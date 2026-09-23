@@ -21,6 +21,7 @@ import {
 } from '../workflow-selector.js';
 import {mutedColor} from '../theme.js';
 import {useTerminalTitle} from '../terminal-title.js';
+import {useHomeSuspension} from '../home-navigation.js';
 
 export type RunDiscovery = (
   collectionRoot: string,
@@ -99,6 +100,7 @@ export function OpenRunScreen({
   const [runIndex, setRunIndex] = useState(0);
   const [openedRun, setOpenedRun] = useState<DiscoveredRun>();
   const [deletionState, setDeletionState] = useState<DeletionState>();
+  useHomeSuspension(deletionState?.state === 'deleting' ? 'busy' : undefined);
 
   const openWorkflow = async (workflow: DiscoveredWorkflow): Promise<void> => {
     setSelectedWorkflow(workflow);
@@ -246,14 +248,14 @@ export function OpenRunScreen({
             <Text bold color={index === runIndex ? 'cyan' : undefined}>
               {index === runIndex ? '› ' : '  '}{sanitizeTerminalText(run.metadata.name ?? 'Unnamed run')}
             </Text>
+            {run.metadata.description && (
+              <Text wrap="truncate">Description: {sanitizeTerminalText(run.metadata.description)}</Text>
+            )}
             <Text>
               Created: {run.metadata.createdAt
                 ? formatDateTime(run.metadata.createdAt)
                 : 'Unavailable'}
             </Text>
-            {run.metadata.description && (
-              <Text wrap="truncate">{sanitizeTerminalText(run.metadata.description)}</Text>
-            )}
             <RunStatus run={run} />
             {run.missingLinkedPaths > 0 && (
               <Alert variant="warning">

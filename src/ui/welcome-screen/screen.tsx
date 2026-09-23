@@ -28,6 +28,7 @@ import {useConfirmedExit} from './hooks/use-confirmed-exit.js';
 import {useTooling} from './tooling/use-tooling.js';
 import {checkForUpdate, type UpdateAvailability} from '../../self-update.js';
 import {mutedColor} from '../theme.js';
+import {HomeSuspensionContext, useHomeSuspensions} from '../home-navigation.js';
 
 export type CliMetadata = {
   packageName: string;
@@ -89,6 +90,7 @@ export function WelcomeScreen({
   const [activeScreenId, setActiveScreenId] = useState<WelcomeCommandId>();
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>();
   const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string>();
+  const {suspension: homeSuspension, suspend: suspendHome} = useHomeSuspensions();
 
   useEffect(() => {
     let active = true;
@@ -148,6 +150,21 @@ export function WelcomeScreen({
   useInput((input, key) => {
     if (input === 'c' && key.ctrl) {
       handleCtrlC();
+      return;
+    }
+
+    // `h` returns home from any depth. A focused text field keeps the letter, and busy work such
+    // as a running workflow must finish first, so both suspend the shortcut instead of losing it.
+    if (
+      activeScreenId &&
+      input === 'h' &&
+      !key.ctrl &&
+      !key.meta &&
+      !homeSuspension &&
+      columns >= minimumTerminalWidth
+    ) {
+      tooling.clearCheckMessage();
+      setActiveScreenId(undefined);
       return;
     }
 
@@ -294,10 +311,17 @@ export function WelcomeScreen({
         marginTop={1}
         flexDirection="column"
       >
-        {renderActiveScreen()}
+        <HomeSuspensionContext.Provider value={suspendHome}>
+          {renderActiveScreen()}
+        </HomeSuspensionContext.Provider>
       </Box>
 
-      <Box marginTop={1}>
+      <Box marginTop={1} flexDirection="column">
+        {activeScreenId && homeSuspension !== 'typing' ? (
+          <Text color={mutedColor}>
+            {homeSuspension === 'busy' ? 'h — Home, once the current work finishes' : 'h — Home'}
+          </Text>
+        ) : null}
         <Text color={showConfirmation ? 'yellow' : undefined}>
           {showConfirmation ? 'Press Ctrl+C again to exit.' : 'Press Ctrl+C twice to exit.'}
         </Text>

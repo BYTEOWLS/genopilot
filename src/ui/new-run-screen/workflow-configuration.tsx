@@ -15,6 +15,7 @@ import {
   type WorkflowRunMode,
 } from './workflow-execution.js';
 import {mutedColor} from '../theme.js';
+import {useHomeSuspension} from '../home-navigation.js';
 
 // Chrome this screen renders around the windowed field list: its own title,
 // margins, and footer hint text. Space consumed by an outer wrapper (such as
@@ -179,6 +180,10 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   const sections = [...new Set(visibleDefinitions.map(definition => definition.section))];
   const selectedDefinition = visibleEditableDefinitions.find(definition => definition.id === selectedId);
   const enterOpensFileChooser = selectedDefinition?.kind === 'file' && isBrowseOnly(selectedDefinition);
+  const showsForm = screen.state === 'editing' || screen.state === 'validating' || screen.state === 'invalid';
+  const typing = showsForm && !browserId && selectedDefinition !== undefined &&
+    selectedDefinition.kind !== 'choice' && !enterOpensFileChooser;
+  useHomeSuspension(screen.state === 'saving' ? 'busy' : typing ? 'typing' : undefined);
 
   const {rows: terminalRows} = useWindowSize();
   const formRows: FormRow[] = [];

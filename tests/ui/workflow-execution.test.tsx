@@ -13,6 +13,7 @@ import {
   type WorkflowResultHandoff,
 } from '../../src/ui/new-run-screen/workflow-execution.js';
 import {RUN_EVENT_SCHEMA_VERSION} from '../../src/workflows/run-events.js';
+import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -111,6 +112,7 @@ function renderExecution(
   ) => Promise<WorkflowRunResult>,
   rows?: number,
   resultHandoff?: WorkflowResultHandoff,
+  onHomeSuspension?: (suspension: HomeSuspension | undefined) => void,
 ): {input: TestInput; output: TestOutput; instance: ReturnType<typeof render>} {
   const input = new TestInput();
   const output = new TestOutput();
@@ -125,6 +127,7 @@ function renderExecution(
     ...(mode === 'execute' ? {eventsPath} : {}),
   });
   const instance = render(
+    <HomeSuspensionContext.Provider value={(_id, suspension) => onHomeSuspension?.(suspension)}>
     <WorkflowExecutionScreen
       configurationPath="/run/config.yaml"
       prepareRun={preparedRun}
@@ -133,7 +136,8 @@ function renderExecution(
       inputActive
       stages={stages}
       resultHandoff={resultHandoff}
-    />,
+    />
+    </HomeSuspensionContext.Provider>,
     {
       exitOnCtrlC: false,
       interactive: true,
@@ -458,4 +462,33 @@ test('sizes the log window to the terminal instead of a fixed height', async con
 
   release();
   await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
+});
+
+test('suspends the home shortcut while the workflow runs', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  let releaseRun = (): void => {};
+  const finished = new Promise<void>(resolve => {
+    releaseRun = resolve;
+  });
+  const suspensions: (HomeSuspension | undefined)[] = [];
+  const {input, output, instance} = renderExecution(
+    join(root, 'events.jsonl'),
+    async run => {
+      await finished;
+      return {...run, exitCode: 0};
+    },
+    undefined,
+    undefined,
+    suspension => suspensions.push(suspension),
+  );
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  await waitUntil(() => suspensions.length === 1, 'the running workflow suspends the shortcut');
+  assert.deepEqual(suspensions, ['busy']);
+
+  releaseRun();
+  await waitUntil(() => suspensions.length === 2, 'the finished workflow releases the shortcut');
+  assert.deepEqual(suspensions, ['busy', undefined]);
 });

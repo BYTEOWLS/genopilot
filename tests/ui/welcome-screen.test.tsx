@@ -579,6 +579,105 @@ test('clears a completed tooling-check message when returning to the command men
   );
 });
 
+test('returns home with h from a nested screen in one press', async context => {
+  let workflowDiscoveryCalls = 0;
+  const runDiscoveries: string[] = [];
+  const {input, instance, output} = renderWelcome(detectedStatus, {
+    commands: openRunOnlyCommands,
+    workflowDiscovery: async () => {
+      workflowDiscoveryCalls += 1;
+      return [discoveredWorkflow('saved-workflow', 'Saved workflow', 'Description for the saved workflow.')];
+    },
+    runDiscovery: async (_collectionRoot, workflow) => {
+      runDiscoveries.push(workflow.manifest.id);
+      return [];
+    },
+  });
+  registerCleanup(context, instance);
+  await waitForOutput(output, value => value.includes('↑/↓ — Select'));
+
+  input.write('\r');
+  await waitForOutput(output, value => value.includes('Description for the saved workflow.'));
+  input.write('\r');
+  await waitFor(() => runDiscoveries.length === 1);
+
+  output.clearOutput();
+  input.write('h');
+  await waitForOutput(output, value => value.includes('↑/↓ — Select'));
+  // The command reopens from its start, so the nested state was left rather than hidden.
+  input.write('\r');
+  await waitFor(() => workflowDiscoveryCalls === 2);
+});
+
+test('leaves h to a focused text field and returns home from a choice field', async context => {
+  const workflowDiscovery = async (): Promise<DiscoveredWorkflow[]> => [
+    discoveredWorkflow('annotation-transfer', 'Annotation workflow', 'Configure it.', [
+      {
+        id: 'annotation-prefix',
+        label: 'Annotation prefix',
+        section: 'Inputs',
+        kind: 'text',
+        required: true,
+        hidden: false,
+        default: null,
+      },
+      {
+        id: 'cpu-allocation',
+        label: 'CPU allocation',
+        section: 'Resources',
+        kind: 'choice',
+        required: true,
+        hidden: false,
+        default: 'automatic',
+        options: [{value: 'automatic', label: 'Automatic'}],
+      },
+    ]),
+  ];
+  const {input, instance, output} = renderWelcome(detectedStatus, {
+    commands: newRunOnlyCommands,
+    workflowDiscovery,
+  });
+  registerCleanup(context, instance);
+  await waitForOutput(output, value => value.includes('↑/↓ — Select'));
+  input.write('\r');
+  await waitForOutput(output, value => value.includes('Configure it.'));
+  input.write('\r');
+  await waitForOutput(output, value => value.includes('Annotation prefix'));
+
+  input.write('x');
+  await waitForOutput(output, value => value.includes('Annotation prefix*: x'));
+  // Written separately so the field receives `h` as its own keypress, like a typed letter.
+  input.write('h');
+  await waitForOutput(output, value => value.includes('Annotation prefix*: xh'));
+
+  input.write('\t');
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  output.clearOutput();
+  input.write('h');
+  await waitForOutput(output, value => value.includes('↑/↓ — Select · Enter — Open'));
+});
+
+test('types h into the NCBI key instead of returning home', async context => {
+  let saved: string | undefined;
+  const {input, instance, output} = renderWelcome(detectedStatus, {
+    commands: ncbiAccessOnlyCommands,
+    checkNcbiApiKeyConfigured: async () => false,
+    saveNcbiApiKey: async key => {
+      saved = key;
+    },
+  });
+  registerCleanup(context, instance);
+  await waitForOutput(output, value => value.includes('↑/↓ — Select'));
+  input.write('\r');
+  await waitForOutput(output, value => value.includes('API key: Not set'));
+
+  input.write('h');
+  await waitForOutput(output, value => value.includes('New key: *'));
+  input.write('\r');
+  await waitFor(() => saved !== undefined);
+  assert.equal(saved, 'h');
+});
+
 test('offers setup choices instead of commands when tooling is missing', async context => {
   const {instance, output} = renderWelcome({
     state: 'setup-required',
@@ -904,12 +1003,13 @@ test('resets Ctrl+C confirmation after its timeout', async context => {
   await instance.waitUntilExit();
 });
 
-test('does not exit in response to q or Escape', async context => {
+test('does not exit in response to q, h, or Escape', async context => {
   const {input, instance, output} = renderWelcome(detectedStatus);
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   input.write('q');
+  input.write('h');
   input.write('\x1b');
   await new Promise<void>(resolve => setTimeout(resolve, 100));
   output.clearOutput();

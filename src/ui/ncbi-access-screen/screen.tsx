@@ -5,6 +5,7 @@ import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
+import {useHomeSuspension} from '../home-navigation.js';
 
 export type NcbiAccessStatusCheck = () => Promise<boolean>;
 export type NcbiApiKeySaver = (key: string) => Promise<void>;
@@ -52,6 +53,8 @@ export function NcbiAccessScreen({
   // so clearing the draft — after a successful save, or on Ctrl+U — is done by bumping this
   // generation and folding it into the field's `key` to force a fresh, empty mount.
   const [draftGeneration, setDraftGeneration] = useState(0);
+  // The key field always has focus, so `h` belongs to the draft here.
+  useHomeSuspension(busy ? 'busy' : 'typing');
 
   const refresh = (): void => {
     setStatus({state: 'loading'});

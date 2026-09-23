@@ -9,6 +9,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 ### Added
 
 - `genopilot` command (short alias `gnp`) with an Ink welcome screen showing package metadata, tooling status, keyboard command selection, responsive layout, and double-`Ctrl+C` exit confirmation.
+- `h` returns to the home screen from any nested screen; it is typed into a focused text field and unavailable while a run, deletion, or save is in progress.
 - Terminal window title set from the package label, extended with the selected workflow's label, a ⏳ mark while Snakemake runs, a ✔ or ✖ outcome mark once it finishes, and restored on exit.
 - Consent-based, user-local tooling setup under a managed `~/.byteowlsGenopilot` directory (XDG data path on Linux): verified Pixi downloads, pinned Snakemake and Conda, version validation against supported ranges, per-tool availability markers, streamed installation progress, cancellation, and retryable checks.
 - Background update notice and `genopilot update`, a non-interactive self-update that installs the exact newer npm release.

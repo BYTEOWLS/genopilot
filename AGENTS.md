@@ -79,6 +79,7 @@ Validate imported artifacts and record their checksums, versions, configuration 
 
 - Treat `package.json` as the source for the displayed command name, description, author, and version.
 - Keep user and developer documentation in [`README.md`](README.md) and package changes in [`CHANGELOG.md`](CHANGELOG.md).
+- Do not document TUI usage (screens, keys, navigation) in the README; the in-app help page covers it.
 - When changing a pinned tool version in `src/tooling/policy.ts` or `workflows/shared/envs/`, update the version tables under *Tooling policy* in the README in the same change.
 - Track pending work as concise checkboxes in [`tasks.md`](tasks.md). Keep rationale in design documentation rather than the task list.
 - Use pnpm to build and pack locally, and npm for global test installation.

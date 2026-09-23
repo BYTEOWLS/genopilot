@@ -56,6 +56,7 @@ Implement the numbered sections in order as testable vertical slices. Add deeper
 ## Remaining commands
 
 - [x] Check for releases in the background, show available updates in the TUI, and add a non-interactive `genopilot update` command that checks before installing.
+- [x] Return to the home screen with `h` from any nested screen, without abandoning running work or stealing keys from text fields.
 - [ ] Implement interactive and non-interactive help and version output.
 
 ## Workflow execution

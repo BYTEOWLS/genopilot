@@ -17,6 +17,7 @@ import {LiveLog} from '../live-log.js';
 import {RunResultsScreen} from '../run-results-screen/screen.js';
 import {mutedColor} from '../theme.js';
 import {useTerminalTitle, type TerminalTitleStatus} from '../terminal-title.js';
+import {useHomeSuspension} from '../home-navigation.js';
 
 // Lines kept in memory so the researcher can scroll back through a long run. Complete output
 // always remains on disk regardless of this cap; see the run's stdout/stderr log files.
@@ -200,6 +201,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
 }): React.JSX.Element {
   const [screen, setScreen] = useState<ExecutionState<R>>({state: 'ready', mode: 'dry-run'});
   useTerminalTitle({status: terminalTitleStatus(screen)});
+  // Leaving would unmount the screen and abort Snakemake without waiting for its cleanup.
+  useHomeSuspension(screen.state === 'running' ? 'busy' : undefined);
   const [progress, setProgress] = useState<RunProgress>(() => initialRunProgress([...stages]));
   // Lines back from the newest; 0 follows the output as it arrives.
   const [scrollOffset, setScrollOffset] = useState(0);

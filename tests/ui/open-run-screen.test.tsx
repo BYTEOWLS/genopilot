@@ -4,6 +4,7 @@ import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
 import {OpenRunScreen} from '../../src/ui/open-run-screen/screen.js';
+import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 import type {DiscoveredRun} from '../../src/workflows/run-discovery.js';
 
@@ -94,12 +95,14 @@ function renderScreen(context: TestContext, options: {
   deleteRun?: (runDirectory: string) => Promise<void>;
   runs?: DiscoveredRun[];
   rows?: number;
+  onHomeSuspension?: (suspension: HomeSuspension | undefined) => void;
 } = {}) {
   const input = new TestInput();
   const output = new TestOutput();
   output.rows = options.rows ?? output.rows;
   let discoveredCollection: string | undefined;
   const instance = render(
+    <HomeSuspensionContext.Provider value={(_id, suspension) => options.onHomeSuspension?.(suspension)}>
     <OpenRunScreen
       currentDirectory="/research/project"
       onBack={options.onBack ?? (() => undefined)}
@@ -110,7 +113,8 @@ function renderScreen(context: TestContext, options: {
       }}
       deleteRun={options.deleteRun}
       formatDateTime={value => `formatted:${value}`}
-    />,
+    />
+    </HomeSuspensionContext.Provider>,
     {
       exitOnCtrlC: false,
       interactive: true,
@@ -305,4 +309,27 @@ test('returns from workflow selection with Escape', async context => {
   screen.input.write('\x1b');
   await new Promise<void>(resolve => setTimeout(resolve, 30));
   assert.equal(backedOut, true);
+});
+
+test('suspends the home shortcut only while a deletion is running', async context => {
+  let finishDeletion: () => void = () => undefined;
+  const suspensions: (HomeSuspension | undefined)[] = [];
+  const screen = renderScreen(context, {
+    onHomeSuspension: suspension => suspensions.push(suspension),
+    deleteRun: () => new Promise<void>(resolve => { finishDeletion = resolve; }),
+  });
+  await waitForOutput(screen.output, 'Current annotation label');
+  screen.input.write('\r');
+  await waitForOutput(screen.output, 'Saved run description');
+  assert.deepEqual(suspensions, []);
+
+  screen.input.write('d');
+  await settle();
+  screen.input.write('y');
+  await settle();
+  assert.deepEqual(suspensions, ['busy']);
+
+  finishDeletion();
+  await settle();
+  assert.deepEqual(suspensions, ['busy', undefined]);
 });
