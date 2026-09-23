@@ -1,0 +1,13 @@
+##gff-version 3
+##sequence-region chr1 1 3000
+##sequence-region chr2 1 2400
+chr1	fixture	gene	1001	1400	.	+	.	ID=gene1;Name=gene1
+chr1	fixture	mRNA	1001	1400	.	+	.	ID=mrna1;Parent=gene1;Name=mrna1
+chr1	fixture	exon	1001	1150	.	+	.	ID=exon1a;Parent=mrna1
+chr1	fixture	exon	1251	1400	.	+	.	ID=exon1b;Parent=mrna1
+chr1	fixture	CDS	1001	1150	.	+	0	ID=cds1;Parent=mrna1
+chr1	fixture	CDS	1251	1400	.	+	0	ID=cds1;Parent=mrna1
+chr2	fixture	gene	801	1100	.	+	.	ID=gene2;Name=gene2
+chr2	fixture	mRNA	801	1100	.	+	.	ID=mrna2;Parent=gene2;Name=mrna2
+chr2	fixture	exon	801	1100	.	+	.	ID=exon2a;Parent=mrna2
+chr2	fixture	CDS	801	1100	.	+	0	ID=cds2;Parent=mrna2

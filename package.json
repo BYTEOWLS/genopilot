@@ -1,0 +1,61 @@
+{
+  "name": "@byteowls/genopilot",
+  "label": "Genopilot",
+  "description": "Guided, reproducible genome workflows for researchers without deep bioinformatics expertise.",
+  "author": "Michael Oberwasserlechner",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BYTEOWLS/genopilot.git"
+  },
+  "homepage": "https://github.com/BYTEOWLS/genopilot#readme",
+  "bugs": {
+    "url": "https://github.com/BYTEOWLS/genopilot/issues"
+  },
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=24.0.0 <26.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "genopilot": "dist/cli.js",
+    "gnp": "dist/cli.js"
+  },
+  "files": [
+    "dist/",
+    "workflows/",
+    "!workflows/**/__pycache__",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli.tsx",
+    "dev:watch": "node --watch-path=src --watch-preserve-output --import tsx src/cli.tsx",
+    "clean": "node --eval \"require('node:fs').rmSync('dist', {recursive: true, force: true})\"",
+    "build": "pnpm clean && tsc -p tsconfig.json",
+    "start": "node dist/cli.js",
+    "test": "tsc -p tsconfig.test.json && tsx --test $(find tests -type f \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print | sort)",
+    "test:python": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "test:all": "pnpm test && pnpm test:python",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pack:local": "pnpm build && pnpm pack --out byteowls-genopilot-local.tgz",
+    "install:global": "pnpm run pack:local && npm install --global ./byteowls-genopilot-local.tgz",
+    "reinstall:global": "pnpm run install:global"
+  },
+  "dependencies": {
+    "@inkjs/ui": "2.0.0",
+    "ink": "7.1.1",
+    "react": "19.2.8",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2"
+  }
+}

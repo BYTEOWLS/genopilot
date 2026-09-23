@@ -1,0 +1,2 @@
+# Entry point for building a consensus from the existing T2T assembly and Illumina reads.
+# Rules will be added after the consensus method and isolate handling are finalized.

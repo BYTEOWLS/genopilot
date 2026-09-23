@@ -1,0 +1,255 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.png">
+    <img src=".github/assets/logo-light.png" alt="Genopilot" width="280">
+  </picture>
+</p>
+<p align="center"><strong><code>@byteowls/genopilot</code></strong></p>
+<p align="center">Guided, reproducible genome workflows for researchers without deep bioinformatics expertise.</p>
+
+<p align="center">
+  <a href="https://github.com/BYTEOWLS/genopilot/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/BYTEOWLS/genopilot/ci.yml?branch=main&style=flat-square&label=tests" alt="Test status on main" /></a>
+  <img src="https://img.shields.io/maintenance/yes/2026?style=flat-square" alt="Maintained in 2026" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license" /></a>
+  <a href="https://www.npmjs.com/package/@byteowls/genopilot"><img src="https://img.shields.io/npm/v/@byteowls/genopilot?style=flat-square" alt="npm version" /></a>
+</p>
+
+The TypeScript, Ink, and React terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI. Linux and macOS are supported.
+
+## Installation
+
+Node.js is the only manual prerequisite because the CLI itself requires Node.js to start.
+
+### One-command installation with NVM
+
+Linux and macOS users can install Node.js 24 with NVM, install the CLI, and start it with one copy-and-paste command:
+
+```bash
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}" && curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash && . "$NVM_DIR/nvm.sh" && nvm install 24 && npm install --global @byteowls/genopilot && genopilot
+```
+
+> This convenience command downloads and executes the pinned NVM installation script. Review the script first or use the downloaded Node.js installer below if this does not match your security policy.
+
+### Installation with a downloaded Node.js installer
+
+Linux and macOS users who prefer not to use NVM can:
+
+1. Download and install **Node.js 24 LTS** for their operating system and architecture from [nodejs.org/download](https://nodejs.org/en/download).
+2. Open a new terminal and verify the installation:
+
+   ```bash
+   node --version
+   npm --version
+   ```
+
+3. Install and start the CLI:
+
+   ```bash
+   npm install --global @byteowls/genopilot && genopilot
+   ```
+
+The installed command is `genopilot`, with `gnp` as a short alias.
+
+Update an existing global installation without entering an npm command:
+
+```bash
+genopilot update
+```
+
+The TUI checks for a newer release in the background and shows an update notice when one is available. The `genopilot update` command checks npm's `latest` release, skips installation when the current version is up to date, and otherwise installs the exact version it checked.
+
+The CLI checks Pixi, Conda, Snakemake, and the workflow runtime after launch. With explicit consent, guided setup downloads a checksum-verified Pixi release into the application data directory and uses it to install the pinned Conda and Snakemake versions. No `sudo` access is required. Native Windows execution is unsupported; WSL2 support is planned.
+
+## Development
+
+Run all commands in this document from the repository root.
+
+Source code is grouped by responsibility:
+
+```text
+src/
+├── cli.tsx                 CLI entry point
+├── tooling/
+│   ├── check.ts            Tool detection and version validation
+│   ├── installer.ts        Verified managed-tool installation
+│   ├── paths.ts            Platform-specific managed paths
+│   └── policy.ts           Pinned versions and downloads
+├── ui/
+│   ├── new-run-screen/     Workflow selection and generic manifest-driven forms
+│   ├── sanitize.ts         Terminal-output sanitization
+│   └── welcome-screen/     Welcome, commands, and tooling setup
+└── workflows/
+    ├── annotation-transfer/
+    │   ├── configuration.ts      Workflow configuration contract
+    │   └── run-configuration.ts  Effective options and safe configuration saving
+    ├── discovery.ts              Installed-package workflow discovery
+    └── manifest.ts               Versioned workflow-manifest validation
+```
+
+Packaged workflow resources are stored separately from the TypeScript source:
+
+```text
+workflows/
+├── annotation-transfer/
+│   ├── Snakefile
+│   ├── manifest.yaml
+│   └── manifest.parameters.yaml
+├── comparison/              Comparison workflow scaffold
+├── consensus/               Consensus workflow scaffold
+└── shared/                  Shared rules, scripts, and environments
+```
+
+Only selected, redistributable workflow resources in this directory are included in the npm package. TypeScript application tests and Python workflow tests share `tests/`; their runners distinguish them by filename.
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Run the CLI from source:
+
+```bash
+pnpm dev
+```
+
+Restart the CLI from source whenever a file under `src/` changes:
+
+```bash
+pnpm dev:watch
+```
+
+Each change restarts the application, so UI state is lost and any running workflow is stopped. `Ctrl+C` stops the watcher itself; run `reset` if the terminal is left in a broken state.
+
+Run the TypeScript tests, Python workflow tests, and type checking:
+
+```bash
+pnpm test:all
+pnpm typecheck
+```
+
+The Python suite can also be run independently with `pnpm test:python`.
+
+Build and run the compiled CLI:
+
+```bash
+pnpm build
+pnpm start
+```
+
+## Tooling policy
+
+The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downloads Pixi from immutable release URLs verified by SHA-256 checksums, and Pixi installs Snakemake and Conda together; Snakemake then uses Conda to provision the environments declared by workflow rules. Managed paths live under the platform user-data directory rather than the current working directory.
+
+### Runtime
+
+| Tool | Pinned version | Accepted range | Installed by | Pinned in |
+|---|---|---|---|---|
+| Node.js | 24 LTS (tested 24.19.0) | ≥ 24.0.0, < 26.0.0 | User | `src/tooling/policy.ts`, `package.json` `engines` |
+| Pixi | 0.79.0 | ≥ 0.79.0, < 0.79.1 | Guided setup | `src/tooling/policy.ts` |
+| Snakemake | 9.26.1 | ≥ 9.26.1, < 9.26.2 | Pixi | `src/tooling/policy.ts` |
+| Conda | 25.11.1 | ≥ 25.11.1, < 25.11.2 | Pixi | `src/tooling/policy.ts` |
+
+### Workflow rule environments
+
+| Tool | Pinned version | Channel | Environment |
+|---|---|---|---|
+| LiftOn | 1.0.13 | PyPI | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
+| minimap2 | 2.31 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
+| miniprot | 0.18 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
+| parasail-python | 1.3.4 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
+| Python | 3.11.16 | conda-forge | [`lifton`](workflows/shared/envs/lifton/environment.yaml), [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
+| NCBI Datasets CLI | 18.36.0 | conda-forge | [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
+
+Dependabot proposes updates for the rule environments, npm, and GitHub Actions, but it changes only the environment file. Runtime pins in `src/tooling/policy.ts` are updated manually, including the Pixi download checksums.
+
+### Updating a pinned version
+
+Every rule-environment bump changes:
+
+1. `workflows/shared/envs/<environment>/environment.yaml`: the pin itself. Run provenance reads its configured tool versions from these files, so nothing else records the version.
+2. This README: the version table above.
+3. `CHANGELOG.md`: an entry under *Unreleased*.
+
+A LiftOn bump additionally requires re-verifying everything that depends on the exact files and values LiftOn writes. Check the release notes and the LiftOn source for the new version, then update the version references and any changed behavior in:
+
+| File | Depends on |
+|---|---|
+| `workflows/shared/rules/transfer_annotation.smk` | Output layout; the declared `lifton_output/` directory must contain every file LiftOn writes (1.0.10 and 1.0.11 wrote `liftoff/` and `miniprot/` beside it) |
+| `workflows/shared/scripts/collect_transfer_metrics.py` | Mutation classes that count as unchanged proteins |
+| `src/workflows/annotation-transfer/result-help.ts` | Gene `source`, transcript `status`, and mutation-class values explained on the result help page |
+| `resources/concepts/done/annotation-transfer-results.md` | The documented metric and value contract |
+
+Then run the full verification, including the per-rule Conda integration tests (`RUN_SNAKEMAKE_CONDA_INTEGRATION=1`, or the *Workflow integration* GitHub workflow). Its expected coordinates on the synthetic fixtures detect changes in transfer results.
+
+Windows support through WSL2 is planned after the core Linux and macOS implementation is complete. Native Windows execution is out of scope.
+
+Tool version validation, actionable per-tool failure diagnostics, guided installation, stale-lock recovery, and manual rechecks are implemented. Repair tooling remains tracked in [`tasks.md`](tasks.md).
+
+## Reset managed tooling for installation tests
+
+Stop the CLI before removing its managed tooling. These commands remove Pixi, Conda, Snakemake, and temporary setup files while preserving previous setup logs.
+
+Linux:
+
+```bash
+TOOLING_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/byteowlsGenopilot/tooling" && rm -rf "$TOOLING_DIR/runtimes" "$TOOLING_DIR/pixi" "$TOOLING_DIR/temporary" "$TOOLING_DIR/tooling-setup.lock"
+```
+
+macOS:
+
+```bash
+TOOLING_DIR="$HOME/.byteowlsGenopilot/tooling" && rm -rf "$TOOLING_DIR/runtimes" "$TOOLING_DIR/pixi" "$TOOLING_DIR/temporary" "$TOOLING_DIR/tooling-setup.lock"
+```
+
+Start `genopilot` again to repeat guided installation. During the limited MVP, external Pixi, Conda, and Snakemake installations on `PATH` are intentionally ignored so every tester uses the same managed runtime.
+
+The pinned per-rule environments Snakemake provisions for workflows are kept separately in `$TOOLING_DIR/conda-envs` and shared by every run, so they are deliberately not removed above: they are unrelated to guided installation, and rebuilding them costs hundreds of megabytes and several minutes. Remove that directory on its own to reclaim the space; the next run provisions whatever it needs again.
+
+```bash
+rm -rf "$TOOLING_DIR/conda-envs"
+```
+
+To also delete setup logs and completely reset the application-managed tooling directory, run the applicable command above to set `TOOLING_DIR`, followed by:
+
+```bash
+rm -rf "$TOOLING_DIR"
+```
+
+These commands do not remove tools installed elsewhere on the system.
+
+## Test a global installation
+
+Build a package tarball and install it globally with npm:
+
+```bash
+pnpm install:global
+```
+
+Run the installed CLI:
+
+```bash
+genopilot
+```
+
+Rebuild and reinstall it after making changes:
+
+```bash
+pnpm reinstall:global
+```
+
+Create `byteowls-genopilot-local.tgz` without installing it:
+
+```bash
+pnpm pack:local
+```
+
+Remove the global test installation:
+
+```bash
+npm uninstall --global @byteowls/genopilot
+```
+
+## License
+
+[MIT](LICENSE)

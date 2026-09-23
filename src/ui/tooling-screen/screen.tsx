@@ -1,0 +1,61 @@
+import React from 'react';
+import {Alert} from '@inkjs/ui';
+import {Box, Text, useInput} from 'ink';
+import type {ToolingStatus} from '../../tooling/check.js';
+import {sanitizeTerminalText} from '../sanitize.js';
+import {ToolingList} from '../welcome-screen/tooling/section.js';
+import {mutedColor} from '../theme.js';
+
+export function ToolingScreen({
+  status,
+  message,
+  onCheck,
+  onBack,
+  inputActive,
+}: {
+  status: ToolingStatus;
+  message?: string;
+  onCheck: () => void;
+  onBack: () => void;
+  inputActive: boolean;
+}): React.JSX.Element {
+  useInput((input, key) => {
+    if (!inputActive) {
+      return;
+    }
+    if (key.escape) {
+      onBack();
+      return;
+    }
+    if (status.state !== 'checking' && (key.return || input.toLowerCase() === 'r')) {
+      onCheck();
+    }
+  });
+
+  return (
+    <Box flexDirection="column">
+      <Text bold>Required tooling</Text>
+      {status.state === 'checking' ? (
+        <Text color={mutedColor}>○ Checking availability…</Text>
+      ) : status.state === 'check-failed' ? (
+        <Alert variant="error">
+          Tooling check failed: {sanitizeTerminalText(status.message)}
+        </Alert>
+      ) : (
+        <ToolingList status={status} />
+      )}
+      {message ? (
+        <Box marginTop={1}>
+          <Alert variant={status.state === 'ready' ? 'success' : 'warning'}>
+            {sanitizeTerminalText(message)}
+          </Alert>
+        </Box>
+      ) : null}
+      <Box marginTop={1}>
+        <Text color={mutedColor}>
+          {status.state === 'checking' ? 'Checking…' : 'R/Enter — Check tooling'} · Esc — Back
+        </Text>
+      </Box>
+    </Box>
+  );
+}

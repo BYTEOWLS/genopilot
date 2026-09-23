@@ -1,0 +1,32 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Stay behind pnpm's minimum release age so updated lockfiles install cleanly.
+    cooldown:
+      default-days: 3
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # One pull request per Snakemake rule environment; each must pass the
+  # workflow-integration job before it is merged.
+  - package-ecosystem: conda
+    directories:
+      - /workflows/shared/envs/*
+    schedule:
+      interval: weekly
+    ignore:
+      # A new Python minor or major release needs a deliberate compatibility check.
+      - dependency-name: python
+        update-types: [version-update:semver-minor, version-update:semver-major]

@@ -1,0 +1,106 @@
+schema_version: 1
+workflow_version: 1
+id: annotation-transfer
+label: Transfer genome annotation
+description: >
+  Transfer a GFF3 annotation from a reference genome to a target genome with
+  LiftOn, apply an identifier prefix when one is configured, validate the
+  resulting GFF3, and report transfer and execution metrics.
+entry_snakefile: Snakefile
+parameter-definitions: manifest.parameters.yaml
+stages:
+  - id: resolve-inputs
+    label: Resolve inputs
+    description: >
+      Normalize each local or NCBI input into a checksummed copy inside the run
+      directory before any scientific rule runs.
+    rules: [resolve_reference, resolve_target]
+  - id: validate-inputs
+    label: Validate inputs
+    description: Validate the input FASTA and GFF3 files and their relationships.
+    rules: [validate_inputs]
+  - id: transfer-annotation
+    label: Transfer annotation
+    description: Run LiftOn and preserve its raw annotation and diagnostics.
+    rules: [transfer_annotation]
+  - id: prefix-identifiers
+    label: Prefix identifiers
+    description: >
+      Apply the configured prefix to GFF3 IDs and identifier references. Skipped
+      entirely when no annotation ID prefix is configured.
+    rules: [prefix_annotation]
+  - id: validate-annotation
+    label: Validate transferred annotation
+    description: >
+      Validate the structure and relationships of the prefixed GFF3, or of the raw
+      LiftOn GFF3 when no prefix is configured.
+    rules: [validate_annotation]
+  - id: summarize-results
+    label: Summarize results
+    description: Collect transfer metrics, the per-feature report, and the completion summary.
+    rules: [summarize_annotation_transfer]
+  - id: record-provenance
+    label: Record provenance
+    description: Checksum produced artifacts and persist workflow execution provenance.
+    rules: [record_annotation_transfer_provenance]
+artifacts:
+  - id: input-validation
+    label: Input validation report
+    path: results/input-validation.json
+    type: json
+    produced_by: validate-inputs
+  - id: raw-gff3
+    label: Raw LiftOn GFF3
+    description: Unmodified annotation produced by LiftOn.
+    path: results/annotation/lifton.raw.gff3
+    type: gff3
+    produced_by: transfer-annotation
+  - id: lifton-diagnostics
+    label: LiftOn diagnostics
+    description: >
+      LiftOn's own liftoff/miniprot/stats/intermediate_files subdirectories,
+      alongside the raw GFF3 since LiftOn derives this path from `-o`.
+    path: results/annotation/lifton_output
+    type: directory
+    produced_by: transfer-annotation
+  - id: prefixed-gff3
+    label: Prefixed LiftOn GFF3
+    description: >
+      Written only when an annotation ID prefix is configured; without one the raw
+      GFF3 above is the annotation downstream stages consume.
+    path: results/annotation/lifton.prefixed.gff3
+    type: gff3
+    produced_by: prefix-identifiers
+  - id: annotation-validation
+    label: Annotation validation report
+    path: results/validation.json
+    type: json
+    produced_by: validate-annotation
+  - id: feature-transfer
+    label: Per-feature transfer report
+    description: Mapping status and target placement for each reference top-level feature.
+    path: results/feature-transfer.tsv
+    type: tsv
+    produced_by: summarize-results
+  - id: transfer-metrics
+    label: Annotation transfer metrics
+    path: results/metrics.json
+    type: json
+    produced_by: summarize-results
+  - id: completion-summary
+    label: Completion summary
+    path: results/summary.json
+    type: json
+    produced_by: summarize-results
+  - id: artifact-index
+    label: Artifact index
+    description: Checksummed records for resolved inputs, scientific results, logs, and benchmarks.
+    path: artifacts.yaml
+    type: yaml
+    produced_by: record-provenance
+  - id: run-provenance
+    label: Run provenance
+    description: Effective configuration, commands, tool versions, resources, and input provenance.
+    path: provenance/run.json
+    type: json
+    produced_by: record-provenance

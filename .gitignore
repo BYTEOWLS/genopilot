@@ -1,0 +1,17 @@
+# Python (workflows/shared/scripts/ are plain Python, run by Snakemake)
+__pycache__/
+*.pyc
+
+# Dependencies and build output
+node_modules/
+dist/
+*.tgz
+
+# Snakemake run workspaces and state
+runs/
+.snakemake/
+
+# Editors and OS files
+.idea/
+.vscode/
+.DS_Store

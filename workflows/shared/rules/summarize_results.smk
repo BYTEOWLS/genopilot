@@ -1,0 +1,61 @@
+"""Collect the annotation-transfer detail table, metrics, and completion summary.
+
+The collector reads only structured GFF3/JSON/TSV evidence preserved by the
+workflow. It does not parse LiftOn or Snakemake console text. Requires
+`SCRIPTS_DIR_SH` and `ANNOTATION_GFF3` from the including Snakefile.
+"""
+
+import shlex
+
+
+def _summarize_results_args(wildcards):
+    args = [
+        "--reference-gff3",
+        "resolved/reference.gff3",
+        "--raw-gff3",
+        "results/annotation/lifton.raw.gff3",
+        "--final-gff3",
+        ANNOTATION_GFF3,
+        "--validation",
+        "results/validation.json",
+        "--diagnostics",
+        "results/annotation/lifton_output",
+        "--details",
+        "results/feature-transfer.tsv",
+        "--metrics",
+        "results/metrics.json",
+        "--summary",
+        "results/summary.json",
+        "--workflow-id",
+        config["workflow_id"],
+        "--workflow-version",
+        config["workflow_version"],
+        "--run-id",
+        config["run"]["id"],
+        "--run-created-at",
+        config["run"]["created_at"],
+        "--effective-cpus",
+        config["resources"]["effective_cpus"],
+        "--id-prefix",
+        config["annotation"]["id_prefix"],
+    ]
+    return " ".join(shlex.quote(str(arg)) for arg in args)
+
+
+rule summarize_annotation_transfer:
+    input:
+        reference_gff3="resolved/reference.gff3",
+        raw_gff3="results/annotation/lifton.raw.gff3",
+        final_gff3=ANNOTATION_GFF3,
+        validation="results/validation.json",
+        diagnostics="results/annotation/lifton_output",
+    output:
+        details="results/feature-transfer.tsv",
+        metrics="results/metrics.json",
+        summary="results/summary.json",
+    log:
+        "logs/summarize-results.log",
+    params:
+        args=_summarize_results_args,
+    shell:
+        "python3 {SCRIPTS_DIR_SH}/collect_transfer_metrics.py {params.args} > {log} 2>&1"

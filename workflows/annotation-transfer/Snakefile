@@ -1,0 +1,39 @@
+"""Entry point for the annotation-transfer workflow.
+
+Invoked with `--directory <run-dir> --configfile <run-dir>/config.yaml` so
+every relative path below resolves inside that run's isolated workspace.
+Rules are added incrementally according to tasks.md. Resource
+locations are relative to this Snakefile's own packaged directory so the
+CLI resolves workflow assets independently of the caller's working
+directory.
+"""
+
+import shlex
+from pathlib import Path
+
+configfile: "config.yaml"
+
+WORKFLOW_DIR = Path(workflow.basedir)
+SHARED_DIR = WORKFLOW_DIR.parent / "shared"
+SCRIPTS_DIR = SHARED_DIR / "scripts"
+ENVS_DIR = SHARED_DIR / "envs"
+SCRIPTS_DIR_SH = shlex.quote(str(SCRIPTS_DIR))
+
+include: str(SHARED_DIR / "rules" / "resolve_inputs.smk")
+include: str(SHARED_DIR / "rules" / "validate_inputs.smk")
+include: str(SHARED_DIR / "rules" / "transfer_annotation.smk")
+include: str(SHARED_DIR / "rules" / "prefix_annotation.smk")
+include: str(SHARED_DIR / "rules" / "validate_annotation.smk")
+include: str(SHARED_DIR / "rules" / "summarize_results.smk")
+include: str(SHARED_DIR / "rules" / "record_provenance.smk")
+
+
+rule all:
+    input:
+        "results/input-validation.json",
+        "results/validation.json",
+        "results/feature-transfer.tsv",
+        "results/metrics.json",
+        "results/summary.json",
+        "artifacts.yaml",
+        "provenance/run.json",

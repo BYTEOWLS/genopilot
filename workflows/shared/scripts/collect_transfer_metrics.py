@@ -1,0 +1,853 @@
+#!/usr/bin/env python3
+"""Collect auditable LiftOn transfer metrics and a completion summary.
+
+LiftOn's structured reports are authoritative for transfer counts and mapping
+status. The raw LiftOn GFF3 supplies coordinates and model-level attributes
+such as identity and mutation classifications, and is cross-checked against
+those reports rather than used to replace them. Human-readable LiftOn or
+Snakemake console output is never parsed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import sys
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from statistics import fmean
+
+METRICS_SCHEMA_VERSION = 1
+SUMMARY_SCHEMA_VERSION = 1
+DETAIL_COLUMNS = (
+    "reference_id",
+    "feature_type",
+    "lifton_category",
+    "status",
+    "copy_number",
+    "target_id",
+    "target_seqid",
+    "target_start",
+    "target_end",
+    "target_strand",
+    "transfer_method",
+    "minimum_dna_identity",
+    "minimum_protein_identity",
+    "mutations",
+)
+
+# LiftOn 1.0.13 mutation classes that describe no protein-level change.
+UNCHANGED_PROTEIN_CLASSES = frozenset({"identical", "synonymous", "non_coding"})
+
+METRIC_EXPLANATIONS = {
+    "reference_features": "Count of top-level reference features that LiftOn selected for transfer.",
+    "mapped_features": "Count of selected reference features that LiftOn placed at least once on the target assembly.",
+    "unmapped_features": "Count of selected reference features that LiftOn did not place on the target assembly.",
+    "mapping_fraction": "Mapped reference features divided by selected reference features.",
+    "target_feature_copies": "Count of target copies emitted by LiftOn: one primary copy per mapped reference feature plus all additional copies.",
+    "features_with_extra_copies": "Count of reference features for which LiftOn emitted at least one additional target copy.",
+    "extra_copies": "Count of additional target copies beyond the primary copy, summed over all reference features.",
+    "miniprot_rescues": "Count of genes added by LiftOn's separate miniprot rescue pass after the Liftoff and regular miniprot steps.",
+    "transfer_methods_by_target_copy": "Count of target copies per LiftOn transfer method.",
+    "changed_primary_protein_coding_features": "Count of mapped protein-coding reference features whose primary target copy carries a mutation class other than identical or synonymous.",
+    "mutation_classifications_by_target_copy": "Count of target copies carrying each LiftOn mutation class; one copy can carry several classes.",
+    "dna_identity_by_transcript_model": "Minimum, mean, and maximum LiftOn dna_identity over transcript models: aligned transcript sequence identity between reference and target.",
+    "protein_identity_by_transcript_model": "Minimum, mean, and maximum LiftOn protein_identity over transcript models: aligned protein sequence identity between reference and target.",
+}
+
+DETAIL_EXPLANATIONS = {
+    "reference_id": "Identifier of the selected top-level feature in the reference GFF3 file.",
+    "feature_type": "GFF3 type of the reference feature, for example gene.",
+    "lifton_category": "LiftOn category of the reference feature: coding, non-coding, or other.",
+    "status": "mapped for the primary target copy, extra-copy for an additional target copy, or unmapped.",
+    "copy_number": "Zero for the primary target copy; positive values identify additional LiftOn copies.",
+    "target_id": "Raw LiftOn target identifier. Later identifier rewriting may change it in the final GFF3.",
+    "target_seqid": "Target assembly sequence carrying this copy.",
+    "target_start": "One-based start coordinate of this copy on the target sequence.",
+    "target_end": "One-based inclusive end coordinate of this copy on the target sequence.",
+    "target_strand": "Strand of this copy on the target sequence.",
+    "transfer_method": "LiftOn transfer method recorded for this copy, such as Liftoff or miniprot.",
+    "minimum_dna_identity": "Lowest LiftOn DNA identity among transcript models below this target copy.",
+    "minimum_protein_identity": "Lowest LiftOn protein identity among transcript models below this target copy.",
+    "mutations": "Distinct LiftOn mutation classes observed below this target copy.",
+}
+
+
+class SummaryError(ValueError):
+    """Raised when persisted LiftOn evidence is missing or contradictory."""
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def parse_attributes(raw: str) -> dict[str, str]:
+    attributes: dict[str, str] = {}
+    for entry in raw.split(";"):
+        if not entry or "=" not in entry:
+            continue
+        key, _, value = entry.partition("=")
+        attributes[key.strip()] = value.strip()
+    return attributes
+
+
+@dataclass(frozen=True)
+class Feature:
+    seqid: str
+    source: str
+    feature_type: str
+    start: int
+    end: int
+    strand: str
+    attributes: dict[str, str]
+
+    @property
+    def feature_id(self) -> str | None:
+        return self.attributes.get("ID")
+
+    @property
+    def parents(self) -> tuple[str, ...]:
+        return tuple(value for value in self.attributes.get("Parent", "").split(",") if value)
+
+
+@dataclass(frozen=True)
+class ReportedFeature:
+    copies: int
+    category: str
+
+
+@dataclass(frozen=True)
+class CompletenessRow:
+    feature_type: str
+    reference: int
+    lifted: int
+    missed: int
+    features_with_extra_copies: int
+    target: int
+
+
+def parse_gff3(path: Path) -> list[Feature]:
+    features: list[Feature] = []
+    with open(path, encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, start=1):
+            line = raw_line.rstrip("\n")
+            if not line or line.startswith("#"):
+                continue
+            columns = line.split("\t")
+            if len(columns) != 9:
+                raise SummaryError(f"{path}: line {line_number} does not have 9 GFF3 columns")
+            try:
+                start = int(columns[3])
+                end = int(columns[4])
+            except ValueError as error:
+                raise SummaryError(
+                    f"{path}: line {line_number} has non-integer coordinates"
+                ) from error
+            features.append(
+                Feature(
+                    seqid=columns[0],
+                    source=columns[1],
+                    feature_type=columns[2],
+                    start=start,
+                    end=end,
+                    strand=columns[6],
+                    attributes=parse_attributes(columns[8]),
+                )
+            )
+    return features
+
+
+def top_level_features(
+    features: list[Feature], path: Path, selected_types: set[str]
+) -> list[Feature]:
+    """Returns one record per selected top-level ID, spanning discontinuous parts."""
+    grouped: dict[str, list[Feature]] = {}
+    for feature in features:
+        feature_id = feature.feature_id
+        if feature.parents or feature_id is None or feature.feature_type not in selected_types:
+            continue
+        grouped.setdefault(feature_id, []).append(feature)
+
+    top_level: list[Feature] = []
+    for feature_id, parts in grouped.items():
+        first = parts[0]
+        for part in parts[1:]:
+            if (
+                part.seqid != first.seqid
+                or part.feature_type != first.feature_type
+                or part.strand != first.strand
+            ):
+                raise SummaryError(
+                    f"{path}: discontinuous top-level ID '{feature_id}' has inconsistent records"
+                )
+            for attribute in ("extra_copy_number", "source"):
+                if part.attributes.get(attribute) != first.attributes.get(attribute):
+                    raise SummaryError(
+                        f"{path}: discontinuous top-level ID '{feature_id}' has inconsistent '{attribute}'"
+                    )
+        top_level.append(
+            Feature(
+                seqid=first.seqid,
+                source=first.source,
+                feature_type=first.feature_type,
+                start=min(part.start for part in parts),
+                end=max(part.end for part in parts),
+                strand=first.strand,
+                attributes=first.attributes,
+            )
+        )
+    return top_level
+
+
+def descendant_records(features: list[Feature]) -> dict[str, list[Feature]]:
+    children: dict[str, set[str]] = defaultdict(set)
+    records_by_id: dict[str, list[Feature]] = defaultdict(list)
+    for feature in features:
+        if feature.feature_id:
+            records_by_id[feature.feature_id].append(feature)
+            for parent in feature.parents:
+                children[parent].add(feature.feature_id)
+
+    descendants: dict[str, list[Feature]] = {}
+    for root in records_by_id:
+        found_ids: set[str] = set()
+        pending = list(children.get(root, set()))
+        while pending:
+            child = pending.pop()
+            if child in found_ids:
+                continue
+            found_ids.add(child)
+            pending.extend(children.get(child, set()))
+        descendants[root] = [record for child in found_ids for record in records_by_id[child]]
+    return descendants
+
+
+def read_required_lines(path: Path) -> list[str]:
+    if not path.is_file():
+        raise SummaryError(f"required LiftOn result is missing: {path}")
+    return [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def read_selected_feature_types(path: Path) -> set[str]:
+    selected = {
+        line.strip()
+        for line in read_required_lines(path)
+        if not line.lstrip().startswith("#")
+    }
+    if not selected:
+        raise SummaryError(f"{path} contains no selected feature types")
+    return selected
+
+
+def parse_reported_features(path: Path, mapped: bool) -> dict[str, ReportedFeature]:
+    reported: dict[str, ReportedFeature] = {}
+    expected_columns = 3 if mapped else 2
+    for line_number, line in enumerate(read_required_lines(path), start=1):
+        columns = line.split("\t")
+        if len(columns) != expected_columns:
+            raise SummaryError(
+                f"{path}: line {line_number} has {len(columns)} columns; expected {expected_columns}"
+            )
+        feature_id = columns[0]
+        if feature_id in reported:
+            raise SummaryError(f"{path}: duplicate feature ID '{feature_id}'")
+        if mapped:
+            try:
+                copies = int(columns[1])
+            except ValueError as error:
+                raise SummaryError(
+                    f"{path}: line {line_number} has invalid copy count '{columns[1]}'"
+                ) from error
+            if copies < 1:
+                raise SummaryError(f"{path}: feature '{feature_id}' has fewer than one copy")
+            category = columns[2]
+        else:
+            copies = 0
+            category = columns[1]
+        reported[feature_id] = ReportedFeature(copies=copies, category=category)
+    return reported
+
+
+def parse_completeness(path: Path) -> dict[str, CompletenessRow]:
+    lines = read_required_lines(path)
+    expected_header = (
+        "feature_type\tn_reference\tn_lifted\tn_missed\tn_extra_copies\tn_target\tpct_recovered"
+    )
+    if lines[0] != expected_header:
+        raise SummaryError(f"{path}: unsupported header '{lines[0]}'")
+
+    rows: dict[str, CompletenessRow] = {}
+    for line_number, line in enumerate(lines[1:], start=2):
+        columns = line.split("\t")
+        if len(columns) != 7:
+            raise SummaryError(f"{path}: line {line_number} does not have 7 columns")
+        feature_type = columns[0]
+        if feature_type in rows:
+            raise SummaryError(f"{path}: duplicate feature type '{feature_type}'")
+        try:
+            counts = [int(value) for value in columns[1:6]]
+            float(columns[6])
+        except ValueError as error:
+            raise SummaryError(f"{path}: line {line_number} has an invalid numeric value") from error
+        rows[feature_type] = CompletenessRow(feature_type, *counts)
+    if not rows:
+        raise SummaryError(f"{path} contains no completeness rows")
+    return rows
+
+
+def read_json(path: Path) -> dict:
+    if not path.is_file():
+        raise SummaryError(f"required JSON result is missing: {path}")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise SummaryError(f"{path} is not valid JSON: {error}") from error
+    if not isinstance(value, dict):
+        raise SummaryError(f"{path} must contain a JSON object")
+    return value
+
+
+def required_integer(record: dict, field: str, path: Path) -> int:
+    value = record.get(field)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise SummaryError(f"{path}: required integer count '{field}' is unavailable")
+    return value
+
+
+def parse_run_manifest(path: Path) -> tuple[dict, dict[str, int]]:
+    manifest = read_json(path)
+    counts = manifest.get("counts")
+    if not isinstance(counts, dict):
+        raise SummaryError(f"{path} has no object-valued 'counts' field")
+    required = {
+        field: required_integer(counts, field, path)
+        for field in (
+            "reference_features",
+            "mapped_reference_features",
+            "emitted_feature_copies",
+            "miniprot_rescued_genes",
+        )
+    }
+    return manifest, required
+
+
+def optional_float(value: str | None, field: str, feature_id: str) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except ValueError as error:
+        raise SummaryError(f"feature '{feature_id}' has invalid {field} value '{value}'") from error
+
+
+def copy_number_and_reference_id(
+    target: Feature, reference_ids: set[str]
+) -> tuple[int, str]:
+    target_id = target.feature_id
+    assert target_id is not None
+    raw_copy_number = target.attributes.get("extra_copy_number")
+    if raw_copy_number is None:
+        if target_id not in reference_ids:
+            raise SummaryError(
+                f"target top-level feature '{target_id}' has no matching reference ID"
+            )
+        return 0, target_id
+
+    try:
+        copy_number = int(raw_copy_number)
+    except ValueError as error:
+        raise SummaryError(
+            f"target feature '{target_id}' has invalid extra_copy_number '{raw_copy_number}'"
+        ) from error
+    if copy_number < 1:
+        raise SummaryError(f"target feature '{target_id}' has non-positive extra_copy_number")
+
+    suffix = f"_{copy_number}"
+    if not target_id.endswith(suffix):
+        raise SummaryError(
+            f"extra-copy target ID '{target_id}' does not end with expected suffix '{suffix}'"
+        )
+    reference_id = target_id[: -len(suffix)]
+    if reference_id not in reference_ids:
+        raise SummaryError(
+            f"extra-copy target '{target_id}' has no matching reference ID '{reference_id}'"
+        )
+    return copy_number, reference_id
+
+
+def minimum_identity(records: list[Feature], attribute: str) -> float | None:
+    values = [
+        value
+        for record in records
+        if (value := optional_float(record.attributes.get(attribute), attribute, record.feature_id or ""))
+        is not None
+    ]
+    return min(values) if values else None
+
+
+def mutation_classes(records: list[Feature]) -> list[str]:
+    mutations: set[str] = set()
+    for record in records:
+        for mutation in record.attributes.get("mutation", "").split(","):
+            if mutation:
+                mutations.add(mutation)
+    return sorted(mutations)
+
+
+def transfer_method(feature: Feature, records: list[Feature]) -> str:
+    method = feature.attributes.get("source")
+    if method:
+        return method
+    statuses = sorted(
+        {
+            record.attributes["status"]
+            for record in records
+            if record.attributes.get("status")
+        }
+    )
+    return ",".join(statuses) if statuses else feature.source
+
+
+def build_detail_rows(
+    reference_features: list[Feature],
+    target_features: list[Feature],
+    all_target: list[Feature],
+    mapped_report: dict[str, ReportedFeature],
+    unmapped_report: dict[str, ReportedFeature],
+) -> list[dict[str, object]]:
+    reference_by_id = {feature.feature_id: feature for feature in reference_features}
+    assert None not in reference_by_id
+    reference_ids = set(reference_by_id)
+    reported_ids = set(mapped_report) | set(unmapped_report)
+    if set(mapped_report) & set(unmapped_report):
+        overlap = sorted(set(mapped_report) & set(unmapped_report))[0]
+        raise SummaryError(f"LiftOn reports feature '{overlap}' as both mapped and unmapped")
+    if reported_ids != reference_ids:
+        missing = sorted(reference_ids - reported_ids)
+        unknown = sorted(reported_ids - reference_ids)
+        raise SummaryError(
+            f"LiftOn feature reports do not match the selected reference features; "
+            f"missing={missing[:3]}, unknown={unknown[:3]}"
+        )
+
+    descendants = descendant_records(all_target)
+    targets_by_reference: dict[str, list[tuple[int, Feature]]] = defaultdict(list)
+    for target in target_features:
+        copy_number, reference_id = copy_number_and_reference_id(target, reference_ids)
+        targets_by_reference[reference_id].append((copy_number, target))
+
+    rows: list[dict[str, object]] = []
+    for reference in reference_features:
+        reference_id = reference.feature_id
+        assert reference_id is not None
+        targets = sorted(targets_by_reference.get(reference_id, []), key=lambda item: item[0])
+        if reference_id in unmapped_report:
+            if targets:
+                raise SummaryError(
+                    f"LiftOn reports '{reference_id}' as unmapped but the raw GFF3 contains a target"
+                )
+            rows.append(
+                {
+                    "reference_id": reference_id,
+                    "feature_type": reference.feature_type,
+                    "lifton_category": unmapped_report[reference_id].category,
+                    "status": "unmapped",
+                    "copy_number": 0,
+                    "target_id": "",
+                    "target_seqid": "",
+                    "target_start": "",
+                    "target_end": "",
+                    "target_strand": "",
+                    "transfer_method": "",
+                    "minimum_dna_identity": "",
+                    "minimum_protein_identity": "",
+                    "mutations": "",
+                }
+            )
+            continue
+
+        report = mapped_report[reference_id]
+        expected_numbers = set(range(report.copies))
+        actual_numbers = {copy_number for copy_number, _target in targets}
+        if len(targets) != report.copies or actual_numbers != expected_numbers:
+            raise SummaryError(
+                f"LiftOn reports {report.copies} copies for '{reference_id}', "
+                f"but the raw GFF3 contains copy numbers {sorted(actual_numbers)}"
+            )
+
+        for copy_number, target in targets:
+            target_id = target.feature_id
+            assert target_id is not None
+            records = [target, *descendants.get(target_id, [])]
+            dna_identity = minimum_identity(records, "dna_identity")
+            protein_identity = minimum_identity(records, "protein_identity")
+            rows.append(
+                {
+                    "reference_id": reference_id,
+                    "feature_type": reference.feature_type,
+                    "lifton_category": report.category,
+                    "status": "extra-copy" if copy_number else "mapped",
+                    "copy_number": copy_number,
+                    "target_id": target_id,
+                    "target_seqid": target.seqid,
+                    "target_start": target.start,
+                    "target_end": target.end,
+                    "target_strand": target.strand,
+                    "transfer_method": transfer_method(target, records),
+                    "minimum_dna_identity": dna_identity if dna_identity is not None else "",
+                    "minimum_protein_identity": protein_identity
+                    if protein_identity is not None
+                    else "",
+                    "mutations": ",".join(mutation_classes(records)),
+                }
+            )
+    return rows
+
+
+def identity_summary(features: list[Feature], attribute: str) -> dict[str, object]:
+    values = [
+        value
+        for feature in features
+        if (value := optional_float(feature.attributes.get(attribute), attribute, feature.feature_id or ""))
+        is not None
+    ]
+    if not values:
+        return {
+            "unit": "transcript_model",
+            "count": 0,
+            "minimum": None,
+            "mean": None,
+            "maximum": None,
+            "unavailable_reason": f"LiftOn emitted no {attribute} attributes for this run",
+        }
+    return {
+        "unit": "transcript_model",
+        "count": len(values),
+        "minimum": min(values),
+        "mean": fmean(values),
+        "maximum": max(values),
+    }
+
+
+def verify_authoritative_reports(
+    reference: list[Feature],
+    target: list[Feature],
+    mapped_report: dict[str, ReportedFeature],
+    unmapped_report: dict[str, ReportedFeature],
+    extra_report: dict[str, ReportedFeature],
+    completeness: dict[str, CompletenessRow],
+    manifest_counts: dict[str, int],
+) -> None:
+    if set(extra_report) != {
+        feature_id for feature_id, report in mapped_report.items() if report.copies > 1
+    }:
+        raise SummaryError("LiftOn extra-copy and mapped-feature reports disagree")
+    for feature_id, report in extra_report.items():
+        if report != mapped_report[feature_id]:
+            raise SummaryError(
+                f"LiftOn reports inconsistent copy information for '{feature_id}'"
+            )
+
+    reference_by_id = {feature.feature_id: feature for feature in reference}
+    reference_type_counts = Counter(feature.feature_type for feature in reference)
+    mapped_type_counts = Counter(reference_by_id[feature_id].feature_type for feature_id in mapped_report)
+    target_type_counts: Counter[str] = Counter()
+    for feature_id, report in mapped_report.items():
+        target_type_counts[reference_by_id[feature_id].feature_type] += report.copies
+    unmapped_type_counts = Counter(
+        reference_by_id[feature_id].feature_type for feature_id in unmapped_report
+    )
+    extra_feature_type_counts = Counter(
+        reference_by_id[feature_id].feature_type for feature_id in extra_report
+    )
+
+    for feature_type, row in completeness.items():
+        observed = (
+            reference_type_counts[feature_type],
+            mapped_type_counts[feature_type],
+            unmapped_type_counts[feature_type],
+            extra_feature_type_counts[feature_type],
+            target_type_counts[feature_type],
+        )
+        reported = (
+            row.reference,
+            row.lifted,
+            row.missed,
+            row.features_with_extra_copies,
+            row.target,
+        )
+        if observed != reported:
+            raise SummaryError(
+                f"LiftOn completeness report disagrees with its GFF3/reports for '{feature_type}': "
+                f"reported={reported}, observed={observed}"
+            )
+
+    total_copies = sum(report.copies for report in mapped_report.values())
+    expected_manifest = {
+        "reference_features": len(mapped_report) + len(unmapped_report),
+        "mapped_reference_features": len(mapped_report),
+        "emitted_feature_copies": total_copies,
+    }
+    for field, expected in expected_manifest.items():
+        if manifest_counts[field] != expected:
+            raise SummaryError(
+                f"LiftOn run manifest count '{field}' is {manifest_counts[field]}, "
+                f"but its feature reports imply {expected}"
+            )
+    if len(target) != total_copies:
+        raise SummaryError(
+            f"LiftOn reports {total_copies} target copies, but its raw GFF3 contains {len(target)}"
+        )
+
+
+def evidence_entry(path: Path) -> dict[str, object]:
+    return {"path": str(path), "available": path.exists()}
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_details(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=DETAIL_COLUMNS, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object]]]:
+    stats_dir = args.diagnostics / "stats"
+    selected_types_path = args.diagnostics / "intermediate_files" / "auto_feature_types.txt"
+    run_manifest_path = args.diagnostics / "run_manifest.json"
+    completeness_path = stats_dir / "completeness_by_feature_type.txt"
+    mapped_path = stats_dir / "mapped_feature.txt"
+    unmapped_path = stats_dir / "unmapped_features.txt"
+    extra_path = stats_dir / "extra_copy_features.txt"
+
+    selected_types = read_selected_feature_types(selected_types_path)
+    _run_manifest, manifest_counts = parse_run_manifest(run_manifest_path)
+    completeness = parse_completeness(completeness_path)
+    mapped_report = parse_reported_features(mapped_path, mapped=True)
+    unmapped_report = parse_reported_features(unmapped_path, mapped=False)
+    extra_report = parse_reported_features(extra_path, mapped=True)
+
+    reference_all = parse_gff3(args.reference_gff3)
+    target_all = parse_gff3(args.raw_gff3)
+    reference = top_level_features(reference_all, args.reference_gff3, selected_types)
+    target = top_level_features(target_all, args.raw_gff3, selected_types)
+
+    verify_authoritative_reports(
+        reference,
+        target,
+        mapped_report,
+        unmapped_report,
+        extra_report,
+        completeness,
+        manifest_counts,
+    )
+    rows = build_detail_rows(
+        reference,
+        target,
+        target_all,
+        mapped_report,
+        unmapped_report,
+    )
+
+    validation = read_json(args.validation)
+    validation_gff3 = validation.get("gff3")
+    if not isinstance(validation_gff3, dict):
+        raise SummaryError(f"{args.validation} has no object-valued 'gff3' field")
+    validation_errors = validation_gff3.get("errors", [])
+    validation_warnings = validation_gff3.get("warnings", [])
+    validation_status = validation.get("status")
+    if not isinstance(validation_errors, list) or not isinstance(validation_warnings, list):
+        raise SummaryError(f"{args.validation} errors and warnings must be arrays")
+    if validation_status not in {"passed", "failed"}:
+        raise SummaryError(f"{args.validation} has unsupported status '{validation_status}'")
+    if (validation_status == "failed") != bool(validation_errors):
+        raise SummaryError(f"{args.validation} status contradicts its error list")
+
+    method_counts = Counter(str(row["transfer_method"]) for row in rows if row["transfer_method"])
+    mutation_counts: Counter[str] = Counter()
+    changed_primary_coding_ids: set[str] = set()
+    for row in rows:
+        mutations = [value for value in str(row["mutations"]).split(",") if value]
+        if (
+            row["status"] == "mapped"
+            and row["lifton_category"] == "coding"
+            and any(mutation not in UNCHANGED_PROTEIN_CLASSES for mutation in mutations)
+        ):
+            changed_primary_coding_ids.add(str(row["reference_id"]))
+        mutation_counts.update(mutations)
+
+    reference_by_type = {
+        feature_type: row.reference for feature_type, row in sorted(completeness.items())
+    }
+    mapped_by_type = {
+        feature_type: row.lifted for feature_type, row in sorted(completeness.items())
+    }
+    unmapped_by_type = {
+        feature_type: row.missed for feature_type, row in sorted(completeness.items())
+    }
+    target_by_type = {
+        feature_type: row.target for feature_type, row in sorted(completeness.items())
+    }
+    features_with_extra_by_type = {
+        feature_type: row.features_with_extra_copies
+        for feature_type, row in sorted(completeness.items())
+    }
+    extra_copy_count = sum(report.copies - 1 for report in extra_report.values())
+
+    generated_at = utc_now_iso()
+    metrics = {
+        "schema_version": METRICS_SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "workflow": {"id": args.workflow_id, "version": args.workflow_version},
+        "definitions": METRIC_EXPLANATIONS,
+        "detail_column_definitions": DETAIL_EXPLANATIONS,
+        "transfer": {
+            "reference_features": manifest_counts["reference_features"],
+            "reference_features_by_type": reference_by_type,
+            "mapped_features": manifest_counts["mapped_reference_features"],
+            "mapped_features_by_type": mapped_by_type,
+            "unmapped_features": manifest_counts["reference_features"]
+            - manifest_counts["mapped_reference_features"],
+            "unmapped_features_by_type": unmapped_by_type,
+            "mapping_fraction": manifest_counts["mapped_reference_features"]
+            / manifest_counts["reference_features"],
+            "target_feature_copies": manifest_counts["emitted_feature_copies"],
+            "target_feature_copies_by_type": target_by_type,
+            "features_with_extra_copies": len(extra_report),
+            "features_with_extra_copies_by_type": features_with_extra_by_type,
+            "extra_copies": extra_copy_count,
+            "miniprot_rescues": manifest_counts["miniprot_rescued_genes"],
+            "transfer_methods_by_target_copy": dict(sorted(method_counts.items())),
+            "changed_primary_protein_coding_features": len(changed_primary_coding_ids),
+            "mutation_classifications_by_target_copy": dict(sorted(mutation_counts.items())),
+            "dna_identity_by_transcript_model": identity_summary(target_all, "dna_identity"),
+            "protein_identity_by_transcript_model": identity_summary(
+                target_all, "protein_identity"
+            ),
+            "authoritative_sources": [
+                str(run_manifest_path),
+                str(completeness_path),
+                str(mapped_path),
+                str(unmapped_path),
+                str(extra_path),
+                str(selected_types_path),
+            ],
+            "detail_enrichment_source": str(args.raw_gff3),
+        },
+        "prefix": {
+            "applied": bool(args.id_prefix),
+            "value": args.id_prefix or None,
+            "transformed_distinct_ids": len(
+                {feature.feature_id for feature in target_all if feature.feature_id}
+            )
+            if args.id_prefix
+            else 0,
+            "explanation": "Provisional prefix-only rewriting; regex-based post-LiftOn rewriting is deferred.",
+        },
+        "validation": {
+            "status": validation_status,
+            "errors": len(validation_errors),
+            "warnings": len(validation_warnings),
+            "source": str(args.validation),
+            "explanation": "Structural General Feature Format version 3 (GFF3) validation of identifiers, parent references, coordinates, strand, and coding-sequence (CDS) phase.",
+        },
+    }
+
+    if validation_status == "failed":
+        completion_status = "validation-failed"
+        completion_status_explanation = (
+            "LiftOn completed, but the transferred annotation failed structural validation."
+        )
+    elif validation_warnings:
+        completion_status = "completed-with-warnings"
+        completion_status_explanation = (
+            "LiftOn completed and validation found no errors, but warnings should be reviewed."
+        )
+    else:
+        completion_status = "completed"
+        completion_status_explanation = "LiftOn completed and structural validation passed."
+
+    evidence_paths = {
+        "raw_gff3": args.raw_gff3,
+        "lifton_diagnostics": args.diagnostics,
+        "run_manifest": run_manifest_path,
+        "completeness_by_feature_type": completeness_path,
+        "mapped_features": mapped_path,
+        "mapped_transcripts": stats_dir / "mapped_transcript.txt",
+        "unmapped_features": unmapped_path,
+        "extra_copy_features": extra_path,
+        "selected_feature_types": selected_types_path,
+    }
+    summary = {
+        "schema_version": SUMMARY_SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "workflow": {"id": args.workflow_id, "version": args.workflow_version},
+        "run": {
+            "id": args.run_id,
+            "created_at": args.run_created_at,
+            "effective_cpus": args.effective_cpus,
+        },
+        "status": completion_status,
+        "status_explanation": completion_status_explanation,
+        "metrics": {
+            "schema_version": METRICS_SCHEMA_VERSION,
+            "path": str(args.metrics),
+            "payload": metrics,
+        },
+        "generated_reports": {
+            "feature_transfer": str(args.details),
+            "aggregated_metrics": str(args.metrics),
+            "completion_summary": str(args.summary),
+            "validation": str(args.validation),
+            "final_gff3": str(args.final_gff3),
+        },
+        "source_evidence": {
+            name: evidence_entry(path) for name, path in evidence_paths.items()
+        },
+    }
+    return metrics, summary, rows
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--reference-gff3", type=Path, required=True)
+    parser.add_argument("--raw-gff3", type=Path, required=True)
+    parser.add_argument("--final-gff3", type=Path, required=True)
+    parser.add_argument("--validation", type=Path, required=True)
+    parser.add_argument("--diagnostics", type=Path, required=True)
+    parser.add_argument("--details", type=Path, required=True)
+    parser.add_argument("--metrics", type=Path, required=True)
+    parser.add_argument("--summary", type=Path, required=True)
+    parser.add_argument("--workflow-id", required=True)
+    parser.add_argument("--workflow-version", type=int, required=True)
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--run-created-at", required=True)
+    parser.add_argument("--effective-cpus", type=int, required=True)
+    parser.add_argument("--id-prefix", default="")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    try:
+        metrics, summary, rows = collect(args)
+        write_details(args.details, rows)
+        write_json(args.metrics, metrics)
+        write_json(args.summary, summary)
+    except (OSError, SummaryError) as error:
+        print(error, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
