@@ -14,7 +14,7 @@
   <a href="https://www.npmjs.com/package/@byteowls/genopilot"><img src="https://img.shields.io/npm/v/@byteowls/genopilot?style=flat-square" alt="npm version" /></a>
 </p>
 
-The TypeScript, Ink, and React terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI. Linux and macOS are supported.
+The terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI. Linux and macOS are supported.
 
 ## Installation
 
@@ -62,30 +62,6 @@ The CLI checks Pixi, Conda, Snakemake, and the workflow runtime after launch. Wi
 
 ## Development
 
-Run all commands in this document from the repository root.
-
-Source code is grouped by responsibility:
-
-```text
-src/
-├── cli.tsx                 CLI entry point
-├── tooling/
-│   ├── check.ts            Tool detection and version validation
-│   ├── installer.ts        Verified managed-tool installation
-│   ├── paths.ts            Platform-specific managed paths
-│   └── policy.ts           Pinned versions and downloads
-├── ui/
-│   ├── new-run-screen/     Workflow selection and generic manifest-driven forms
-│   ├── sanitize.ts         Terminal-output sanitization
-│   └── welcome-screen/     Welcome, commands, and tooling setup
-└── workflows/
-    ├── annotation-transfer/
-    │   ├── configuration.ts      Workflow configuration contract
-    │   └── run-configuration.ts  Effective options and safe configuration saving
-    ├── discovery.ts              Installed-package workflow discovery
-    └── manifest.ts               Versioned workflow-manifest validation
-```
-
 Packaged workflow resources are stored separately from the TypeScript source:
 
 ```text
@@ -100,6 +76,8 @@ workflows/
 ```
 
 Only selected, redistributable workflow resources in this directory are included in the npm package. TypeScript application tests and Python workflow tests share `tests/`; their runners distinguish them by filename.
+
+Run all commands in this document from the repository root.
 
 Install dependencies:
 
@@ -159,7 +137,7 @@ The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downlo
 | miniprot | 0.18 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
 | parasail-python | 1.3.4 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
 | Python | 3.11.16 | conda-forge | [`lifton`](workflows/shared/envs/lifton/environment.yaml), [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
-| NCBI Datasets CLI | 18.36.0 | conda-forge | [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
+| NCBI Datasets CLI | 18.37.0 | conda-forge | [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
 
 Dependabot proposes updates for the rule environments, npm, and GitHub Actions, but it changes only the environment file. Runtime pins in `src/tooling/policy.ts` are updated manually, including the Pixi download checksums.
 
@@ -180,7 +158,12 @@ A LiftOn bump additionally requires re-verifying everything that depends on the 
 | `src/workflows/annotation-transfer/result-help.ts` | Gene `source`, transcript `status`, and mutation-class values explained on the result help page |
 | `resources/concepts/done/annotation-transfer-results.md` | The documented metric and value contract |
 
-Then run the full verification, including the per-rule Conda integration tests (`RUN_SNAKEMAKE_CONDA_INTEGRATION=1`, or the *Workflow integration* GitHub workflow). Its expected coordinates on the synthetic fixtures detect changes in transfer results.
+Then run the full verification, including the per-rule Conda integration tests, which run only locally:
+
+```bash
+RUN_SNAKEMAKE_CONDA_INTEGRATION=1 python3 -m unittest discover -s tests -p "test_*.py"
+```
+CI skips these tests, so run them before merging any change to `workflows/shared/envs/`, including Dependabot updates. Their expected coordinates on the synthetic fixtures detect changes in transfer results.
 
 Windows support through WSL2 is planned after the core Linux and macOS implementation is complete. Native Windows execution is out of scope.
 

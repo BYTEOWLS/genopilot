@@ -86,7 +86,7 @@ export const toolingPolicy = {
     package: 'snakemake=9.26.1',
   },
   managedGlobalEnvironment: {
-    name: 'byteowlsGenopilot',
+    name: 'byteowls-genopilot',
     relativeHomePath: 'pixi',
     channels: ['conda-forge', 'bioconda'] as const,
     packages: ['snakemake=9.26.1', 'conda=25.11.1'] as const,

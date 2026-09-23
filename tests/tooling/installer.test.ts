@@ -92,7 +92,7 @@ test('installs verified Pixi and the pinned runtime bundle', async context => {
     'global',
     'install',
     '--environment',
-    'byteowlsGenopilot',
+    'byteowls-genopilot',
     '--channel',
     'conda-forge',
     '--channel',

@@ -43,7 +43,7 @@ test('pins Pixi, Snakemake, Conda, and managed installation locations', () => {
     `snakemake=${toolingPolicy.snakemake.managedVersion}`,
   );
   assert.equal(toolingPolicy.conda.package, `conda=${toolingPolicy.conda.managedVersion}`);
-  assert.equal(toolingPolicy.managedGlobalEnvironment.name, 'byteowlsGenopilot');
+  assert.equal(toolingPolicy.managedGlobalEnvironment.name, 'byteowls-genopilot');
   assert.deepEqual(toolingPolicy.managedGlobalEnvironment.channels, [
     'conda-forge',
     'bioconda',

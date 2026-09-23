@@ -27,5 +27,6 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - run: pnpm pack:local
-      # Direct-Snakemake tests skip themselves here; workflow-integration.yml runs them.
+      # Direct-Snakemake tests skip themselves here; run them locally with
+      # RUN_SNAKEMAKE_CONDA_INTEGRATION=1 (see README).
       - run: python3 -m unittest discover -s tests -p "test_*.py"
