@@ -12,8 +12,15 @@ Each isolate has:
 - an editable name and optional description;
 - an explicit `wildtype` value;
 - an optional `derived_from` reference to another isolate ID;
-- one explicit local paired-end read set with absolute R1 and R2 paths for schema version 1;
-- zero or more generated isolate-genome records added by Task 4.1.
+- one or more local read pairs, each with absolute R1 and R2 paths and an explicit `trimmed` flag.
+
+### Read pairs
+
+Illumina writes one R1/R2 pair per lane per sequencing run. A library sequenced on two runs, for example as a top-up to reach the ordered depth, therefore arrives as two pairs whose reads add up. The catalog lists every pair the researcher assigns to the isolate; the workflow derives run, flowcell, and lane from the read headers, so the catalog does not duplicate them (see [Task 4.1](4a-per-isolate-processing.md)).
+
+`trimmed` records whether the provider already adapter- or quality-trimmed or filtered the pair. Untrimmed reads are preferred because the workflow applies its own pinned, recorded QC to every isolate; trimmed reads remain allowed because some deliveries contain nothing else. File names cannot tell trimmed from untrimmed reads — a provider may deliver both under identical names — so the researcher sets the flag, defaulting to untrimmed. One isolate must not mix trimmed and untrimmed pairs.
+
+Generated isolate-genome records are not part of schema version 1. They arrive with the first action that creates them, **Save to isolate catalog** in [Task 5](5-results-and-post-processing.md#catalog-owned-isolate-genomes), as a deliberate schema revision.
 
 Example shape:
 
@@ -25,72 +32,48 @@ isolates:
     description: Wild-type laboratory isolate
     wildtype: true
     derived_from: null
-    reads:
-      layout: paired-end
-      r1: /data/isolate-a_R1.fastq.gz
-      r2: /data/isolate-a_R2.fastq.gz
-    genomes: []
+    read_pairs:
+      - r1: /data/isolate-a_S1_L001_R1_001.fastq.gz
+        r2: /data/isolate-a_S1_L001_R2_001.fastq.gz
+        trimmed: false
+      - r1: /data/isolate-a_S1_L002_R1_001.fastq.gz
+        r2: /data/isolate-a_S1_L002_R2_001.fastq.gz
+        trimmed: false
 ```
+
+Schema version 1 was revised from a single read set to `read_pairs` before its first release, so no stored catalog needs migrating.
+
+The catalog lives at `isolates/isolates.yaml` beside, not inside, the managed tooling directory (`~/.byteowlsGenopilot/` on macOS, `${XDG_DATA_HOME:-~/.local/share}/byteowlsGenopilot/` on Linux), so resetting tooling never removes it. The directory is owner-only and the file is written with `0600` permissions.
 
 `wildtype` and `derived_from` are researcher-supplied metadata. They may be shown during cohort review but never cause automatic inclusion or exclusion. Do not infer wild-type status from the absence of `derived_from`.
-
-## Generated isolate genomes
-
-One isolate can acquire multiple generated FASTA files from different runs or backbones. A result becomes catalog-owned only when the researcher explicitly saves it to the isolate catalog. Saving copies the validated FASTA, index, and compact provenance into managed storage, so deleting the producing run does not remove the reusable genome.
-
-`isolates.yaml` is the authoritative index. It lists every managed genome explicitly; normal catalog loading never treats files found by scanning a directory as valid entries:
-
-```yaml
-genomes:
-  - id: 2026-01-01_run-a_isolate-a
-    isolate_id: isolate-a
-    name: Isolate A against T2T v1
-    path: genomes/isolate-a/2026-01-01_run-a_isolate-a/genome.fasta
-    sha256: "..."
-    created_at: 2026-01-01T12:00:00.000Z
-    origin: generated
-    producing_run:
-      id: 2026-01-01_run-a
-    workflow:
-      id: reference-consensus
-      version: 1
-    backbone:
-      name: T2T v1
-      accession: GCF_000149205.2
-      sha256: "..."
-```
-
-`accession` is optional for a local backbone. The producing run retains complete read, tool, parameter, and command provenance; the catalog copy retains compact provenance and the identity needed to display and verify the genome independently. `isolate_id` must match the containing isolate. Paths are normalized relative paths contained under `genomes/<isolate-id>/<genome-id>/`; reject absolute paths, parent traversal, control characters, ID/path disagreement, and symlink escape.
-
-Promotion first copies files into a private temporary directory, validates their formats and checksums, atomically renames the directory into place, and then atomically updates `isolates.yaml`. A crash may leave an unreferenced directory, but directory contents never become catalog entries implicitly. Removal updates the index before deleting managed files, making a leftover orphan safer than a live entry pointing to deliberately removed data. An explicit maintenance action may report or clean orphaned directories.
 
 ## TUI behavior
 
 - List isolates by name and stable ID, with wild-type/derived lineage and read-validation state.
-- Create and edit an isolate using file choosers for R1 and R2.
-- Show all catalog-owned genomes beneath an isolate, including name, date, backbone, producing run, and checksum state.
-- Allow an editable local name for each generated genome without changing its scientific identity.
-- Remove a managed genome only after confirming both its index entry and catalog-owned files will be removed.
-- Confirm destructive removal. Refuse or explicitly repair references from `derived_from` children rather than leaving dangling IDs.
+- Create and edit an isolate using typed paths or file choosers for R1 and R2, add and remove read pairs, and mark each pair as already trimmed. The ID is suggested from the name, editable before the first save, and fixed afterwards.
+- Import candidates from a sequencing delivery folder is [Task 1b](1b-import-illumina-isolates.md).
+- Confirm destructive removal. Refuse removal while `derived_from` children reference the isolate rather than leaving dangling IDs or repairing lineage silently.
 - Keep navigation usable without color and at narrow terminal widths.
 
 ## Validation
 
-Before saving metadata, reject duplicate IDs, the same path as both mates, non-absolute paths, missing/unreadable files, self-derived isolates, missing parents, and lineage cycles. Perform lightweight FASTQ/compression checks in the manager; Task 4.1 performs authoritative full input validation and mate synchronization before scientific processing.
+Before saving metadata, reject duplicate IDs, an empty read-pair list, any read file used more than once in the catalog (by path, or through a symlink or hard link within the isolate), mixed trimmed and untrimmed pairs, non-absolute paths, missing/unreadable files, self-derived isolates, missing parents, and lineage cycles. Perform lightweight FASTQ/compression checks in the manager; Task 4.1 performs authoritative full input validation and mate synchronization before scientific processing.
 
-Catalog writes must be private, atomic, and safe against two application instances overwriting each other. The catalog contains local research paths and must not be placed in the repository or a run workspace.
+Catalog writes must be private, atomic, and safe against two application instances overwriting each other. Each write holds an exclusive lock file, refuses to proceed when the file no longer matches the checksum it was loaded with, and replaces the file by renaming a fully written temporary file. A catalog that fails to parse or validate is reported with its path and is never overwritten. The catalog contains local research paths and must not be placed in the repository or a run workspace.
 
 ## Work
 
-- [ ] Define and validate the versioned isolate catalog and generated-genome record schemas.
-- [ ] Resolve a private user-local catalog root containing `isolates.yaml` and managed genome directories.
-- [ ] Implement atomic catalog loading and saving with locking, contained-path validation, and actionable corruption errors.
-- [ ] Implement list, create, edit, and remove flows.
-- [ ] Add R1/R2 file selection and lightweight validation.
-- [ ] Show lineage and generated-genome integrity without treating labels as behavioral selectors.
-- [ ] Implement safe promotion/removal primitives for later workflow result screens.
-- [ ] Add tests for validation, lineage cycles, contained paths, symlink escape, orphan recovery, concurrent/failed writes, resizing, keyboard input, and missing generated artifacts.
+- [x] Define and validate the versioned isolate catalog schema.
+- [x] Resolve a private user-local catalog root containing `isolates.yaml`.
+- [x] Implement atomic catalog loading and saving with locking, stale-revision detection, and actionable corruption errors.
+- [x] Implement list, create, edit, and remove flows.
+- [x] Add R1/R2 file selection and lightweight validation.
+- [x] Support several read pairs per isolate with a per-pair `trimmed` flag.
+- [x] Show lineage and read state without treating labels as behavioral selectors.
+- [x] Add tests for validation, lineage cycles, linked or reused read files, mixed trimming, adding and removing pairs, concurrent/failed writes, corruption, resizing, keyboard input, and persistence across restarts.
+
+Generated-genome records, promotion and removal primitives, integrity display, and orphan maintenance moved to [Task 5](5-results-and-post-processing.md#catalog-owned-isolate-genomes), where the first action that creates them lives.
 
 ## Acceptance
 
-A researcher can create reusable isolate records, restart the application, inspect or edit them, and see zero or more explicitly indexed, catalog-owned FASTAs. No workflow execution is required to complete this task, and no catalog action silently changes a previous run.
+A researcher can create reusable isolate records, restart the application, and inspect or edit them. No workflow execution is required to complete this task, and no catalog action silently changes a previous run.

@@ -25,7 +25,7 @@ The visible default voting method is `strict-majority`, and the effective value 
 
 ## Persisted run snapshot
 
-The run stores stable isolate IDs in `config.yaml` and copies their selected catalog records into `isolates.yaml`. The snapshot resolves read paths to absolute paths and is immutable for the run. Later edits to the user-local catalog cannot alter or invalidate what an old run claims to have used.
+The run stores stable isolate IDs in `config.yaml` and copies their selected catalog records into `isolates.yaml`. The snapshot includes every selected read pair with its `trimmed` flag, resolves read paths to absolute paths, and is immutable for the run. Later edits to the user-local catalog cannot alter or invalidate what an old run claims to have used.
 
 A conceptual configuration shape is:
 
@@ -61,8 +61,8 @@ The stable workflow ID remains provisional until this task begins. Finalize it b
 Show:
 
 - backbone name, source, versioned accession where applicable, path/cache decision, and known checksum;
-- selected isolate names and stable IDs, derived count, R1/R2 filenames, wild-type status, and lineage;
-- warnings for unavailable reads, duplicated paths, or a possible duplicate of the biological sample used for the backbone;
+- selected isolate names and stable IDs, derived count, read-pair count and R1/R2 filenames, trimmed status, wild-type status, and lineage;
+- warnings for unavailable reads, duplicated paths, a possible duplicate of the biological sample used for the backbone, and a selection that mixes isolates with trimmed and untrimmed reads, because the cohort would then not be processed consistently;
 - voting-method explanation with a compact example;
 - all effective scientific and resource parameters;
 - run directory and exact Snakemake command;
@@ -76,7 +76,8 @@ Generated isolate genomes already in the catalog are informative but are not sub
 - [ ] Add backbone choice using local entry, file chooser, or accession catalog.
 - [ ] Add searchable isolate multi-selection and derived count, requiring at least one isolate.
 - [ ] Add the required strict-majority/plurality single select with help text.
-- [ ] Snapshot selected isolate metadata atomically into the new run workspace.
+- [ ] Snapshot selected isolate metadata, including every read pair and its `trimmed` flag, atomically into the new run workspace.
+- [ ] Warn in review when the selected isolates mix trimmed and untrimmed reads.
 - [ ] Validate all paths, IDs, source choices, cache decisions, and effective values before review.
 - [ ] Present the exact command and run a Snakemake dry run through the established execution path.
 - [ ] Add tests for empty catalogs, returning from each manager, preserving selections, conditional fields, stale entries, review, saving, resizing, and direct configuration parsing.
