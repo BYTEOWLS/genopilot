@@ -1,6 +1,6 @@
 import {dirname, isAbsolute} from 'node:path';
 import React, {useCallback, useMemo, useRef, useState} from 'react';
-import {Box, Newline, Text, useInput, useWindowSize} from 'ink';
+import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
 import type {WorkflowParameterDefinition} from '../../workflows/parameter-definitions.js';
@@ -16,6 +16,7 @@ import {
 } from './workflow-execution.js';
 import {mutedColor} from '../theme.js';
 import {useHomeSuspension} from '../home-navigation.js';
+import {ValidationError} from '../validation-error.js';
 
 // Chrome this screen renders around the windowed field list: its own title,
 // margins, and footer hint text. Space consumed by an outer wrapper (such as
@@ -632,15 +633,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         <Text color={mutedColor}>↓ more below</Text>
       ) : null}
       {screen.state === 'invalid' ? (
-        <Box marginTop={1} flexDirection="column">
-          <Alert variant={'error'}><Text color={'red'}>Fix these fields before continuing:</Text>
-            {screen.messages.map(message => {
-              return <Text key={message}><Newline />• {sanitizeTerminalText(message)}</Text>
-            })
-            }
-
-          </Alert>
-        </Box>
+        <ValidationError title="Fix these fields before continuing:" problems={screen.messages} />
       ) : null}
       <Box marginTop={1}>
         <Text color={mutedColor} wrap="wrap">

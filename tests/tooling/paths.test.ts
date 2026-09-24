@@ -29,6 +29,19 @@ test('resolves the NCBI API key path under a private secrets directory', () => {
   assert.equal(paths.ncbiApiKeyPath, `${paths.dataDirectory}/secrets/ncbi-api-key`);
 });
 
+test('keeps the isolate catalog outside the managed tooling directory', () => {
+  const paths = resolveToolingPaths({
+    platform: 'darwin',
+    architecture: 'arm64',
+    environment: {},
+    homeDirectory: '/Users/researcher',
+  });
+
+  assert.equal(paths.isolateCatalogDirectory, '/Users/researcher/.byteowlsGenopilot/isolates');
+  assert.equal(paths.isolateCatalogPath, `${paths.isolateCatalogDirectory}/isolates.yaml`);
+  assert.ok(!paths.isolateCatalogPath.startsWith(`${paths.dataDirectory}/`));
+});
+
 test('uses platform user-data defaults without depending on the working directory', () => {
   const linux = resolveToolingPaths({
     platform: 'linux',

@@ -22,11 +22,12 @@ These are already implemented by the annotation-transfer work and should be reus
 - [x] Versioned configuration validation, isolated run workspaces, and dry-run review.
 - [x] Local and versioned NCBI assembly resolution with checksum-verified reuse/refresh caching.
 - [x] Managed Snakemake execution, structured events, complete logs, provenance, and result loading.
-- [x] Welcome-screen entries for **Manage isolates** and **Manage NCBI accessions**; their catalog behavior is not implemented yet.
+- [x] Welcome-screen entries for **Manage isolates** and **Manage NCBI accessions**; the isolate catalog is implemented (Task 1), the accession catalog is not yet.
 
 ## Ordered work
 
-- [ ] 1. [Manage isolates](1-manage-isolates.md)
+- [x] 1. [Manage isolates](1-manage-isolates.md)
+- [ ] 1b. [Import isolates from an Illumina delivery](1b-import-illumina-isolates.md)
 - [ ] 2. [Manage accessions](2-manage-accessions.md)
 - [ ] 3. [Workflow configuration and review](3-workflow-configuration-and-review.md)
 - [ ] 4.1. [Per-isolate processing](4a-per-isolate-processing.md)
@@ -34,12 +35,13 @@ These are already implemented by the annotation-transfer work and should be reus
 - [ ] 4.3. [Combined consensus generation](4c-combined-consensus-generation.md)
 - [ ] 5. [Results and post-processing](5-results-and-post-processing.md)
 
-Tasks 1 and 2 may be implemented independently. Task 3 depends on both catalogs. Execution tasks 4.1–4.3 are sequential Snakemake targets but remain separate vertical slices because each produces independently testable scientific artifacts. Task 5 depends on their persisted result contracts.
+Tasks 1 and 2 may be implemented independently. Task 1b builds on Task 1 and is optional for the later tasks. Task 3 depends on both catalogs. Execution tasks 4.1–4.3 are sequential Snakemake targets but remain separate vertical slices because each produces independently testable scientific artifacts. Task 5 depends on their persisted result contracts.
 
 ## Terminology
 
 - **Backbone**: the assembly FASTA that supplies coordinates, sequence structure, and one cohort vote; typically the T2T assembly.
 - **Legacy reference**: an older assembly, such as a Sanger-era reference, used later for comparison or annotation transfer; it is not a cohort vote unless a future design explicitly says otherwise.
-- **Isolate**: a biological sample with reusable metadata and paired R1/R2 reads.
+- **Isolate**: a biological sample with reusable metadata and one or more paired R1/R2 read sets.
+- **Read pair**: one R1/R2 FASTQ pair, typically one lane of one sequencing run; a library sequenced several times has several pairs whose reads add up.
 - **Isolate genome**: a reference-guided FASTA generated for one isolate from its calls against a particular backbone.
 - **Cohort consensus**: the potentially mosaic sequence selected from the backbone and callable isolate votes. It is not claimed to be the genome of one biological individual.

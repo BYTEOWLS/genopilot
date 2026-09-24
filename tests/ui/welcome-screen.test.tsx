@@ -17,6 +17,7 @@ import {
   type WelcomeCommandId,
 } from '../../src/ui/welcome-screen/commands/definitions.js';
 import type {RunDiscovery} from '../../src/ui/open-run-screen/screen.js';
+import type {IsolateCatalogLoader, IsolateCatalogUpdater} from '../../src/ui/isolates-screen/screen.js';
 import type {WorkflowDiscovery} from '../../src/ui/workflow-selector.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 import type {WorkflowParameterDefinition} from '../../src/workflows/parameter-definitions.js';
@@ -82,6 +83,7 @@ function commandsFor(...ids: WelcomeCommandId[]): readonly CommandDefinition<Wel
 const newRunOnlyCommands = commandsFor('new-run');
 const openRunOnlyCommands = commandsFor('open-run');
 const ncbiAccessOnlyCommands = commandsFor('ncbi-access');
+const isolatesOnlyCommands = commandsFor('manage-isolates');
 const toolingOnlyCommands = commandsFor('check-tooling');
 
 /** Simulates the TTY input stream that Ink expects during interactive tests. */
@@ -157,6 +159,8 @@ function renderWelcome(
     checkNcbiApiKeyConfigured?: () => Promise<boolean>;
     saveNcbiApiKey?: (key: string) => Promise<void>;
     clearStoredNcbiApiKey?: () => Promise<void>;
+    loadIsolates?: IsolateCatalogLoader;
+    updateIsolates?: IsolateCatalogUpdater;
     updateCheck?: () => Promise<UpdateAvailability>;
   } = {},
 ): {
@@ -181,6 +185,9 @@ function renderWelcome(
       checkNcbiApiKeyConfigured={options.checkNcbiApiKeyConfigured}
       saveNcbiApiKey={options.saveNcbiApiKey}
       clearStoredNcbiApiKey={options.clearStoredNcbiApiKey}
+      isolateCatalogPath="/researcher/isolates/isolates.yaml"
+      loadIsolates={options.loadIsolates}
+      updateIsolates={options.updateIsolates}
       updateCheck={options.updateCheck ?? (async () => ({state: 'current'}))}
     />,
     {
@@ -487,6 +494,35 @@ test('opens and navigates away from the ncbi-access command', async context => {
   input.write('\x1b');
   const welcomeFrame = await waitForOutput(output, value => value.includes('↑/↓ — Select'));
   assert.match(welcomeFrame, /Commands/);
+});
+
+test('opens the isolate manager by command ID and returns to the menu', async context => {
+  let loads = 0;
+  let updates = 0;
+  const {input, instance} = renderWelcome(detectedStatus, {
+    commands: isolatesOnlyCommands,
+    loadIsolates: async () => {
+      loads += 1;
+      return {catalog: {schema_version: 1, isolates: []}, revision: undefined};
+    },
+    updateIsolates: async () => {
+      updates += 1;
+      throw new Error('unexpected');
+    },
+  });
+  registerCleanup(context, instance);
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+
+  input.write('\r');
+  await waitFor(() => loads === 1);
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+
+  input.write('\x1b');
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  // Back on the menu, Enter opens the manager again, which reloads the catalog.
+  input.write('\r');
+  await waitFor(() => loads === 2);
+  assert.equal(updates, 0);
 });
 
 test('opens the tooling screen and runs a fresh check there', async context => {
