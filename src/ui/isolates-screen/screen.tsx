@@ -231,8 +231,6 @@ export function IsolatesScreen({
   const visibleStart = isolates
     ? Math.max(0, Math.min(selectedIndex - Math.floor(visibleIsolateCount / 2), isolates.length - visibleIsolateCount))
     : 0;
-  const selected = selectedIndex >= 0 ? isolates?.[selectedIndex] : undefined;
-  const selectedCheck = selected ? readChecks.get(selected.id) : undefined;
 
   return (
     <Box flexDirection="column">
@@ -266,36 +264,6 @@ export function IsolatesScreen({
           <Text color={mutedColor}>{selectedIndex + 1} of {isolates.length}</Text>
         ) : null}
       </Box>
-      {selected && view.kind === 'list' ? (
-        <Box marginTop={1} flexDirection="column">
-          {selected.description ? (
-            <Text wrap="wrap">{sanitizeTerminalText(selected.description)}</Text>
-          ) : null}
-          {selected.read_pairs.map((pair, index) => {
-            const check = selectedCheck?.pairs[index];
-            return (
-              <Box key={`${pair.r1}:${pair.r2}`} flexDirection="column">
-                <Text color={mutedColor}>
-                  Read pair {index + 1}{pair.trimmed ? ' (already trimmed)' : ''}
-                </Text>
-                <Text wrap="truncate-middle">
-                  {'  '}R1: {sanitizeTerminalText(pair.r1)}
-                  {check && check.r1.state !== 'ok' ? ` — ${check.r1.reason}` : ''}
-                </Text>
-                <Text wrap="truncate-middle">
-                  {'  '}R2: {sanitizeTerminalText(pair.r2)}
-                  {check && check.r2.state !== 'ok' ? ` — ${check.r2.reason}` : ''}
-                </Text>
-              </Box>
-            );
-          })}
-          {selectedCheck?.sameFiles.map(({first, second}) => (
-            <Text key={`${first}:${second}`} wrap="wrap">
-              {sanitizeTerminalText(second)} is the same file as {sanitizeTerminalText(first)}
-            </Text>
-          ))}
-        </Box>
-      ) : null}
       {view.kind === 'confirm-remove' ? (
         <Box marginTop={1} flexDirection="column">
           <Text color="yellow" wrap="wrap">
