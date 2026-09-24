@@ -122,7 +122,7 @@ Cancellation is deferred to [`later.md`](later.md) "Workflow cancellation".
 - [ ] Replace or extend provisional prefix-only annotation-ID rewriting with a reviewed regular-expression search-and-replacement step after raw LiftOn output, including previews, collision checks, provenance, and distinct raw/final IDs in reports.
 - [ ] Evaluate advanced LiftOn controls only if baseline results demonstrate a need, including alignment coverage, sequence identity, extra-copy search, feature-type selection, and chromosome correspondence.
 - [ ] Add manifests for the consensus and comparison workflows when their contracts are ready.
-- [ ] Implement isolate creation, editing, reuse, and lineage metadata management.
+- [x] Implement isolate creation, editing, reuse, and lineage metadata management.
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions beyond basic annotation-transfer resume.
 - [ ] Implement explicit decision-boundary screens and save decisions before invoking dependent targets.
 

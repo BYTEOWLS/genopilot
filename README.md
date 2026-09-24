@@ -169,6 +169,35 @@ Windows support through WSL2 is planned after the core Linux and macOS implement
 
 Tool version validation, actionable per-tool failure diagnostics, guided installation, stale-lock recovery, and manual rechecks are implemented. Repair tooling remains tracked in [`tasks.md`](tasks.md).
 
+## Isolate catalog
+
+Isolates reused across consensus runs are stored in a user-local catalog, `isolates/isolates.yaml`, beside the managed tooling directory:
+
+| Platform | Catalog file |
+|---|---|
+| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/byteowlsGenopilot/isolates/isolates.yaml` |
+| macOS | `$HOME/.byteowlsGenopilot/isolates/isolates.yaml` |
+
+The catalog records local research paths, so it is owner-only and never belongs in a repository or run workspace. Each isolate has a stable ID, a name, an optional description, an explicit `wildtype` value, an optional `derived_from` parent ID, and one or more R1/R2 FASTQ pairs (plain or gzip-compressed) given as absolute paths. Sequencing providers deliver one pair per lane or run, so a library sequenced twice has two pairs. Each pair records whether the provider already trimmed or filtered it; untrimmed reads are preferred, and one isolate cannot mix trimmed and untrimmed pairs:
+
+```yaml
+schema_version: 1
+isolates:
+  - id: "isolate-a"
+    name: "Isolate A"
+    wildtype: true
+    derived_from: null
+    read_pairs:
+      - r1: "/data/isolate-a_S1_L001_R1_001.fastq.gz"
+        r2: "/data/isolate-a_S1_L001_R2_001.fastq.gz"
+        trimmed: false
+      - r1: "/data/isolate-a_S1_L002_R1_001.fastq.gz"
+        r2: "/data/isolate-a_S1_L002_R2_001.fastq.gz"
+        trimmed: false
+```
+
+The CLI validates the whole file on every load and save: duplicate or malformed IDs, relative paths, a read file used more than once, mixed trimmed and untrimmed pairs, missing parents, and lineage cycles are rejected. Saves take an exclusive lock, refuse to overwrite changes made by another Genopilot window, and replace the file atomically. A file that fails validation is reported with its path and left untouched; fix or move it aside to continue. Removing an isolate from the catalog never deletes its read files.
+
 ## Reset managed tooling for installation tests
 
 Stop the CLI before removing its managed tooling. These commands remove Pixi, Conda, Snakemake, and temporary setup files while preserving previous setup logs.
@@ -199,7 +228,7 @@ To also delete setup logs and completely reset the application-managed tooling d
 rm -rf "$TOOLING_DIR"
 ```
 
-These commands do not remove tools installed elsewhere on the system.
+These commands do not remove tools installed elsewhere on the system, and they never touch the [isolate catalog](#isolate-catalog), which lives outside `$TOOLING_DIR`.
 
 ## Test a global installation
 

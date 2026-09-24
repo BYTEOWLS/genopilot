@@ -18,6 +18,13 @@ import {
 import {sanitizeTerminalText} from '../sanitize.js';
 import {NewRunScreen} from '../new-run-screen/screen.js';
 import {NcbiAccessScreen} from '../ncbi-access-screen/screen.js';
+import {
+  IsolatesScreen,
+  type IsolateCatalogLoader,
+  type IsolateCatalogUpdater,
+} from '../isolates-screen/screen.js';
+import {loadIsolateCatalog, updateIsolateCatalog} from '../../isolates/store.js';
+import {checkReadPairs, type ReadPairsChecker} from '../../isolates/reads.js';
 import {OpenRunScreen, type RunDiscovery} from '../open-run-screen/screen.js';
 import {ToolingScreen} from '../tooling-screen/screen.js';
 import type {WorkflowDiscovery} from '../workflow-selector.js';
@@ -60,6 +67,10 @@ export function WelcomeScreen({
   checkNcbiApiKeyConfigured = () => isNcbiApiKeyConfigured(ncbiApiKeyPath),
   saveNcbiApiKey = key => writeNcbiApiKey(ncbiApiKeyPath, key),
   clearStoredNcbiApiKey = () => clearNcbiApiKey(ncbiApiKeyPath),
+  isolateCatalogPath = resolveToolingPaths().isolateCatalogPath,
+  loadIsolates,
+  updateIsolates,
+  checkIsolateReads = checkReadPairs,
   updateCheck,
 }: {
   metadata: CliMetadata;
@@ -78,6 +89,10 @@ export function WelcomeScreen({
   checkNcbiApiKeyConfigured?: () => Promise<boolean>;
   saveNcbiApiKey?: (key: string) => Promise<void>;
   clearStoredNcbiApiKey?: () => Promise<void>;
+  isolateCatalogPath?: string;
+  loadIsolates?: IsolateCatalogLoader;
+  updateIsolates?: IsolateCatalogUpdater;
+  checkIsolateReads?: ReadPairsChecker;
   updateCheck?: (signal?: AbortSignal) => Promise<UpdateAvailability>;
 }): React.JSX.Element {
   const {exit} = useApp();
@@ -91,6 +106,15 @@ export function WelcomeScreen({
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>();
   const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string>();
   const {suspension: homeSuspension, suspend: suspendHome} = useHomeSuspensions();
+  // Stable callbacks: the isolate screen reloads whenever its loader's identity changes.
+  const loadIsolatesFromPath = useCallback(
+    () => loadIsolateCatalog(isolateCatalogPath),
+    [isolateCatalogPath],
+  );
+  const updateIsolatesAtPath = useCallback<IsolateCatalogUpdater>(
+    (revision, mutate) => updateIsolateCatalog(isolateCatalogPath, revision, mutate),
+    [isolateCatalogPath],
+  );
 
   useEffect(() => {
     let active = true;
@@ -127,6 +151,7 @@ export function WelcomeScreen({
     switch (id) {
       case 'new-run':
       case 'open-run':
+      case 'manage-isolates':
       case 'ncbi-access':
         setCommandMessage(undefined);
         tooling.clearCheckMessage();
@@ -171,6 +196,7 @@ export function WelcomeScreen({
     switch (activeScreenId) {
       case 'new-run':
       case 'open-run':
+      case 'manage-isolates':
       case 'ncbi-access':
       case 'check-tooling':
         return;
@@ -233,6 +259,18 @@ export function WelcomeScreen({
             inputActive={columns >= minimumTerminalWidth}
             discoverWorkflows={workflowDiscovery}
             discoverRuns={runDiscovery}
+          />
+        );
+      case 'manage-isolates':
+        return (
+          <IsolatesScreen
+            onBack={() => setActiveScreenId(undefined)}
+            inputActive={columns >= minimumTerminalWidth}
+            currentDirectory={currentDirectory}
+            catalogPath={isolateCatalogPath}
+            loadCatalog={loadIsolates ?? loadIsolatesFromPath}
+            updateCatalog={updateIsolates ?? updateIsolatesAtPath}
+            checkReads={checkIsolateReads}
           />
         );
       case 'ncbi-access':

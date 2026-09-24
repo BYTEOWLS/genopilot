@@ -1,5 +1,5 @@
 import {homedir} from 'node:os';
-import {join, resolve} from 'node:path';
+import {dirname, join, resolve} from 'node:path';
 import {
   toolingPolicy,
   type SupportedArchitecture,
@@ -21,6 +21,8 @@ export type ToolingPaths = {
   installationLockPath: string;
   secretsDirectory: string;
   ncbiApiKeyPath: string;
+  isolateCatalogDirectory: string;
+  isolateCatalogPath: string;
 };
 
 function supportedPlatform(value: NodeJS.Platform): SupportedPlatform {
@@ -91,6 +93,10 @@ export function resolveToolingPaths({
     installationLockPath: join(dataDirectory, 'tooling-setup.lock'),
     secretsDirectory: join(dataDirectory, 'secrets'),
     ncbiApiKeyPath: join(dataDirectory, 'secrets', 'ncbi-api-key'),
+    // Research metadata sits beside, not inside, the tooling directory, so resetting or
+    // deleting managed tooling never removes the researcher's isolate catalog.
+    isolateCatalogDirectory: join(dirname(resolve(dataDirectory)), 'isolates'),
+    isolateCatalogPath: join(dirname(resolve(dataDirectory)), 'isolates', 'isolates.yaml'),
   };
 }
 
