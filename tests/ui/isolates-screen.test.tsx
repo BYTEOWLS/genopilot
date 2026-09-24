@@ -15,6 +15,7 @@ import {
   type LoadedIsolateCatalog,
 } from '../../src/isolates/store.js';
 import {expandHomeDirectory} from '../../src/ui/isolates-screen/isolate-form.js';
+import type {DirectoryReader} from '../../src/ui/new-run-screen/path-browser.js';
 import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
 import {
   IsolatesScreen,
@@ -145,6 +146,7 @@ function renderScreen(
     loadCatalog: IsolateCatalogLoader;
     updateCatalog: IsolateCatalogUpdater;
     checkReads?: ReadPairsChecker;
+    readDirectory?: DirectoryReader;
     onBack?: () => void;
     onSuspension?: (suspension: HomeSuspension | undefined) => void;
   },
@@ -160,6 +162,7 @@ function renderScreen(
       loadCatalog={options.loadCatalog}
       updateCatalog={options.updateCatalog}
       checkReads={options.checkReads ?? (async pairs => okReads(pairs))}
+      readDirectory={options.readDirectory}
     />
   );
   const instance = render(
@@ -359,6 +362,32 @@ test('names the other isolate when an edit conflicts with a later one', async co
   // The form no longer shows the list, so the ID can only come from the conflict message.
   const frame = await waitForOutput(output, value => value.includes('isolate-b'));
   assert.doesNotMatch(frame, /\$\.isolates/);
+});
+
+test('opens the file chooser beside the other mate of the pair', async context => {
+  const store = new MemoryCatalog();
+  const directoriesRead: string[] = [];
+  const {input} = renderScreen(context, {
+    loadCatalog: store.load,
+    updateCatalog: store.update,
+    readDirectory: async path => {
+      directoriesRead.push(path);
+      return [];
+    },
+  });
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  // New-isolate rows: name, ID, description, wild type, parent, then pair 1 R1 and R2.
+  const downToR1 = Array.from({length: 5}, () => keys.down);
+  await press(input, 'n', ...downToR1, keys.down, '/deliveries/run-7/x_R2.fq', keys.up, keys.enter);
+  await waitFor(() => directoriesRead.length === 1);
+  assert.equal(directoriesRead[0], '/deliveries/run-7');
+
+  // Without either mate, the chooser starts in the current directory.
+  await press(input, keys.escape, keys.escape, 'n', ...downToR1, keys.enter);
+  await waitFor(() => directoriesRead.length === 2);
+  assert.equal(directoriesRead[1], '/research/project');
 });
 
 test('refuses to save while required fields or read files are invalid', async context => {

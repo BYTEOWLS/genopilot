@@ -324,10 +324,14 @@ export function IsolateForm({
   );
 
   if (browsing) {
-    const current = expandHomeDirectory(pairs.find(pair => pair.key === browsing.pairKey)?.[browsing.mate].trim() ?? '');
+    const pair = pairs.find(candidate => candidate.key === browsing.pairKey);
+    const own = expandHomeDirectory(pair?.[browsing.mate].trim() ?? '');
+    // Mates are normally delivered side by side, so an empty field starts beside its partner.
+    const mate = expandHomeDirectory(pair?.[browsing.mate === 'r1' ? 'r2' : 'r1'].trim() ?? '');
+    const start = isAbsolute(own) ? own : isAbsolute(mate) ? mate : undefined;
     return (
       <PathBrowser
-        initialDirectory={isAbsolute(current) ? dirname(current) : currentDirectory}
+        initialDirectory={start ? dirname(start) : currentDirectory}
         onSelect={path => {
           updatePair(browsing.pairKey, {[browsing.mate]: path});
           setBrowsing(undefined);
