@@ -1,6 +1,6 @@
 import {spawn} from 'node:child_process';
 import {createHash, randomUUID} from 'node:crypto';
-import {lstat, readFile, stat} from 'node:fs/promises';
+import {lstat, stat} from 'node:fs/promises';
 import {
   appendFile,
   chmod,
@@ -12,6 +12,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import {delimiter, dirname, join} from 'node:path';
+import {acquireFileLock, type FileLock} from '../file-lock.js';
 import {LiveOutputBuffer} from '../live-output.js';
 import {toolingPolicy} from './policy.js';
 import {
@@ -72,7 +73,6 @@ export class ToolingInstallationError extends Error {
 
 const processTailCharacters = 64 * 1024;
 const forcedTerminationDelayMilliseconds = 5000;
-const malformedLockGracePeriodMilliseconds = 30_000;
 const trustedTarExecutables = ['/usr/bin/tar', '/bin/tar'] as const;
 
 function terminateProcessGroup(
@@ -301,60 +301,6 @@ async function selectTrustedTarExecutable(): Promise<string> {
   throw new Error(`A trusted tar executable was not found at ${trustedTarExecutables.join(' or ')}.`);
 }
 
-function processIsActive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code !== 'ESRCH';
-  }
-}
-
-async function acquireInstallationLock(
-  path: string,
-): Promise<{handle: Awaited<ReturnType<typeof open>>; recovered: boolean}> {
-  let recovered = false;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const handle = await open(path, 'wx', 0o600);
-      try {
-        await handle.writeFile(`${String(process.pid)}\n`, 'utf8');
-        return {handle, recovered};
-      } catch (error) {
-        await handle.close();
-        await rm(path, {force: true});
-        throw error;
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-        throw error;
-      }
-
-      try {
-        const [contents, details] = await Promise.all([readFile(path, 'utf8'), stat(path)]);
-        const pidText = contents.trim();
-        const parsedPid = /^\d+$/.test(pidText) ? Number(pidText) : undefined;
-        const pid =
-          parsedPid !== undefined && Number.isSafeInteger(parsedPid) && parsedPid > 0
-            ? parsedPid
-            : undefined;
-        const malformedLockIsRecent =
-          pid === undefined && Date.now() - details.mtimeMs < malformedLockGracePeriodMilliseconds;
-        if ((pid !== undefined && processIsActive(pid)) || malformedLockIsRecent) {
-          throw new Error('Tooling setup is already running.');
-        }
-        await rm(path, {force: true});
-        recovered = true;
-      } catch (inspectionError) {
-        if ((inspectionError as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw inspectionError;
-        }
-      }
-    }
-  }
-  throw new Error('Could not acquire the tooling setup lock.');
-}
-
 function minimalEnvironment(paths: ToolingPaths): NodeJS.ProcessEnv {
   const inheritedNames = [
     'HOME',
@@ -426,7 +372,7 @@ export async function installTooling(
   };
 
   let workingDirectory: string | undefined;
-  let lock: Awaited<ReturnType<typeof open>> | undefined;
+  let lock: FileLock | undefined;
   const runLogged = async (
     command: string,
     arguments_: readonly string[],
@@ -461,9 +407,8 @@ export async function installTooling(
   };
 
   try {
-    const acquiredLock = await acquireInstallationLock(paths.installationLockPath);
-    lock = acquiredLock.handle;
-    if (acquiredLock.recovered) {
+    lock = await acquireFileLock(paths.installationLockPath, 'Tooling setup is already running.');
+    if (lock.recovered) {
       await log('Recovered a stale tooling setup lock.');
     }
     const trustedTarExecutable = await selectTrustedTarExecutable();
@@ -570,11 +515,7 @@ export async function installTooling(
       await rm(workingDirectory, {recursive: true, force: true});
     }
     if (lock) {
-      try {
-        await lock.close();
-      } finally {
-        await rm(paths.installationLockPath, {force: true});
-      }
+      await lock.release();
     }
   }
 }
