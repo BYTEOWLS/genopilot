@@ -1,4 +1,5 @@
-import {dirname, isAbsolute} from 'node:path';
+import {homedir} from 'node:os';
+import {dirname, isAbsolute, join} from 'node:path';
 import React, {useCallback, useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {
@@ -65,6 +66,14 @@ function fieldLabel(field: string): string {
     return `Pair ${String(number)}${part}`;
   }
   return fieldLabels[field] ?? field;
+}
+
+/** Expands a leading `~` the way a shell would, since researchers often paste home-relative paths. */
+export function expandHomeDirectory(path: string, homeDirectory = homedir()): string {
+  if (path === '~') {
+    return homeDirectory;
+  }
+  return path.startsWith('~/') ? join(homeDirectory, path.slice(2)) : path;
 }
 
 function readProblem(label: string, check: ReadFileCheck | undefined): string | undefined {
@@ -203,7 +212,11 @@ export function IsolateForm({
       ...(description.length > 0 ? {description} : {}),
       wildtype: values.wildtype === 'true',
       derived_from: values.derived_from === '' ? null : values.derived_from,
-      read_pairs: pairs.map(pair => ({r1: pair.r1.trim(), r2: pair.r2.trim(), trimmed: pair.trimmed})),
+      read_pairs: pairs.map(pair => ({
+        r1: expandHomeDirectory(pair.r1.trim()),
+        r2: expandHomeDirectory(pair.r2.trim()),
+        trimmed: pair.trimmed,
+      })),
     };
 
     const candidate = withIsolate(catalog, isolate, editing?.id);
@@ -215,10 +228,17 @@ export function IsolateForm({
         setProblems([error instanceof Error ? error.message : String(error)]);
         return;
       }
-      const prefix = `$.isolates[${String(index)}].`;
       setProblems(error.issues.map(issue => {
-        const field = issue.path.startsWith(prefix) ? issue.path.slice(prefix.length) : issue.path;
-        return `${fieldLabel(field)}: ${issue.message}`;
+        const located = /^\$\.isolates\[(\d+)\]\.(.+)$/.exec(issue.path);
+        if (!located) {
+          return `${issue.path}: ${issue.message}`;
+        }
+        const issueIndex = Number(located[1]);
+        const field = fieldLabel(located[2] ?? '');
+        // Editing one isolate can surface a conflict recorded on another, e.g. a read file that a
+        // later isolate already uses; name that isolate instead of hiding or garbling the issue.
+        const owner = issueIndex === index ? '' : `Isolate "${candidate.isolates[issueIndex]?.id ?? ''}" `;
+        return `${owner}${field}: ${issue.message}`;
       }));
       return;
     }
@@ -304,7 +324,7 @@ export function IsolateForm({
   );
 
   if (browsing) {
-    const current = pairs.find(pair => pair.key === browsing.pairKey)?.[browsing.mate].trim() ?? '';
+    const current = expandHomeDirectory(pairs.find(pair => pair.key === browsing.pairKey)?.[browsing.mate].trim() ?? '');
     return (
       <PathBrowser
         initialDirectory={isAbsolute(current) ? dirname(current) : currentDirectory}

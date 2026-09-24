@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {mkdtemp, rm, writeFile} from 'node:fs/promises';
-import {tmpdir} from 'node:os';
+import {homedir, tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
@@ -14,6 +14,7 @@ import {
   updateIsolateCatalog,
   type LoadedIsolateCatalog,
 } from '../../src/isolates/store.js';
+import {expandHomeDirectory} from '../../src/ui/isolates-screen/isolate-form.js';
 import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
 import {
   IsolatesScreen,
@@ -316,6 +317,48 @@ test('removes a read pair while editing', async context => {
   assert.deepEqual(store.catalog.isolates[0]?.read_pairs, [
     {r1: '/data/L8_R1.fq', r2: '/data/L8_R2.fq', trimmed: false},
   ]);
+});
+
+test('expands home-relative read paths', () => {
+  assert.equal(expandHomeDirectory('~/reads/x_R1.fq', '/home/researcher'), '/home/researcher/reads/x_R1.fq');
+  assert.equal(expandHomeDirectory('~', '/home/researcher'), '/home/researcher');
+  assert.equal(expandHomeDirectory('/data/~/x.fq', '/home/researcher'), '/data/~/x.fq');
+  // `~user` needs a user database lookup; it stays unexpanded and is rejected as non-absolute.
+  assert.equal(expandHomeDirectory('~other/x.fq', '/home/researcher'), '~other/x.fq');
+});
+
+test('saves a typed ~ path as an absolute path', async context => {
+  const store = new MemoryCatalog();
+  const {input} = renderScreen(context, {loadCatalog: store.load, updateCatalog: store.update});
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await createIsolate(input, {name: 'Home Reads', pairs: [{r1: '~/reads/h_R1.fq', r2: '~/reads/h_R2.fq'}]});
+
+  await waitFor(() => store.catalog.isolates.length === 1);
+  assert.deepEqual(store.catalog.isolates[0]?.read_pairs, [
+    {r1: join(homedir(), 'reads/h_R1.fq'), r2: join(homedir(), 'reads/h_R2.fq'), trimmed: false},
+  ]);
+});
+
+test('names the other isolate when an edit conflicts with a later one', async context => {
+  const store = new MemoryCatalog(isolate('isolate-a'), isolate('isolate-b'));
+  const {input, output} = renderScreen(context, {loadCatalog: store.load, updateCatalog: store.update});
+  await waitForOutput(output, value => value.includes('isolate-b'));
+
+  // Edit isolate-a so its R1 is isolate-b's R1; the catalog records the conflict on isolate-b.
+  const downToR1 = Array.from({length: 4}, () => keys.down);
+  await press(input, keys.enter, ...downToR1);
+  const clearR1 = Array.from({length: '/data/isolate-a_R1.fq'.length}, () => '\x7f');
+  await press(input, clearR1.join(''), '/data/isolate-b_R1.fq', keys.up, keys.up, keys.up, keys.up, keys.up);
+  output.clearOutput();
+  await press(input, keys.enter);
+  await settle();
+
+  assert.equal(store.updates, 0);
+  // The form no longer shows the list, so the ID can only come from the conflict message.
+  const frame = await waitForOutput(output, value => value.includes('isolate-b'));
+  assert.doesNotMatch(frame, /\$\.isolates/);
 });
 
 test('refuses to save while required fields or read files are invalid', async context => {

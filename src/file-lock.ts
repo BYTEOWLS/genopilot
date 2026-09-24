@@ -20,7 +20,8 @@ function processIsActive(pid: number): boolean {
 /**
  * Creates `path` exclusively and records the current PID in it. A lock whose owner has stopped
  * is recovered; a lock held by a running process, or one still being written, fails with
- * `busyMessage`.
+ * `busyMessage` plus the lock's path, because an unrelated process can reuse a crashed owner's PID
+ * and only the researcher can then tell that the lock is stale.
  */
 export async function acquireFileLock(path: string, busyMessage: string): Promise<FileLock> {
   let recovered = false;
@@ -60,7 +61,9 @@ export async function acquireFileLock(path: string, busyMessage: string): Promis
         const malformedLockIsRecent =
           pid === undefined && Date.now() - details.mtimeMs < malformedLockGracePeriodMilliseconds;
         if ((pid !== undefined && processIsActive(pid)) || malformedLockIsRecent) {
-          throw new Error(busyMessage);
+          throw new Error(
+            `${busyMessage} If no other Genopilot window is running, remove the stale lock file ${path}.`,
+          );
         }
         await rm(path, {force: true});
         recovered = true;

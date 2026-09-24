@@ -156,7 +156,7 @@ function validateIsolate(
  * trimmed reads in one isolate, which would process that isolate inconsistently.
  */
 function validateReadFileUse(isolates: readonly Isolate[], issues: IsolateCatalogValidationIssue[]): void {
-  const firstUse = new Map<string, string>();
+  const firstUse = new Map<string, {isolateId: string; mate: string}>();
   isolates.forEach((isolate, isolateIndex) => {
     const path = `$.isolates[${isolateIndex}].read_pairs`;
     isolate.read_pairs.forEach((pair, pairIndex) => {
@@ -165,9 +165,11 @@ function validateReadFileUse(isolates: readonly Isolate[], issues: IsolateCatalo
         const file = resolve(pair[mate]);
         const previous = firstUse.get(file);
         if (previous === undefined) {
-          firstUse.set(file, matePath);
+          firstUse.set(file, {isolateId: isolate.id, mate: `pair ${String(pairIndex + 1)} ${mate.toUpperCase()}`});
         } else {
-          issues.push({path: matePath, message: `uses the same file as ${previous}`});
+          // Name the earlier use by isolate ID rather than catalog position, which researchers never see.
+          const owner = previous.isolateId === isolate.id ? '' : `isolate "${previous.isolateId}", `;
+          issues.push({path: matePath, message: `uses the same file as ${owner}${previous.mate}`});
         }
       }
     });
@@ -185,10 +187,7 @@ function validateLineage(isolates: readonly Isolate[], issues: IsolateCatalogVal
     if (previous === undefined) {
       indexById.set(isolate.id, index);
     } else {
-      issues.push({
-        path: `$.isolates[${index}].id`,
-        message: `duplicates the ID of $.isolates[${previous}]`,
-      });
+      issues.push({path: `$.isolates[${index}].id`, message: 'is already used by another isolate'});
     }
   });
 

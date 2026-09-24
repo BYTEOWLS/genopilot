@@ -26,7 +26,13 @@ test('refuses a lock held by a running process', async context => {
   const lock = await acquireFileLock(path, 'busy');
   context.after(() => lock.release());
 
-  await assert.rejects(acquireFileLock(path, 'Already locked.'), /Already locked\./);
+  await assert.rejects(acquireFileLock(path, 'Already locked.'), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /Already locked\./);
+    // A crashed owner's PID can be reused, so the researcher must be able to find the lock.
+    assert.ok(error.message.includes(path));
+    return true;
+  });
 });
 
 test('recovers a lock whose owner has stopped', async context => {

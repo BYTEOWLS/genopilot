@@ -140,6 +140,31 @@ test('rejects the same file used twice, including unnormalized spellings and acr
   assert.deepEqual(acrossIsolates.map(issue => issue.path), ['$.isolates[1].read_pairs[0].r1']);
 });
 
+test('names conflicting isolates by ID rather than catalog position', () => {
+  const acrossIsolates = issuesFor(catalogOf(
+    isolate('a'),
+    isolate('b', {read_pairs: [{r1: '/data/a_R1.fastq.gz', r2: '/data/b_R2.fq', trimmed: false}]}),
+  ));
+  assert.match(acrossIsolates[0]?.message ?? '', /isolate "a", pair 1 R1/);
+
+  const withinIsolate = issuesFor(catalogOf(isolate('a', {
+    read_pairs: [
+      {r1: '/data/L7_R1.fq', r2: '/data/L7_R2.fq', trimmed: false},
+      {r1: '/data/L7_R1.fq', r2: '/data/L8_R2.fq', trimmed: false},
+    ],
+  })));
+  assert.match(withinIsolate[0]?.message ?? '', /pair 1 R1/);
+  assert.doesNotMatch(withinIsolate[0]?.message ?? '', /isolate "/);
+
+  const duplicateId = issuesFor(catalogOf(
+    isolate('a'),
+    isolate('a', {read_pairs: [{r1: '/data/other_R1.fq', r2: '/data/other_R2.fq', trimmed: false}]}),
+  ));
+  for (const issue of [...acrossIsolates, ...withinIsolate, ...duplicateId]) {
+    assert.doesNotMatch(issue.message, /\$\.isolates/);
+  }
+});
+
 test('rejects mixing trimmed and untrimmed read pairs in one isolate', () => {
   const issues = issuesFor(catalogOf(isolate('a', {
     read_pairs: [

@@ -119,6 +119,15 @@ Interactive decisions remain outside Snakemake rules. The TUI saves decisions, a
 
 - [ ] Detect newer releases of the Snakemake, Conda, and Pixi versions pinned in `src/tooling/policy.ts`. Dependabot covers npm, GitHub Actions, and the conda environments under `workflows/shared/envs/`, but cannot read these TypeScript constants; a scheduled check or a custom update manager could propose bumps that still require validation.
 
+### Isolate catalog
+
+Follow-ups from the review of the first isolate-catalog implementation:
+
+- [ ] Make stale-lock recovery in `src/file-lock.ts` race-free. When two processes find the same stale lock, both remove it, and the slower one can delete the lock the faster one just created, so both proceed. The catalog's revision check narrows but does not close the window. Shared with tooling setup.
+- [ ] Reload the catalog automatically after a save is refused because another window changed it, instead of leaving the list stale until the researcher presses `r`.
+- [ ] Detect one read file reached through different paths across isolates, not only within one: symlinks and hard links, and differently cased paths on case-insensitive filesystems such as the macOS default.
+- [ ] Replace fixed keystroke delays in `tests/ui/isolates-screen.test.tsx` with waits on injected callbacks or rendered state, so the suite does not become flaky on slower CI runners.
+
 ## Run verification command
 
 Researchers should be able to inspect and rerun a released workflow without repository access. Every run records package and workflow versions, workflow checksums, effective configuration, input/output checksums, reference versions, tool versions, commands, logs, events, timestamps, and platform.
