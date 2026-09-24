@@ -15,6 +15,7 @@ import {TextField} from '../new-run-screen/text-field.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
+import {ValidationError} from '../validation-error.js';
 
 type Mate = 'r1' | 'r2';
 
@@ -449,19 +450,12 @@ export function IsolateForm({
 
   return (
     <Box flexDirection="column">
-      <Text bold>{creating ? 'New isolate' : `Edit isolate ${sanitizeTerminalText(editing.id)}`}</Text>
+      <Text bold underline>{creating ? 'New isolate' : `Edit isolate ${sanitizeTerminalText(editing.id)}`}</Text>
       <Box marginTop={1} flexDirection="column">
         {rows.map(renderRow)}
       </Box>
       {submitting ? <Text>Checking reads and saving…</Text> : null}
-      {problems.length > 0 ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text color="red">Not saved:</Text>
-          {problems.map(problem => (
-            <Text key={problem} wrap="wrap">• {sanitizeTerminalText(problem)}</Text>
-          ))}
-        </Box>
-      ) : null}
+      <ValidationError title="Not saved:" problems={problems} />
       <Box marginTop={1} flexDirection="column">
         <Text color={mutedColor} wrap="wrap">
           Add one read pair per lane or sequencing run. Prefer untrimmed reads; mark pairs that the

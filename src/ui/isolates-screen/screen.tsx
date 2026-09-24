@@ -234,7 +234,7 @@ export function IsolatesScreen({
 
   return (
     <Box flexDirection="column">
-      <Text bold>Isolates</Text>
+      <Text bold underline>Isolates</Text>
       <Text color={mutedColor} wrap="truncate">Catalog: {sanitizeTerminalText(catalogPath)}</Text>
       <Box marginTop={1} flexDirection="column">
         {catalogState.state === 'loading' ? <Text>Loading isolates…</Text> : null}
