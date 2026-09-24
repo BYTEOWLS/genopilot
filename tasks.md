@@ -1,6 +1,6 @@
 # Tasks
 
-The annotation-transfer design is recorded in [`resources/concepts/done/annotation-transfer-workflow.md`](resources/concepts/done/annotation-transfer-workflow.md) and its results in [`resources/concepts/done/annotation-transfer-results.md`](resources/concepts/done/annotation-transfer-results.md). The next workflows are designed in [`resources/concepts/consensus-and-comparison-workflows.md`](resources/concepts/consensus-and-comparison-workflows.md).
+The annotation-transfer design is recorded in [`resources/concepts/done/annotation-transfer-workflow.md`](resources/concepts/done/annotation-transfer-workflow.md) and its results in [`resources/concepts/done/annotation-transfer-results.md`](resources/concepts/done/annotation-transfer-results.md). Ordered consensus work is indexed in [`resources/concepts/consensus/README.md`](resources/concepts/consensus/README.md); comparison and downstream workflows will receive separate plans when their contracts are discussed.
 
 ## Definition of done
 

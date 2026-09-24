@@ -281,11 +281,11 @@ export function WelcomeScreen({
     <Box flexDirection="column" paddingX={1}>
       <Box borderColor="cyan" borderStyle="round" flexDirection="column" paddingX={1} width="100%">
         <Text>
-          <Text bold>{metadata.label} ({metadata.commandName})</Text>
+          <Text bold>{metadata.label}</Text>
           <Text color={mutedColor}> v{metadata.version}</Text>
         </Text>
         <Text color={mutedColor} wrap="wrap">{metadata.description}</Text>
-        <Text>Author: {metadata.author}</Text>
+        <Text>Author: {metadata.author} (https://byteowls.com)</Text>
       </Box>
       {availableUpdateVersion ? (
         <Box marginTop={1}>

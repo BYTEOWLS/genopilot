@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the design of the first workflow, `annotation-transfer`, together with the generic workflow-manifest, run-workspace, provenance, and metrics contracts it established for later workflows. All increments below are implemented; it is kept for reference. Result presentation is recorded separately in [`annotation-transfer-results.md`](annotation-transfer-results.md), and the next workflows in [`../consensus-and-comparison-workflows.md`](../consensus-and-comparison-workflows.md).
+This document records the design of the first workflow, `annotation-transfer`, together with the generic workflow-manifest, run-workspace, provenance, and metrics contracts it established for later workflows. All increments below are implemented; it is kept for reference. Result presentation is recorded separately in [`annotation-transfer-results.md`](annotation-transfer-results.md), and the next workflow is planned in the [`consensus` concept index](../consensus/README.md).
 
 ## Workflow identity, versioning, and presentation
 

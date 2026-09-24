@@ -1,0 +1,65 @@
+# Task 4.1 — Per-isolate processing
+
+## Goal
+
+Implement the first executable scientific target: independently validate and process every selected isolate against the resolved backbone, preserve auditable intermediate results, and make each validated isolate FASTA eligible for explicit promotion into its isolate catalog entry.
+
+## Pipeline
+
+For every selected isolate:
+
+```text
+R1/R2 FASTQ
+  -> authoritative input and pairing validation
+  -> read QC
+  -> alignment to the resolved backbone
+  -> sorted/indexed BAM
+  -> mapping, depth, and coverage metrics
+  -> callable-position mask
+  -> normalized SNP/indel calls and index
+  -> reference-guided isolate FASTA
+  -> isolate FASTA validation
+```
+
+No isolate name is hard-coded in a rule. Snakemake expands jobs from the immutable `isolates.yaml` snapshot and remains the only scheduler.
+
+## Scientific contract to finalize first
+
+Implement the ploidy and minimal scientific configuration contract agreed at the Task 3 kickoff. Select and pin the read-QC, mapper, BAM-processing, variant-calling, normalization, callability, and consensus tools; finalize their detailed thresholds, duplicate handling, no-call representation, and behavior in repeats without silently adding persisted semantics to the released configuration schema. Save every effective setting; do not rely on an unrecorded tool default.
+
+The isolate consensus uses the backbone as coordinates and starting sequence, not as an equal second vote. A confident isolate allele replaces the backbone allele. Ambiguous or uncallable positions follow the explicit per-isolate policy and remain distinguishable through the callable mask.
+
+## Outputs per isolate
+
+Preserve at least:
+
+- read-validation and QC reports;
+- BAM and index;
+- alignment, depth, and callable-coverage metrics;
+- callable-position mask;
+- normalized VCF and index;
+- reference-guided consensus FASTA and index;
+- logs, benchmark data, checksums, tool versions, and effective parameters.
+
+One isolate failing validation or execution must be visible as a failed job and must not disappear from later aggregation.
+
+## Catalog promotion candidate
+
+The scientific workflow writes a versioned promotion manifest describing each successfully validated isolate FASTA, its isolate ID, checksum, backbone identity/checksum, producing run, workflow version, and creation time. This keeps direct Snakemake execution independent of user-local TUI state.
+
+Task 5 offers an explicit **Save to isolate catalog** action. On confirmation, the TUI uses Task 1's promotion primitive to copy the FASTA, index, and compact provenance into `genomes/<isolate-id>/<genome-id>/`, verify the copy, and append its authoritative record to `isolates.yaml`. Never offer or promote a partial, failed, missing, or checksum-invalid FASTA. Repeating promotion is idempotent for the same genome identity and checksum; another run or backbone creates a separate record rather than replacing an older genome.
+
+## Work
+
+- [ ] Finalize the scientific toolchain, ploidy support, thresholds, and expected synthetic results.
+- [ ] Add small redistributable paired FASTQ fixtures covering reference, alternate, no-call, low-quality, SNP, and indel cases.
+- [ ] Implement full FASTQ/pair validation and checksumming.
+- [ ] Implement pinned per-rule environments and per-isolate QC, alignment, callability, calling, normalization, and FASTA generation.
+- [ ] Validate every intermediate format before dependent rules run.
+- [ ] Emit per-isolate metrics, provenance, artifact records, and a versioned catalog-promotion manifest.
+- [ ] Validate that every promotion candidate identifies its isolate and complete source artifacts without requiring catalog access.
+- [ ] Test any positive isolate count, isolated failure, resume, parameter-only reruns, direct Snakemake execution, and valid/invalid promotion candidates.
+
+## Acceptance
+
+The target runs directly through Snakemake and produces independently inspectable, scientifically validated artifacts for every isolate. Each successful FASTA can later be copied into catalog-owned storage without making catalog mutation part of the scientific DAG or overwriting older genome records.
