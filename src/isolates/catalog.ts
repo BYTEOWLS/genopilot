@@ -7,7 +7,7 @@ export const ISOLATE_CATALOG_SCHEMA_VERSION = 1 as const;
 export type ReadPair = {
   r1: string;
   r2: string;
-  /** Whether the reads were already trimmed or filtered before reaching Genopilot. */
+  /** Whether the reads were already trimmed or filtered before reaching GenoPilot. */
   trimmed: boolean;
 };
 
@@ -15,7 +15,8 @@ export type Isolate = {
   id: string;
   name: string;
   description?: string;
-  wildtype: boolean;
+  /** Researcher-supplied lineage metadata; null when not recorded. */
+  wildtype: boolean | null;
   derived_from: string | null;
   read_pairs: ReadPair[];
 };
@@ -138,8 +139,8 @@ function validateIsolate(
   if (value.description !== undefined && typeof value.description !== 'string') {
     issues.push({path: `${path}.description`, message: 'must be a string when present'});
   }
-  if (typeof value.wildtype !== 'boolean') {
-    issues.push({path: `${path}.wildtype`, message: 'must be true or false'});
+  if (value.wildtype !== null && typeof value.wildtype !== 'boolean') {
+    issues.push({path: `${path}.wildtype`, message: 'must be true, false, or null'});
   }
   if (value.derived_from !== null && typeof value.derived_from !== 'string') {
     issues.push({path: `${path}.derived_from`, message: 'must be an isolate ID or null'});
@@ -151,10 +152,7 @@ function validateIsolate(
   value.read_pairs.forEach((pair, index) => validateReadPair(pair, `${path}.read_pairs[${index}]`, issues));
 }
 
-/**
- * Checks what only the whole catalog can reveal: a read file used twice, and raw reads mixed with
- * trimmed reads in one isolate, which would process that isolate inconsistently.
- */
+/** Checks what only the whole catalog can reveal: a read file used twice. */
 function validateReadFileUse(isolates: readonly Isolate[], issues: IsolateCatalogValidationIssue[]): void {
   const firstUse = new Map<string, {isolateId: string; mate: string}>();
   isolates.forEach((isolate, isolateIndex) => {
@@ -173,9 +171,6 @@ function validateReadFileUse(isolates: readonly Isolate[], issues: IsolateCatalo
         }
       }
     });
-    if (new Set(isolate.read_pairs.map(pair => pair.trimmed)).size > 1) {
-      issues.push({path, message: 'must not mix trimmed and untrimmed read pairs'});
-    }
   });
 }
 

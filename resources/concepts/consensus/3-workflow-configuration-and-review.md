@@ -61,8 +61,8 @@ The stable workflow ID remains provisional until this task begins. Finalize it b
 Show:
 
 - backbone name, source, versioned accession where applicable, path/cache decision, and known checksum;
-- selected isolate names and stable IDs, derived count, read-pair count and R1/R2 filenames, trimmed status, wild-type status, and lineage;
-- warnings for unavailable reads, duplicated paths, a possible duplicate of the biological sample used for the backbone, and a selection that mixes isolates with trimmed and untrimmed reads, because the cohort would then not be processed consistently;
+- selected isolate names and stable IDs, derived count, read-pair count and R1/R2 filenames, trimmed status (untrimmed, trimmed, or partly trimmed), wild-type status (yes, no, or not recorded), and lineage;
+- warnings for unavailable reads, duplicated paths, a possible duplicate of the biological sample used for the backbone, and a selection that mixes trimmed and untrimmed reads within or across isolates, because the cohort would then not be processed consistently;
 - voting-method explanation with a compact example;
 - all effective scientific and resource parameters;
 - run directory and exact Snakemake command;

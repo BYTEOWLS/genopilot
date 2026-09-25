@@ -13,7 +13,7 @@ import {
 import type {WorkflowManifest} from '../../workflows/manifest.js';
 import {loadWorkflowResult, type LoadedWorkflowResult} from '../../workflows/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import {LiveLog} from '../live-log.js';
+import {LiveLog} from '../components/live-log.js';
 import {RunResultsScreen} from '../run-results-screen/screen.js';
 import {mutedColor} from '../theme.js';
 import {useTerminalTitle, type TerminalTitleStatus} from '../terminal-title.js';

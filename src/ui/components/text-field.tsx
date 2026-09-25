@@ -1,11 +1,11 @@
 import React from 'react';
 import {Text} from 'ink';
-import {TextInput} from '@inkjs/ui';
+import {TextInput} from './text-input.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 
-// A single labelled text field row. While selected and editable it hosts an @inkjs/ui
-// TextInput seeded with defaultValue; otherwise it shows displayValue. Remount the
+// A single labelled text field row. While selected and editable it hosts a TextInput seeded
+// with defaultValue; otherwise it shows displayValue. Remount the
 // component through its React key to reset the editor's internal value.
 export function TextField({
   label,

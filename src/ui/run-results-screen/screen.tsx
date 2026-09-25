@@ -8,7 +8,7 @@ import type {LoadedWorkflowResult} from '../../workflows/results.js';
 import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AnnotationTransferResults, annotationTransferHelpSections} from './annotation-transfer-results.js';
-import {ResultHelp} from './help.js';
+import {HelpContent} from '../components/help.js';
 import {runHelpSections} from './run-help.js';
 import type {WorkflowExecutionOutcome} from '../new-run-screen/workflow-execution.js';
 import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
@@ -194,7 +194,13 @@ export function RunResultsScreen({
         flexDirection="column"
       >
         <Box ref={contentRef} marginTop={-effectiveScrollOffset} flexDirection="column" flexShrink={0}>
-          {view === 'help' ? <ResultHelp sections={helpSections} /> : <>
+          {view === 'help' ? (
+            <HelpContent
+              title="Result help"
+              intro="Each entry explains one item of the result page. Recorded definitions were saved with this run by the workflow."
+              sections={helpSections}
+            />
+          ) : <>
           <SectionList title={'Run Metadata'} items={metadataItems}>
             {runMetadata && (runMetadata.workflowId !== manifest.id || runMetadata.workflowVersion !== manifest.workflow_version) ? (
                 <Alert variant="warning">

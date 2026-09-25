@@ -2,7 +2,7 @@
 
 ## Scope
 
-Genopilot is a guided terminal interface and npm package for running curated, reproducible genome workflows. It configures and starts packaged Snakemake workflows; every workflow remains runnable directly through Snakemake without the TUI.
+GenoPilot is a guided terminal interface and npm package for running curated, reproducible genome workflows. It configures and starts packaged Snakemake workflows; every workflow remains runnable directly through Snakemake without the TUI.
 
 Keep the package independent of private research data, machine-specific paths, and any single project's organisms, samples, or accessions.
 

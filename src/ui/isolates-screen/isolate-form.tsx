@@ -1,6 +1,6 @@
 import {homedir} from 'node:os';
 import {dirname, isAbsolute, join} from 'node:path';
-import React, {useCallback, useRef, useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {
   IsolateCatalogValidationError,
@@ -10,12 +10,12 @@ import {
   type IsolateCatalog,
 } from '../../isolates/catalog.js';
 import type {ReadFileCheck, ReadPairsChecker} from '../../isolates/reads.js';
-import {PathBrowser, type DirectoryReader} from '../new-run-screen/path-browser.js';
-import {TextField} from '../new-run-screen/text-field.js';
+import {PathBrowser, type DirectoryReader} from '../components/path-browser.js';
+import {TextField} from '../components/text-field.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
-import {ValidationError} from '../validation-error.js';
+import {ValidationError} from '../components/validation-error.js';
 
 type Mate = 'r1' | 'r2';
 
@@ -53,7 +53,7 @@ function initialValues(isolate: Isolate | undefined): Values {
     name: isolate?.name ?? '',
     id: isolate?.id ?? '',
     description: isolate?.description ?? '',
-    wildtype: isolate === undefined ? '' : isolate.wildtype ? 'true' : 'false',
+    wildtype: isolate?.wildtype === true ? 'true' : isolate?.wildtype === false ? 'false' : '',
     derived_from: isolate?.derived_from ?? '',
   };
 }
@@ -158,18 +158,6 @@ export function IsolateForm({
 
   useHomeSuspension(submitting ? 'busy' : !browsing && typing ? 'typing' : undefined);
 
-  // TextInput re-fires onChange whenever its callback reference changes, so each field keeps one
-  // stable callback (see WorkflowConfigurationScreen).
-  const onChangeCache = useRef(new Map<string, (value: string) => void>());
-  const onChangeFor = useCallback((rowId: string, apply: (value: string) => void): ((value: string) => void) => {
-    let cached = onChangeCache.current.get(rowId);
-    if (!cached) {
-      cached = apply;
-      onChangeCache.current.set(rowId, cached);
-    }
-    return cached;
-  }, []);
-
   const updatePair = (key: number, change: Partial<Omit<PairDraft, 'key'>>): void => {
     setPairs(current => current.map(pair => pair.key === key ? {...pair, ...change} : pair));
   };
@@ -179,7 +167,7 @@ export function IsolateForm({
   };
 
   const cycleChoice = (field: 'wildtype' | 'derived_from', offset: -1 | 1): void => {
-    const options = field === 'wildtype' ? ['true', 'false'] : parentOptions;
+    const options = field === 'wildtype' ? ['', 'true', 'false'] : parentOptions;
     const index = options.indexOf(values[field]);
     const next = index < 0
       ? options[offset === 1 ? 0 : options.length - 1]
@@ -191,9 +179,6 @@ export function IsolateForm({
     const missing: string[] = [];
     if (values.name.trim().length === 0) {
       missing.push('Name: is required');
-    }
-    if (values.wildtype === '') {
-      missing.push('Wild type: choose yes or no');
     }
     pairs.forEach((pair, index) => {
       for (const mate of ['r1', 'r2'] as const) {
@@ -211,7 +196,7 @@ export function IsolateForm({
       id: creating ? effectiveId : editing.id,
       name: values.name.trim(),
       ...(description.length > 0 ? {description} : {}),
-      wildtype: values.wildtype === 'true',
+      wildtype: values.wildtype === '' ? null : values.wildtype === 'true',
       derived_from: values.derived_from === '' ? null : values.derived_from,
       read_pairs: pairs.map(pair => ({
         r1: expandHomeDirectory(pair.r1.trim()),
@@ -362,12 +347,12 @@ export function IsolateForm({
               inputActive={inputActive && !submitting}
               defaultValue={value}
               displayValue={value}
-              onChange={onChangeFor(row.id, text => {
+              onChange={text => {
                 if (row.field === 'id') {
                   setIdEdited(true);
                 }
                 setValues(current => ({...current, [row.field]: text}));
-              })}
+              }}
             />
             {idHint ? (
               <Text color={mutedColor}>{'  '}ID is suggested from the name and fixed after saving.</Text>
@@ -377,11 +362,11 @@ export function IsolateForm({
       }
       case 'choice': {
         const display = row.field === 'wildtype'
-          ? values.wildtype === '' ? 'not set' : values.wildtype === 'true' ? 'yes' : 'no'
+          ? values.wildtype === '' ? 'not recorded' : values.wildtype === 'true' ? 'yes' : 'no'
           : values.derived_from === '' ? 'none' : `${parent?.name ?? ''} (${values.derived_from})`;
         return (
           <Text key={row.id} color={color(row)} wrap="truncate">
-            {marker(row)}{fieldLabels[row.field]}{row.field === 'wildtype' ? '*' : ''}: ‹ {sanitizeTerminalText(display)} ›
+            {marker(row)}{fieldLabels[row.field]}: ‹ {sanitizeTerminalText(display)} ›
           </Text>
         );
       }
@@ -402,7 +387,7 @@ export function IsolateForm({
               defaultValue={row.pair[row.mate]}
               displayValue={row.pair[row.mate]}
               placeholder="Type or paste an absolute path"
-              onChange={onChangeFor(row.id, text => updatePair(row.pair.key, {[row.mate]: text}))}
+              onChange={text => updatePair(row.pair.key, {[row.mate]: text})}
             />
           </React.Fragment>
         );

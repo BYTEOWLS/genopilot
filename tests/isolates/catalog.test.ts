@@ -105,9 +105,14 @@ test('rejects malformed isolate fields', () => {
   }
 });
 
-test('requires wildtype to be explicit rather than inferred', () => {
+test('requires wildtype to be present rather than inferred', () => {
   const {wildtype: _omitted, ...withoutWildtype} = isolate('a');
   assert.ok(issuesFor(catalogOf(withoutWildtype)).some(issue => issue.path === '$.isolates[0].wildtype'));
+});
+
+test('accepts a wildtype that was not recorded', () => {
+  const catalog = validateIsolateCatalog(catalogOf(isolate('a', {wildtype: null})));
+  assert.equal(catalog.isolates[0]?.wildtype, null);
 });
 
 test('requires at least one read pair', () => {
@@ -165,14 +170,14 @@ test('names conflicting isolates by ID rather than catalog position', () => {
   }
 });
 
-test('rejects mixing trimmed and untrimmed read pairs in one isolate', () => {
-  const issues = issuesFor(catalogOf(isolate('a', {
+test('accepts trimmed and untrimmed read pairs in one isolate', () => {
+  const catalog = validateIsolateCatalog(catalogOf(isolate('a', {
     read_pairs: [
       {r1: '/data/L7_R1.fq', r2: '/data/L7_R2.fq', trimmed: false},
       {r1: '/data/L8_R1.fq', r2: '/data/L8_R2.fq', trimmed: true},
     ],
   })));
-  assert.deepEqual(issues.map(issue => issue.path), ['$.isolates[0].read_pairs']);
+  assert.deepEqual(catalog.isolates[0]?.read_pairs.map(pair => pair.trimmed), [false, true]);
 });
 
 test('rejects duplicate IDs', () => {

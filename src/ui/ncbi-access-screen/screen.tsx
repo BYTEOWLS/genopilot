@@ -1,11 +1,11 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
-import {PasswordInput} from '@inkjs/ui';
 import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 import {useHomeSuspension} from '../home-navigation.js';
+import {TextInput} from '../components/text-input.js';
 
 export type NcbiAccessStatusCheck = () => Promise<boolean>;
 export type NcbiApiKeySaver = (key: string) => Promise<void>;
@@ -24,7 +24,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// PasswordInput inserts pasted text verbatim, so a clipboard key can arrive padded with
+// The key field inserts pasted text verbatim, so a clipboard key can arrive padded with
 // whitespace or carrying an embedded control character (e.g. a trailing newline). Neither
 // belongs in a stored secret; strip and trim only at the save boundary, once the value is final.
 function sanitizeKey(value: string): string {
@@ -49,7 +49,7 @@ export function NcbiAccessScreen({
   const [status, setStatus] = useState<StatusState>({state: 'loading'});
   const [message, setMessage] = useState<string>();
   const [busy, setBusy] = useState(false);
-  // PasswordInput is uncontrolled (its value lives inside the component, seeded once at mount),
+  // The key field is uncontrolled (its value lives inside the component, seeded once at mount),
   // so clearing the draft — after a successful save, or on Ctrl+U — is done by bumping this
   // generation and folding it into the field's `key` to force a fresh, empty mount.
   const [draftGeneration, setDraftGeneration] = useState(0);
@@ -136,8 +136,9 @@ export function NcbiAccessScreen({
       </Box>
       <Box marginTop={1}>
         <Text>New key: </Text>
-        <PasswordInput
+        <TextInput
           key={draftGeneration}
+          mask="*"
           isDisabled={!inputActive || busy}
           placeholder="Type or paste"
           onSubmit={handleSubmit}

@@ -1,7 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
-import {sanitizeTerminalText} from './sanitize.js';
-import {mutedColor} from './theme.js';
+import {sanitizeTerminalText} from '../sanitize.js';
+import {mutedColor} from '../theme.js';
 
 /**
  * Shared bounded live-log presentation for setup and workflow processes.

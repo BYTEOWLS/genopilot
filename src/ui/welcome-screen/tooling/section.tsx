@@ -3,7 +3,7 @@ import {Box, Text} from 'ink';
 import type {ToolCheckResult, ToolingStatus} from '../../../tooling/check.js';
 import {toolingPolicy} from '../../../tooling/policy.js';
 import {sanitizeTerminalText} from '../../sanitize.js';
-import {LiveLog} from '../../live-log.js';
+import {LiveLog} from '../../components/live-log.js';
 import {mutedColor} from '../../theme.js';
 
 const spinnerIntervalMilliseconds = 80;

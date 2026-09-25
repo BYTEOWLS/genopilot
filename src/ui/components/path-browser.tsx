@@ -19,22 +19,29 @@ type BrowserState =
   | {state: 'failed'; message: string}
   | {state: 'ready'; entries: Dirent[]};
 
+/**
+ * Browses the filesystem to choose a file, or with `selectFolder` a folder: a leading row then
+ * chooses the folder being shown, and files are listed for orientation only.
+ */
 export function PathBrowser({
   initialDirectory,
   onSelect,
   onCancel,
   inputActive,
   readDirectory = readFilesystemDirectory,
+  selectFolder = false,
 }: {
   initialDirectory: string;
   onSelect: (path: string) => void;
   onCancel: () => void;
   inputActive: boolean;
   readDirectory?: DirectoryReader;
+  selectFolder?: boolean;
 }): React.JSX.Element {
   const [directory, setDirectory] = useState(initialDirectory);
   const [browser, setBrowser] = useState<BrowserState>({state: 'loading'});
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const leadingRows = selectFolder ? 1 : 0;
 
   useEffect(() => {
     let active = true;
@@ -83,22 +90,32 @@ export function PathBrowser({
         setDirectory(current => dirname(current));
         return;
       }
-      if (browser.state !== 'ready' || browser.entries.length === 0) {
+      if (browser.state !== 'ready') {
+        return;
+      }
+      const rowCount = browser.entries.length + leadingRows;
+      if (rowCount === 0) {
         return;
       }
       if (key.upArrow) {
-        setSelectedIndex(index => (index - 1 + browser.entries.length) % browser.entries.length);
+        setSelectedIndex(index => (index - 1 + rowCount) % rowCount);
       } else if (key.downArrow) {
-        setSelectedIndex(index => (index + 1) % browser.entries.length);
+        setSelectedIndex(index => (index + 1) % rowCount);
       } else if (key.return || key.rightArrow) {
-        const selected = browser.entries[selectedIndex];
+        if (selectFolder && selectedIndex === 0) {
+          if (key.return) {
+            onSelect(directory);
+          }
+          return;
+        }
+        const selected = browser.entries[selectedIndex - leadingRows];
         if (!selected) {
           return;
         }
         const selectedPath = resolve(directory, selected.name);
         if (selected.isDirectory()) {
           setDirectory(selectedPath);
-        } else if (key.return) {
+        } else if (key.return && !selectFolder) {
           onSelect(selectedPath);
         }
       }
@@ -106,16 +123,13 @@ export function PathBrowser({
     {isActive: inputActive},
   );
 
-  const visibleStart =
-    browser.state === 'ready'
-      ? Math.max(0, Math.min(selectedIndex - 5, browser.entries.length - 12))
-      : 0;
-  const visibleEntries =
-    browser.state === 'ready' ? browser.entries.slice(visibleStart, visibleStart + 12) : [];
+  const rowCount = browser.state === 'ready' ? browser.entries.length + leadingRows : 0;
+  const visibleStart = Math.max(0, Math.min(selectedIndex - 5, rowCount - 12));
+  const visibleRows = Array.from({length: Math.max(0, Math.min(12, rowCount - visibleStart))}, (_, offset) => visibleStart + offset);
 
   return (
     <Box flexDirection="column">
-      <Text bold>Select a file</Text>
+      <Text bold>{selectFolder ? 'Select a folder' : 'Select a file'}</Text>
       <Text color={mutedColor} wrap="truncate">{sanitizeTerminalText(directory)}</Text>
       <Box marginTop={1} flexDirection="column">
         {browser.state === 'loading' ? <Text>Reading directory…</Text> : null}
@@ -129,27 +143,39 @@ export function PathBrowser({
           <Text>This directory is empty.</Text>
         ) : null}
         {browser.state === 'ready'
-          ? visibleEntries.map((entry, visibleIndex) => {
-              const index = visibleStart + visibleIndex;
+          ? visibleRows.map(index => {
+              const selected = index === selectedIndex;
+              if (selectFolder && index === 0) {
+                return (
+                  <Text key="use-this-folder" color={selected ? 'cyan' : undefined}>
+                    {selected ? '›' : ' '} [ Use this folder ]
+                  </Text>
+                );
+              }
+              const entry = browser.entries[index - leadingRows];
+              if (!entry) {
+                return null;
+              }
               return (
-                <Text
-                  key={entry.name}
-                  color={index === selectedIndex ? 'cyan' : mutedColor}
-                >
-                  {index === selectedIndex ? '›' : ' '} {sanitizeTerminalText(entry.name)}
+                <Text key={entry.name} color={selected ? 'cyan' : mutedColor} dimColor={selectFolder && !entry.isDirectory()}>
+                  {selected ? '›' : ' '} {sanitizeTerminalText(entry.name)}
                   {entry.isDirectory() ? '/' : ''}
                 </Text>
               );
             })
           : null}
-        {browser.state === 'ready' && browser.entries.length > 12 ? (
+        {rowCount > 12 ? (
           <Text color={mutedColor}>
-            {selectedIndex + 1} of {browser.entries.length}
+            {selectedIndex + 1} of {rowCount}
           </Text>
         ) : null}
       </Box>
       <Box marginTop={1}>
-        <Text color={mutedColor}>↑/↓ — Select · → Open — folder · Enter — Choose · ← — Parent · Esc — Cancel</Text>
+        <Text color={mutedColor}>
+          {selectFolder
+            ? '↑/↓ — Select · →/Enter — Open folder · Enter on [ Use this folder ] — Choose · ← — Parent · Esc — Cancel'
+            : '↑/↓ — Select · → Open — folder · Enter — Choose · ← — Parent · Esc — Cancel'}
+        </Text>
       </Box>
     </Box>
   );
