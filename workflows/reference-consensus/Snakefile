@@ -1,0 +1,153 @@
+"""Entry point for the reference-guided cohort consensus workflow.
+
+Invoked with `--directory <run-dir> --configfile <run-dir>/config.yaml` so
+every relative path below resolves inside that run's isolated workspace,
+including the `isolates.yaml` snapshot the configuration refers to. The
+snapshot is read and checked against the configuration while the workflow
+is parsed, so an inconsistent run is refused before any job is scheduled.
+
+Per-isolate processing, support aggregation, and consensus generation are
+added by later tasks; this entry point resolves the backbone and validates
+the run's inputs.
+"""
+
+import shlex
+from pathlib import Path
+
+import yaml
+
+configfile: "config.yaml"
+
+WORKFLOW_DIR = Path(workflow.basedir)
+SHARED_DIR = WORKFLOW_DIR.parent / "shared"
+SCRIPTS_DIR = SHARED_DIR / "scripts"
+ENVS_DIR = SHARED_DIR / "envs"
+SCRIPTS_DIR_SH = shlex.quote(str(SCRIPTS_DIR))
+
+def _fail(message):
+    raise ValueError(f"config.yaml: {message}")
+
+
+def _declarable(path):
+    """Snakemake reads braces in an input path as wildcards, even escaped, so such a file
+    cannot be declared as an input at all."""
+    return "{" not in path and "}" not in path
+
+
+def _section(name):
+    value = config.get(name)
+    if not isinstance(value, dict):
+        _fail(f"{name} must be a mapping")
+    return value
+
+
+def _integer(section, name, minimum):
+    value = _section(section).get(name)
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        _fail(f"{section}.{name} must be an integer of at least {minimum}, found {value!r}")
+
+
+def _check_configuration():
+    """Refuses a configuration the app would not have saved, before any job is scheduled.
+
+    The application validates the full contract when it saves a run; this repeats the checks
+    that matter for running the workflow directly, with readable messages instead of a
+    KeyError deep inside a rule.
+    """
+    for field, expected in (
+        ("schema_version", 1),
+        ("workflow_id", "reference-consensus"),
+        ("workflow_version", 1),
+    ):
+        if config.get(field) != expected:
+            _fail(f"{field} must equal {expected!r}, found {config.get(field)!r}")
+
+    inputs = _section("inputs")
+    backbone = inputs.get("backbone")
+    if not isinstance(backbone, dict) or backbone.get("source") not in ("local", "ncbi"):
+        _fail("inputs.backbone.source must be 'local' or 'ncbi'")
+    if backbone["source"] == "local":
+        if not isinstance(backbone.get("fasta"), str) or not Path(backbone["fasta"]).is_absolute():
+            _fail("inputs.backbone.fasta must be an absolute path")
+        if not _declarable(backbone["fasta"]):
+            _fail("inputs.backbone.fasta must not contain '{' or '}'")
+    else:
+        if not isinstance(backbone.get("accession"), str) or not backbone["accession"]:
+            _fail("inputs.backbone.accession must be a versioned NCBI assembly accession")
+        if backbone.get("ncbi_cache_mode", "reuse") not in ("reuse", "refresh"):
+            _fail("inputs.backbone.ncbi_cache_mode must be 'reuse' or 'refresh'")
+    if inputs.get("isolates_file") != "isolates.yaml":
+        _fail("inputs.isolates_file must equal 'isolates.yaml'")
+    selected = inputs.get("selected_isolates")
+    if (
+        not isinstance(selected, list)
+        or not selected
+        or not all(isinstance(isolate_id, str) for isolate_id in selected)
+        or len(set(selected)) != len(selected)
+    ):
+        _fail("inputs.selected_isolates must list at least one unique isolate ID")
+
+    if _section("calling").get("ploidy") != 1:
+        _fail("calling.ploidy must equal 1; only haploid calling is supported")
+    _integer("calling", "min_depth", 1)
+    _integer("calling", "min_mapping_quality", 0)
+    _integer("calling", "min_base_quality", 0)
+    fraction = _section("calling").get("min_allele_fraction")
+    if isinstance(fraction, bool) or not isinstance(fraction, (int, float)) or not 0.5 < fraction <= 1:
+        _fail(f"calling.min_allele_fraction must be greater than 0.5 and at most 1, found {fraction!r}")
+
+    consensus = _section("consensus")
+    if not isinstance(consensus.get("include_backbone_vote"), bool):
+        _fail("consensus.include_backbone_vote must be true or false")
+    if consensus.get("voting_method") not in ("strict-majority", "plurality"):
+        _fail("consensus.voting_method must be 'strict-majority' or 'plurality'")
+    _integer("resources", "effective_cpus", 1)
+    if not isinstance(_section("run").get("output_root"), str):
+        _fail("run.output_root must be an absolute path")
+
+
+def _load_isolate_snapshot():
+    """Returns the snapshot's isolates in the configured selection order."""
+    path = Path(config["inputs"]["isolates_file"])
+
+    def fail(message):
+        raise ValueError(f"{path}: {message}")
+
+    with open(path, encoding="utf-8") as handle:
+        snapshot = yaml.safe_load(handle)
+    if not isinstance(snapshot, dict) or snapshot.get("schema_version") != 1:
+        fail("schema_version must equal 1")
+    isolates = snapshot.get("isolates")
+    selected = config["inputs"]["selected_isolates"]
+    if (
+        not isinstance(isolates, list)
+        or not all(isinstance(isolate, dict) for isolate in isolates)
+        or [isolate.get("id") for isolate in isolates] != selected
+    ):
+        fail(f"must hold exactly the selected isolates in order: {', '.join(selected)}")
+    for isolate in isolates:
+        pairs = isolate.get("read_pairs")
+        if not isinstance(pairs, list) or not pairs or not all(isinstance(pair, dict) for pair in pairs):
+            fail(f"isolate {isolate['id']!r} must list at least one read pair")
+        for pair in pairs:
+            for mate in ("r1", "r2"):
+                if not isinstance(pair.get(mate), str) or not Path(pair[mate]).is_absolute():
+                    fail(f"isolate {isolate['id']!r} {mate} must be an absolute path")
+                if not _declarable(pair[mate]):
+                    fail(f"isolate {isolate['id']!r} {mate} must not contain '{{' or '}}': {pair[mate]}")
+            if not isinstance(pair.get("trimmed"), bool):
+                fail(f"isolate {isolate['id']!r} trimmed must be true or false")
+    return isolates
+
+
+_check_configuration()
+ISOLATES = _load_isolate_snapshot()
+
+include: str(SHARED_DIR / "rules" / "resolve_backbone.smk")
+include: str(SHARED_DIR / "rules" / "validate_run_inputs.smk")
+
+
+rule all:
+    input:
+        "resolved/backbone.fasta",
+        "results/input-validation.json",

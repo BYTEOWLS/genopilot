@@ -1,0 +1,146 @@
+schema_version: 1
+parameters:
+  - id: backbone-source
+    label: Backbone source
+    section: Inputs
+    kind: choice
+    required: true
+    default: ncbi
+    hidden: false
+    options:
+      - value: local
+        label: Local file
+      - value: ncbi
+        label: NCBI accession
+  - id: backbone-fasta
+    label: Backbone FASTA
+    section: Inputs
+    kind: file
+    required: true
+    default: null
+    hidden: false
+    visible_when:
+      parameter: backbone-source
+      equals: local
+  - id: backbone-accession
+    label: Backbone NCBI accession
+    section: Inputs
+    kind: accession
+    required: true
+    default: null
+    hidden: false
+    visible_when:
+      parameter: backbone-source
+      equals: ncbi
+  - id: isolates
+    label: Isolates
+    section: Inputs
+    kind: isolates
+    required: true
+    default: null
+    hidden: false
+  - id: voting-method
+    label: Voting method
+    section: Consensus
+    kind: choice
+    required: true
+    default: strict-majority
+    hidden: false
+    options:
+      - value: strict-majority
+        label: Strict majority (more than half of the votes cast)
+      - value: plurality
+        label: Plurality (the unique highest vote count)
+  - id: include-backbone-vote
+    label: Backbone vote
+    section: Consensus
+    kind: choice
+    required: true
+    default: 'yes'
+    hidden: false
+    options:
+      - value: 'yes'
+        label: The backbone casts one vote
+      - value: 'no'
+        label: Only callable isolates vote
+  - id: ploidy
+    label: Ploidy
+    section: Per-isolate calling
+    kind: fixed
+    required: true
+    hidden: true
+    default: '1'
+  - id: min-depth
+    label: Minimum read depth
+    section: Per-isolate calling
+    kind: integer
+    required: true
+    default: '10'
+    hidden: false
+  - id: min-mapping-quality
+    label: Minimum mapping quality
+    section: Per-isolate calling
+    kind: integer
+    required: true
+    default: '20'
+    hidden: false
+  - id: min-base-quality
+    label: Minimum base quality
+    section: Per-isolate calling
+    kind: integer
+    required: true
+    default: '20'
+    hidden: false
+  - id: min-allele-fraction
+    label: Minimum allele fraction
+    section: Per-isolate calling
+    kind: text
+    required: true
+    default: '0.8'
+    hidden: false
+    preview: Above 0.5 and at most 1; a call needs this share of the reads at a position
+  - id: output-root
+    label: Output directory
+    section: Run details
+    kind: text
+    required: true
+    default: runs
+    hidden: false
+  - id: run-name
+    label: Run name
+    section: Run details
+    kind: text
+    required: false
+    default: null
+    hidden: false
+  - id: run-description
+    label: Run description
+    section: Run details
+    kind: text
+    required: false
+    default: null
+    hidden: false
+  - id: cpu-allocation
+    label: CPU allocation
+    section: Run details
+    kind: choice
+    required: true
+    default: automatic
+    hidden: false
+    options:
+      - value: automatic
+        label: Automatic (all available CPUs)
+      - value: leave-one-free
+        label: Leave one CPU free
+      - value: manual
+        label: Manual limit
+  - id: manual-cpu-limit
+    label: Requested CPU limit
+    section: Run details
+    kind: integer
+    required: true
+    default: null
+    hidden: false
+    visible_when:
+      parameter: cpu-allocation
+      equals: manual

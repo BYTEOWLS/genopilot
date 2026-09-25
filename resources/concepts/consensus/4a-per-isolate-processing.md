@@ -39,7 +39,7 @@ Run QC and adapter trimming inside the workflow with a pinned tool and recorded 
 
 ## Scientific contract to finalize first
 
-Implement the ploidy and minimal scientific configuration contract agreed at the Task 3 kickoff. Select and pin the read-QC, mapper, BAM-processing, variant-calling, normalization, callability, and consensus tools; finalize their detailed thresholds, duplicate handling, no-call representation, and behavior in repeats without silently adding persisted semantics to the released configuration schema. Save every effective setting; do not rely on an unrecorded tool default.
+Implement the contract agreed at the [Task 3 kickoff](3-workflow-configuration-and-review.md#kickoff-decisions): haploid calling (`calling.ploidy: 1`) with the editable `min_depth`, `min_mapping_quality`, `min_base_quality`, and `min_allele_fraction` thresholds, read per isolate from the run's `isolates.yaml` snapshot. The resolved backbone is `resolved/backbone.fasta` from the existing `resolve_backbone` rule, and per-isolate processing starts only after `validate_run_inputs` passes. Select and pin the read-QC, mapper, BAM-processing, variant-calling, normalization, callability, and consensus tools; finalize their detailed thresholds, duplicate handling, no-call representation, and behavior in repeats without silently adding persisted semantics to the released configuration schema. Save every effective setting; do not rely on an unrecorded tool default.
 
 The isolate consensus uses the backbone as coordinates and starting sequence, not as an equal second vote. A confident isolate allele replaces the backbone allele. Ambiguous or uncallable positions follow the explicit per-isolate policy and remain distinguishable through the callable mask.
 

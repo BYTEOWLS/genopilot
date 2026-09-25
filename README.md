@@ -71,7 +71,10 @@ workflows/
 │   ├── manifest.yaml
 │   └── manifest.parameters.yaml
 ├── comparison/              Comparison workflow scaffold
-├── consensus/               Consensus workflow scaffold
+├── reference-consensus/     Cohort consensus: configuration, backbone resolution, input validation
+│   ├── Snakefile
+│   ├── manifest.yaml
+│   └── manifest.parameters.yaml
 └── shared/                  Shared rules, scripts, and environments
 ```
 

@@ -56,9 +56,10 @@ test('discovers packaged workflows independently of the current directory', asyn
     const workflows = await discoverPackagedWorkflows();
     assert.deepEqual(
       workflows.map(workflow => workflow.manifest.id),
-      ['annotation-transfer'],
+      ['annotation-transfer', 'reference-consensus'],
     );
     assert.match(workflows[0]?.directoryUrl.pathname ?? '', /workflows\/annotation-transfer\/$/);
+    assert.match(workflows[1]?.directoryUrl.pathname ?? '', /workflows\/reference-consensus\/$/);
     assert.equal(
       workflows[0]?.parameterDefinitions.find(definition => definition.id === 'reference-fasta')
         ?.required,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve a reference or target input into a canonical, checksummed file.
+"""Resolve a reference, target, or backbone input into a canonical, checksummed file.
 
 Normalizes a `local` (already-existing path) or `ncbi` (versioned assembly
 accession) source into the same kind of output before any scientific rule
@@ -209,7 +209,7 @@ def build_ncbi_provenance(
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--role", choices=["reference", "target"], required=True)
+    parser.add_argument("--role", choices=["reference", "target", "backbone"], required=True)
     parser.add_argument("--source-type", choices=["local", "ncbi"], required=True)
     parser.add_argument("--fasta-destination", type=Path, required=True)
     parser.add_argument("--fasta-provenance", type=Path, required=True)

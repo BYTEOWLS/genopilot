@@ -8,7 +8,7 @@ Present the complete initial run, make ties and supporting evidence reviewable, 
 
 Show:
 
-- backbone identity, source, checksum, and one-vote policy;
+- backbone identity, source, checksum, and whether it cast a vote;
 - all analyzed isolates with wild-type/lineage metadata and QC/callability summaries;
 - direct paths to each isolate's BAM, VCF, callable mask, consensus FASTA, metrics, and logs;
 - whether each isolate FASTA is eligible for promotion or already saved in **Manage isolates**;

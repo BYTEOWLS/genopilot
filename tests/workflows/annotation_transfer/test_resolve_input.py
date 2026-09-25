@@ -211,7 +211,61 @@ class MainLocalTests(unittest.TestCase):
             self.assertEqual(provenance["source"], "local")
 
 
+    def test_resolves_a_backbone_fasta_without_gff3(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fasta = root / "backbone.fasta"
+            fasta.write_text(">chr1\nACGT\n", encoding="utf-8")
+
+            exit_code = resolve_input.main(
+                [
+                    "--role", "backbone",
+                    "--source-type", "local",
+                    "--fasta-destination", str(root / "out" / "backbone.fasta"),
+                    "--fasta-provenance", str(root / "prov" / "backbone.fasta.json"),
+                    "--local-fasta", str(fasta),
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual((root / "out" / "backbone.fasta").read_text(encoding="utf-8"), ">chr1\nACGT\n")
+            self.assertEqual(sorted(path.name for path in (root / "out").iterdir()), ["backbone.fasta"])
+
+
 class MainNcbiTests(unittest.TestCase):
+    def test_resolves_a_backbone_accession_as_fasta_only(self) -> None:
+        import tempfile
+
+        fake_download = FakeDownload()
+        original_download = resolve_input.download_accession
+        original_version = resolve_input.get_datasets_version
+        resolve_input.download_accession = fake_download
+        resolve_input.get_datasets_version = lambda datasets_bin: "18.36.0"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                exit_code = resolve_input.main(
+                    [
+                        "--role", "backbone",
+                        "--source-type", "ncbi",
+                        "--fasta-destination", str(root / "out" / "backbone.fasta"),
+                        "--fasta-provenance", str(root / "prov" / "backbone.fasta.json"),
+                        "--accession", "GCF_000149205.2",
+                        "--cache-dir", str(root / "cache"),
+                        "--cache-mode", "refresh",
+                    ]
+                )
+
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(fake_download.calls, [("GCF_000149205.2", ["genome"])])
+                provenance = json.loads((root / "prov" / "backbone.fasta.json").read_text(encoding="utf-8"))
+                self.assertEqual(provenance["cache_mode"], "refresh")
+        finally:
+            resolve_input.download_accession = original_download
+            resolve_input.get_datasets_version = original_version
+
     def test_resolves_target_fasta_via_injected_download(self) -> None:
         import tempfile
 

@@ -1,0 +1,44 @@
+schema_version: 1
+workflow_version: 1
+id: reference-consensus
+label: Build a reference-guided cohort consensus
+description: >
+  Call every selected isolate's paired reads against one backbone assembly, combine the callable
+  isolate alleles with an optional backbone vote, and build a cohort consensus by strict majority
+  or plurality. Per-isolate processing, aggregation, and consensus generation are not
+  implemented yet; this build configures the run, resolves the backbone, and validates the inputs.
+entry_snakefile: Snakefile
+parameter-definitions: manifest.parameters.yaml
+stages:
+  - id: resolve-inputs
+    label: Resolve backbone
+    description: >
+      Normalize the local or NCBI backbone into a checksummed copy inside the run directory before
+      any scientific rule runs.
+    rules: [resolve_backbone]
+  - id: validate-inputs
+    label: Validate inputs
+    description: >
+      Validate the backbone FASTA and check that every read file of the isolate snapshot is present.
+    rules: [validate_run_inputs]
+  - id: process-isolates
+    label: Process isolates
+    description: Validate, align, and call every isolate independently against the backbone.
+  - id: aggregate-support
+    label: Aggregate cohort support
+    description: Combine the backbone and callable isolate votes into a per-position support table.
+  - id: generate-consensus
+    label: Generate consensus
+    description: Select the cohort allele at each position with the configured voting method.
+artifacts:
+  - id: resolved-backbone
+    label: Resolved backbone FASTA
+    description: The checksummed copy of the backbone every later rule consumes.
+    path: resolved/backbone.fasta
+    type: fasta
+    produced_by: resolve-inputs
+  - id: input-validation
+    label: Input validation report
+    path: results/input-validation.json
+    type: json
+    produced_by: validate-inputs

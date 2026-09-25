@@ -153,9 +153,10 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// The rendered line of a parameter, found by the label its ID currently has in the manifest.
+// The rendered line of a parameter, found by the label its ID currently has in the manifest: a
+// form field ends its label with a colon, and the review aligns values in a column after it.
 function lineFor(frame: string, label: string): string | undefined {
-  const pattern = new RegExp(`^[›\\s]*${escapeRegExp(label)}\\*?:`);
+  const pattern = new RegExp(`^[›\\s]*${escapeRegExp(label)}(\\*?:|\\s{2,})`);
   return frame.split('\n').find(line => pattern.test(line));
 }
 
@@ -320,6 +321,8 @@ test('edits all required fields and confirms effective options before saving', a
   const executedModes: string[] = [];
   const registrations: string[] = [];
   const {input, output, instance} = renderConfiguration('/research', {
+    // Tall enough to show the whole review without scrolling.
+    rows: 60,
     registerAccessionCaches: async outputRoot => {
       registrations.push(outputRoot);
       return 'Recorded.';
@@ -398,6 +401,8 @@ test('records the NCBI cache in the accession catalog after a successful NCBI-so
   const executedModes: string[] = [];
   const registrations: string[] = [];
   const {input, output, instance} = renderConfiguration('/research', {
+    // Tall enough to show the whole review without scrolling.
+    rows: 60,
     registerAccessionCaches: async outputRoot => {
       registrations.push(outputRoot);
       return 'Test registration note';

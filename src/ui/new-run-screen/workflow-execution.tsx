@@ -196,6 +196,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   readEvents = readAppendedRunEvents,
   resultHandoff,
   onSucceeded,
+  executionUnavailableReason,
 }: {
   configurationPath: string;
   prepareRun: WorkflowRunPreparer<R>;
@@ -210,7 +211,14 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
    * to do. Its outcome is only reported; it cannot change the run's status or outputs.
    */
   onSucceeded?: () => RunFollowUp | undefined;
+  /**
+   * Why the workflow cannot be executed yet. The execution stays listed, visibly marked as not
+   * available, and only the dry run can be started.
+   */
+  executionUnavailableReason?: string;
 }): React.JSX.Element {
+  const availableModes = modeOptions.filter(option =>
+    option.mode !== 'execute' || executionUnavailableReason === undefined);
   const [screen, setScreen] = useState<ExecutionState<R>>({state: 'ready', mode: 'dry-run'});
   useTerminalTitle({status: terminalTitleStatus(screen)});
   // Leaving would unmount the screen and abort Snakemake without waiting for its cleanup.
@@ -478,7 +486,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         // A finished dry run is a step towards executing, so Esc offers the mode chooser again
         // with the execution preselected. A finished execution has nothing left to choose.
         if (screen.run.mode === 'dry-run') {
-          returnToModes('execute');
+          returnToModes(executionUnavailableReason === undefined ? 'execute' : 'dry-run');
         } else {
           onBack();
         }
@@ -488,8 +496,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         onBack();
       } else if (key.upArrow || key.downArrow || input === ' ') {
         const offset = key.upArrow ? -1 : 1;
-        const currentIndex = modeOptions.findIndex(option => option.mode === screen.mode);
-        const option = modeOptions[(currentIndex + offset + modeOptions.length) % modeOptions.length];
+        const currentIndex = availableModes.findIndex(option => option.mode === screen.mode);
+        const option = availableModes[(currentIndex + offset + availableModes.length) % availableModes.length];
         if (option) {
           setScreen({state: 'ready', mode: option.mode});
         }
@@ -517,20 +525,26 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   if (screen.state === 'ready') {
     const run = preparedRuns[screen.mode];
     return (
-      <Page title="Start run" shortcuts={['↑/↓ — Choose', 'Enter — Start']} back="Back to workflow">
+      <Page
+        title="Start run"
+        shortcuts={[availableModes.length > 1 && '↑/↓ — Choose', 'Enter — Start']}
+        back="Back to workflow"
+      >
         <Alert variant="info">Configuration saved. Choose how to start this run.</Alert>
         <Text>{sanitizeTerminalText(configurationPath)}</Text>
         <Box marginTop={1} flexDirection="column">
           {modeOptions.map(option => {
             const selected = option.mode === screen.mode;
+            const unavailable = !availableModes.includes(option);
             return (
               <Box key={option.mode} flexDirection="column">
-                <Text color={selected ? 'cyan' : undefined}>
+                <Text color={selected ? 'cyan' : unavailable ? mutedColor : undefined}>
                   {selected ? '›' : ' '} ({selected ? '●' : ' '}) {option.label}
+                  {unavailable ? ' — not available yet' : ''}
                 </Text>
                 <Text color={mutedColor} wrap="wrap">
                   {'      '}
-                  {option.description}
+                  {unavailable ? executionUnavailableReason : option.description}
                 </Text>
               </Box>
             );

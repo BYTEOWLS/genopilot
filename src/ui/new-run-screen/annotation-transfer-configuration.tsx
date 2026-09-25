@@ -7,6 +7,7 @@ import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/sto
 import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import type {AnnotationTransferConfiguration} from '../../workflows/annotation-transfer/configuration.js';
+import type {RunDetails} from '../../workflows/configuration-validation.js';
 import type {WorkflowParameterDefinition} from '../../workflows/parameter-definitions.js';
 import {
   executeSnakemakeRun as defaultExecuteSnakemakeRun,
@@ -100,7 +101,7 @@ function previousRunFormValues(configuration: AnnotationTransferConfiguration): 
  * sanitized directory form are hard to read here. The time is shown exactly as
  * `run.created_at` records it, in UTC, so it never disagrees with the saved configuration.
  */
-export function previousRunLabel(configuration: AnnotationTransferConfiguration): string {
+export function previousRunLabel(configuration: {run: RunDetails}): string {
   const createdAt = `${configuration.run.created_at.replace('T', ' ').slice(0, 19)} UTC`;
   return [configuration.run.name, createdAt, configuration.run.description]
     .filter(Boolean)
