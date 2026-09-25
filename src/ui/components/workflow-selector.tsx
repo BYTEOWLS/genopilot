@@ -1,9 +1,9 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Alert} from '@inkjs/ui';
 import {Box, Text, useInput} from 'ink';
-import type {DiscoveredWorkflow} from '../workflows/discovery.js';
-import {sanitizeTerminalText} from './sanitize.js';
-import {mutedColor} from './theme.js';
+import type {DiscoveredWorkflow} from '../../workflows/discovery.js';
+import {sanitizeTerminalText} from '../sanitize.js';
+import {mutedColor} from '../theme.js';
 
 export type WorkflowDiscovery = () => Promise<DiscoveredWorkflow[]>;
 

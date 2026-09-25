@@ -73,9 +73,9 @@ Three slices, each with its tests. Task 1's contract changes they rely on — nu
 
 - [x] **Scan and report:** parse names and headers (index reads, optional lanes, chunks, undetermined and malformed names); stream the sampled records; scan safely; group candidates, read sets, and variants; detect already-imported files; explain every file not imported.
 - [x] **Raw/trimmed suggestions:** suggest trimming from varying read lengths.
-- [ ] **Review and save:** import entry, folder selection, scan progress with cancellation, candidate review with new or existing target, the single atomic save, and the retry after a catalog conflict.
-- [ ] Build synthetic delivery trees in tests: a BaseSpace-style export with raw and processed copies sharing file names, a library sequenced on two runs, lane-split and lane-merged files, a plain folder of FASTQs, a missing mate, index reads, split chunks, undetermined reads, a directory symlink loop, and a file symlink leaving the folder.
-- [ ] Test grouping, suggestions, skipped and unsupported files, review decisions, cancellation, resizing, conflicts, and the single-write save.
+- [x] **Review and save:** import entry, folder selection, scan progress with cancellation, candidate review with new or existing target, the single atomic save, and the retry after a catalog conflict.
+- [x] Build synthetic delivery trees in tests: a BaseSpace-style export with raw and processed copies sharing file names, a library sequenced on two runs, lane-split and lane-merged files, a plain folder of FASTQs, a missing mate, index reads, split chunks, undetermined reads, a directory symlink loop, and a file symlink leaving the folder.
+- [x] Test grouping, suggestions, skipped and unsupported files, review decisions, cancellation, resizing, conflicts, and the single-write save.
 
 ## Acceptance
 

@@ -6,7 +6,7 @@ import {
   annotationTransferValueExplanations,
 } from '../../workflows/annotation-transfer/result-help.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import type {HelpSection, HelpValue} from './help.js';
+import type {HelpSection, HelpValue} from '../components/help.js';
 import {SectionList, type SectionListItem} from './section-list.js';
 
 export type ResultSection = {id: string; title: string; items: SectionListItem[]};

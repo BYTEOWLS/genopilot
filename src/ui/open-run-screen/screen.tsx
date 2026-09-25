@@ -18,7 +18,7 @@ import {
   useWorkflowSelection,
   WorkflowSelector,
   type WorkflowDiscovery,
-} from '../workflow-selector.js';
+} from '../components/workflow-selector.js';
 import {mutedColor} from '../theme.js';
 import {useTerminalTitle} from '../terminal-title.js';
 import {useHomeSuspension} from '../home-navigation.js';

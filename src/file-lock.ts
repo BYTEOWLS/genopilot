@@ -62,7 +62,7 @@ export async function acquireFileLock(path: string, busyMessage: string): Promis
           pid === undefined && Date.now() - details.mtimeMs < malformedLockGracePeriodMilliseconds;
         if ((pid !== undefined && processIsActive(pid)) || malformedLockIsRecent) {
           throw new Error(
-            `${busyMessage} If no other Genopilot window is running, remove the stale lock file ${path}.`,
+            `${busyMessage} If no other GenoPilot window is running, remove the stale lock file ${path}.`,
           );
         }
         await rm(path, {force: true});

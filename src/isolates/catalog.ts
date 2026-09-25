@@ -7,7 +7,7 @@ export const ISOLATE_CATALOG_SCHEMA_VERSION = 1 as const;
 export type ReadPair = {
   r1: string;
   r2: string;
-  /** Whether the reads were already trimmed or filtered before reaching Genopilot. */
+  /** Whether the reads were already trimmed or filtered before reaching GenoPilot. */
   trimmed: boolean;
 };
 

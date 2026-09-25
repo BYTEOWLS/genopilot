@@ -27,7 +27,7 @@ These are already implemented by the annotation-transfer work and should be reus
 ## Ordered work
 
 - [x] 1. [Manage isolates](1-manage-isolates.md)
-- [ ] 1b. [Import isolates from an Illumina delivery](1b-import-illumina-isolates.md)
+- [x] 1b. [Import isolates from an Illumina delivery](1b-import-illumina-isolates.md)
 - [ ] 2. [Manage accessions](2-manage-accessions.md)
 - [ ] 3. [Workflow configuration and review](3-workflow-configuration-and-review.md)
 - [ ] 4.1. [Per-isolate processing](4a-per-isolate-processing.md)

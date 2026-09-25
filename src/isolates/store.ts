@@ -31,7 +31,7 @@ export class IsolateCatalogLoadError extends Error {
 /** Another writer changed the catalog after it was loaded, so the edit was not applied. */
 export class IsolateCatalogChangedError extends Error {
   constructor() {
-    super('The isolate catalog was changed by another Genopilot window. Reload it and try again.');
+    super('The isolate catalog was changed by another GenoPilot window. Reload it and try again.');
     this.name = 'IsolateCatalogChangedError';
   }
 }
@@ -87,7 +87,7 @@ export async function updateIsolateCatalog(
   await chmod(directory, 0o700);
   const lock = await acquireFileLock(
     `${path}.lock`,
-    'Another Genopilot window is saving the isolate catalog. Try again.',
+    'Another GenoPilot window is saving the isolate catalog. Try again.',
   );
   try {
     const current = parseCatalogSource(path, await readCatalogSource(path));

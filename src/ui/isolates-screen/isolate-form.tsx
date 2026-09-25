@@ -1,6 +1,6 @@
 import {homedir} from 'node:os';
 import {dirname, isAbsolute, join} from 'node:path';
-import React, {useCallback, useRef, useState} from 'react';
+import React, {useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {
   IsolateCatalogValidationError,
@@ -10,12 +10,12 @@ import {
   type IsolateCatalog,
 } from '../../isolates/catalog.js';
 import type {ReadFileCheck, ReadPairsChecker} from '../../isolates/reads.js';
-import {PathBrowser, type DirectoryReader} from '../new-run-screen/path-browser.js';
-import {TextField} from '../new-run-screen/text-field.js';
+import {PathBrowser, type DirectoryReader} from '../components/path-browser.js';
+import {TextField} from '../components/text-field.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
-import {ValidationError} from '../validation-error.js';
+import {ValidationError} from '../components/validation-error.js';
 
 type Mate = 'r1' | 'r2';
 
@@ -157,18 +157,6 @@ export function IsolateForm({
   const typing = selectedRow?.kind === 'text' || selectedRow?.kind === 'mate';
 
   useHomeSuspension(submitting ? 'busy' : !browsing && typing ? 'typing' : undefined);
-
-  // TextInput re-fires onChange whenever its callback reference changes, so each field keeps one
-  // stable callback (see WorkflowConfigurationScreen).
-  const onChangeCache = useRef(new Map<string, (value: string) => void>());
-  const onChangeFor = useCallback((rowId: string, apply: (value: string) => void): ((value: string) => void) => {
-    let cached = onChangeCache.current.get(rowId);
-    if (!cached) {
-      cached = apply;
-      onChangeCache.current.set(rowId, cached);
-    }
-    return cached;
-  }, []);
 
   const updatePair = (key: number, change: Partial<Omit<PairDraft, 'key'>>): void => {
     setPairs(current => current.map(pair => pair.key === key ? {...pair, ...change} : pair));
@@ -359,12 +347,12 @@ export function IsolateForm({
               inputActive={inputActive && !submitting}
               defaultValue={value}
               displayValue={value}
-              onChange={onChangeFor(row.id, text => {
+              onChange={text => {
                 if (row.field === 'id') {
                   setIdEdited(true);
                 }
                 setValues(current => ({...current, [row.field]: text}));
-              })}
+              }}
             />
             {idHint ? (
               <Text color={mutedColor}>{'  '}ID is suggested from the name and fixed after saving.</Text>
@@ -399,7 +387,7 @@ export function IsolateForm({
               defaultValue={row.pair[row.mate]}
               displayValue={row.pair[row.mate]}
               placeholder="Type or paste an absolute path"
-              onChange={onChangeFor(row.id, text => updatePair(row.pair.key, {[row.mate]: text}))}
+              onChange={text => updatePair(row.pair.key, {[row.mate]: text})}
             />
           </React.Fragment>
         );

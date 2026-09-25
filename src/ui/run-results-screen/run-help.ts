@@ -1,4 +1,4 @@
-import type {HelpEntry, HelpSection} from './help.js';
+import type {HelpEntry, HelpSection} from '../components/help.js';
 
 /** Workflow-independent explanations keyed by the run-level result item IDs. */
 const runExplanations: Record<string, string> = {

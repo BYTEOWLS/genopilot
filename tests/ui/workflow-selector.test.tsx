@@ -7,7 +7,7 @@ import {
   useWorkflowSelection,
   WorkflowSelector,
   type WorkflowDiscovery,
-} from '../../src/ui/workflow-selector.js';
+} from '../../src/ui/components/workflow-selector.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 
 class TestInput extends PassThrough {

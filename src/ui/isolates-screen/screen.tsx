@@ -3,10 +3,12 @@ import {Box, Text, useInput} from 'ink';
 import {childIsolateIds, type Isolate} from '../../isolates/catalog.js';
 import type {ReadPairsCheck, ReadPairsChecker} from '../../isolates/reads.js';
 import type {IsolateCatalogMutation, LoadedIsolateCatalog} from '../../isolates/store.js';
-import type {DirectoryReader} from '../new-run-screen/path-browser.js';
+import type {DirectoryReader} from '../components/path-browser.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
+import {scanIlluminaDelivery} from '../../isolates/illumina-delivery.js';
+import {IsolateImport, type DeliveryScanner} from './import.js';
 import {IsolateForm, withIsolate} from './isolate-form.js';
 
 export type IsolateCatalogLoader = () => Promise<LoadedIsolateCatalog>;
@@ -23,6 +25,7 @@ type CatalogState =
 type View =
   | {kind: 'list'}
   | {kind: 'form'; editingId?: string}
+  | {kind: 'import'}
   | {kind: 'confirm-remove'; id: string};
 
 const visibleIsolateCount = 10;
@@ -65,6 +68,7 @@ export function IsolatesScreen({
   updateCatalog,
   checkReads,
   readDirectory,
+  scanDelivery = scanIlluminaDelivery,
 }: {
   onBack: () => void;
   inputActive: boolean;
@@ -74,6 +78,7 @@ export function IsolatesScreen({
   updateCatalog: IsolateCatalogUpdater;
   checkReads: ReadPairsChecker;
   readDirectory?: DirectoryReader;
+  scanDelivery?: DeliveryScanner;
 }): React.JSX.Element {
   const [catalogState, setCatalogState] = useState<CatalogState>({state: 'loading'});
   const [readChecks, setReadChecks] = useState<ReadonlyMap<string, ReadPairsCheck>>(new Map());
@@ -145,7 +150,7 @@ export function IsolatesScreen({
 
   useInput(
     (input, key) => {
-      if (busy || view.kind === 'form') {
+      if (busy || view.kind === 'form' || view.kind === 'import') {
         return;
       }
       if (view.kind === 'confirm-remove') {
@@ -172,6 +177,11 @@ export function IsolatesScreen({
       if (input === 'n') {
         setMessage(undefined);
         setView({kind: 'form'});
+        return;
+      }
+      if (input === 'i') {
+        setMessage(undefined);
+        setView({kind: 'import'});
         return;
       }
       if (current.length === 0 || selectedId === undefined) {
@@ -230,6 +240,27 @@ export function IsolatesScreen({
     );
   }
 
+  if (view.kind === 'import' && catalogState.state === 'ready') {
+    return (
+      <IsolateImport
+        loaded={catalogState.loaded}
+        loadCatalog={loadCatalog}
+        updateCatalog={updateCatalog}
+        checkReads={checkReads}
+        scanDelivery={scanDelivery}
+        inputActive={inputActive}
+        currentDirectory={currentDirectory}
+        readDirectory={readDirectory}
+        onCancel={() => setView({kind: 'list'})}
+        onDone={(loaded, text) => {
+          applyLoaded(loaded);
+          setMessage({text, error: false});
+          setView({kind: 'list'});
+        }}
+      />
+    );
+  }
+
   const selectedIndex = isolates?.findIndex(isolate => isolate.id === selectedId) ?? -1;
   const visibleStart = isolates
     ? Math.max(0, Math.min(selectedIndex - Math.floor(visibleIsolateCount / 2), isolates.length - visibleIsolateCount))
@@ -237,7 +268,10 @@ export function IsolatesScreen({
 
   return (
     <Box flexDirection="column">
-      <Text bold underline>Isolates</Text>
+      <Text>
+        <Text bold underline>Isolates</Text>
+        {isolates ? <Text color={mutedColor}> · {isolates.length} in catalog</Text> : null}
+      </Text>
       <Text color={mutedColor} wrap="truncate">Catalog: {sanitizeTerminalText(catalogPath)}</Text>
       <Box marginTop={1} flexDirection="column">
         {catalogState.state === 'loading' ? <Text>Loading isolates…</Text> : null}
@@ -248,7 +282,7 @@ export function IsolatesScreen({
           </Box>
         ) : null}
         {isolates && isolates.length === 0 ? (
-          <Text>No isolates yet. Press n to add one.</Text>
+          <Text>No isolates yet. Press n to add one or i to import a sequencing delivery.</Text>
         ) : null}
         {isolates?.slice(visibleStart, visibleStart + visibleIsolateCount).map(isolate => {
           const isSelected = isolate.id === selectedId;
@@ -286,7 +320,7 @@ export function IsolatesScreen({
       {view.kind === 'list' ? (
         <Box marginTop={1}>
           <Text color={mutedColor} wrap="wrap">
-            ↑/↓ — Select · Enter — Edit · n — New · d — Remove · r — Reload · Esc — Back
+            ↑/↓ — Select · Enter — Edit · n — New · i — Import delivery · d — Remove · r — Reload · Esc — Back
           </Text>
         </Box>
       ) : null}

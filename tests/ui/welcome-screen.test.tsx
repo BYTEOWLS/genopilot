@@ -18,14 +18,14 @@ import {
 } from '../../src/ui/welcome-screen/commands/definitions.js';
 import type {RunDiscovery} from '../../src/ui/open-run-screen/screen.js';
 import type {IsolateCatalogLoader, IsolateCatalogUpdater} from '../../src/ui/isolates-screen/screen.js';
-import type {WorkflowDiscovery} from '../../src/ui/workflow-selector.js';
+import type {WorkflowDiscovery} from '../../src/ui/components/workflow-selector.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 import type {WorkflowParameterDefinition} from '../../src/workflows/parameter-definitions.js';
 import type {UpdateAvailability} from '../../src/self-update.js';
 
 const metadata: CliMetadata = {
   packageName: '@byteowls/genopilot',
-  label: 'Genopilot',
+  label: 'GenoPilot',
   commandName: 'genopilot',
   description: 'Run selected genomic workflows.',
   author: 'Test Author',
@@ -242,7 +242,7 @@ test('renders identity, directory, and commands without the ready tooling list',
 
   const frame = await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
-  assert.match(frame, /Genopilot/);
+  assert.match(frame, /GenoPilot/);
   assert.match(frame, /v0\.8\.0/);
   assert.match(frame, /Run selected genomic workflows\./);
   assert.match(frame, /Author: Test Author/);

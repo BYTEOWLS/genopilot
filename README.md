@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset=".github/assets/logo-dark.png">
-    <img src=".github/assets/logo-light.png" alt="Genopilot" width="280">
+    <img src=".github/assets/logo-light.png" alt="GenoPilot" width="280">
   </picture>
 </p>
 <p align="center"><strong><code>@byteowls/genopilot</code></strong></p>
@@ -196,7 +196,7 @@ isolates:
         trimmed: false
 ```
 
-The CLI validates the whole file on every load and save: duplicate or malformed IDs, relative paths, a read file used more than once, missing parents, and lineage cycles are rejected. Saves take an exclusive lock, refuse to overwrite changes made by another Genopilot window, and replace the file atomically. A file that fails validation is reported with its path and left untouched; fix or move it aside to continue. Removing an isolate from the catalog never deletes its read files.
+The CLI validates the whole file on every load and save: duplicate or malformed IDs, relative paths, a read file used more than once, missing parents, and lineage cycles are rejected. Saves take an exclusive lock, refuse to overwrite changes made by another GenoPilot window, and replace the file atomically. A file that fails validation is reported with its path and left untouched; fix or move it aside to continue. Removing an isolate from the catalog never deletes its read files.
 
 ## Reset managed tooling for installation tests
 

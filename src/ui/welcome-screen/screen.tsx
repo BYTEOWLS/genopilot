@@ -27,7 +27,7 @@ import {loadIsolateCatalog, updateIsolateCatalog} from '../../isolates/store.js'
 import {checkReadPairs, type ReadPairsChecker} from '../../isolates/reads.js';
 import {OpenRunScreen, type RunDiscovery} from '../open-run-screen/screen.js';
 import {ToolingScreen} from '../tooling-screen/screen.js';
-import type {WorkflowDiscovery} from '../workflow-selector.js';
+import type {WorkflowDiscovery} from '../components/workflow-selector.js';
 import {clearNcbiApiKey, isNcbiApiKeyConfigured, writeNcbiApiKey} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import {ToolingSection} from './tooling/section.js';

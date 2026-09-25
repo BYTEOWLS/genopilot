@@ -1,12 +1,12 @@
 import {dirname, isAbsolute} from 'node:path';
-import React, {useCallback, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useMemo, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
 import type {WorkflowParameterDefinition} from '../../workflows/parameter-definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import {PathBrowser} from './path-browser.js';
-import {TextField} from './text-field.js';
+import {PathBrowser} from '../components/path-browser.js';
+import {TextField} from '../components/text-field.js';
 import {
   WorkflowExecutionScreen,
   type WorkflowProgressStage,
@@ -16,7 +16,7 @@ import {
 } from './workflow-execution.js';
 import {mutedColor} from '../theme.js';
 import {useHomeSuspension} from '../home-navigation.js';
-import {ValidationError} from '../validation-error.js';
+import {ValidationError} from '../components/validation-error.js';
 
 // Chrome this screen renders around the windowed field list: its own title,
 // margins, and footer hint text. Space consumed by an outer wrapper (such as
@@ -163,8 +163,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   const [browserId, setBrowserId] = useState<string>();
   const [screen, setScreen] = useState<ScreenState<T>>({state: 'editing'});
   const [previousRunIndex, setPreviousRunIndex] = useState<number>();
-  // A file field's TextInput is uncontrolled (@inkjs/ui seeds it once from `defaultValue` at
-  // mount and never re-reads that prop), so stepping through run history — which can overwrite
+  // A file field's TextInput is uncontrolled (it is seeded once from `defaultValue` at mount and
+  // never re-reads that prop), so stepping through run history — which can overwrite
   // the currently selected file field's value without unmounting it — has to force a remount to
   // show the new value. Bumping this generation on every step and folding it into that field's
   // `key` does exactly that, without disturbing the field while the user is simply typing.
@@ -229,22 +229,6 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   const updateValue = useCallback((id: string, value: string): void => {
     setValues(current => ({...current, [id]: value}));
   }, []);
-
-  // @inkjs/ui's TextInput calls `onChange` from a useEffect that re-fires whenever the
-  // *reference* it was given changes, not only when the value does — its own change-tracking
-  // never resets once a field has been edited once. A fresh inline arrow per render would
-  // therefore re-trigger that effect on every parent re-render, which calls onChange again,
-  // which re-renders the parent, forever. Caching one stable callback per field id keeps the
-  // reference constant across renders so the effect only fires on an actual keystroke.
-  const onChangeCache = useRef(new Map<string, (value: string) => void>());
-  const onChangeFor = (id: string): ((value: string) => void) => {
-    let cached = onChangeCache.current.get(id);
-    if (!cached) {
-      cached = value => updateValue(id, value);
-      onChangeCache.current.set(id, cached);
-    }
-    return cached;
-  };
 
   const selectField = (id: string): void => {
     setSelectedId(id);
@@ -432,7 +416,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       }
       // A choice field only responds to arrows/space (handled above). Every other
       // selectable kind (file, text, integer) delegates its own caret, backspace, and
-      // paste handling to @inkjs/ui's TextInput, mounted below whenever that field is
+      // paste handling to TextInput, mounted below whenever that field is
       // selected — nothing else to do here.
     },
     {isActive: inputActive},
@@ -587,7 +571,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         } else if (definition.kind === 'file') {
           const browseOnly = isBrowseOnly(definition);
           // Entering/pasting the path and opening the file chooser are two independent
-          // interactions, never both on the same field: a typable field is a plain @inkjs/ui
+          // interactions, never both on the same field: a typable field is a plain
           // TextInput (caret, backspace, paste — all its own), while a browse-only field (see
           // 'browse_only_when') has no typable value at all — only Enter, handled in useInput
           // above, opens the separate PathBrowser overlay that reports its pick through onChange.
@@ -610,7 +594,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
                   : displayValue(definition, value)
               }
               placeholder={definition.placeholder ?? 'Type or paste a path'}
-              onChange={onChangeFor(definition.id)}
+              onChange={value => updateValue(definition.id, value)}
             />
           );
         }
@@ -625,7 +609,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
             displayValue={displayValue(definition, value)}
             placeholder={definition.placeholder}
             preview={definition.preview?.replaceAll('{value}', value || '<value>')}
-            onChange={onChangeFor(definition.id)}
+            onChange={value => updateValue(definition.id, value)}
           />
         );
       })}

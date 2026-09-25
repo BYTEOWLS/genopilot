@@ -9,7 +9,7 @@ import {
   useWorkflowSelection,
   WorkflowSelector,
   type WorkflowDiscovery,
-} from '../workflow-selector.js';
+} from '../components/workflow-selector.js';
 import {AnnotationTransferConfigurationScreen} from './annotation-transfer-configuration.js';
 import {mutedColor} from '../theme.js';
 import {useTerminalTitle} from '../terminal-title.js';

@@ -156,7 +156,7 @@ test('refuses to write while another live process holds the lock', async context
 
   await assert.rejects(
     updateIsolateCatalog(path, revision, catalog => ({...catalog, isolates: [isolate('a')]})),
-    /another Genopilot window/i,
+    /another GenoPilot window/i,
   );
   assert.equal(await readFile(`${path}.lock`, 'utf8'), `${String(process.pid)}\n`);
 });

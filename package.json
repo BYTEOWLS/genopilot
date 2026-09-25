@@ -1,6 +1,6 @@
 {
   "name": "@byteowls/genopilot",
-  "label": "Genopilot",
+  "label": "GenoPilot",
   "description": "Guided, reproducible genome workflows for researchers without deep bioinformatics expertise.",
   "author": "Michael Oberwasserlechner",
   "license": "MIT",

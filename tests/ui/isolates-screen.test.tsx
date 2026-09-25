@@ -14,8 +14,10 @@ import {
   updateIsolateCatalog,
   type LoadedIsolateCatalog,
 } from '../../src/isolates/store.js';
+import type {DeliveryReadSet, DeliveryScan, DeliveryVariant} from '../../src/isolates/illumina-delivery.js';
+import type {DeliveryScanner} from '../../src/ui/isolates-screen/import.js';
 import {expandHomeDirectory} from '../../src/ui/isolates-screen/isolate-form.js';
-import type {DirectoryReader} from '../../src/ui/new-run-screen/path-browser.js';
+import type {DirectoryReader} from '../../src/ui/components/path-browser.js';
 import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
 import {
   IsolatesScreen,
@@ -147,6 +149,7 @@ function renderScreen(
     updateCatalog: IsolateCatalogUpdater;
     checkReads?: ReadPairsChecker;
     readDirectory?: DirectoryReader;
+    scanDelivery?: DeliveryScanner;
     onBack?: () => void;
     onSuspension?: (suspension: HomeSuspension | undefined) => void;
   },
@@ -163,6 +166,7 @@ function renderScreen(
       updateCatalog={options.updateCatalog}
       checkReads={options.checkReads ?? (async pairs => okReads(pairs))}
       readDirectory={options.readDirectory}
+      scanDelivery={options.scanDelivery}
     />
   );
   const instance = render(
@@ -580,5 +584,288 @@ test('persists created isolates across a restart with the real store and read ch
   const {catalog} = await loadIsolateCatalog(catalogPath);
   assert.deepEqual(catalog.isolates.map(entry => [entry.id, entry.read_pairs]), [
     ['sample-one', [{r1, r2, trimmed: false}]],
+  ]);
+});
+
+function deliveryVariant(folder: string, sample: string, suggestedTrimmed = false): DeliveryVariant {
+  return {
+    r1: `/delivery/${folder}/${sample}_S1_L001_R1_001.fastq.gz`,
+    r2: `/delivery/${folder}/${sample}_S1_L001_R2_001.fastq.gz`,
+    r1Bytes: 1_000_000,
+    r2Bytes: 1_000_000,
+    sampleNumber: 1,
+    readLength: suggestedTrimmed ? {min: 50, max: 151} : {min: 151, max: 151},
+    sampledReads: 1000,
+    suggestedTrimmed,
+  };
+}
+
+function deliveryReadSet(variants: DeliveryVariant[], run = 7): DeliveryReadSet {
+  return {instrument: 'A00001', run, flowcell: 'HFLOWAAXX', lane: 1, variants};
+}
+
+function deliveryScan(candidates: DeliveryScan['candidates'], extra: Partial<DeliveryScan> = {}): DeliveryScan {
+  return {root: '/delivery', candidates, alreadyImported: [], skippedFiles: [], skippedDirectories: [], ...extra};
+}
+
+/** Opens the import, chooses the browser's current folder, and waits until the scan was requested. */
+async function startImport(input: TestInput, scans: string[]): Promise<void> {
+  await press(input, 'i');
+  await settle();
+  // The folder browser's first row chooses the folder it shows.
+  await press(input, keys.enter);
+  await waitFor(() => scans.length === 1);
+  await settle();
+}
+
+function importFixture(context: TestContext, store: MemoryCatalog, scan: DeliveryScan, options: {
+  checkReads?: ReadPairsChecker;
+  onSuspension?: (suspension: HomeSuspension | undefined) => void;
+} = {}): {input: TestInput; output: TestOutput; scans: string[]} {
+  const scans: string[] = [];
+  const {input, output} = renderScreen(context, {
+    loadCatalog: store.load,
+    updateCatalog: store.update,
+    readDirectory: async () => [],
+    scanDelivery: async root => {
+      scans.push(root);
+      return scan;
+    },
+    ...options,
+  });
+  return {input, output, scans};
+}
+
+test('imports a delivery sample as a new isolate using its untrimmed copy', async context => {
+  const store = new MemoryCatalog();
+  const scan = deliveryScan([{
+    sample: 'strain-a',
+    readSets: [deliveryReadSet([deliveryVariant('processed', 'strain-a', true), deliveryVariant('raw', 'strain-a')])],
+  }]);
+  const suspensions: (HomeSuspension | undefined)[] = [];
+  let releaseReads: () => void = () => {};
+  const {input, scans} = importFixture(context, store, scan, {
+    onSuspension: suspension => suspensions.push(suspension),
+    checkReads: pairs => new Promise(resolve => {
+      releaseReads = () => resolve(okReads(pairs));
+    }),
+  });
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  assert.deepEqual(scans, ['/research/project']);
+  // Report, then review; the save action is one step up from the first row.
+  await press(input, keys.enter, keys.up, keys.enter);
+  await waitFor(() => suspensions.at(-1) === 'busy');
+  releaseReads();
+
+  await waitFor(() => store.updates === 1);
+  assert.deepEqual(store.catalog.isolates, [{
+    id: 'strain-a',
+    name: 'strain-a',
+    wildtype: null,
+    derived_from: null,
+    read_pairs: [{r1: '/delivery/raw/strain-a_S1_L001_R1_001.fastq.gz', r2: '/delivery/raw/strain-a_S1_L001_R2_001.fastq.gz', trimmed: false}],
+  }]);
+});
+
+test('requires a choice when no single copy looks untrimmed', async context => {
+  const store = new MemoryCatalog();
+  const scan = deliveryScan([{
+    sample: 'strain-b',
+    readSets: [deliveryReadSet([deliveryVariant('first', 'strain-b', true), deliveryVariant('second', 'strain-b', true)])],
+  }]);
+  const {input, scans} = importFixture(context, store, scan);
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  await press(input, keys.enter, keys.up, keys.enter);
+  await settle();
+  assert.equal(store.updates, 0);
+
+  // Rows: sample, name, ID, wild type, parent, copy; choosing the copy adds its trimmed row.
+  await press(input, keys.down, keys.down, keys.down, keys.down, keys.down, keys.down, ' ');
+  await press(input, keys.down, keys.down, keys.enter);
+  await waitFor(() => store.updates === 1);
+  assert.deepEqual(store.catalog.isolates[0]?.read_pairs.map(pair => [pair.r1, pair.trimmed]), [
+    ['/delivery/first/strain-b_S1_L001_R1_001.fastq.gz', true],
+  ]);
+});
+
+test('adds a top-up run to the existing isolate of the same name, also after a resize', async context => {
+  const store = new MemoryCatalog(isolate('known', {name: 'known'}));
+  const scan = deliveryScan([{sample: 'known', readSets: [deliveryReadSet([deliveryVariant('run-9', 'known')], 9)]}]);
+  const {input, output, scans} = importFixture(context, store, scan);
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  await press(input, keys.enter);
+  output.columns = 42;
+  output.emit('resize');
+  await press(input, keys.up, keys.enter);
+
+  await waitFor(() => store.updates === 1);
+  assert.equal(store.catalog.isolates.length, 1);
+  assert.deepEqual(store.catalog.isolates[0]?.read_pairs.map(pair => pair.r1), [
+    '/data/known_R1.fq',
+    '/delivery/run-9/known_S1_L001_R1_001.fastq.gz',
+  ]);
+});
+
+test('cancels a running scan and returns to the folder choice', async context => {
+  const store = new MemoryCatalog();
+  let signal: AbortSignal | undefined;
+  const scans: string[] = [];
+  const {input, output} = renderScreen(context, {
+    loadCatalog: store.load,
+    updateCatalog: store.update,
+    readDirectory: async () => [],
+    scanDelivery: (root, _catalog, scanSignal) => {
+      scans.push(root);
+      signal = scanSignal;
+      return new Promise(() => {});
+    },
+  });
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  output.clearOutput();
+  await press(input, keys.escape);
+  await waitFor(() => signal?.aborted === true);
+  // Back in the folder browser, choosing again starts a new scan.
+  await press(input, keys.enter);
+  await waitFor(() => scans.length === 2);
+  assert.equal(store.updates, 0);
+});
+
+test('keeps review decisions when another window changed the catalog, then saves', async context => {
+  const store = new MemoryCatalog();
+  const scan = deliveryScan([{sample: 'strain-c', readSets: [deliveryReadSet([deliveryVariant('raw', 'strain-c')])]}]);
+  const {input, scans} = importFixture(context, store, scan);
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  await press(input, keys.enter);
+  // Another window saves in the meantime.
+  store.catalog = {schema_version: 1, isolates: [isolate('other')]};
+  store.revision += 1;
+  await press(input, keys.up, keys.enter);
+  await waitFor(() => store.loads === 2);
+  await settle();
+  assert.deepEqual(store.catalog.isolates.map(entry => entry.id), ['other']);
+
+  await press(input, keys.enter);
+  await waitFor(() => store.catalog.isolates.length === 2);
+  assert.deepEqual(store.catalog.isolates.map(entry => entry.id), ['other', 'strain-c']);
+});
+
+test('lists every file the scan did not import', async context => {
+  const store = new MemoryCatalog();
+  const scan = deliveryScan([], {
+    alreadyImported: [{path: '/delivery/old/known_R1.fastq.gz', isolateId: 'known'}],
+    skippedFiles: [{path: '/delivery/raw/lonely_S2_L001_R1_001.fastq.gz', reason: 'missing-mate'}],
+    skippedDirectories: [{path: '/delivery/locked', reason: 'unreadable'}],
+  });
+  const {input, output, scans} = importFixture(context, store, scan);
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  const report = await waitForOutput(output, value => value.includes('raw/lonely_S2_L001_R1_001.fastq.gz'));
+  assert.match(report, /old\/known_R1\.fastq\.gz/);
+  assert.match(report, /locked/);
+  // With nothing to import, Enter returns to the folder choice instead of an empty review.
+  await press(input, keys.enter, keys.enter);
+  await waitFor(() => scans.length === 2);
+  assert.equal(store.updates, 0);
+});
+
+test('opens the review help and returns to the review with its decisions', async context => {
+  const store = new MemoryCatalog();
+  const scan = deliveryScan([{
+    sample: 'strain-d',
+    readSets: [deliveryReadSet([deliveryVariant('first', 'strain-d', true), deliveryVariant('second', 'strain-d', true)])],
+  }]);
+  const {input, output, scans} = importFixture(context, store, scan);
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  // Rows: sample, name, ID, wild type, parent, copy. Choose the second copy, then open the help.
+  await press(input, keys.enter, keys.down, keys.down, keys.down, keys.down, keys.down, ' ', ' ');
+  output.clearOutput();
+  await press(input, '?');
+  // The help's annotated example names a folder that only it shows.
+  await waitForOutput(output, value => value.includes('strain-a-ds.e055c2'));
+
+  // Arrow keys scroll the help rather than moving through the review.
+  await press(input, keys.down, keys.down, keys.escape);
+  // Back in the review on the same row: the save action is two rows further down.
+  await press(input, keys.down, keys.down, keys.enter);
+  await waitFor(() => store.updates === 1);
+  assert.deepEqual(store.catalog.isolates[0]?.read_pairs.map(pair => pair.r1), [
+    '/delivery/second/strain-d_S1_L001_R1_001.fastq.gz',
+  ]);
+});
+
+test('types a question mark into a text field instead of opening the help', async context => {
+  const store = new MemoryCatalog();
+  const scan = deliveryScan([{sample: 'strain-e', readSets: [deliveryReadSet([deliveryVariant('raw', 'strain-e')])]}]);
+  const {input, scans} = importFixture(context, store, scan);
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  // The name row is a text field; `?` becomes part of the name.
+  await press(input, keys.enter, keys.down, '?', keys.up, keys.up, keys.enter);
+  await waitFor(() => store.updates === 1);
+  assert.equal(store.catalog.isolates[0]?.name, 'strain-e?');
+});
+
+test('shows a long list of open choices briefly so the review stays on screen', async context => {
+  const store = new MemoryCatalog();
+  const scan = deliveryScan(Array.from({length: 8}, (_, index) => ({
+    sample: `strain-${String(index + 1)}`,
+    readSets: [deliveryReadSet([
+      deliveryVariant('first', `strain-${String(index + 1)}`, true),
+      deliveryVariant('second', `strain-${String(index + 1)}`, true),
+    ])],
+  })));
+  const {input, output, scans} = importFixture(context, store, scan);
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  output.clearOutput();
+  // Eight samples, each with two open problems: only the first few are listed.
+  await press(input, keys.enter, keys.up, keys.enter);
+  const frame = await waitForOutput(output, value => /and 12 more/.test(value));
+  assert.doesNotMatch(frame, /8\) strain-8: choose/);
+  assert.equal(store.updates, 0);
+});
+
+test('returns from the report to the row where the review was left', async context => {
+  const store = new MemoryCatalog();
+  const scan = deliveryScan([{
+    sample: 'strain-f',
+    readSets: [deliveryReadSet([deliveryVariant('first', 'strain-f', true), deliveryVariant('second', 'strain-f', true)])],
+  }]);
+  const {input, scans} = importFixture(context, store, scan);
+  await waitFor(() => store.loads === 1);
+  await settle();
+
+  await startImport(input, scans);
+  // Go to the copy row (sample, name, ID, wild type, parent, copy), out to the report, and back.
+  await press(input, keys.enter, keys.down, keys.down, keys.down, keys.down, keys.down, keys.escape, keys.enter);
+  // Still on the copy row: choosing the second copy and saving imports it.
+  await press(input, ' ', ' ', keys.down, keys.down, keys.enter);
+  await waitFor(() => store.updates === 1);
+  assert.deepEqual(store.catalog.isolates[0]?.read_pairs.map(pair => pair.r1), [
+    '/delivery/second/strain-f_S1_L001_R1_001.fastq.gz',
   ]);
 });
