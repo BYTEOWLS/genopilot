@@ -40,8 +40,8 @@ The importer uses instrument, run, and flowcell from the header. It never uses t
 ## Discovery
 
 1. Walk the chosen folder recursively without following directory symlinks, so a link cannot cause loops or escape the chosen folder. Use a file symlink only when its real path lies inside the chosen folder. Report unreadable subfolders instead of failing the scan. The scan can be cancelled.
-2. Match R1 files to the Illumina pattern and pair each with its R2 in the same folder. Report every FASTQ that is not imported, with its reason: missing mate, index read, split chunk, undetermined reads, non-Illumina name, mismatched mates, or unreadable file.
-3. Stream the start of each R1 through gunzip, stopping after a fixed number of records (about 1,000) or a hard limit on compressed bytes, whichever comes first; never decompress whole files. Read only the first record of each R2 and require its read name to match R1's, ignoring the header comment.
+2. Match R1 files to the Illumina pattern and pair each with its R2 in the same folder. Report every FASTQ that is not imported, with its reason: non-Illumina name or read header, undetermined reads, index read, split chunk, missing or mismatched mate (naming the failing mate), invalid or unreadable FASTQ, a link leaving the chosen folder, or a second path to a file already found (the file itself is preferred over a link to it).
+3. Stream the start of each R1 through gunzip, stopping after a fixed number of records (about 1,000) or a hard limit on compressed bytes, whichever comes first; never decompress whole files. Limit decompressed bytes and line length as well, so a small, highly compressed file cannot exhaust memory. Read only the first record of each R2 and require its read name to match R1's, ignoring the header comment.
 4. Group pairs into **candidate isolates** by sample name, and pairs within a candidate by the key (run, flowcell, lane from the file name or none):
    - pairs with the same key are **variants of one read set** — the same reads, typically raw and provider-processed copies, which may share identical file names in different folders;
    - pairs with different keys are **separate read sets** whose reads add up, such as two lanes or a top-up run.
@@ -74,7 +74,7 @@ The importer never renames, moves, merges, or decompresses delivered files.
 
 Three slices, each with its tests. Task 1's contract changes they rely on — nullable `wildtype` and allowed mixed trimming — land first.
 
-- [ ] **Scan and report:** parse names and headers (index reads, optional lanes, chunks, undetermined and malformed names); stream the sampled records; scan safely; group candidates, read sets, and variants; detect already-imported files; explain every file not imported.
+- [x] **Scan and report:** parse names and headers (index reads, optional lanes, chunks, undetermined and malformed names); stream the sampled records; scan safely; group candidates, read sets, and variants; detect already-imported files; explain every file not imported.
 - [ ] **Raw/trimmed suggestions:** read-length evidence, variant comparison, and `ReportStats.json` when present.
 - [ ] **Review and save:** import entry, folder selection, scan progress with cancellation, candidate review with new or existing target, the single atomic save, and the retry after a catalog conflict.
 - [ ] Build synthetic delivery trees in tests: a BaseSpace-style export with raw and processed copies sharing file names, a library sequenced on two runs, lane-split and lane-merged files, a plain folder of FASTQs, a missing mate, index reads, split chunks, undetermined reads, a directory symlink loop, and a file symlink leaving the folder.

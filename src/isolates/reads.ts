@@ -1,7 +1,7 @@
-import {constants} from 'node:fs';
+import {constants, createReadStream} from 'node:fs';
 import {access, open, stat} from 'node:fs/promises';
 import {isAbsolute} from 'node:path';
-import {constants as zlibConstants, gunzipSync} from 'node:zlib';
+import {constants as zlibConstants, createGunzip, gunzipSync} from 'node:zlib';
 
 export type ReadFileCheck =
   | {state: 'ok'}
@@ -22,11 +22,11 @@ function errorCode(error: unknown): string | undefined {
   return (error as NodeJS.ErrnoException).code;
 }
 
-async function readPrefix(path: string): Promise<Buffer> {
+async function readPrefix(path: string, length = inspectedBytes): Promise<Buffer> {
   const handle = await open(path, 'r');
   try {
-    const buffer = Buffer.alloc(inspectedBytes);
-    const {bytesRead} = await handle.read(buffer, 0, inspectedBytes, 0);
+    const buffer = Buffer.alloc(length);
+    const {bytesRead} = await handle.read(buffer, 0, length, 0);
     return buffer.subarray(0, bytesRead);
   } finally {
     await handle.close();
@@ -37,6 +37,17 @@ function isGzip(prefix: Buffer): boolean {
   return prefix.length >= 2 && prefix[0] === 0x1f && prefix[1] === 0x8b;
 }
 
+function isFastqRecord(header: string, sequence: string, separator: string, quality: string): boolean {
+  return (
+    header.startsWith('@') &&
+    header.length > 1 &&
+    sequence.length > 0 &&
+    /^[A-Za-z.*-]+$/.test(sequence) &&
+    separator.startsWith('+') &&
+    quality.length === sequence.length
+  );
+}
+
 /** Checks that `text` starts with one complete four-line FASTQ record. */
 function startsWithFastqRecord(text: string): boolean {
   const lines = text.split(/\r?\n/);
@@ -44,19 +55,8 @@ function startsWithFastqRecord(text: string): boolean {
     // A fifth element exists only when the fourth line was terminated, i.e. the record is complete.
     return false;
   }
-  const [header, sequence, separator, quality] = lines;
-  return (
-    header !== undefined &&
-    header.startsWith('@') &&
-    header.length > 1 &&
-    sequence !== undefined &&
-    sequence.length > 0 &&
-    /^[A-Za-z.*-]+$/.test(sequence) &&
-    separator !== undefined &&
-    separator.startsWith('+') &&
-    quality !== undefined &&
-    quality.length === sequence.length
-  );
+  const [header = '', sequence = '', separator = '', quality = ''] = lines;
+  return isFastqRecord(header, sequence, separator, quality);
 }
 
 /**
@@ -136,4 +136,110 @@ export async function checkReadPairs(pairs: readonly {r1: string; r2: string}[])
     }
   });
   return {pairs: results, sameFiles};
+}
+
+export type FastqRecordSummary = {header: string; sequenceLength: number};
+
+export type FastqHead =
+  | {state: 'ok'; records: FastqRecordSummary[]}
+  | {state: 'unreadable' | 'invalid'; reason: string};
+
+/** Longest FASTQ line accepted while sampling; far above any short-read header or sequence. */
+const maxSampledLineLength = 64 * 1024;
+/** Decompressed bytes allowed per compressed byte read, so a gzip bomb cannot exhaust memory. */
+const maxExpansionRatio = 32;
+
+/**
+ * Streams the first `maxRecords` records of a plain or gzip-compressed FASTQ file, reading at most
+ * `maxBytes` bytes from disk, and stops as soon as either limit is reached. A record cut off by the
+ * byte limit is dropped; damage or truncation before the limit makes the file invalid.
+ */
+export async function readFastqHead(
+  path: string,
+  {maxRecords, maxBytes}: {maxRecords: number; maxBytes: number},
+): Promise<FastqHead> {
+  let gzip: boolean;
+  try {
+    gzip = isGzip(await readPrefix(path, 2));
+  } catch {
+    return {state: 'unreadable', reason: 'file cannot be read'};
+  }
+
+  const source = createReadStream(path, {start: 0, end: maxBytes - 1});
+  const gunzip = gzip ? createGunzip() : undefined;
+  if (gunzip) {
+    source.on('error', error => gunzip.destroy(error));
+    source.pipe(gunzip);
+  }
+  const decoded = gunzip ?? source;
+  const records: FastqRecordSummary[] = [];
+  let lines: string[] = [];
+  let pending = '';
+  let decodedBytes = 0;
+  let problem: string | undefined;
+  let endOfFile = false;
+
+  /** Adds one line; returns false once reading should stop. */
+  const accept = (line: string): boolean => {
+    lines.push(line.endsWith('\r') ? line.slice(0, -1) : line);
+    if (lines.length < 4) {
+      return true;
+    }
+    const [header = '', sequence = '', separator = '', quality = ''] = lines;
+    lines = [];
+    if (!isFastqRecord(header, sequence, separator, quality)) {
+      problem = 'malformed FASTQ record';
+      return false;
+    }
+    records.push({header, sequenceLength: sequence.length});
+    return records.length < maxRecords;
+  };
+
+  try {
+    reading: for await (const chunk of decoded) {
+      const text = (chunk as Buffer).toString('latin1');
+      decodedBytes += text.length;
+      if (decodedBytes > maxBytes * maxExpansionRatio) {
+        problem = 'decompresses to far more data than FASTQ would';
+        break;
+      }
+      pending += text;
+      const complete = pending.split('\n');
+      pending = complete.pop() ?? '';
+      if (pending.length > maxSampledLineLength) {
+        problem = 'line too long for FASTQ';
+        break;
+      }
+      for (const line of complete) {
+        if (!accept(line)) {
+          break reading;
+        }
+      }
+    }
+    endOfFile = problem === undefined && records.length < maxRecords && source.bytesRead < maxBytes;
+  } catch (error) {
+    // Stopping at the byte limit truncates a gzip stream, which zlib reports as a buffer error;
+    // any other error, or a truncation before the limit, is damage.
+    if ((error as NodeJS.ErrnoException).code !== 'Z_BUF_ERROR' || source.bytesRead < maxBytes) {
+      return {state: 'invalid', reason: 'damaged gzip data'};
+    }
+  } finally {
+    source.destroy();
+    decoded.destroy();
+  }
+  // At the true end of the file, a final line without a newline still counts.
+  if (endOfFile && pending.length > 0) {
+    accept(pending);
+    pending = '';
+  }
+  if (problem !== undefined) {
+    return {state: 'invalid', reason: problem};
+  }
+  if (endOfFile && lines.length > 0) {
+    return {state: 'invalid', reason: 'file ends inside a FASTQ record'};
+  }
+  if (records.length === 0) {
+    return {state: 'invalid', reason: 'no complete FASTQ record'};
+  }
+  return {state: 'ok', records};
 }
