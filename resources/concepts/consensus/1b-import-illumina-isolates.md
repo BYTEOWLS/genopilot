@@ -49,16 +49,13 @@ The importer uses instrument, run, and flowcell from the header. It never uses t
 
 ## Raw or trimmed
 
-Suggest, never decide. Show the evidence for each suggestion:
+Suggest, never decide. Raw reads share one length equal to the sequencing cycles, so a pair whose sampled R1 records vary in length is suggested as trimmed, and every other pair as untrimmed. Demultiplexing software can itself trim adapters, so varying lengths alone do not prove provider trimming. Adapter trimming shortens only reads from fragments shorter than the read length, often a few percent, which is why about 1,000 records are sampled.
 
-- **Read lengths:** raw reads share one length equal to the sequencing cycles; varying lengths across the sampled records suggest trimming. Demultiplexing software can itself trim adapters, so varying lengths alone do not prove provider trimming. Adapter trimming shortens only reads from fragments shorter than the read length, often a few percent, which is why about 1,000 records are sampled.
-- **Variant comparison:** within a read set, the variant with varying lengths or the smaller file is suggested as the processed copy. This relative signal is stronger than either variant's lengths alone.
-- **Provider reports:** when a BaseSpace `ReportStats.json` is present, parse it defensively; its command and input sample name link a processed read set to its raw source. A malformed or unknown report is shown as unreadable, never guessed at.
-- **Folder hints:** provider-specific suffixes on dataset folders are shown as context only.
+File sizes are shown but not used as evidence: gzip compression settings change them as much as trimming does. Dataset folder names are visible in the paths and serve as context only. BaseSpace processing reports were evaluated and deferred; see *Illumina import: provider processing reports* in [`later.md`](../../../later.md).
 
 ## Review and save
 
-The review preselects the untrimmed variant of each read set and lets the researcher confirm every `trimmed` flag. For each candidate, the researcher:
+The review preselects the untrimmed variant of each read set and lets the researcher confirm every `trimmed` flag. When no variant, or more than one, is suggested as untrimmed — for example when demultiplexing already trimmed adapters in the raw copy — nothing is preselected for that read set and the researcher chooses. For each candidate, the researcher:
 
 - chooses whether it creates a new isolate or adds its read sets to an existing isolate; "add" is preselected when the sample name matches an existing isolate's name or ID, which covers a top-up run delivered after the first import;
 - selects which read sets to include and at most one variant of each, because two variants are the same reads and would be counted twice;
@@ -75,7 +72,7 @@ The importer never renames, moves, merges, or decompresses delivered files.
 Three slices, each with its tests. Task 1's contract changes they rely on — nullable `wildtype` and allowed mixed trimming — land first.
 
 - [x] **Scan and report:** parse names and headers (index reads, optional lanes, chunks, undetermined and malformed names); stream the sampled records; scan safely; group candidates, read sets, and variants; detect already-imported files; explain every file not imported.
-- [ ] **Raw/trimmed suggestions:** read-length evidence, variant comparison, and `ReportStats.json` when present.
+- [x] **Raw/trimmed suggestions:** suggest trimming from varying read lengths.
 - [ ] **Review and save:** import entry, folder selection, scan progress with cancellation, candidate review with new or existing target, the single atomic save, and the retry after a catalog conflict.
 - [ ] Build synthetic delivery trees in tests: a BaseSpace-style export with raw and processed copies sharing file names, a library sequenced on two runs, lane-split and lane-merged files, a plain folder of FASTQs, a missing mate, index reads, split chunks, undetermined reads, a directory symlink loop, and a file symlink leaving the folder.
 - [ ] Test grouping, suggestions, skipped and unsupported files, review decisions, cancellation, resizing, conflicts, and the single-write save.

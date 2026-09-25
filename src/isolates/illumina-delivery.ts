@@ -73,6 +73,11 @@ export type DeliveryVariant = {
   /** Shortest and longest read among the sampled R1 records. */
   readLength: {min: number; max: number};
   sampledReads: number;
+  /**
+   * Raw Illumina reads share one length, so varying lengths suggest trimming or filtering. It is a
+   * suggestion only: demultiplexing can itself trim adapters, and the researcher confirms the flag.
+   */
+  suggestedTrimmed: boolean;
 };
 
 /** Reads of one flowcell lane, or of a whole flowcell when the lanes were merged. */
@@ -195,8 +200,8 @@ function headProblem(mate: 'R1' | 'R2', head: FastqHead): {reason: SkipReason; d
 
 /**
  * Proposes isolates from an Illumina delivery folder. It only reads: file names give sample, lane,
- * and mate; the first records give run, flowcell, and read lengths. Every FASTQ that is not
- * proposed is listed with its reason.
+ * and mate; the first records give run, flowcell, and read lengths, from which each pair gets a
+ * raw/trimmed suggestion. Every FASTQ that is not proposed is listed with its reason.
  */
 export async function scanIlluminaDelivery(
   rootPath: string,
@@ -327,14 +332,16 @@ export async function scanIlluminaDelivery(
       readSet: {instrument, run, flowcell, lane, variants: []},
     };
     const lengths = r1Head.records.map(record => record.sequenceLength);
+    const readLength = {min: Math.min(...lengths), max: Math.max(...lengths)};
     entry.readSet.variants.push({
       r1: r1.path,
       r2: r2.path,
       r1Bytes: r1.bytes,
       r2Bytes: r2.bytes,
       sampleNumber: r1.name.sampleNumber,
-      readLength: {min: Math.min(...lengths), max: Math.max(...lengths)},
+      readLength,
       sampledReads: lengths.length,
+      suggestedTrimmed: readLength.min !== readLength.max,
     });
     readSets.set(key, entry);
   }

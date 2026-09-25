@@ -112,6 +112,7 @@ test('groups raw and processed copies with identical names as variants of one re
     'Sample-A_L001_ds.raw/strain-a_S1_L001_R1_001.fastq.gz',
   ]);
   assert.deepEqual(variants.map(variant => variant.readLength), [{min: 131, max: 151}, {min: 151, max: 151}]);
+  assert.deepEqual(variants.map(variant => variant.suggestedTrimmed), [true, false]);
   assert.ok(variants.every(variant => variant.r1Bytes > 0 && variant.r2Bytes > 0));
 });
 

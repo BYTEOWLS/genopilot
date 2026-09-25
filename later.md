@@ -128,6 +128,19 @@ Follow-ups from the review of the first isolate-catalog implementation:
 - [ ] Detect one read file reached through different paths across isolates, not only within one: symlinks and hard links, and differently cased paths on case-insensitive filesystems such as the macOS default.
 - [ ] Replace fixed keystroke delays in `tests/ui/isolates-screen.test.tsx` with waits on injected callbacks or rendered state, so the suite does not become flaky on slower CI runners.
 
+### Illumina import: provider processing reports
+
+The Illumina importer (consensus Task 1b) suggests raw or trimmed reads from read lengths only. Parsing BaseSpace processing reports was implemented, evaluated against a real delivery, and dropped because read lengths alone classified every pair correctly and no current delivery needs more. Findings for a later attempt:
+
+- A processing app writes `ReportStats.json`, `ReportMetadata.json`, `Readme.txt`, and `ResourceUsageLog.txt` into a dataset folder named after the **input** sample (`<input>-ds.<hex id>`), without FASTQ files. The processed FASTQ files sit in a separate dataset folder named after the **output** sample (`<output>-ds.<hex id>`, e.g. an `adq30ft` suffix), and keep the input's file names.
+- `ReportMetadata.json` explicitly names `inputSampleName` and `outputSampleName`; this, not `ReportStats.json`, is the reliable link to the processed dataset folder.
+- `ReportStats.json` holds `version`, `command`, a `parameters` object (`fastq`/`fastq2` input paths and every trimming and filtering option, with empty strings and `"False"` for unused ones), read and base counts before and after processing (`inputreadpairs`, `outputreadpairs`, …), and per-length histograms.
+- The app merges all lanes of a sample into one output file per mate while keeping a single-lane name such as `_L001_`. In a multi-lane delivery the importer would then treat that file as a copy of lane 1 although it holds every lane; choosing it together with raw reads of another lane would count those reads twice. A report whose input files differ from the processed pair's names detects this.
+- Output sample names repeat across deliveries, so linking must prefer a report in the same parent folder as the processed dataset and flag ambiguous matches.
+- File sizes are not evidence: processed copies were about 15% smaller here, but gzip compression settings change sizes as much.
+
+Revisit when a multi-lane delivery with processed copies appears, or when raw reads are already adapter-trimmed during demultiplexing so that read lengths no longer tell raw and processed copies apart.
+
 ## Run verification command
 
 Researchers should be able to inspect and rerun a released workflow without repository access. Every run records package and workflow versions, workflow checksums, effective configuration, input/output checksums, reference versions, tool versions, commands, logs, events, timestamps, and platform.
