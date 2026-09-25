@@ -30,7 +30,8 @@ No isolate name or read-pair count is hard-coded in a rule.
 
 An isolate may have several read pairs, typically one per lane or sequencing run of the same library. Each pair is validated, QC'd, and aligned separately with its own read group, then merged per isolate:
 
-- derive the read group from the first read header of each pair — `ID` from flowcell and lane, `PU` from flowcell, lane, and barcode, `SM` from the isolate ID, and `LB` from the Illumina sample name and barcodes — and reject a pair whose records disagree with its first header;
+- derive the read group from the read headers of each pair — `ID` from the flowcell, `PU` from the flowcell and barcode, `SM` from the isolate ID, and `LB` from the Illumina sample name and barcodes; extend `ID` and `PU` with the lane only when every record of the pair has the same lane, because lane-merged deliveries (`--no-lane-splitting`) combine all lanes of a flowcell in one file;
+- reject a pair whose records disagree with its first header on instrument, run, or flowcell, but never on lane alone;
 - mark duplicates across all pairs of the same library, because PCR duplicates of one library can appear in several runs;
 - record instrument, run, flowcell, lane, read length, and read counts per pair in provenance; the isolate catalog deliberately does not store them.
 

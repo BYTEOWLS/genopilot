@@ -283,7 +283,7 @@ test('creates an isolate with several trimmed read pairs', async context => {
   assert.ok(checkedPairs.includes(2));
 });
 
-test('refuses to save an isolate that mixes trimmed and untrimmed pairs', async context => {
+test('saves an isolate that mixes trimmed and untrimmed pairs', async context => {
   const store = new MemoryCatalog();
   const {input} = renderScreen(context, {loadCatalog: store.load, updateCatalog: store.update});
   await waitFor(() => store.loads === 1);
@@ -296,8 +296,22 @@ test('refuses to save an isolate that mixes trimmed and untrimmed pairs', async 
       {r1: '/data/L8_R1.fq', r2: '/data/L8_R2.fq'},
     ],
   });
+  await waitFor(() => store.catalog.isolates.length === 1);
+  assert.deepEqual(store.catalog.isolates[0]?.read_pairs.map(pair => pair.trimmed), [true, false]);
+});
+
+test('saves an isolate whose wild-type status is not recorded', async context => {
+  const store = new MemoryCatalog();
+  const {input} = renderScreen(context, {loadCatalog: store.load, updateCatalog: store.update});
+  await waitFor(() => store.loads === 1);
   await settle();
-  assert.equal(store.updates, 0);
+
+  // New-isolate rows: name, ID, description, wild type, parent, pair 1 R1, R2, trimmed, add-pair, save.
+  const downToR1 = Array.from({length: 5}, () => keys.down);
+  await press(input, 'n', 'Strain Z', ...downToR1, '/data/z_R1.fq', keys.down, '/data/z_R2.fq');
+  await press(input, keys.down, keys.down, keys.down, keys.enter);
+  await waitFor(() => store.catalog.isolates.length === 1);
+  assert.equal(store.catalog.isolates[0]?.wildtype, null);
 });
 
 test('removes a read pair while editing', async context => {
@@ -403,16 +417,16 @@ test('refuses to save while required fields or read files are invalid', async co
   await waitFor(() => store.loads === 1);
   await settle();
 
-  // Saving without a wild-type choice is refused before any file is checked.
-  await press(input, 'n', 'Strain Y', keys.tab, keys.tab, keys.tab, keys.tab, keys.tab, '/data/y_R1.fq');
+  // Saving without a name is refused before any file is checked.
+  await press(input, 'n', keys.tab, keys.tab, keys.tab, keys.tab, keys.tab, '/data/y_R1.fq');
   await press(input, keys.tab, '/data/y_R2.fq', keys.tab, keys.tab, keys.tab, keys.enter);
   await settle();
   assert.equal(store.updates, 0);
 
-  // Choosing it still leaves the missing R2 file blocking the save.
-  const upToWildtype = Array.from({length: 6}, () => keys.up);
-  const downToSave = Array.from({length: 6}, () => keys.down);
-  await press(input, ...upToWildtype, ' ', ...downToSave, keys.enter);
+  // Naming it still leaves the missing R2 file blocking the save.
+  const upToName = Array.from({length: 9}, () => keys.up);
+  const downToSave = Array.from({length: 9}, () => keys.down);
+  await press(input, ...upToName, 'Strain Y', ...downToSave, keys.enter);
   await settle();
   assert.equal(store.updates, 0);
   assert.equal(store.catalog.isolates.length, 0);

@@ -34,7 +34,8 @@ function errorMessage(error: unknown): string {
 function readSummary(isolate: Isolate, check: ReadPairsCheck | undefined): string {
   const count = isolate.read_pairs.length;
   const pairs = `${String(count)} read pair${count === 1 ? '' : 's'}`;
-  const trimmed = isolate.read_pairs.some(pair => pair.trimmed) ? ', trimmed' : '';
+  const trimmedCount = isolate.read_pairs.filter(pair => pair.trimmed).length;
+  const trimmed = trimmedCount === 0 ? '' : trimmedCount === count ? ', trimmed' : ', partly trimmed';
   if (!check) {
     return `${pairs}${trimmed} · checking reads`;
   }
@@ -49,7 +50,9 @@ function readSummary(isolate: Isolate, check: ReadPairsCheck | undefined): strin
 }
 
 function lineage(isolate: Isolate): string {
-  const wildtype = isolate.wildtype ? 'wild type' : 'not wild type';
+  const wildtype = isolate.wildtype === null
+    ? 'wild type not recorded'
+    : isolate.wildtype ? 'wild type' : 'not wild type';
   return isolate.derived_from === null ? wildtype : `${wildtype}, derived from ${isolate.derived_from}`;
 }
 

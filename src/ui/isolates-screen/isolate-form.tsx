@@ -53,7 +53,7 @@ function initialValues(isolate: Isolate | undefined): Values {
     name: isolate?.name ?? '',
     id: isolate?.id ?? '',
     description: isolate?.description ?? '',
-    wildtype: isolate === undefined ? '' : isolate.wildtype ? 'true' : 'false',
+    wildtype: isolate?.wildtype === true ? 'true' : isolate?.wildtype === false ? 'false' : '',
     derived_from: isolate?.derived_from ?? '',
   };
 }
@@ -179,7 +179,7 @@ export function IsolateForm({
   };
 
   const cycleChoice = (field: 'wildtype' | 'derived_from', offset: -1 | 1): void => {
-    const options = field === 'wildtype' ? ['true', 'false'] : parentOptions;
+    const options = field === 'wildtype' ? ['', 'true', 'false'] : parentOptions;
     const index = options.indexOf(values[field]);
     const next = index < 0
       ? options[offset === 1 ? 0 : options.length - 1]
@@ -191,9 +191,6 @@ export function IsolateForm({
     const missing: string[] = [];
     if (values.name.trim().length === 0) {
       missing.push('Name: is required');
-    }
-    if (values.wildtype === '') {
-      missing.push('Wild type: choose yes or no');
     }
     pairs.forEach((pair, index) => {
       for (const mate of ['r1', 'r2'] as const) {
@@ -211,7 +208,7 @@ export function IsolateForm({
       id: creating ? effectiveId : editing.id,
       name: values.name.trim(),
       ...(description.length > 0 ? {description} : {}),
-      wildtype: values.wildtype === 'true',
+      wildtype: values.wildtype === '' ? null : values.wildtype === 'true',
       derived_from: values.derived_from === '' ? null : values.derived_from,
       read_pairs: pairs.map(pair => ({
         r1: expandHomeDirectory(pair.r1.trim()),
@@ -377,11 +374,11 @@ export function IsolateForm({
       }
       case 'choice': {
         const display = row.field === 'wildtype'
-          ? values.wildtype === '' ? 'not set' : values.wildtype === 'true' ? 'yes' : 'no'
+          ? values.wildtype === '' ? 'not recorded' : values.wildtype === 'true' ? 'yes' : 'no'
           : values.derived_from === '' ? 'none' : `${parent?.name ?? ''} (${values.derived_from})`;
         return (
           <Text key={row.id} color={color(row)} wrap="truncate">
-            {marker(row)}{fieldLabels[row.field]}{row.field === 'wildtype' ? '*' : ''}: ‹ {sanitizeTerminalText(display)} ›
+            {marker(row)}{fieldLabels[row.field]}: ‹ {sanitizeTerminalText(display)} ›
           </Text>
         );
       }
