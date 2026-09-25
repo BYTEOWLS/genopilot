@@ -1,6 +1,10 @@
 import React, {useState} from 'react';
 import {Box, Text, useInput} from 'ink';
-import {isVersionedAssemblyAccession} from '../../accessions/accession.js';
+import {
+  isVersionedAssemblyAccession,
+  ncbiAccessionFormatMessage,
+  normalizeAccession,
+} from '../../accessions/accession.js';
 import type {ScannedCopy} from '../../accessions/cache-discovery.js';
 import {
   AccessionCatalogValidationError,
@@ -96,9 +100,9 @@ export function AccessionForm({
   useHomeSuspension(busy ? 'busy' : typing ? 'typing' : undefined);
 
   const lookUp = (): void => {
-    const candidate = accession.trim().toUpperCase();
+    const candidate = normalizeAccession(accession);
     if (!isVersionedAssemblyAccession(candidate)) {
-      setProblems(['Accession: must be a versioned NCBI assembly accession, for example GCF_000149205.2']);
+      setProblems([`Accession: ${ncbiAccessionFormatMessage}`]);
       return;
     }
     if (catalog.accessions.some(entry => entry.accession === candidate)) {

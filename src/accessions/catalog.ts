@@ -307,11 +307,32 @@ export function accessionDisplayName(entry: AccessionEntry): string {
   return entry.name ?? entry.accession;
 }
 
+/** The NCBI facts that tell assemblies apart at a glance, joined into one line. */
+export function accessionFactsSummary(entry: AccessionEntry): string {
+  if (!entry.ncbi) {
+    return 'metadata not retrieved';
+  }
+  return [
+    entry.ncbi.organism,
+    entry.ncbi.assembly_name,
+    entry.ncbi.strain,
+    entry.ncbi.assembly_type,
+    entry.ncbi.refseq_category,
+  ]
+    .filter((value): value is string => value !== undefined)
+    .join(' · ');
+}
+
 /**
  * `conflict` means verified copies disagree about the bytes of one versioned accession. That needs
  * inspection; no copy is preferred automatically.
  */
 export type RecordedCacheState = 'not-cached' | 'cached' | 'conflict';
+
+/** Why an accession whose cached copies conflict cannot be used, for a validation problem. */
+export const conflictingCopiesMessage =
+  'has cached copies whose checksums disagree in the accession catalog; remove the entry under ' +
+  'Manage NCBI accessions, which deletes its cached copies, before using it';
 
 export function recordedCacheState(entry: AccessionEntry): RecordedCacheState {
   if (entry.cached_copies.length === 0) {

@@ -7,3 +7,8 @@ export const ncbiAccessionFormatMessage =
 export function isVersionedAssemblyAccession(value: string): boolean {
   return ncbiAccessionPattern.test(value);
 }
+
+/** Tidies a typed or pasted accession, whose surrounding whitespace and case carry no meaning. */
+export function normalizeAccession(value: string): string {
+  return value.trim().toUpperCase();
+}

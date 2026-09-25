@@ -3,6 +3,7 @@ import {Box, Text, useInput} from 'ink';
 import type {AccessionCacheDeleter, CacheScan, ScannedCopy} from '../../accessions/cache-discovery.js';
 import {
   accessionDisplayName,
+  accessionFactsSummary,
   recordedCacheState,
   withAccession,
   type AccessionEntry,
@@ -45,21 +46,6 @@ function cacheStatus(entry: AccessionEntry, scan: CacheScan): string {
     case 'not-cached':
       return damage.length > 0 ? `not cached, ${damage}` : 'not cached';
   }
-}
-
-function factsSummary(entry: AccessionEntry): string {
-  if (!entry.ncbi) {
-    return 'metadata not retrieved';
-  }
-  return [
-    entry.ncbi.organism,
-    entry.ncbi.assembly_name,
-    entry.ncbi.strain,
-    entry.ncbi.assembly_type,
-    entry.ncbi.refseq_category,
-  ]
-    .filter((value): value is string => value !== undefined)
-    .join(' · ');
 }
 
 export function AccessionsTab({
@@ -258,7 +244,7 @@ export function AccessionsTab({
             {sanitizeTerminalText(accessionDisplayName(entry))}
             {entry.name ? <Text color={mutedColor}> ({entry.accession})</Text> : null}
             {' · '}{cacheStatus(entry, scan)}
-            {' · '}{sanitizeTerminalText(factsSummary(entry))}
+            {' · '}{sanitizeTerminalText(accessionFactsSummary(entry))}
           </Text>
         );
       })}

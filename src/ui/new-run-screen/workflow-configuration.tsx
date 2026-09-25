@@ -4,6 +4,7 @@ import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
 import type {WorkflowParameterDefinition} from '../../workflows/parameter-definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
+import {AccessionField} from '../components/accession-field.js';
 import {PathField} from '../components/path-field.js';
 import {TextField} from '../components/text-field.js';
 import {
@@ -35,7 +36,8 @@ function definitionLineCount(definition: WorkflowParameterDefinition): number {
   if (definition.kind === 'choice') {
     return 1 + (definition.options?.length ?? 0);
   }
-  return 1 + (definition.preview ? 1 : 0);
+  // An accession field always shows its validity or catalog line.
+  return 1 + (definition.preview || definition.kind === 'accession' ? 1 : 0);
 }
 
 export type WorkflowFormValues = Record<string, string>;
@@ -165,6 +167,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   );
   const [values, setValues] = useState(() => initialWorkflowFormValues(parameterDefinitions));
   const [selectedId, setSelectedId] = useState<string>(editableDefinitions[0]?.id ?? continueButtonId);
+  // The field whose file browser or accession picker is open over the form.
   const [browserId, setBrowserId] = useState<string>();
   const [screen, setScreen] = useState<ScreenState<T>>({state: 'editing'});
   const [previousRunIndex, setPreviousRunIndex] = useState<number>();
@@ -182,8 +185,10 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   const sections = [...new Set(visibleDefinitions.map(definition => definition.section))];
   const selectedDefinition = visibleEditableDefinitions.find(definition => definition.id === selectedId);
   const continueSelected = selectedId === continueButtonId;
-  // A file path is typed or pasted, and Enter on it opens the file browser.
+  // A file path or accession is typed or pasted, and Enter on it opens the file browser or the
+  // accession picker.
   const enterOpensFileChooser = selectedDefinition?.kind === 'file';
+  const enterOpensAccessionPicker = selectedDefinition?.kind === 'accession';
   const showsForm = screen.state === 'editing' || screen.state === 'validating' || screen.state === 'invalid';
   const typing = showsForm && !browserId && selectedDefinition !== undefined &&
     selectedDefinition.kind !== 'choice';
@@ -417,8 +422,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         return;
       }
       // A choice field only responds to arrows/space (handled above). Every other
-      // selectable kind (file, text, integer) delegates its own caret, backspace, and
-      // paste handling to TextInput, mounted below whenever that field is
+      // selectable kind (file, accession, text, integer) delegates its own caret, backspace,
+      // and paste handling to TextInput, mounted below whenever that field is
       // selected — nothing else to do here.
     },
     {isActive: inputActive},
@@ -427,6 +432,23 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   const browsedDefinition = browserId
     ? parameterDefinitions.find(definition => definition.id === browserId)
     : undefined;
+  if (browserId && browsedDefinition?.kind === 'accession') {
+    return (
+      <AccessionField
+        label={browsedDefinition.label}
+        selected
+        inputActive={inputActive}
+        value={values[browserId] ?? ''}
+        onChange={accession => updateValue(browserId, accession)}
+        choosing
+        onChoosingChange={choose => {
+          if (!choose) {
+            setBrowserId(undefined);
+          }
+        }}
+      />
+    );
+  }
   if (browserId && browsedDefinition) {
     return (
       <PathField
@@ -561,7 +583,11 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         selectedDefinition?.kind === 'choice' ? 'Space/↑/↓ — Choose' : '↑/↓ — Field',
         '* — Required',
         previousRuns.length > 0 && 'PageUp/PageDown (or fn + ↑/↓) — Previous runs',
-        continueSelected ? 'Enter — Continue to review' : enterOpensFileChooser && 'Enter — Browse for file',
+        continueSelected
+          ? 'Enter — Continue to review'
+          : enterOpensFileChooser
+            ? 'Enter — Browse for file'
+            : enterOpensAccessionPicker && 'Enter — Choose from catalog',
       ]}
       saveLabel="Continue to review"
       saveSelected={continueSelected}
@@ -611,6 +637,22 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
               browsing={false}
               onBrowsingChange={browse => setBrowserId(browse ? definition.id : undefined)}
               startDirectory={currentDirectory}
+              {...(definition.placeholder ? {placeholder: definition.placeholder} : {})}
+            />
+          );
+        } else if (definition.kind === 'accession') {
+          return (
+            <AccessionField
+              key={`${row.key}:${runApplyGeneration}`}
+              label={definition.label}
+              required={definition.required}
+              selected={selected}
+              // While the configuration is checked, Enter must not open the picker over it.
+              inputActive={inputActive && screen.state !== 'validating'}
+              value={value}
+              onChange={value => updateValue(definition.id, value)}
+              choosing={false}
+              onChoosingChange={choose => setBrowserId(choose ? definition.id : undefined)}
               {...(definition.placeholder ? {placeholder: definition.placeholder} : {})}
             />
           );

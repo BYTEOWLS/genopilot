@@ -1,9 +1,11 @@
 import {createCatalogStore, type CatalogMutation, type LoadedCatalog} from '../catalog-store.js';
+import {resolveToolingPaths} from '../tooling/paths.js';
 import {
   emptyAccessionCatalog,
   parseAccessionCatalog,
   validateAccessionCatalog,
   type AccessionCatalog,
+  type AccessionEntry,
 } from './catalog.js';
 
 export type LoadedAccessionCatalog = LoadedCatalog<AccessionCatalog>;
@@ -45,3 +47,10 @@ const store = createCatalogStore<AccessionCatalog>({
 export const loadAccessionCatalog = store.load;
 
 export const updateAccessionCatalog = store.update;
+
+/** Reads the cataloged accessions, for example to choose from them or to check one. */
+export type AccessionCatalogReader = () => Promise<readonly AccessionEntry[]>;
+
+/** Reads the researcher's own accession catalog; a missing catalog has no entries. */
+export const readCatalogedAccessions: AccessionCatalogReader = async () =>
+  (await loadAccessionCatalog(resolveToolingPaths().accessionCatalogPath)).catalog.accessions;

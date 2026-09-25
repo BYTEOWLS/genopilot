@@ -128,3 +128,13 @@ test('accepts a visible_when matching any of several values and rejects an empty
     issues(emptyList).some(issue => issue.path === '$.parameters[0].visible_when.equals'),
   );
 });
+
+test('accepts an accession parameter', () => {
+  const [definition] = validateParameterDefinitions({
+    schema_version: 1,
+    parameters: [
+      {id: 'reference-accession', label: 'Reference', section: 'Inputs', kind: 'accession', required: true, default: null},
+    ],
+  });
+  assert.equal(definition?.kind, 'accession');
+});

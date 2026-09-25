@@ -2,7 +2,8 @@ import {parse, parseAllDocuments} from 'yaml';
 
 export const PARAMETER_DEFINITIONS_SCHEMA_VERSION = 1 as const;
 
-export type WorkflowParameterKind = 'file' | 'text' | 'choice' | 'integer' | 'fixed';
+/** `accession` is a versioned NCBI assembly accession, typed or chosen from the accession catalog. */
+export type WorkflowParameterKind = 'file' | 'accession' | 'text' | 'choice' | 'integer' | 'fixed';
 
 export type WorkflowParameterOption = {
   value: string;
@@ -48,6 +49,7 @@ type RecordValue = Record<string, unknown>;
 const identifierPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const parameterKinds: readonly WorkflowParameterKind[] = [
   'file',
+  'accession',
   'text',
   'choice',
   'integer',

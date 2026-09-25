@@ -85,7 +85,8 @@ test('resolves an NCBI accession source independently for the reference and the 
   const {root, draft} = await fixture();
   context.after(() => rm(root, {recursive: true, force: true}));
   draft.referenceSource = 'ncbi';
-  draft.referenceAccession = '  GCF_000149205.2  ';
+  // Pasted with surrounding whitespace and typed in lowercase.
+  draft.referenceAccession = '  gcf_000149205.2  ';
   draft.targetSource = 'local';
 
   const prepared = buildAnnotationTransferConfiguration(draft, root, 4);
@@ -245,7 +246,45 @@ test('does not check the filesystem for an NCBI-sourced input', async context =>
   draft.referenceAccession = 'GCF_000149205.2';
   const prepared = buildAnnotationTransferConfiguration(draft, root, 4);
 
-  await validatePreparedRunPaths(prepared);
+  await validatePreparedRunPaths(prepared, undefined, async () => []);
+});
+
+test('refuses an NCBI accession whose cataloged copies conflict', async context => {
+  const {root, draft} = await fixture();
+  context.after(() => rm(root, {recursive: true, force: true}));
+  draft.referenceSource = 'ncbi';
+  draft.referenceAccession = 'GCF_000149205.2';
+  draft.targetSource = 'ncbi';
+  draft.targetAccession = 'GCA_000011425.1';
+  const prepared = buildAnnotationTransferConfiguration(draft, root, 4);
+  const copy = (path: string, checksum: string) =>
+    ({path, verified_at: '2026-01-01T00:00:00.000Z', fasta_sha256: checksum.repeat(64)});
+  const catalog = async () => [
+    {
+      accession: 'GCF_000149205.2',
+      ncbi: null,
+      cached_copies: [copy('/a/GCF_000149205.2', 'a'), copy('/b/GCF_000149205.2', 'b')],
+    },
+    {
+      accession: 'GCA_000011425.1',
+      ncbi: null,
+      cached_copies: [copy('/a/GCA_000011425.1', 'c'), copy('/b/GCA_000011425.1', 'c')],
+    },
+  ];
+
+  await assert.rejects(
+    validatePreparedRunPaths(prepared, undefined, catalog),
+    (error: unknown) => {
+      assert.ok(error instanceof AnnotationTransferConfigurationError);
+      // Only the reference conflicts; the target's copies agree.
+      assert.deepEqual(error.issues.map(issue => issue.path), ['$.inputs.reference.accession']);
+      return true;
+    },
+  );
+  // An unreadable catalog does not block the run.
+  await validatePreparedRunPaths(prepared, undefined, async () => {
+    throw new Error('catalog is broken');
+  });
 });
 
 test('atomically saves a complete configuration without overwriting a run', async context => {

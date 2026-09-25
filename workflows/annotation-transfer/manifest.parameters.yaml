@@ -35,11 +35,10 @@ parameters:
   - id: reference-accession
     label: Reference NCBI accession
     section: Inputs
-    kind: text
+    kind: accession
     required: true
     default: null
     hidden: false
-    placeholder: "Type or paste accession"
     visible_when:
       parameter: reference-source
       equals: ncbi
@@ -68,11 +67,10 @@ parameters:
   - id: target-accession
     label: Target NCBI accession
     section: Inputs
-    kind: text
+    kind: accession
     required: true
     default: null
     hidden: false
-    placeholder: "Type or paste accession"
     visible_when:
       parameter: target-source
       equals: ncbi

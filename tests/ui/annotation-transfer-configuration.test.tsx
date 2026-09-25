@@ -699,6 +699,8 @@ test('shows actionable validation errors before confirmation', async context => 
     validatePreparedRun: async () => {
       validations += 1;
     },
+    // Tall enough that every form row stays on screen beside the error list.
+    rows: 60,
   });
   registerCleanup(context, instance);
   await waitForForm(output);
