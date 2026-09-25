@@ -72,15 +72,48 @@ async function waitFor(condition: () => boolean, description: string): Promise<v
   assert.fail(`Timed out waiting for ${description}.`);
 }
 
+/**
+ * Lets React finish the work a render left behind. Ink draws a frame when React commits it, but a
+ * newly shown field starts listening for keys in an effect that React's scheduler runs later, in
+ * `setImmediate` turns of at least one task each; a key written in between is dropped. A few turns
+ * cover the effects and anything they schedule.
+ */
+async function effectsSettled(): Promise<void> {
+  for (let turn = 0; turn < 3; turn += 1) {
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+}
+
+/** Waits for output matching `predicate` and for the drawn screen to listen for keys. */
 async function waitForOutput(output: TestOutput, predicate: (value: string) => boolean): Promise<string> {
-  await waitFor(() => predicate(output.read()), `terminal output. Received:\n${output.read()}`);
+  const timeoutAt = Date.now() + 2000;
+  while (!predicate(output.read())) {
+    if (Date.now() >= timeoutAt) {
+      // The output when the wait gave up, not when it began.
+      assert.fail(`Timed out waiting for terminal output. Received:\n${output.read()}`);
+    }
+    await new Promise<void>(resolve => setTimeout(resolve, 10));
+  }
+  await effectsSettled();
   return output.read();
 }
 
-/** Lets Ink process one keypress before the next arrives. */
+// Ink holds a lone Escape this long in case it starts a key sequence (`pendingInputFlushDelay`).
+const inkEscapeDelayMilliseconds = 20;
+
+/**
+ * Lets Ink handle one keypress before the next arrives. Ink reads stdin and runs the key handlers
+ * synchronously, so an empty input buffer means the key was handled, except a lone Escape, which
+ * Ink passes on from a timer. A timer started afterwards with the same delay fires after Ink's, as
+ * Node fires timers by deadline. Then whatever the key showed starts listening for keys.
+ */
 async function press(input: TestInput, key: string): Promise<void> {
   input.write(key);
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await waitFor(() => input.readableLength === 0, 'the key to be handled');
+  if (key === ESCAPE) {
+    await new Promise<void>(resolve => setTimeout(resolve, inkEscapeDelayMilliseconds));
+  }
+  await effectsSettled();
 }
 
 /** ↓ moves from the accession field to the look-up button; Enter there looks it up. */
@@ -101,9 +134,9 @@ async function addTypedRoot(input: TestInput): Promise<void> {
   await press(input, ENTER);
 }
 
-/** Gives a newly opened form time to take keyboard input. */
+/** Lets a newly opened form take keyboard input. */
 async function settle(): Promise<void> {
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await effectsSettled();
 }
 
 function metadata(organism: string): NcbiAssemblyMetadata {
@@ -221,10 +254,13 @@ function renderScreen(
   };
 }
 
-/** Waits until the first cache scan has finished and the screen has settled. */
+/**
+ * Waits until the first cache scan has finished and the screen has shown its result; until then
+ * the screen refuses removals and rescans.
+ */
 async function ready(screen: {scansCompleted: number}): Promise<void> {
   await waitFor(() => screen.scansCompleted >= 1, 'the first cache scan');
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await effectsSettled();
 }
 
 test('records verified caches on open and shows damaged copies without trusting them', async context => {
@@ -363,6 +399,7 @@ test('keeps the entry when deleting its cache fails', async context => {
     },
   });
   await waitFor(() => screen.writes === 1, 'discovery to record the copy');
+  await ready(screen);
 
   await press(screen.input, 'd');
   await press(screen.input, 'y');
@@ -426,6 +463,9 @@ test('switches tabs with ←/→ like the file browser moves between folders', a
   await waitForOutput(screen.output, value => value.includes('/analysis/other'));
   await addTypedRoot(screen.input);
   await waitFor(() => screen.catalog.output_roots.length === 1, 'the root added on the roots tab');
+  // Adding a root rescans; the tab takes keys again once the save and that scan are shown.
+  await waitFor(() => screen.scansCompleted >= 2, 'the rescan after adding the root');
+  await effectsSettled();
 
   // ← from the roots tab returns to the accession list, whose n opens the add form.
   await press(screen.input, ARROW_LEFT);
@@ -462,6 +502,7 @@ test('shows every cached and damaged copy when an entry is opened', async contex
     ],
   });
   await waitFor(() => screen.writes === 1, 'discovery to record the verified copy');
+  await ready(screen);
 
   screen.output.clear();
   await press(screen.input, ENTER);

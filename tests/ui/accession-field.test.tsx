@@ -29,15 +29,36 @@ class TestOutput extends Writable {
   readonly rows = 30;
   readonly isTTY = false;
   private output = '';
+  /** How many frames Ink has written, to wait for the next one. */
+  writes = 0;
 
   override _write(chunk: string | Buffer, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
     this.output += chunk.toString();
+    this.writes += 1;
     callback();
   }
 
   lastFrame(): string {
     return this.output.split(/\x1b\[[GH]/).at(-1) ?? '';
   }
+}
+
+async function waitUntil(condition: () => boolean, description: string): Promise<void> {
+  const timeoutAt = Date.now() + 1000;
+  while (Date.now() < timeoutAt) {
+    if (condition()) {
+      return;
+    }
+    await new Promise<void>(resolve => setTimeout(resolve, 5));
+  }
+  assert.fail(`Timed out waiting until ${description}`);
+}
+
+// Ink reads stdin and runs every key handler synchronously in one 'readable' callback, so once
+// the input buffer is empty the key has been handled, including keys that change nothing.
+async function press(input: TestInput, key: string): Promise<void> {
+  input.write(key);
+  await waitUntil(() => input.readableLength === 0, 'the key is handled');
 }
 
 async function waitForFrame(output: TestOutput, predicate: (frame: string) => boolean): Promise<string> {
@@ -100,7 +121,8 @@ function Harness({
   );
 }
 
-// Renders the field and waits until its catalog load has settled and the frame shows it.
+// Renders the field and waits for the frame drawn after its catalog load settled. The loader's
+// `finally` runs before the field stores the result, so any later frame shows the loaded state.
 async function renderField(
   context: TestContext,
   props: {initialValue?: string; loadAccessions?: AccessionCatalogReader} = {},
@@ -109,9 +131,9 @@ async function renderField(
   const output = new TestOutput();
   const changes: string[] = [];
   const load = props.loadAccessions ?? catalog;
-  let settled = false;
+  let writesAtSettle: number | undefined;
   const loadAccessions: AccessionCatalogReader = () => load().finally(() => {
-    settled = true;
+    writesAtSettle = output.writes;
   });
   const instance = render(
     <Harness
@@ -128,13 +150,10 @@ async function renderField(
     },
   );
   context.after(() => instance.unmount());
-  const timeoutAt = Date.now() + 1000;
-  while (!settled && Date.now() < timeoutAt) {
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.ok(settled, 'The catalog load did not settle.');
-  // The frame after the load, which renders once the settled state is committed.
-  await new Promise<void>(resolve => setTimeout(resolve, 20));
+  await waitUntil(
+    () => writesAtSettle !== undefined && output.writes > writesAtSettle,
+    'the loaded catalog is drawn',
+  );
   return {input, output, changes};
 }
 
@@ -220,8 +239,7 @@ test('lists a conflicting accession with its copies but refuses to choose it', a
   assert.match(picker, /\/first-root\/GCF_000000003\.1/);
   assert.match(picker, /\/second-root\/GCF_000000003\.1/);
 
-  input.write(ENTER);
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await press(input, ENTER);
   assert.deepEqual(changes, []);
   assert.ok(selectedLine(output.lastFrame()).includes('GCF_000000003.1'), 'The picker stays open.');
 
@@ -250,9 +268,9 @@ test('opens an empty or unreadable catalog without choosing anything', async con
     if (index === 1) {
       assert.match(picker, /catalog is broken/);
     }
-    // Enter has nothing to choose; give it time to act before leaving.
-    input.write(ENTER);
-    await new Promise<void>(resolve => setTimeout(resolve, 50));
+    // Enter has nothing to choose.
+    await press(input, ENTER);
+    assert.deepEqual(changes, []);
     input.write(ESCAPE);
     await waitForFrame(output, frame => selectedLine(frame).length > 0);
     assert.deepEqual(changes, []);
