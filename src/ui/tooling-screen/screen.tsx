@@ -5,6 +5,7 @@ import type {ToolingStatus} from '../../tooling/check.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {ToolingList} from '../welcome-screen/tooling/section.js';
 import {mutedColor} from '../theme.js';
+import {Page} from '../components/page.js';
 
 export function ToolingScreen({
   status,
@@ -33,8 +34,10 @@ export function ToolingScreen({
   });
 
   return (
-    <Box flexDirection="column">
-      <Text bold>Required tooling</Text>
+    <Page
+      title="Required tooling"
+      shortcuts={[status.state === 'checking' ? 'Checking…' : 'R/Enter — Check tooling']}
+    >
       {status.state === 'checking' ? (
         <Text color={mutedColor}>○ Checking availability…</Text>
       ) : status.state === 'check-failed' ? (
@@ -51,11 +54,6 @@ export function ToolingScreen({
           </Alert>
         </Box>
       ) : null}
-      <Box marginTop={1}>
-        <Text color={mutedColor}>
-          {status.state === 'checking' ? 'Checking…' : 'R/Enter — Check tooling'} · Esc — Back
-        </Text>
-      </Box>
-    </Box>
+    </Page>
   );
 }

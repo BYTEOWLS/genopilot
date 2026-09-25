@@ -1,11 +1,10 @@
-import {dirname, isAbsolute} from 'node:path';
 import React, {useCallback, useMemo, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
 import type {WorkflowParameterDefinition} from '../../workflows/parameter-definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import {PathBrowser} from '../components/path-browser.js';
+import {PathField} from '../components/path-field.js';
 import {TextField} from '../components/text-field.js';
 import {
   WorkflowExecutionScreen,
@@ -13,15 +12,18 @@ import {
   type WorkflowRun,
   type WorkflowRunExecutor,
   type WorkflowRunMode,
+  type RunFollowUp,
 } from './workflow-execution.js';
 import {mutedColor} from '../theme.js';
 import {useHomeSuspension} from '../home-navigation.js';
-import {ValidationError} from '../components/validation-error.js';
+import {EditPage, Page} from '../components/page.js';
 
-// Chrome this screen renders around the windowed field list: its own title,
-// margins, and footer hint text. Space consumed by an outer wrapper (such as
+// Chrome this screen renders around the windowed field list: the page title and description,
+// margins, the continue button, and the shortcut line. Space consumed by an outer wrapper (such as
 // the welcome screen's header/footer) is not visible here and is not reserved.
-const reservedChromeLines = 8;
+const reservedChromeLines = 12;
+// The continue button's row ID; parameter IDs cannot contain '#', so it never collides with one.
+const continueButtonId = '#continue';
 const minimumVisibleLines = 5;
 const scrollLookbackLines = 3;
 
@@ -136,6 +138,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   previousRuns = [],
   stages = [],
   resultManifest,
+  onRunSucceeded,
 }: {
   title: string;
   currentDirectory: string;
@@ -149,6 +152,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   previousRuns?: readonly PreviousWorkflowRun[];
   stages?: readonly WorkflowProgressStage[];
   resultManifest?: WorkflowManifest;
+  /** Follow-up bookkeeping after a successful execution, or nothing when none is needed. */
+  onRunSucceeded?: (payload: T) => RunFollowUp | undefined;
 }): React.JSX.Element {
   const editableDefinitions = useMemo(
     () => parameterDefinitions.filter(definition => !definition.hidden && definition.kind !== 'fixed'),
@@ -159,7 +164,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
     [parameterDefinitions],
   );
   const [values, setValues] = useState(() => initialWorkflowFormValues(parameterDefinitions));
-  const [selectedId, setSelectedId] = useState(editableDefinitions[0]?.id);
+  const [selectedId, setSelectedId] = useState<string>(editableDefinitions[0]?.id ?? continueButtonId);
   const [browserId, setBrowserId] = useState<string>();
   const [screen, setScreen] = useState<ScreenState<T>>({state: 'editing'});
   const [previousRunIndex, setPreviousRunIndex] = useState<number>();
@@ -172,18 +177,16 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
 
   const isVisible = (definition: WorkflowParameterDefinition): boolean =>
     !definition.hidden && (!definition.visible_when || matchesCondition(definition.visible_when, values));
-  // A browse-only file field (see 'browse_only_when' on WorkflowParameterDefinition) has no
-  // typable value of its own: Enter opens the file chooser directly instead of a TextInput.
-  const isBrowseOnly = (definition: WorkflowParameterDefinition): boolean =>
-    matchesCondition(definition.browse_only_when, values);
   const visibleEditableDefinitions = editableDefinitions.filter(isVisible);
   const visibleDefinitions = parameterDefinitions.filter(isVisible);
   const sections = [...new Set(visibleDefinitions.map(definition => definition.section))];
   const selectedDefinition = visibleEditableDefinitions.find(definition => definition.id === selectedId);
-  const enterOpensFileChooser = selectedDefinition?.kind === 'file' && isBrowseOnly(selectedDefinition);
+  const continueSelected = selectedId === continueButtonId;
+  // A file path is typed or pasted, and Enter on it opens the file browser.
+  const enterOpensFileChooser = selectedDefinition?.kind === 'file';
   const showsForm = screen.state === 'editing' || screen.state === 'validating' || screen.state === 'invalid';
   const typing = showsForm && !browserId && selectedDefinition !== undefined &&
-    selectedDefinition.kind !== 'choice' && !enterOpensFileChooser;
+    selectedDefinition.kind !== 'choice';
   useHomeSuspension(screen.state === 'saving' ? 'busy' : typing ? 'typing' : undefined);
 
   const {rows: terminalRows} = useWindowSize();
@@ -211,19 +214,28 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   const selectedFormRow = formRowsWithOffsets.find(
     row => row.kind === 'field' && row.definition.id === selectedId,
   );
-  const formScrollTop = selectedFormRow
-    ? Math.max(
-        0,
-        Math.min(
-          selectedFormRow.start - scrollLookbackLines,
-          Math.max(0, totalFormLines - availableFormLines),
-        ),
-      )
-    : 0;
+  const lastScrollTop = Math.max(0, totalFormLines - availableFormLines);
+  // Show a few rows above the selected one, but never cut the selected row off at the bottom.
+  const formScrollTop = continueSelected
+    ? lastScrollTop
+    : selectedFormRow
+      ? Math.max(
+          0,
+          Math.min(
+            selectedFormRow.start,
+            Math.max(
+              Math.min(selectedFormRow.start - scrollLookbackLines, lastScrollTop),
+              selectedFormRow.start + selectedFormRow.lines - availableFormLines,
+            ),
+          ),
+        )
+      : 0;
+  // Only rows that fit completely are drawn, so a tall choice never pushes the page past the
+  // terminal; the selected row always is.
   const visibleFormRows = isFormWindowed
-    ? formRowsWithOffsets.filter(
-        row => row.start + row.lines > formScrollTop && row.start < formScrollTop + availableFormLines,
-      )
+    ? formRowsWithOffsets.filter(row =>
+        row === selectedFormRow ||
+        (row.start >= formScrollTop && row.start + row.lines <= formScrollTop + availableFormLines))
     : formRowsWithOffsets;
 
   const updateValue = useCallback((id: string, value: string): void => {
@@ -234,20 +246,11 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
     setSelectedId(id);
   };
 
+  // Every visible field, then the continue button.
+  const selectableIds = [...visibleEditableDefinitions.map(definition => definition.id), continueButtonId];
   const selectAdjacent = (offset: -1 | 1): void => {
-    if (visibleEditableDefinitions.length === 0) {
-      return;
-    }
-    const currentIndex = Math.max(
-      0,
-      visibleEditableDefinitions.findIndex(definition => definition.id === selectedId),
-    );
-    selectField(
-      visibleEditableDefinitions[
-        (currentIndex + offset + visibleEditableDefinitions.length) %
-          visibleEditableDefinitions.length
-      ]?.id,
-    );
+    const currentIndex = Math.max(0, selectableIds.indexOf(selectedId ?? ''));
+    selectField(selectableIds[(currentIndex + offset + selectableIds.length) % selectableIds.length] ?? continueButtonId);
   };
 
   // Stepping through run history is a snapshot browser, not a merge: each step fully replaces
@@ -301,14 +304,15 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       if (screen.state === 'pre-review-choices') {
         const choices = screen.prepared.preReviewChoices ?? [];
         const selectedChoice = choices[screen.selectedIndex];
+        // The rows are the choices, then the continue button at index `choices.length`.
+        const rowCount = choices.length + 1;
         if (key.escape) {
           setScreen({state: 'editing'});
         } else if (key.tab || key.upArrow || key.downArrow) {
           const offset = key.upArrow || (key.tab && key.shift) ? -1 : 1;
           setScreen({
             ...screen,
-            selectedIndex:
-              (screen.selectedIndex + offset + choices.length) % choices.length,
+            selectedIndex: (screen.selectedIndex + offset + rowCount) % rowCount,
           });
         } else if (input === ' ' && selectedChoice) {
           const currentIndex = Math.max(
@@ -324,7 +328,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
               values: {...screen.values, [selectedChoice.id]: option.value},
             });
           }
-        } else if (key.return) {
+        } else if (key.return && screen.selectedIndex === choices.length) {
           const prepared = screen.prepared.applyPreReviewChoices?.(screen.values);
           if (prepared) {
             setScreen({state: 'review', prepared});
@@ -406,12 +410,10 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         selectAdjacent(key.upArrow ? -1 : 1);
         return;
       }
-      if (key.return) {
-        if (selectedDefinition?.kind === 'file' && isBrowseOnly(selectedDefinition)) {
-          setBrowserId(selectedDefinition.id);
-        } else {
-          beginReview();
-        }
+      // Enter acts only on the continue button (and opens the browser on a path field, which the
+      // field handles itself); Tab and the arrows move between fields.
+      if (key.return && continueSelected) {
+        beginReview();
         return;
       }
       // A choice field only responds to arrows/space (handled above). Every other
@@ -422,17 +424,24 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
     {isActive: inputActive},
   );
 
-  if (browserId) {
-    const currentValue = values[browserId] ?? '';
+  const browsedDefinition = browserId
+    ? parameterDefinitions.find(definition => definition.id === browserId)
+    : undefined;
+  if (browserId && browsedDefinition) {
     return (
-      <PathBrowser
-        initialDirectory={isAbsolute(currentValue) ? dirname(currentValue) : currentDirectory}
-        onSelect={path => {
-          updateValue(browserId, path);
-          setBrowserId(undefined);
-        }}
-        onCancel={() => setBrowserId(undefined)}
+      <PathField
+        label={browsedDefinition.label}
+        selected
         inputActive={inputActive}
+        value={values[browserId] ?? ''}
+        onChange={path => updateValue(browserId, path)}
+        browsing
+        onBrowsingChange={browse => {
+          if (!browse) {
+            setBrowserId(undefined);
+          }
+        }}
+        startDirectory={currentDirectory}
       />
     );
   }
@@ -440,11 +449,18 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   if (screen.state === 'pre-review-choices') {
     const choices = screen.prepared.preReviewChoices ?? [];
     return (
-      <Box flexDirection="column">
-        <Text bold>NCBI cache entries found</Text>
-        <Text>Choose whether to verify and reuse each cache entry or download it again.</Text>
+      <EditPage
+        title="NCBI cache entries found"
+        description="Choose whether to verify and reuse each cache entry or download it again."
+        shortcuts={[
+          'Tab/↑/↓ — Entry',
+          screen.selectedIndex === choices.length ? 'Enter — Continue to review' : 'Space — Select',
+        ]}
+        saveLabel="Continue to review"
+        saveSelected={screen.selectedIndex === choices.length}
+      >
         {choices.map((choice, index) => (
-          <Box key={choice.id} marginTop={1} flexDirection="column">
+          <Box key={choice.id} marginTop={index === 0 ? 0 : 1} flexDirection="column">
             <Text color={index === screen.selectedIndex ? 'cyan' : undefined}>
               {index === screen.selectedIndex ? '›' : ' '} {sanitizeTerminalText(choice.label)}
             </Text>
@@ -456,19 +472,24 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
             ))}
           </Box>
         ))}
-        <Box marginTop={1}>
-          <Text color={mutedColor}>Tab/↑/↓ — Entry · Space — Select · Enter — Review · Esc — Back</Text>
-        </Box>
-      </Box>
+      </EditPage>
     );
   }
 
   if (screen.state === 'review' || screen.state === 'saving') {
     return (
-      <Box flexDirection="column">
-        <Text bold>Confirm {sanitizeTerminalText(title.toLowerCase())}</Text>
-        {sections.map(section => (
-          <Box key={section} marginTop={1} flexDirection="column">
+      <EditPage
+        title={`Review workflow "${title}"`}
+        description="Check the configuration before it is saved into the run directory."
+        shortcuts={['Enter — Save and continue']}
+        back="Back to form"
+        saveLabel="Save and continue"
+        saveSelected
+        saving={screen.state === 'saving'}
+        savingLabel="Saving configuration…"
+      >
+        {sections.map((section, index) => (
+          <Box key={section} marginTop={index === 0 ? 0 : 1} flexDirection="column">
             <Text bold>{sanitizeTerminalText(section)}</Text>
             {visibleDefinitions
               .filter(definition => definition.section === section)
@@ -495,10 +516,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
           <Text bold>Output</Text>
           <Text>{sanitizeTerminalText(screen.prepared.outputDirectory)}</Text>
         </Box>
-        <Box marginTop={1}>
-          <Text color={mutedColor}>{screen.state === 'saving' ? 'Saving configuration…' : 'Enter — Save · Esc — Back'}</Text>
-        </Box>
-      </Box>
+      </EditPage>
     );
   }
 
@@ -512,6 +530,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         onBack={onBack}
         inputActive={inputActive}
         stages={stages}
+        onSucceeded={onRunSucceeded ? () => onRunSucceeded(payload) : undefined}
         resultHandoff={resultManifest ? {
           runDirectory: outputDirectory,
           manifest: resultManifest,
@@ -522,31 +541,41 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
 
   if (screen.state === 'saved') {
     return (
-      <Box flexDirection="column">
-        <Text bold>Configuration saved</Text>
+      <Page title="Configuration saved" back="Back to workflow">
         <Text>{sanitizeTerminalText(screen.configurationPath)}</Text>
         <Alert variant="warning">Execution is not configured for this workflow.</Alert>
-        <Text color={mutedColor}>Esc — Back to workflow</Text>
-      </Box>
+      </Page>
     );
   }
 
   return (
-    <Box flexDirection="column">
-      <Text bold underline>Configure workflow "{sanitizeTerminalText(title)}"</Text>
-      {previousRuns.length > 0 ? (
-        <Text color={mutedColor}>
-          {previousRunIndex === undefined
-            ? `${previousRuns.length} previous run${previousRuns.length === 1 ? '' : 's'} found — PageDown (or fn + ↓) to prefill`
-            : `Prefilled from ${sanitizeTerminalText(previousRuns[previousRunIndex]?.label ?? '')} (${previousRunIndex + 1}/${previousRuns.length})`}
-        </Text>
-      ) : null}
+    <EditPage
+      title={`Configure workflow "${title}"`}
+      {...(previousRuns.length > 0 ? {
+        description: previousRunIndex === undefined
+          ? `${previousRuns.length} previous run${previousRuns.length === 1 ? '' : 's'} found — PageDown (or fn + ↓) to prefill`
+          : `Prefilled from ${sanitizeTerminalText(previousRuns[previousRunIndex]?.label ?? '')} (${previousRunIndex + 1}/${previousRuns.length})`,
+      } : {})}
+      shortcuts={[
+        'Tab — Next field',
+        selectedDefinition?.kind === 'choice' ? 'Space/↑/↓ — Choose' : '↑/↓ — Field',
+        '* — Required',
+        previousRuns.length > 0 && 'PageUp/PageDown (or fn + ↑/↓) — Previous runs',
+        continueSelected ? 'Enter — Continue to review' : enterOpensFileChooser && 'Enter — Browse for file',
+      ]}
+      saveLabel="Continue to review"
+      saveSelected={continueSelected}
+      saving={screen.state === 'validating'}
+      savingLabel="Checking configuration…"
+      problems={screen.state === 'invalid' ? screen.messages : []}
+      problemsTitle="Fix these fields before continuing:"
+    >
       {isFormWindowed && formScrollTop > 0 ? <Text color={mutedColor}>↑ more above</Text> : null}
-      {visibleFormRows.map(row => {
+      {visibleFormRows.map((row, rowIndex) => {
         if (row.kind === 'section') {
           return (
-            <Box key={row.key} marginTop={1}>
-              <Text bold underline>{sanitizeTerminalText(row.section)}</Text>
+            <Box key={row.key} marginTop={rowIndex === 0 ? 0 : 1}>
+              <Text bold>{sanitizeTerminalText(row.section)}</Text>
             </Box>
           );
         }
@@ -569,32 +598,20 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
             </Box>
           );
         } else if (definition.kind === 'file') {
-          const browseOnly = isBrowseOnly(definition);
-          // Entering/pasting the path and opening the file chooser are two independent
-          // interactions, never both on the same field: a typable field is a plain
-          // TextInput (caret, backspace, paste — all its own), while a browse-only field (see
-          // 'browse_only_when') has no typable value at all — only Enter, handled in useInput
-          // above, opens the separate PathBrowser overlay that reports its pick through onChange.
           return (
-            <TextField
+            <PathField
               key={`${row.key}:${runApplyGeneration}`}
               label={definition.label}
               required={definition.required}
               selected={selected}
-              editable={!browseOnly}
-              inputActive={inputActive}
-              defaultValue={value}
-              displayValue={
-                browseOnly
-                  ? value.length === 0
-                    ? 'Press Enter to browse'
-                    : selected
-                      ? `${value} (Enter to change)`
-                      : value
-                  : displayValue(definition, value)
-              }
-              placeholder={definition.placeholder ?? 'Type or paste a path'}
+              // While the configuration is checked, Enter must not open the browser over it.
+              inputActive={inputActive && screen.state !== 'validating'}
+              value={value}
               onChange={value => updateValue(definition.id, value)}
+              browsing={false}
+              onBrowsingChange={browse => setBrowserId(browse ? definition.id : undefined)}
+              startDirectory={currentDirectory}
+              {...(definition.placeholder ? {placeholder: definition.placeholder} : {})}
             />
           );
         }
@@ -616,20 +633,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       {isFormWindowed && formScrollTop + availableFormLines < totalFormLines ? (
         <Text color={mutedColor}>↓ more below</Text>
       ) : null}
-      {screen.state === 'invalid' ? (
-        <ValidationError title="Fix these fields before continuing:" problems={screen.messages} />
-      ) : null}
-      <Box marginTop={1}>
-        <Text color={mutedColor} wrap="wrap">
-          Tab — Next field · ↑/↓ — Field or choice · Space — Select choice · * — Required field ·
-          Type — Edit · Backspace — Delete · Ctrl+U — Clear ·
-          {previousRuns.length > 0
-            ? ' PageUp/PageDown (or fn + ↑/↓) — Browse previous runs ·'
-            : ''}{' '}
-          {enterOpensFileChooser ? 'Enter — Open file chooser' : 'Enter — Review'} · Esc — Back
-        </Text>
-      </Box>
-    </Box>
+    </EditPage>
   );
 }
 

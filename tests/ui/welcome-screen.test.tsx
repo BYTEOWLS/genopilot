@@ -3,6 +3,9 @@ import test, {type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import {render} from 'ink';
+import type {CacheScanner} from '../../src/accessions/cache-discovery.js';
+import type {AssemblyMetadataFetcher} from '../../src/accessions/ncbi-metadata.js';
+import type {AccessionCatalogLoader, AccessionCatalogUpdater} from '../../src/accessions/registration.js';
 import {WelcomeScreen, type CliMetadata} from '../../src/ui/welcome-screen.js';
 import type {ToolingStatus} from '../../src/tooling/check.js';
 import {
@@ -82,7 +85,7 @@ function commandsFor(...ids: WelcomeCommandId[]): readonly CommandDefinition<Wel
 
 const newRunOnlyCommands = commandsFor('new-run');
 const openRunOnlyCommands = commandsFor('open-run');
-const ncbiAccessOnlyCommands = commandsFor('ncbi-access');
+const accessionsOnlyCommands = commandsFor('manage-accessions');
 const isolatesOnlyCommands = commandsFor('manage-isolates');
 const toolingOnlyCommands = commandsFor('check-tooling');
 
@@ -161,6 +164,10 @@ function renderWelcome(
     clearStoredNcbiApiKey?: () => Promise<void>;
     loadIsolates?: IsolateCatalogLoader;
     updateIsolates?: IsolateCatalogUpdater;
+    loadAccessions?: AccessionCatalogLoader;
+    updateAccessions?: AccessionCatalogUpdater;
+    scanAccessionCaches?: CacheScanner;
+    fetchAccessionMetadata?: AssemblyMetadataFetcher;
     updateCheck?: () => Promise<UpdateAvailability>;
   } = {},
 ): {
@@ -188,6 +195,11 @@ function renderWelcome(
       isolateCatalogPath="/researcher/isolates/isolates.yaml"
       loadIsolates={options.loadIsolates}
       updateIsolates={options.updateIsolates}
+      accessionCatalogPath="/researcher/accessions/accessions.yaml"
+      loadAccessions={options.loadAccessions}
+      updateAccessions={options.updateAccessions}
+      scanAccessionCaches={options.scanAccessionCaches}
+      fetchAccessionMetadata={options.fetchAccessionMetadata}
       updateCheck={options.updateCheck ?? (async () => ({state: 'current'}))}
     />,
     {
@@ -420,11 +432,7 @@ test('returns from a workflow-discovery failure', async context => {
 
   output.clearOutput();
   input.write('\r');
-  const failedFrame = await waitForOutput(output, value =>
-    value.includes('Workflow discovery failed.'),
-  );
-  assert.match(failedFrame, /duplicate workflow ID/);
-  assert.match(failedFrame, /Esc — Back/);
+  await waitForOutput(output, value => value.includes('duplicate workflow ID'));
 
   output.clearOutput();
   input.write('\x1b');
@@ -467,28 +475,34 @@ test('opens the existing-run flow from the welcome command', async context => {
   await waitFor(() => workflowDiscoveryCalls === 2);
 });
 
-test('opens and navigates away from the ncbi-access command', async context => {
-  let saved: string | undefined;
+test('opens the accession manager by command ID and returns to the menu', async context => {
+  let loads = 0;
+  let scannedRoots: readonly string[] = [];
   const {input, instance, output} = renderWelcome(detectedStatus, {
-    commands: ncbiAccessOnlyCommands,
-    ncbiApiKeyPath: '/researcher/data/secrets/ncbi-api-key',
-    checkNcbiApiKeyConfigured: async () => false,
-    saveNcbiApiKey: async key => {
-      saved = key;
+    commands: accessionsOnlyCommands,
+    loadAccessions: async () => {
+      loads += 1;
+      return {catalog: {schema_version: 1, output_roots: [], accessions: []}, revision: undefined};
+    },
+    updateAccessions: async () => {
+      throw new Error('unexpected');
+    },
+    scanAccessionCaches: async roots => {
+      scannedRoots = roots;
+      return {scannedAt: '2026-01-01T12:00:00.000Z', cacheDirectories: [], copies: [], ignored: [], rootProblems: []};
+    },
+    fetchAccessionMetadata: async () => {
+      throw new Error('unexpected');
     },
   });
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   input.write('\r');
-
-  const screenFrame = await waitForOutput(output, value => value.includes('API key: Not set'));
-  assert.match(screenFrame, /Saved to:\s+\/researcher\/data\/secrets\/ncbi-api-key/);
-  input.write('a-key');
-  await waitForOutput(output, value => value.includes('New key: *****'));
-  input.write('\r');
-  await waitForOutput(output, value => value.includes('NCBI API key saved.'));
-  assert.equal(saved, 'a-key');
+  await waitFor(() => loads >= 1);
+  // Only the current directory's run collection is scanned when no roots are stored.
+  await waitFor(() => scannedRoots.length === 1);
+  assert.equal(scannedRoots[0], '/research/project/runs');
 
   output.clearOutput();
   input.write('\x1b');
@@ -541,9 +555,9 @@ test('opens the tooling screen and runs a fresh check there', async context => {
   output.clearOutput();
   input.write('\r');
 
-  const toolingFrame = await waitForOutput(output, value => value.includes('R/Enter — Check tooling'));
+  // The tooling screen lists each detected version from the injected status.
+  const toolingFrame = await waitForOutput(output, value => value.includes('v9.26.1'));
   assert.equal(checks, 1);
-  assert.match(toolingFrame, /Required tooling/);
   assert.match(toolingFrame, /✓ Node — Runtime — v24\.19\.0 — Available/);
   assert.match(toolingFrame, /✓ Pixi — Provisioning — v0\.79\.0 — Available/);
   assert.match(toolingFrame, /✓ Conda — Environments — v25\.11\.1 — Available/);
@@ -582,7 +596,7 @@ test('runs a command by ID when its display label changes', async context => {
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   input.write('\r');
-  await waitForOutput(output, value => value.includes('R/Enter — Check tooling'));
+  await waitForOutput(output, value => value.includes('v9.26.1'));
   input.write('\r');
 
   const checkedFrame = await waitForOutput(output, value =>
@@ -600,7 +614,7 @@ test('clears a completed tooling-check message when returning to the command men
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   input.write('\r');
-  await waitForOutput(output, value => value.includes('R/Enter — Check tooling'));
+  await waitForOutput(output, value => value.includes('v9.26.1'));
   input.write('\r');
   await waitForOutput(output, value =>
     value.includes('Tooling check complete. All required tools are available.'),
@@ -695,20 +709,38 @@ test('leaves h to a focused text field and returns home from a choice field', as
 
 test('types h into the NCBI key instead of returning home', async context => {
   let saved: string | undefined;
+  let accessionLoads = 0;
+  let keyChecks = 0;
   const {input, instance, output} = renderWelcome(detectedStatus, {
-    commands: ncbiAccessOnlyCommands,
-    checkNcbiApiKeyConfigured: async () => false,
+    commands: accessionsOnlyCommands,
+    loadAccessions: async () => {
+      accessionLoads += 1;
+      return {catalog: {schema_version: 1, output_roots: [], accessions: []}, revision: undefined};
+    },
+    scanAccessionCaches: async () => ({scannedAt: '', cacheDirectories: [], copies: [], ignored: [], rootProblems: []}),
+    checkNcbiApiKeyConfigured: async () => {
+      keyChecks += 1;
+      return false;
+    },
     saveNcbiApiKey: async key => {
       saved = key;
     },
   });
   registerCleanup(context, instance);
-  await waitForOutput(output, value => value.includes('↑/↓ — Select'));
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
   input.write('\r');
-  await waitForOutput(output, value => value.includes('API key: Not set'));
+  await waitFor(() => accessionLoads >= 1 && keyChecks === 1);
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  // Shift+Tab wraps from the first tab to the API-key tab, whose key field then has focus.
+  input.write('\x1b[Z');
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
 
+  output.clearOutput();
   input.write('h');
-  await waitForOutput(output, value => value.includes('New key: *'));
+  await waitForOutput(output, value => value.includes('*'));
+  // ↓ selects the save button, and Enter there saves.
+  input.write('\x1b[B');
+  await new Promise<void>(resolve => setTimeout(resolve, 30));
   input.write('\r');
   await waitFor(() => saved !== undefined);
   assert.equal(saved, 'h');

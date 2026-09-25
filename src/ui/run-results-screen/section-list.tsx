@@ -28,7 +28,7 @@ export function SectionList({
                             }: SectionListProps): React.JSX.Element {
     return (
         <Box marginTop={1} flexDirection="column" flexShrink={0}>
-            <Text bold underline>{title}</Text>
+            <Text bold>{title}</Text>
             {description && (<Text italic>{description}</Text>)}
             <UnorderedList>
                 {items.map(i => (<UnorderedList.Item key={i.id}>

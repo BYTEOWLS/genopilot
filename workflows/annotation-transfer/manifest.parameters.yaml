@@ -8,10 +8,8 @@ parameters:
     default: ncbi
     hidden: false
     options:
-      - value: local-path-type-in
-        label: Local file path
-      - value: local-path-choose
-        label: Local file chooser
+      - value: local
+        label: Local file
       - value: ncbi
         label: NCBI accession
   - id: reference-fasta
@@ -23,10 +21,7 @@ parameters:
     hidden: false
     visible_when:
       parameter: reference-source
-      equals: [local-path-type-in, local-path-choose]
-    browse_only_when:
-      parameter: reference-source
-      equals: local-path-choose
+      equals: local
   - id: reference-gff3
     label: Reference GFF3
     section: Inputs
@@ -36,10 +31,7 @@ parameters:
     hidden: false
     visible_when:
       parameter: reference-source
-      equals: [local-path-type-in, local-path-choose]
-    browse_only_when:
-      parameter: reference-source
-      equals: local-path-choose
+      equals: local
   - id: reference-accession
     label: Reference NCBI accession
     section: Inputs
@@ -59,10 +51,8 @@ parameters:
     default: ncbi
     hidden: false
     options:
-      - value: local-path-type-in
-        label: Local file path
-      - value: local-path-choose
-        label: Local file chooser
+      - value: local
+        label: Local file
       - value: ncbi
         label: NCBI accession
   - id: target-fasta
@@ -74,10 +64,7 @@ parameters:
     hidden: false
     visible_when:
       parameter: target-source
-      equals: [local-path-type-in, local-path-choose]
-    browse_only_when:
-      parameter: target-source
-      equals: local-path-choose
+      equals: local
   - id: target-accession
     label: Target NCBI accession
     section: Inputs

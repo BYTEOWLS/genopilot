@@ -128,37 +128,3 @@ test('accepts a visible_when matching any of several values and rejects an empty
     issues(emptyList).some(issue => issue.path === '$.parameters[0].visible_when.equals'),
   );
 });
-
-test('accepts browse_only_when only on a file field and validates its cross-reference', () => {
-  const withBrowseOnly = structuredClone(valid) as {parameters: Record<string, unknown>[]};
-  (withBrowseOnly.parameters[0] as Record<string, unknown>).browse_only_when = {
-    parameter: 'run-name',
-    equals: 'chosen',
-  };
-  const definitions = validateParameterDefinitions(withBrowseOnly);
-  assert.deepEqual(definitions[0]?.browse_only_when, {parameter: 'run-name', equals: 'chosen'});
-
-  const onNonFile = structuredClone(valid) as {parameters: Record<string, unknown>[]};
-  (onNonFile.parameters[1] as Record<string, unknown>).browse_only_when = {
-    parameter: 'reference-fasta',
-    equals: 'x',
-  };
-  assert.ok(
-    issues(onNonFile).some(
-      issue =>
-        issue.path === '$.parameters[1].browse_only_when' &&
-        issue.message.includes('only allowed for a file field'),
-    ),
-  );
-
-  const unknownReference = structuredClone(valid) as {parameters: Record<string, unknown>[]};
-  (unknownReference.parameters[0] as Record<string, unknown>).browse_only_when = {
-    parameter: 'does-not-exist',
-    equals: 'x',
-  };
-  assert.ok(
-    issues(unknownReference).some(issue =>
-      issue.path.endsWith('.browse_only_when.parameter'),
-    ),
-  );
-});

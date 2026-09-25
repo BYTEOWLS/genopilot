@@ -14,11 +14,11 @@ import type {ReadPairsChecker} from '../../isolates/reads.js';
 import {IsolateCatalogChangedError, type LoadedIsolateCatalog} from '../../isolates/store.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {HelpPage} from '../components/help.js';
+import {EditPage, Page} from '../components/page.js';
 import {PathBrowser, type DirectoryReader} from '../components/path-browser.js';
 import {TextField} from '../components/text-field.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
-import {ValidationError} from '../components/validation-error.js';
 import {importHelpSections} from './import-help.js';
 import type {IsolateCatalogLoader, IsolateCatalogUpdater} from './screen.js';
 
@@ -116,18 +116,11 @@ function limitProblems(problems: readonly string[]): string[] {
   return [...problems.slice(0, shownProblemLimit - 1), `…and ${String(hidden)} more; fix these first.`];
 }
 
-function ImportHeader(): React.JSX.Element {
-  return (
-    <>
-      <Text bold underline>Import isolates from an Illumina delivery</Text>
-      <Text color={mutedColor} wrap="wrap">
-        {'Illumina names FASTQ files and read headers the same way across instruments and delivery ' +
-          'formats, so GenoPilot can find each sample\'s read pairs in a delivery folder and propose ' +
-          'them as isolates. Nothing is saved until you have reviewed them.'}
-      </Text>
-    </>
-  );
-}
+const importTitle = 'Import isolates from an Illumina delivery';
+const importIntro =
+  'Illumina names FASTQ files and read headers the same way across instruments and delivery ' +
+  'formats, so GenoPilot can find each sample\'s read pairs in a delivery folder and propose ' +
+  'them as isolates. Nothing is saved until you have reviewed them.';
 
 /**
  * Imports isolates from an Illumina delivery: choose a folder, read the scan report, review each
@@ -429,12 +422,9 @@ export function IsolateImport({
         cycle(selectedRow, change);
         return;
       }
-      if (key.return) {
-        if (selectedRow.kind === 'save') {
-          void save();
-        } else {
-          setSelectedRowId(rows[(selectedIndex + 1) % rows.length]?.id ?? 'save');
-        }
+      // Enter acts only on the save button; Tab and the arrows move between rows.
+      if (key.return && selectedRow.kind === 'save') {
+        void save();
       }
     },
     {isActive: inputActive},
@@ -442,27 +432,28 @@ export function IsolateImport({
 
   if (stage.kind === 'folder') {
     return (
-      <Box flexDirection="column">
-        <ImportHeader />
-        <Box marginTop={1}>
-          <PathBrowser
-            initialDirectory={currentDirectory}
-            selectFolder
-            onSelect={root => setStage({kind: 'scanning', root})}
-            onCancel={onCancel}
-            inputActive={inputActive}
-            readDirectory={readDirectory}
-          />
-        </Box>
-      </Box>
+      <PathBrowser
+        title={importTitle}
+        intro={importIntro}
+        initialDirectory={currentDirectory}
+        selectFolder
+        onSelect={root => setStage({kind: 'scanning', root})}
+        onCancel={onCancel}
+        inputActive={inputActive}
+        readDirectory={readDirectory}
+      />
     );
   }
 
   if (stage.kind === 'scanning' || stage.kind === 'failed') {
     return (
-      <Box flexDirection="column">
-        <ImportHeader />
-        <Box marginTop={1} flexDirection="column">
+      <Page
+        title={importTitle}
+        description={importIntro}
+        shortcuts={[stage.kind === 'failed' && 'Enter — Choose another folder']}
+        back={stage.kind === 'scanning' ? 'Cancel' : 'Choose another folder'}
+      >
+        <Box flexDirection="column">
           {stage.kind === 'scanning' ? (
             <Text wrap="truncate">Scanning {sanitizeTerminalText(stage.root)}…</Text>
           ) : (
@@ -472,10 +463,7 @@ export function IsolateImport({
             </>
           )}
         </Box>
-        <Box marginTop={1}>
-          <Text color={mutedColor}>{stage.kind === 'scanning' ? 'Esc — Cancel' : 'Enter/Esc — Choose another folder'}</Text>
-        </Box>
-      </Box>
+      </Page>
     );
   }
 
@@ -484,10 +472,12 @@ export function IsolateImport({
       sum + candidate.readSets.reduce((inner, readSet) => inner + readSet.variants.length, 0), 0);
     const visible = lines.slice(reportOffset, reportOffset + reportPageSize);
     return (
-      <Box flexDirection="column">
-        <Text bold underline>Scan report</Text>
-        <Text color={mutedColor} wrap="truncate">{sanitizeTerminalText(stage.scan.root)}</Text>
-        <Box marginTop={1} flexDirection="column">
+      <Page
+        title="Scan report"
+        description={sanitizeTerminalText(stage.scan.root)}
+        shortcuts={['↑/↓ — Scroll', `Enter — ${stage.scan.candidates.length === 0 ? 'Choose another folder' : 'Review samples'}`]}
+      >
+        <Box flexDirection="column">
           <Text wrap="wrap">
             {stage.scan.candidates.length === 0
               ? 'No samples to import were found.'
@@ -505,12 +495,7 @@ export function IsolateImport({
             </Text>
           ) : null}
         </Box>
-        <Box marginTop={1}>
-          <Text color={mutedColor} wrap="wrap">
-            ↑/↓ — Scroll · Enter — {stage.scan.candidates.length === 0 ? 'Choose another folder' : 'Review samples'} · Esc — Back
-          </Text>
-        </Box>
-      </Box>
+      </Page>
     );
   }
 
@@ -547,7 +532,8 @@ export function IsolateImport({
     const marker = selected ? '› ' : '  ';
     const color = selected ? 'cyan' : undefined;
     if (row.kind === 'save') {
-      return <Text key={row.id} color={color} bold={selected}>{marker}[ Save import ]</Text>;
+      // Drawn by the page as its save button.
+      return <React.Fragment key={row.id} />;
     }
     const candidate = stage.scan.candidates[row.candidate];
     const decision = decisions[row.candidate];
@@ -645,16 +631,24 @@ export function IsolateImport({
   })();
   const hint = selectedRow?.kind === 'save'
     ? 'Enter — Save'
-    : typing ? 'Enter — Next field' : 'Space/←/→ — Change · Enter — Next field';
+    : typing ? undefined : 'Space/←/→ — Change';
 
   return (
-    <Box flexDirection="column">
-      <Text bold underline>Review import</Text>
+    <EditPage
+      title="Review import"
+      description={`${sanitizeTerminalText(stage.scan.root)}\nChoose one copy per read set; copies hold the same reads. Prefer untrimmed reads.`}
+      shortcuts={['Tab/↑/↓ — Field', hint, !typing && '? — Help']}
+      back="Back to report"
+      saveLabel="Save import"
+      saveSelected={selectedRow?.kind === 'save'}
+      saving={saving}
+      savingLabel="Checking reads and saving…"
+      problems={shownProblems}
+    >
       <Text wrap="wrap">
         Press <Text bold color="cyan">?</Text> for help: what each row means, such as run, flowcell, lane,
         {' '}copies, and read lengths.{typing ? ' (Leave the text field first.)' : ''}
       </Text>
-      <Text color={mutedColor} wrap="truncate">{sanitizeTerminalText(stage.scan.root)}</Text>
       <Box marginTop={1} flexDirection="column">
         {rows.slice(reviewStart, reviewStart + reviewPageSize).map(renderRow)}
         {rows.length > reviewPageSize ? (
@@ -667,16 +661,6 @@ export function IsolateImport({
           <Text color={mutedColor} wrap="truncate-start">R2: {sanitizeTerminalText(selectedVariant.r2)}</Text>
         </Box>
       ) : null}
-      {saving ? <Text>Checking reads and saving…</Text> : null}
-      <ValidationError title="Not saved:" problems={shownProblems} />
-      <Box marginTop={1} flexDirection="column">
-        <Text color={mutedColor} wrap="wrap">
-          Choose one copy per read set; copies hold the same reads. Prefer untrimmed reads.
-        </Text>
-        <Text color={mutedColor} wrap="wrap">
-          Tab/↑/↓ — Field · {hint}{typing ? '' : ' · ? — Help'} · Esc — Back to report
-        </Text>
-      </Box>
-    </Box>
+    </EditPage>
   );
 }

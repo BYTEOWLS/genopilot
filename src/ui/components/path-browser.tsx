@@ -5,6 +5,7 @@ import React, {useEffect, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
+import {Page} from './page.js';
 
 export type DirectoryReader = (path: string) => Promise<Dirent[]>;
 
@@ -30,6 +31,8 @@ export function PathBrowser({
   inputActive,
   readDirectory = readFilesystemDirectory,
   selectFolder = false,
+  title,
+  intro,
 }: {
   initialDirectory: string;
   onSelect: (path: string) => void;
@@ -37,6 +40,10 @@ export function PathBrowser({
   inputActive: boolean;
   readDirectory?: DirectoryReader;
   selectFolder?: boolean;
+  /** Replaces the default "Select a file/folder" title. */
+  title?: string;
+  /** Explains the choice above the shown directory. */
+  intro?: string;
 }): React.JSX.Element {
   const [directory, setDirectory] = useState(initialDirectory);
   const [browser, setBrowser] = useState<BrowserState>({state: 'loading'});
@@ -128,10 +135,15 @@ export function PathBrowser({
   const visibleRows = Array.from({length: Math.max(0, Math.min(12, rowCount - visibleStart))}, (_, offset) => visibleStart + offset);
 
   return (
-    <Box flexDirection="column">
-      <Text bold>{selectFolder ? 'Select a folder' : 'Select a file'}</Text>
-      <Text color={mutedColor} wrap="truncate">{sanitizeTerminalText(directory)}</Text>
-      <Box marginTop={1} flexDirection="column">
+    <Page
+      title={title ?? (selectFolder ? 'Select a folder' : 'Select a file')}
+      description={[intro, sanitizeTerminalText(directory)].filter(Boolean).join('\n')}
+      shortcuts={selectFolder
+        ? ['↑/↓ — Select', '→/Enter — Open folder', 'Enter on [ Use this folder ] — Choose', '← — Parent']
+        : ['↑/↓ — Select', '→ — Open folder', 'Enter — Choose', '← — Parent']}
+      back="Cancel"
+    >
+      <Box flexDirection="column">
         {browser.state === 'loading' ? <Text>Reading directory…</Text> : null}
         {browser.state === 'failed' ? (
           <Box flexDirection="column">
@@ -170,13 +182,6 @@ export function PathBrowser({
           </Text>
         ) : null}
       </Box>
-      <Box marginTop={1}>
-        <Text color={mutedColor}>
-          {selectFolder
-            ? '↑/↓ — Select · →/Enter — Open folder · Enter on [ Use this folder ] — Choose · ← — Parent · Esc — Cancel'
-            : '↑/↓ — Select · → Open — folder · Enter — Choose · ← — Parent · Esc — Cancel'}
-        </Text>
-      </Box>
-    </Box>
+    </Page>
   );
 }

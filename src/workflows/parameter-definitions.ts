@@ -23,10 +23,6 @@ export type WorkflowParameterDefinition = {
   preview?: string;
   options?: WorkflowParameterOption[];
   visible_when?: WorkflowParameterCondition;
-  // Only meaningful for kind 'file': when the referenced parameter's value matches, this field
-  // has no directly typable value and is set exclusively through the file chooser (see the
-  // 'reference-source'/'target-source' local-path-choose option in annotation-transfer).
-  browse_only_when?: WorkflowParameterCondition;
 };
 
 export type ParameterDefinitionValidationIssue = {
@@ -168,7 +164,6 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
           'preview',
           'options',
           'visible_when',
-          'browse_only_when',
         ],
         path,
         issues,
@@ -205,21 +200,6 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
       let visibleWhen: WorkflowParameterDefinition['visible_when'];
       if ('visible_when' in candidate) {
         visibleWhen = validateCondition(candidate.visible_when, `${path}.visible_when`, issues);
-      }
-      let browseOnlyWhen: WorkflowParameterDefinition['browse_only_when'];
-      if ('browse_only_when' in candidate) {
-        if (kind !== 'file') {
-          issues.push({
-            path: `${path}.browse_only_when`,
-            message: 'is only allowed for a file field',
-          });
-        } else {
-          browseOnlyWhen = validateCondition(
-            candidate.browse_only_when,
-            `${path}.browse_only_when`,
-            issues,
-          );
-        }
       }
       let options: WorkflowParameterOption[] | undefined;
       if (kind === 'choice') {
@@ -301,7 +281,6 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
           ...('preview' in candidate ? {preview: candidate.preview as string} : {}),
           ...(options ? {options} : {}),
           ...(visibleWhen ? {visible_when: visibleWhen} : {}),
-          ...(browseOnlyWhen ? {browse_only_when: browseOnlyWhen} : {}),
         });
       }
     });
@@ -313,12 +292,6 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
       issues.push({
         path: `$.parameters[${index}].visible_when.parameter`,
         message: `references unknown parameter '${definition.visible_when.parameter}'`,
-      });
-    }
-    if (definition.browse_only_when && !definitionIds.has(definition.browse_only_when.parameter)) {
-      issues.push({
-        path: `$.parameters[${index}].browse_only_when.parameter`,
-        message: `references unknown parameter '${definition.browse_only_when.parameter}'`,
       });
     }
   });

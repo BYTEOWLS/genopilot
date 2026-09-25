@@ -198,6 +198,40 @@ isolates:
 
 The CLI validates the whole file on every load and save: duplicate or malformed IDs, relative paths, a read file used more than once, missing parents, and lineage cycles are rejected. Saves take an exclusive lock, refuse to overwrite changes made by another GenoPilot window, and replace the file atomically. A file that fails validation is reported with its path and left untouched; fix or move it aside to continue. Removing an isolate from the catalog never deletes its read files.
 
+## Accession catalog
+
+Versioned NCBI assembly accessions (`GCA_…`/`GCF_…` with a version suffix) are cataloged in `accessions/accessions.yaml`, beside the isolate catalog and with the same private, locked, atomic saves:
+
+| Platform | Catalog file |
+|---|---|
+| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/byteowlsGenopilot/accessions/accessions.yaml` |
+| macOS | `$HOME/.byteowlsGenopilot/accessions/accessions.yaml` |
+
+Each entry keeps an optional local name and description apart from the facts NCBI reports (organism, taxon, assembly name, level, status, and type such as haploid, submitter, and the RefSeq category and strain only when NCBI provides them), which record when and from where they were retrieved: the NCBI Datasets v2 API, or the report cached with a download. Cataloging an accession never downloads its assembly; workflows download it on demand. Metadata lookups use the optional NCBI API key when one is configured and work without it at NCBI's lower rate limit.
+
+```yaml
+schema_version: 1
+output_roots:
+  - "/analysis/genopilot"
+accessions:
+  - accession: "GCF_000149205.2"
+    name: "Preferred backbone"
+    ncbi:
+      organism: "Example organism"
+      assembly_name: "Example assembly"
+      assembly_type: "haploid"
+      refseq_category: "reference genome"
+      submitter: "Example submitter"
+      retrieved_at: "2026-01-01T12:00:00.000Z"
+      source: "datasets-v2-rest"
+    cached_copies:
+      - path: "/analysis/genopilot/ncbi-accessions-cache/GCF_000149205.2"
+        verified_at: "2026-01-01T12:00:00.000Z"
+        fasta_sha256: "…"
+```
+
+`cached_copies` lists the workflow caches that matched their recorded checksums when they were last discovered. Discovery reads only `ncbi-accessions-cache/` directly inside `./runs` and the listed `output_roots`, never contacts NCBI, and adds any verified cache it finds; incomplete or checksum-invalid caches are reported but never recorded. A successful run that used an NCBI input adds its output root. Two verified copies with different files for one versioned accession are reported as a conflict that needs inspection. Removing an accession from the catalog **deletes its cache directories** under the known output roots, so a later workflow that needs it downloads it again.
+
 ## Reset managed tooling for installation tests
 
 Stop the CLI before removing its managed tooling. These commands remove Pixi, Conda, Snakemake, and temporary setup files while preserving previous setup logs.
@@ -228,7 +262,7 @@ To also delete setup logs and completely reset the application-managed tooling d
 rm -rf "$TOOLING_DIR"
 ```
 
-These commands do not remove tools installed elsewhere on the system, and they never touch the [isolate catalog](#isolate-catalog), which lives outside `$TOOLING_DIR`.
+These commands do not remove tools installed elsewhere on the system, and they never touch the [isolate catalog](#isolate-catalog) or the [accession catalog](#accession-catalog), which live outside `$TOOLING_DIR`.
 
 ## Test a global installation
 

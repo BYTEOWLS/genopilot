@@ -16,7 +16,7 @@ import {
 } from '../../src/isolates/store.js';
 import type {DeliveryReadSet, DeliveryScan, DeliveryVariant} from '../../src/isolates/illumina-delivery.js';
 import type {DeliveryScanner} from '../../src/ui/isolates-screen/import.js';
-import {expandHomeDirectory} from '../../src/ui/isolates-screen/isolate-form.js';
+import {expandHomeDirectory} from '../../src/ui/components/path-field.js';
 import type {DirectoryReader} from '../../src/ui/components/path-browser.js';
 import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
 import {

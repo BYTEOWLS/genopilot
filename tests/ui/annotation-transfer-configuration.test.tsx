@@ -10,6 +10,7 @@ import {render} from 'ink';
 import {
   AnnotationTransferConfigurationScreen,
   previousRunLabel,
+  type AccessionCacheRegistration,
 } from '../../src/ui/new-run-screen/annotation-transfer-configuration.js';
 import WorkflowConfigurationScreen from '../../src/ui/new-run-screen/workflow-configuration.js';
 import type {
@@ -186,6 +187,7 @@ function renderConfiguration(
     discoverPreviousRuns?: PreviousRunsLoader;
     findCacheEntries?: NcbiCacheEntryFinder;
     executeSnakemakeRun?: typeof executeSnakemakeRun;
+    registerAccessionCaches?: AccessionCacheRegistration;
     rows?: number;
   } = {},
 ): {input: TestInput; output: TestOutput; instance: ReturnType<typeof render>} {
@@ -207,6 +209,8 @@ function renderConfiguration(
       discoverPreviousRuns={options.discoverPreviousRuns ?? (async () => [])}
       findCacheEntries={options.findCacheEntries ?? (async () => [])}
       executeSnakemakeRun={options.executeSnakemakeRun}
+      // Never the real catalog: a test run must not touch the researcher's accession catalog.
+      registerAccessionCaches={options.registerAccessionCaches ?? (async () => 'Recorded.')}
     />,
     {
       exitOnCtrlC: false,
@@ -234,6 +238,18 @@ async function focusField(input: TestInput, output: TestOutput, id: string): Pro
     await waitForFrame(output, next => selectedLine(next) !== before);
   }
   assert.fail(`Could not select parameter ${id}.`);
+}
+
+// The form's continue button follows its last field; selected, its line starts with "› [".
+async function startReview(input: TestInput, output: TestOutput): Promise<void> {
+  const onButton = (frame: string): boolean => /^› \[/.test(selectedLine(frame) ?? '');
+  for (let attempt = 0; attempt <= packagedParameterDefinitions.length && !onButton(lastFrame(output)); attempt += 1) {
+    const before = selectedLine(lastFrame(output));
+    input.write(TAB);
+    await waitForFrame(output, next => selectedLine(next) !== before);
+  }
+  assert.ok(onButton(lastFrame(output)), 'Could not select the continue button.');
+  input.write(ENTER);
 }
 
 async function typeInto(input: TestInput, output: TestOutput, id: string, value: string): Promise<void> {
@@ -289,7 +305,7 @@ test('keeps pasted whitespace in a typable local-file-path field', async context
   registerCleanup(context, instance);
   await waitForForm(output);
 
-  await chooseOption(input, output, 'reference-source', 'local-path-type-in');
+  await chooseOption(input, output, 'reference-source', 'local');
   await focusField(input, output, 'reference-fasta');
   // Unlike a text/integer field, a paste here is inserted as-is: no trimming, no control-
   // character stripping. That is @inkjs/ui's own behavior, not something this form adds back.
@@ -302,7 +318,12 @@ test('edits all required fields and confirms effective options before saving', a
   let saved: PreparedAnnotationTransferRun | undefined;
   let apiKeyChecks = 0;
   const executedModes: string[] = [];
+  const registrations: string[] = [];
   const {input, output, instance} = renderConfiguration('/research', {
+    registerAccessionCaches: async outputRoot => {
+      registrations.push(outputRoot);
+      return 'Recorded.';
+    },
     validatePreparedRun: async prepared => {
       reviewed = prepared;
     },
@@ -324,16 +345,16 @@ test('edits all required fields and confirms effective options before saving', a
   await waitForForm(output);
 
   // Both sides of this run come from local files.
-  await chooseOption(input, output, 'reference-source', 'local-path-type-in');
+  await chooseOption(input, output, 'reference-source', 'local');
   await typeInto(input, output, 'reference-fasta', '/data/reference.fa');
   await typeInto(input, output, 'reference-gff3', '/data/reference.gff3');
-  await chooseOption(input, output, 'target-source', 'local-path-type-in');
+  await chooseOption(input, output, 'target-source', 'local');
   await typeInto(input, output, 'target-fasta', '/data/target.fa');
   await chooseOption(input, output, 'cpu-allocation', 'leave-one-free');
   await typeInto(input, output, 'run-name', 'Test run');
   await typeInto(input, output, 'run-description', 'Baseline annotation');
 
-  input.write(ENTER);
+  await startReview(input, output);
   const review = await waitForReview(output, () => reviewed);
   const {configuration} = review.prepared;
   assert.equal(configuration.workflow_id, 'annotation-transfer');
@@ -367,6 +388,54 @@ test('edits all required fields and confirms effective options before saving', a
   await waitUntil(() => executedModes.length === 1, 'the workflow is executed');
   assert.deepEqual(executedModes, ['execute']);
   await waitForFrame(output, frame => frame.includes('Nothing to be done.'));
+  // Local inputs leave nothing to record in the accession catalog.
+  assert.deepEqual(registrations, []);
+});
+
+test('records the NCBI cache in the accession catalog after a successful NCBI-sourced run', async context => {
+  let reviewed: PreparedAnnotationTransferRun | undefined;
+  let saves = 0;
+  const executedModes: string[] = [];
+  const registrations: string[] = [];
+  const {input, output, instance} = renderConfiguration('/research', {
+    registerAccessionCaches: async outputRoot => {
+      registrations.push(outputRoot);
+      return 'Test registration note';
+    },
+    validatePreparedRun: async prepared => {
+      reviewed = prepared;
+    },
+    saveRun: async () => {
+      saves += 1;
+      return '/research/runs/config.yaml';
+    },
+    checkNcbiApiKey: async () => false,
+    executeSnakemakeRun: async run => {
+      executedModes.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+  });
+  registerCleanup(context, instance);
+  await waitForForm(output);
+
+  await chooseOption(input, output, 'reference-source', 'ncbi');
+  await typeInto(input, output, 'reference-accession', 'GCF_000149205.2');
+  await chooseOption(input, output, 'target-source', 'ncbi');
+  await typeInto(input, output, 'target-accession', 'GCA_000011425.1');
+  await startReview(input, output);
+  await waitForReview(output, () => reviewed);
+  input.write(ENTER);
+  await waitUntil(() => saves === 1, 'the configuration is saved');
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  // The start options list the dry run first; the execution is the next option.
+  input.write(ARROW_DOWN);
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  input.write(ENTER);
+
+  await waitUntil(() => registrations.length === 1, 'the cache is recorded');
+  assert.deepEqual(executedModes, ['execute']);
+  assert.deepEqual(registrations, ['/research/runs']);
+  await waitForFrame(output, frame => frame.includes('Test registration note'));
 });
 
 test('shows a failed dry run with its live output, then offers execution again', async context => {
@@ -465,10 +534,10 @@ test('switches the reference to an NCBI accession independently of the target', 
   assert.equal(fieldLine(lastFrame(output), 'reference-gff3'), undefined);
 
   await typeInto(input, output, 'reference-accession', 'GCF_000149205.2');
-  await chooseOption(input, output, 'target-source', 'local-path-type-in');
+  await chooseOption(input, output, 'target-source', 'local');
   await typeInto(input, output, 'target-fasta', '/data/target.fa');
 
-  input.write(ENTER);
+  await startReview(input, output);
   const {frame, prepared} = await waitForReview(output, () => reviewed);
   const {reference, target} = prepared.configuration.inputs;
   assert.equal(reference.source, 'ncbi');
@@ -478,7 +547,7 @@ test('switches the reference to an NCBI accession independently of the target', 
   assert.match(fieldLine(frame, 'reference-accession') ?? '', /GCF_000149205\.2/);
   // Choices are reviewed by their option label, not the raw stored value.
   assert.ok(fieldLine(frame, 'reference-source')?.includes(optionLabel('reference-source', 'ncbi')));
-  assert.ok(fieldLine(frame, 'target-source')?.includes(optionLabel('target-source', 'local-path-type-in')));
+  assert.ok(fieldLine(frame, 'target-source')?.includes(optionLabel('target-source', 'local')));
   assert.equal(fieldLine(frame, 'reference-fasta'), undefined);
   assert.equal(fieldLine(frame, 'reference-gff3'), undefined);
 });
@@ -498,7 +567,7 @@ test('reflects the NCBI API key status in the review of an NCBI-sourced run', as
     await typeInto(input, output, 'reference-accession', 'GCF_000149205.2');
     await chooseOption(input, output, 'target-source', 'ncbi');
     await typeInto(input, output, 'target-accession', 'GCA_000011425.1');
-    input.write(ENTER);
+    await startReview(input, output);
     const {frame, prepared} = await waitForReview(output, () => reviewed);
     // Each render generates its own timestamped run ID; only the key status should differ.
     return frame.replaceAll(prepared.configuration.run.id, '<run-id>');
@@ -532,10 +601,10 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
 
   await chooseOption(input, output, 'reference-source', 'ncbi');
   await typeInto(input, output, 'reference-accession', 'GCF_000149205.2');
-  await chooseOption(input, output, 'target-source', 'local-path-type-in');
+  await chooseOption(input, output, 'target-source', 'local');
   await typeInto(input, output, 'target-fasta', '/data/target.fa');
 
-  input.write(ENTER);
+  await startReview(input, output);
   await waitUntil(() => cacheLookups === 1, 'the NCBI cache is searched');
   // The cache decision replaces the form and names the cached accession.
   const cacheFrame = await waitForFrame(
@@ -545,7 +614,8 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
 
   input.write(SPACE);
   await waitForFrame(output, frame => frame !== cacheFrame);
-  input.write(ENTER);
+  // Enter acts only on the continue button, which follows the cache choices.
+  await startReview(input, output);
   await waitForReview(output, () => reviewed);
   input.write(ENTER);
   await waitUntil(() => saved !== undefined, 'the configuration is saved');
@@ -638,7 +708,7 @@ test('shows actionable validation errors before confirmation', async context => 
   );
   assert.ok(missingRequired.length > 0);
   const occurrences = (frame: string, label: string): number => frame.split(label).length - 1;
-  input.write(ENTER);
+  await startReview(input, output);
   // Each missing field is named in the error list in addition to its own form row.
   const frame = await waitForFrame(output, value =>
     missingRequired.every(definition => occurrences(value, definition.label) >= 2),
@@ -647,7 +717,7 @@ test('shows actionable validation errors before confirmation', async context => 
   assert.equal(validations, 0);
 });
 
-test('opens the file browser from a browse-only file field and selects a file without typing', async context => {
+test('opens the file browser with Enter from a local path field and selects a file', async context => {
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'annotation-transfer-browser-'));
   context.after(() => rm(temporaryRoot, {recursive: true, force: true}));
   const root = join(temporaryRoot, 'runs');
@@ -667,9 +737,9 @@ test('opens the file browser from a browse-only file field and selects a file wi
   registerCleanup(context, instance);
   await waitForForm(output);
 
-  // The chooser source makes the reference files browse-only: no typable value, Enter opens the
-  // browser instead of starting the review.
-  await chooseOption(input, output, 'reference-source', 'local-path-choose');
+  // On a local path field, which can also be typed into, Enter opens the browser instead of
+  // starting the review.
+  await chooseOption(input, output, 'reference-source', 'local');
   await focusField(input, output, 'reference-fasta');
 
   input.write(ENTER);
@@ -744,7 +814,7 @@ test('steps through previous run history and prefills the form immediately', asy
       values: {
         'reference-source': 'ncbi',
         'reference-accession': 'GCF_000149205.2',
-        'target-source': 'local-path-type-in',
+        'target-source': 'local',
         'target-fasta': '/data/target-a.fa',
         'annotation-id-prefix': 'AN_A',
         'cpu-allocation': 'automatic',
@@ -756,10 +826,10 @@ test('steps through previous run history and prefills the form immediately', asy
     {
       label: 'Run B',
       values: {
-        'reference-source': 'local-path-type-in',
+        'reference-source': 'local',
         'reference-fasta': '/data/reference-b.fa',
         'reference-gff3': '/data/reference-b.gff3',
-        'target-source': 'local-path-type-in',
+        'target-source': 'local',
         'target-fasta': '/data/target-b.fa',
         'annotation-id-prefix': 'AN_B',
         'cpu-allocation': 'automatic',
@@ -822,18 +892,37 @@ test('scrolls the field list to keep the selected field reachable in a short ter
   assert.ok(editableLabels.some(label => lineFor(initialFrame, label) === undefined));
   assert.ok(frameHeight(initialFrame) <= rows);
 
-  // Tab through every editable field and wrap around: each selected field is on screen and the
-  // form never grows past the terminal height.
+  // Tab through every editable field and the continue button, then wrap around: each selected
+  // row is on screen and the form never grows past the terminal height.
   const selectedLabel = (frame: string): string | undefined =>
-    editableLabels.find(label => isSelected(frame, label));
+    editableLabels.find(label => isSelected(frame, label)) ??
+    (/^› \[/.test(selectedLine(frame) ?? '') ? 'continue button' : undefined);
   const visited = [selectedLabel(initialFrame)];
-  for (let step = 0; step < editableLabels.length; step += 1) {
+  for (let step = 0; step <= editableLabels.length; step += 1) {
     const before = selectedLine(lastFrame(output));
     input.write(TAB);
     const frame = await waitForFrame(output, next => selectedLine(next) !== before);
     assert.ok(frameHeight(frame) <= rows, `Frame exceeds ${String(rows)} rows:\n${frame}`);
     visited.push(selectedLabel(frame));
   }
-  assert.deepEqual(new Set(visited), new Set(editableLabels));
+  assert.deepEqual(new Set(visited), new Set([...editableLabels, 'continue button']));
   assert.equal(visited.at(-1), visited[0]);
+});
+
+test('ignores Enter in a field and reviews only from the continue button', async context => {
+  let validations = 0;
+  const {input, output, instance} = renderConfiguration('/research', {
+    validatePreparedRun: async () => {
+      validations += 1;
+    },
+  });
+  registerCleanup(context, instance);
+  await waitForForm(output);
+
+  await focusField(input, output, 'run-name');
+  const before = selectedLine(lastFrame(output));
+  input.write(ENTER);
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  assert.equal(selectedLine(lastFrame(output)), before);
+  assert.equal(validations, 0);
 });

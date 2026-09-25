@@ -1,5 +1,4 @@
-import {homedir} from 'node:os';
-import {dirname, isAbsolute, join} from 'node:path';
+import {dirname, isAbsolute} from 'node:path';
 import React, {useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {
@@ -10,12 +9,13 @@ import {
   type IsolateCatalog,
 } from '../../isolates/catalog.js';
 import type {ReadFileCheck, ReadPairsChecker} from '../../isolates/reads.js';
-import {PathBrowser, type DirectoryReader} from '../components/path-browser.js';
+import type {DirectoryReader} from '../components/path-browser.js';
+import {expandHomeDirectory, PathField} from '../components/path-field.js';
 import {TextField} from '../components/text-field.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
-import {ValidationError} from '../components/validation-error.js';
+import {EditPage} from '../components/page.js';
 
 type Mate = 'r1' | 'r2';
 
@@ -67,14 +67,6 @@ function fieldLabel(field: string): string {
     return `Pair ${String(number)}${part}`;
   }
   return fieldLabels[field] ?? field;
-}
-
-/** Expands a leading `~` the way a shell would, since researchers often paste home-relative paths. */
-export function expandHomeDirectory(path: string, homeDirectory = homedir()): string {
-  if (path === '~') {
-    return homeDirectory;
-  }
-  return path.startsWith('~/') ? join(homeDirectory, path.slice(2)) : path;
 }
 
 function readProblem(label: string, check: ReadFileCheck | undefined): string | undefined {
@@ -285,7 +277,7 @@ export function IsolateForm({
       }
       switch (selectedRow.kind) {
         case 'mate':
-          setBrowsing({pairKey: selectedRow.pair.key, mate: selectedRow.mate});
+          // The path field opens its file browser on Enter.
           return;
         case 'add-pair': {
           const pair = newPair();
@@ -303,27 +295,35 @@ export function IsolateForm({
           void submit();
           return;
         default:
-          moveRow(1);
+          // Enter acts only on buttons and path fields; Tab and the arrows move between fields.
+          return;
       }
     },
     {isActive: inputActive},
   );
 
-  if (browsing) {
-    const pair = pairs.find(candidate => candidate.key === browsing.pairKey);
-    const own = expandHomeDirectory(pair?.[browsing.mate].trim() ?? '');
-    // Mates are normally delivered side by side, so an empty field starts beside its partner.
-    const mate = expandHomeDirectory(pair?.[browsing.mate === 'r1' ? 'r2' : 'r1'].trim() ?? '');
-    const start = isAbsolute(own) ? own : isAbsolute(mate) ? mate : undefined;
+  // Mates are normally delivered side by side, so an empty field browses beside its partner.
+  const mateDirectory = (pair: PairDraft, mate: Mate): string => {
+    const partner = expandHomeDirectory(pair[mate === 'r1' ? 'r2' : 'r1'].trim());
+    return isAbsolute(partner) ? dirname(partner) : currentDirectory;
+  };
+
+  const browsedPair = browsing ? pairs.find(candidate => candidate.key === browsing.pairKey) : undefined;
+  if (browsing && browsedPair) {
     return (
-      <PathBrowser
-        initialDirectory={start ? dirname(start) : currentDirectory}
-        onSelect={path => {
-          updatePair(browsing.pairKey, {[browsing.mate]: path});
-          setBrowsing(undefined);
-        }}
-        onCancel={() => setBrowsing(undefined)}
+      <PathField
+        label={browsing.mate.toUpperCase()}
+        selected
         inputActive={inputActive}
+        value={browsedPair[browsing.mate]}
+        onChange={path => updatePair(browsedPair.key, {[browsing.mate]: path})}
+        browsing
+        onBrowsingChange={browse => {
+          if (!browse) {
+            setBrowsing(undefined);
+          }
+        }}
+        startDirectory={mateDirectory(browsedPair, browsing.mate)}
         readDirectory={readDirectory}
       />
     );
@@ -379,15 +379,17 @@ export function IsolateForm({
         return (
           <React.Fragment key={row.id}>
             {header}
-            <TextField
+            <PathField
               label={row.mate.toUpperCase()}
               required
               selected={row.id === selectedRow?.id}
               inputActive={inputActive && !submitting}
-              defaultValue={row.pair[row.mate]}
-              displayValue={row.pair[row.mate]}
-              placeholder="Type or paste an absolute path"
+              value={row.pair[row.mate]}
               onChange={text => updatePair(row.pair.key, {[row.mate]: text})}
+              browsing={false}
+              onBrowsingChange={browse => setBrowsing(browse ? {pairKey: row.pair.key, mate: row.mate} : undefined)}
+              startDirectory={mateDirectory(row.pair, row.mate)}
+              readDirectory={readDirectory}
             />
           </React.Fragment>
         );
@@ -409,9 +411,8 @@ export function IsolateForm({
           </Box>
         );
       case 'save':
-        return (
-          <Text key={row.id} color={color(row)} bold={row.id === selectedRow?.id}>{marker(row)}[ Save isolate ]</Text>
-        );
+        // Drawn by the page as its save button.
+        return <React.Fragment key={row.id} />;
     }
   };
 
@@ -421,7 +422,7 @@ export function IsolateForm({
         return 'Enter — Browse for file';
       case 'choice':
       case 'trimmed':
-        return 'Space/←/→ — Change · Enter — Next field';
+        return 'Space/←/→ — Change';
       case 'add-pair':
         return 'Enter — Add read pair';
       case 'remove-pair':
@@ -429,25 +430,26 @@ export function IsolateForm({
       case 'save':
         return 'Enter — Save';
       default:
-        return 'Enter — Next field';
+        return undefined;
     }
   })();
 
   return (
-    <Box flexDirection="column">
-      <Text bold underline>{creating ? 'New isolate' : `Edit isolate ${sanitizeTerminalText(editing.id)}`}</Text>
-      <Box marginTop={1} flexDirection="column">
-        {rows.map(renderRow)}
-      </Box>
-      {submitting ? <Text>Checking reads and saving…</Text> : null}
-      <ValidationError title="Not saved:" problems={problems} />
-      <Box marginTop={1} flexDirection="column">
-        <Text color={mutedColor} wrap="wrap">
-          Add one read pair per lane or sequencing run. Prefer untrimmed reads; mark pairs that the
-          provider already trimmed or filtered.
-        </Text>
-        <Text color={mutedColor} wrap="wrap">Tab/↑/↓ — Field · {hint} · Esc — Cancel</Text>
-      </Box>
-    </Box>
+    <EditPage
+      title={creating ? 'New isolate' : `Edit isolate ${editing.id}`}
+      description={
+        'Add one read pair per lane or sequencing run. Prefer untrimmed reads; mark pairs that the ' +
+        'provider already trimmed or filtered.'
+      }
+      shortcuts={['Tab/↑/↓ — Field', hint]}
+      back="Cancel"
+      saveLabel="Save isolate"
+      saveSelected={selectedRow?.kind === 'save'}
+      saving={submitting}
+      savingLabel="Checking reads and saving…"
+      problems={problems}
+    >
+      {rows.map(renderRow)}
+    </EditPage>
   );
 }

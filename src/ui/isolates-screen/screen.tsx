@@ -5,6 +5,7 @@ import type {ReadPairsCheck, ReadPairsChecker} from '../../isolates/reads.js';
 import type {IsolateCatalogMutation, LoadedIsolateCatalog} from '../../isolates/store.js';
 import type {DirectoryReader} from '../components/path-browser.js';
 import {useHomeSuspension} from '../home-navigation.js';
+import {Page} from '../components/page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 import {scanIlluminaDelivery} from '../../isolates/illumina-delivery.js';
@@ -267,47 +268,47 @@ export function IsolatesScreen({
     : 0;
 
   return (
-    <Box flexDirection="column">
-      <Text>
-        <Text bold underline>Isolates</Text>
-        {isolates ? <Text color={mutedColor}> · {isolates.length} in catalog</Text> : null}
-      </Text>
-      <Text color={mutedColor} wrap="truncate">Catalog: {sanitizeTerminalText(catalogPath)}</Text>
-      <Box marginTop={1} flexDirection="column">
-        {catalogState.state === 'loading' ? <Text>Loading isolates…</Text> : null}
-        {catalogState.state === 'failed' ? (
-          <Box flexDirection="column">
-            <Text color="red">Unable to load the isolate catalog.</Text>
-            <Text wrap="wrap">{sanitizeTerminalText(catalogState.message)}</Text>
-          </Box>
-        ) : null}
-        {isolates && isolates.length === 0 ? (
-          <Text>No isolates yet. Press n to add one or i to import a sequencing delivery.</Text>
-        ) : null}
-        {isolates?.slice(visibleStart, visibleStart + visibleIsolateCount).map(isolate => {
-          const isSelected = isolate.id === selectedId;
-          return (
-            <Text key={isolate.id} color={isSelected ? 'cyan' : undefined} wrap="truncate">
-              {isSelected ? '› ' : '  '}
-              {sanitizeTerminalText(isolate.name)}
-              <Text color={mutedColor}> ({sanitizeTerminalText(isolate.id)})</Text>
-              {/* Read problems come before lineage so a narrow terminal truncates the less urgent part. */}
-              {' · '}{readSummary(isolate, readChecks.get(isolate.id))}
-              {' · '}{sanitizeTerminalText(lineage(isolate))}
-            </Text>
-          );
-        })}
-        {isolates && isolates.length > visibleIsolateCount ? (
-          <Text color={mutedColor}>{selectedIndex + 1} of {isolates.length}</Text>
-        ) : null}
-      </Box>
+    <Page
+      title="Isolates"
+      detail={isolates ? `${String(isolates.length)} in catalog` : undefined}
+      description={`Catalog: ${sanitizeTerminalText(catalogPath)}`}
+      shortcuts={view.kind === 'confirm-remove'
+        ? [busy ? 'Removing…' : 'y — Remove']
+        : ['↑/↓ — Select', 'Enter — Edit', 'n — New', 'i — Import delivery', 'd — Remove', 'r — Reload']}
+      back={view.kind === 'confirm-remove' ? 'Keep' : 'Back'}
+    >
+      {catalogState.state === 'loading' ? <Text>Loading isolates…</Text> : null}
+      {catalogState.state === 'failed' ? (
+        <Box flexDirection="column">
+          <Text color="red">Unable to load the isolate catalog.</Text>
+          <Text wrap="wrap">{sanitizeTerminalText(catalogState.message)}</Text>
+        </Box>
+      ) : null}
+      {isolates && isolates.length === 0 ? (
+        <Text>No isolates yet. Press n to add one or i to import a sequencing delivery.</Text>
+      ) : null}
+      {isolates?.slice(visibleStart, visibleStart + visibleIsolateCount).map(isolate => {
+        const isSelected = isolate.id === selectedId;
+        return (
+          <Text key={isolate.id} color={isSelected ? 'cyan' : undefined} wrap="truncate">
+            {isSelected ? '› ' : '  '}
+            {sanitizeTerminalText(isolate.name)}
+            <Text color={mutedColor}> ({sanitizeTerminalText(isolate.id)})</Text>
+            {/* Read problems come before lineage so a narrow terminal truncates the less urgent part. */}
+            {' · '}{readSummary(isolate, readChecks.get(isolate.id))}
+            {' · '}{sanitizeTerminalText(lineage(isolate))}
+          </Text>
+        );
+      })}
+      {isolates && isolates.length > visibleIsolateCount ? (
+        <Text color={mutedColor}>{selectedIndex + 1} of {isolates.length}</Text>
+      ) : null}
       {view.kind === 'confirm-remove' ? (
-        <Box marginTop={1} flexDirection="column">
+        <Box marginTop={1}>
           <Text color="yellow" wrap="wrap">
             Remove isolate {sanitizeTerminalText(view.id)} from the catalog? Its read files are not
             deleted.
           </Text>
-          <Text>{busy ? 'Removing…' : 'y — Remove · n/Esc — Keep'}</Text>
         </Box>
       ) : null}
       {message ? (
@@ -317,13 +318,6 @@ export function IsolatesScreen({
           </Text>
         </Box>
       ) : null}
-      {view.kind === 'list' ? (
-        <Box marginTop={1}>
-          <Text color={mutedColor} wrap="wrap">
-            ↑/↓ — Select · Enter — Edit · n — New · i — Import delivery · d — Remove · r — Reload · Esc — Back
-          </Text>
-        </Box>
-      ) : null}
-    </Box>
+    </Page>
   );
 }

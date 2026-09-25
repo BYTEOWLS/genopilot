@@ -18,6 +18,7 @@ import {RunResultsScreen} from '../run-results-screen/screen.js';
 import {mutedColor} from '../theme.js';
 import {useTerminalTitle, type TerminalTitleStatus} from '../terminal-title.js';
 import {useHomeSuspension} from '../home-navigation.js';
+import {Page} from '../components/page.js';
 
 // Lines kept in memory so the researcher can scroll back through a long run. Complete output
 // always remains on disk regardless of this cap; see the run's stdout/stderr log files.
@@ -25,10 +26,10 @@ const maximumRetainedLogLines = 5000;
 const eventPollIntervalMs = 250;
 // Rows this screen uses around the log window: the status alert (3), the log's own margin,
 // border, title, scroll markers and footer (7), up to three failure lines (stage failure,
-// process error, exit code), and the footer hint. The stage list varies per workflow and is
-// measured separately. Space taken by an outer wrapper, such as the welcome screen's own header
-// and footer, is not visible here and is not reserved.
-const reservedChromeLines = 14;
+// process error, exit code), and the page's title, margins, and shortcut line (4). The stage list
+// varies per workflow and is measured separately. Space taken by an outer wrapper, such as the
+// welcome screen's own header and footer, is not visible here and is not reserved.
+const reservedChromeLines = 17;
 const minimumVisibleLogLines = 5;
 
 export type WorkflowProgressStage = {id: string; label: string; rules?: readonly string[]};
@@ -128,6 +129,9 @@ export type WorkflowExecutionOutcome = {
   stderrLogPath: string;
 };
 
+/** Bookkeeping after a successful run: what is shown while it runs, and its eventual note. */
+export type RunFollowUp = {label: string; outcome: Promise<string | undefined>};
+
 export type WorkflowResultHandoff = {
   runDirectory: string;
   manifest: WorkflowManifest;
@@ -146,6 +150,8 @@ type FinishedExecution = {
   logLines: string[];
   exitCode?: number | null;
   error?: string;
+  /** What the success follow-up reported, e.g. that a downloaded accession was cataloged. */
+  followUp?: {text: string; error: boolean};
   // Present once a finished execution's persisted results are loaded and can be opened.
   result?: PersistedRunResult;
 };
@@ -189,6 +195,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   stages = [],
   readEvents = readAppendedRunEvents,
   resultHandoff,
+  onSucceeded,
 }: {
   configurationPath: string;
   prepareRun: WorkflowRunPreparer<R>;
@@ -198,6 +205,11 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   stages?: readonly WorkflowProgressStage[];
   readEvents?: typeof readAppendedRunEvents;
   resultHandoff?: WorkflowResultHandoff;
+  /**
+   * Runs after a successful execution, never a dry run, and returns nothing when there is nothing
+   * to do. Its outcome is only reported; it cannot change the run's status or outputs.
+   */
+  onSucceeded?: () => RunFollowUp | undefined;
 }): React.JSX.Element {
   const [screen, setScreen] = useState<ExecutionState<R>>({state: 'ready', mode: 'dry-run'});
   useTerminalTitle({status: terminalTitleStatus(screen)});
@@ -336,13 +348,23 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
                 },
               }
             : undefined;
+        const followUp = run.mode === 'execute' && result.exitCode === 0 ? onSucceeded?.() : undefined;
         setScreen(current => ({
           state: 'finished',
           run: result,
           logLines: current.state === 'running' ? current.logLines : [],
           exitCode: result.exitCode,
+          ...(followUp ? {followUp: {text: followUp.label, error: false}} : {}),
           ...(persisted ? {result: persisted} : {}),
         }));
+        // The run is finished either way; its follow-up may take a while and must not hold the
+        // finished screen back, so its outcome is filled in when it arrives.
+        if (followUp) {
+          followUp.outcome.then(
+            text => setFollowUp(text ? {text, error: false} : undefined),
+            error => setFollowUp({text: errorMessage(error), error: true}),
+          );
+        }
       },
       async error => {
         liveOutput.current?.flush();
@@ -370,6 +392,23 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         }));
       },
     );
+  };
+
+  /** Records the follow-up outcome on the finished run, also while its results are open. */
+  const setFollowUp = (followUp: FinishedExecution['followUp']): void => {
+    const withFollowUp = (finished: FinishedExecution): FinishedExecution => {
+      const {followUp: _previous, ...rest} = finished;
+      return followUp ? {...rest, followUp} : rest;
+    };
+    setScreen(current => {
+      if (current.state === 'finished') {
+        return withFollowUp(current);
+      }
+      if (current.state === 'result') {
+        return {...current, finished: {...withFollowUp(current.finished), result: current.finished.result}};
+      }
+      return current;
+    });
   };
 
   const returnToModes = (mode: WorkflowRunMode): void => {
@@ -478,7 +517,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   if (screen.state === 'ready') {
     const run = preparedRuns[screen.mode];
     return (
-      <Box flexDirection="column">
+      <Page title="Start run" shortcuts={['↑/↓ — Choose', 'Enter — Start']} back="Back to workflow">
         <Alert variant="info">Configuration saved. Choose how to start this run.</Alert>
         <Text>{sanitizeTerminalText(configurationPath)}</Text>
         <Box marginTop={1} flexDirection="column">
@@ -501,8 +540,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
           <Text bold>Snakemake command</Text>
           <Text wrap="wrap">{sanitizeTerminalText(run.command)}</Text>
         </Box>
-        <Text color={mutedColor}>↑/↓ — Choose · Enter — Start · Esc — Back to workflow</Text>
-      </Box>
+      </Page>
     );
   }
 
@@ -512,7 +550,12 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   const succeeded = finished && hasSucceeded(screen);
   const label = screen.run.mode === 'dry-run' ? 'Snakemake dry run' : 'Workflow run';
   return (
-    <Box flexDirection="column">
+    <Page
+      title={label}
+      shortcuts={[finished && screen.run.mode === 'execute' && screen.result && 'Enter — View results']}
+      // Leaving a running workflow would abort it, so Esc waits until it finishes.
+      back={!finished ? false : screen.run.mode === 'dry-run' ? 'Start options' : 'Back to workflow'}
+    >
       {finished ? (
         <Alert variant={succeeded ? 'success' : 'error'}>
           {succeeded ? `${label} succeeded.` : `${label} failed.`}
@@ -544,15 +587,12 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
       {finished && exitCode !== undefined && exitCode !== null && exitCode !== 0 ? (
         <Text color="red">Snakemake exited with code {String(exitCode)}.</Text>
       ) : null}
-      {finished ? (
-        <Text color={mutedColor}>
-          {screen.run.mode === 'dry-run'
-            ? 'Esc — Start options'
-            : `${screen.result ? 'Enter — View results · ' : ''}Esc — Back to workflow`}
+      {finished && screen.followUp ? (
+        <Text color={screen.followUp.error ? 'yellow' : mutedColor} wrap="wrap">
+          {sanitizeTerminalText(screen.followUp.text)}
         </Text>
-      ) : (
-        <Text color={mutedColor}>Do not close this terminal.</Text>
-      )}
-    </Box>
+      ) : null}
+      {finished ? null : <Text color={mutedColor}>Do not close this terminal.</Text>}
+    </Page>
   );
 }
