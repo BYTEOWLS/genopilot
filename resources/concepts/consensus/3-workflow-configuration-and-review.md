@@ -73,7 +73,7 @@ Generated isolate genomes already in the catalog are informative but are not sub
 ## Work
 
 - [ ] Finalize the stable workflow ID, supported ploidy, minimal scientific fields/defaults, manifest, configuration schema, and parameter definitions.
-- [ ] Add backbone choice using local entry, file chooser, or accession catalog.
+- [ ] Add backbone choice using local entry, file chooser, or accession catalog; refuse a cataloged accession whose verified copies conflict.
 - [ ] Add searchable isolate multi-selection and derived count, requiring at least one isolate.
 - [ ] Add the required strict-majority/plurality single select with help text.
 - [ ] Snapshot selected isolate metadata, including every read pair and its `trimmed` flag, atomically into the new run workspace.

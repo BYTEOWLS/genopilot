@@ -22,13 +22,13 @@ These are already implemented by the annotation-transfer work and should be reus
 - [x] Versioned configuration validation, isolated run workspaces, and dry-run review.
 - [x] Local and versioned NCBI assembly resolution with checksum-verified reuse/refresh caching.
 - [x] Managed Snakemake execution, structured events, complete logs, provenance, and result loading.
-- [x] Welcome-screen entries for **Manage isolates** and **Manage NCBI accessions**; the isolate catalog is implemented (Task 1), the accession catalog is not yet.
+- [x] Welcome-screen entries for **Manage isolates** and **Manage NCBI accessions**, backed by the isolate catalog (Task 1) and the accession catalog (Task 2).
 
 ## Ordered work
 
 - [x] 1. [Manage isolates](1-manage-isolates.md)
 - [x] 1b. [Import isolates from an Illumina delivery](1b-import-illumina-isolates.md)
-- [ ] 2. [Manage accessions](2-manage-accessions.md)
+- [x] 2. [Manage accessions](2-manage-accessions.md)
 - [ ] 3. [Workflow configuration and review](3-workflow-configuration-and-review.md)
 - [ ] 4.1. [Per-isolate processing](4a-per-isolate-processing.md)
 - [ ] 4.2. [Cohort support aggregation](4b-cohort-support-aggregation.md)

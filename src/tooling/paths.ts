@@ -23,6 +23,8 @@ export type ToolingPaths = {
   ncbiApiKeyPath: string;
   isolateCatalogDirectory: string;
   isolateCatalogPath: string;
+  accessionCatalogDirectory: string;
+  accessionCatalogPath: string;
 };
 
 function supportedPlatform(value: NodeJS.Platform): SupportedPlatform {
@@ -94,9 +96,11 @@ export function resolveToolingPaths({
     secretsDirectory: join(dataDirectory, 'secrets'),
     ncbiApiKeyPath: join(dataDirectory, 'secrets', 'ncbi-api-key'),
     // Research metadata sits beside, not inside, the tooling directory, so resetting or
-    // deleting managed tooling never removes the researcher's isolate catalog.
+    // deleting managed tooling never removes the researcher's isolate or accession catalog.
     isolateCatalogDirectory: join(dirname(resolve(dataDirectory)), 'isolates'),
     isolateCatalogPath: join(dirname(resolve(dataDirectory)), 'isolates', 'isolates.yaml'),
+    accessionCatalogDirectory: join(dirname(resolve(dataDirectory)), 'accessions'),
+    accessionCatalogPath: join(dirname(resolve(dataDirectory)), 'accessions', 'accessions.yaml'),
   };
 }
 

@@ -23,7 +23,7 @@ export function CommandMenu<Id extends string>({
     const selected = command.id === selectedId;
     return (
       <Text key={command.id} color={selected ? 'cyan' : mutedColor}>
-        {selected ? '›' : ' '} {command.label} — {command.description}
+        {selected ? '›' : ' '} {command.label}{command.description ? ` — ${command.description}` : ''}
       </Text>
     );
   };

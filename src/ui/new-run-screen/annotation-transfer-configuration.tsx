@@ -1,6 +1,9 @@
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import React, {useEffect, useState} from 'react';
+import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
+import {refreshAccessionCaches} from '../../accessions/registration.js';
+import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
 import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import type {AnnotationTransferConfiguration} from '../../workflows/annotation-transfer/configuration.js';
@@ -36,6 +39,8 @@ export type PreviousRunsLoader = (currentDirectory: string) => Promise<readonly 
 export type NcbiCacheEntryFinder = (
   prepared: PreparedAnnotationTransferRun,
 ) => Promise<readonly NcbiCacheEntry[]>;
+/** Records the NCBI caches under a finished run's output root in the accession catalog. */
+export type AccessionCacheRegistration = (outputRoot: string, currentDirectory: string) => Promise<string>;
 
 const packagedSnakefilePath = fileURLToPath(
   new URL('../../../workflows/annotation-transfer/Snakefile', import.meta.url),
@@ -45,20 +50,39 @@ async function defaultNcbiApiKeyCheck(): Promise<boolean> {
   return isNcbiApiKeyConfigured(resolveToolingPaths().ncbiApiKeyPath);
 }
 
-// The saved configuration only ever records 'local' or 'ncbi' — it has no memory of whether a
-// local path was typed or browsed to. Prefilling always lands on the typed-path source, since
-// the concrete path string is directly useful there and would just have to be re-browsed-to
-// otherwise.
-const localPathTypeInSource = 'local-path-type-in';
+async function defaultRegisterAccessionCaches(outputRoot: string, currentDirectory: string): Promise<string> {
+  const catalogPath = resolveToolingPaths().accessionCatalogPath;
+  try {
+    await refreshAccessionCaches({
+      currentDirectory,
+      loadCatalog: () => loadAccessionCatalog(catalogPath),
+      updateCatalog: (revision, mutate) => updateAccessionCatalog(catalogPath, revision, mutate),
+      scanCaches: scanAccessionCaches,
+      addRoot: outputRoot,
+      onlyAddedRoot: true,
+    });
+  } catch (error) {
+    throw new Error(
+      `The run succeeded, but its NCBI cache was not recorded in the accession catalog: ${
+        error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return `Recorded the NCBI accession cache under ${outputRoot} in the accession catalog.`;
+}
+
+function usesNcbiInput(prepared: PreparedAnnotationTransferRun): boolean {
+  return prepared.configuration.inputs.reference.source === 'ncbi' ||
+    prepared.configuration.inputs.target.source === 'ncbi';
+}
 
 function previousRunFormValues(configuration: AnnotationTransferConfiguration): WorkflowFormValues {
   const {reference, target} = configuration.inputs;
   return {
-    'reference-source': reference.source === 'ncbi' ? 'ncbi' : localPathTypeInSource,
+    'reference-source': reference.source,
     'reference-fasta': reference.source === 'local' ? reference.fasta : '',
     'reference-gff3': reference.source === 'local' ? reference.gff3 : '',
     'reference-accession': reference.source === 'ncbi' ? reference.accession : '',
-    'target-source': target.source === 'ncbi' ? 'ncbi' : localPathTypeInSource,
+    'target-source': target.source,
     'target-fasta': target.source === 'local' ? target.fasta : '',
     'target-accession': target.source === 'ncbi' ? target.accession : '',
     'annotation-id-prefix': configuration.annotation.id_prefix,
@@ -158,6 +182,7 @@ export function AnnotationTransferConfigurationScreen({
   snakefilePath = packagedSnakefilePath,
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
+  registerAccessionCaches = defaultRegisterAccessionCaches,
   manifest,
 }: {
   currentDirectory: string;
@@ -174,6 +199,7 @@ export function AnnotationTransferConfigurationScreen({
   snakefilePath?: string;
   prepareSnakemakeRun?: typeof defaultPrepareSnakemakeRun;
   executeSnakemakeRun?: typeof defaultExecuteSnakemakeRun;
+  registerAccessionCaches?: AccessionCacheRegistration;
   manifest?: WorkflowManifest;
 }): React.JSX.Element {
   const [previousRuns, setPreviousRuns] = useState<readonly PreviousWorkflowRun[]>([]);
@@ -206,9 +232,7 @@ export function AnnotationTransferConfigurationScreen({
       availableCpus,
     );
     await validatePreparedRun(prepared);
-    const usesNcbi =
-      prepared.configuration.inputs.reference.source === 'ncbi' ||
-      prepared.configuration.inputs.target.source === 'ncbi';
+    const usesNcbi = usesNcbiInput(prepared);
     const apiKeyConfigured = usesNcbi ? await checkNcbiApiKey() : false;
     const cacheEntries = usesNcbi ? await findCacheEntries(prepared) : [];
 
@@ -224,7 +248,7 @@ export function AnnotationTransferConfigurationScreen({
           label: 'NCBI API key',
           value: apiKeyConfigured
             ? 'Configured'
-            : 'Not set (rate-limited) — add one from NCBI access in the main menu',
+            : 'Not set (rate-limited) — add one in Manage NCBI accessions',
         });
         for (const input of ['reference', 'target'] as const) {
           const configuredInput = run.configuration.inputs[input];
@@ -296,6 +320,12 @@ export function AnnotationTransferConfigurationScreen({
         executeSnakemakeRun(run, onOutput as (output: WorkflowOutput) => void, signal)
       }
       resultManifest={manifest}
+      onRunSucceeded={prepared => usesNcbiInput(prepared)
+        ? {
+          label: 'Recording the NCBI accession cache in the accession catalog…',
+          outcome: registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory),
+        }
+        : undefined}
     />
   );
 }

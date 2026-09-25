@@ -10,6 +10,14 @@ export type HomeSuspender = (id: number, suspension: HomeSuspension | undefined)
 
 export const HomeSuspensionContext = createContext<HomeSuspender | undefined>(undefined);
 
+/** Why the home shortcut is unavailable right now, so pages can describe it accurately. */
+export const HomeSuspensionStateContext = createContext<HomeSuspension | undefined>(undefined);
+
+/** The current suspension of the home shortcut; undefined when it is available. */
+export function useHomeSuspensionState(): HomeSuspension | undefined {
+  return useContext(HomeSuspensionStateContext);
+}
+
 /**
  * Collects the suspensions reported by mounted screens. `busy` wins over `typing`, because the
  * shortcut must stay blocked while work runs even if a field also has focus.

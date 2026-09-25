@@ -151,11 +151,7 @@ test('ships complete parameter definitions with explicit required fields', async
   assert.equal(byId.get('reference-fasta')?.required, true);
   assert.deepEqual(byId.get('reference-fasta')?.visible_when, {
     parameter: 'reference-source',
-    equals: ['local-path-type-in', 'local-path-choose'],
-  });
-  assert.deepEqual(byId.get('reference-fasta')?.browse_only_when, {
-    parameter: 'reference-source',
-    equals: 'local-path-choose',
+    equals: 'local',
   });
   assert.deepEqual(byId.get('reference-accession')?.visible_when, {
     parameter: 'reference-source',
@@ -163,11 +159,7 @@ test('ships complete parameter definitions with explicit required fields', async
   });
   assert.deepEqual(byId.get('target-fasta')?.visible_when, {
     parameter: 'target-source',
-    equals: ['local-path-type-in', 'local-path-choose'],
-  });
-  assert.deepEqual(byId.get('target-fasta')?.browse_only_when, {
-    parameter: 'target-source',
-    equals: 'local-path-choose',
+    equals: 'local',
   });
   assert.deepEqual(byId.get('target-accession')?.visible_when, {
     parameter: 'target-source',

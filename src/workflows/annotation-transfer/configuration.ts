@@ -1,5 +1,6 @@
 import {isAbsolute} from 'node:path';
 import {parse} from 'yaml';
+import {isVersionedAssemblyAccession, ncbiAccessionFormatMessage} from '../../accessions/accession.js';
 
 export const ANNOTATION_TRANSFER_CONFIGURATION_SCHEMA_VERSION = 1 as const;
 export const ANNOTATION_TRANSFER_WORKFLOW_ID = 'annotation-transfer' as const;
@@ -126,8 +127,6 @@ function validateAbsolutePath(
   return true;
 }
 
-const ncbiAccessionPattern = /^GC[AF]_\d{9}\.\d+$/;
-
 function validateAccession(
   value: unknown,
   path: string,
@@ -136,11 +135,8 @@ function validateAccession(
   if (!requireNonEmptyString(value, path, issues)) {
     return false;
   }
-  if (!ncbiAccessionPattern.test(value)) {
-    issues.push({
-      path,
-      message: 'must be a versioned NCBI assembly accession (for example GCF_000149205.2)',
-    });
+  if (!isVersionedAssemblyAccession(value)) {
+    issues.push({path, message: ncbiAccessionFormatMessage});
     return false;
   }
   return true;

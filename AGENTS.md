@@ -58,6 +58,7 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Keep layouts responsive to terminal resizing and usable without color.
 - Use the alternate-screen buffer for the interactive application to avoid polluting terminal history during rerenders.
 - A user-requested interactive exit requires two `Ctrl+C` presses within two seconds. Do not bind `q`, Escape, or a menu command to exit.
+- Build every screen on the shared `Page` component (title, optional description, content, shortcut line ending in Esc and `h — Home`) and forms on `EditPage`, whose save button is a selectable row. In forms, Tab and the arrow keys move between fields; Enter only activates the selected button (or opens the file browser on a path field) and never moves on or submits from a text field. Validation runs when the save button is pressed and its problems are shown by `EditPage`.
 
 ## Data contracts
 

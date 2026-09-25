@@ -8,13 +8,13 @@ import type {LoadedWorkflowResult} from '../../workflows/results.js';
 import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AnnotationTransferResults, annotationTransferHelpSections} from './annotation-transfer-results.js';
+import {Page} from '../components/page.js';
 import {HelpContent} from '../components/help.js';
 import {runHelpSections} from './run-help.js';
 import type {WorkflowExecutionOutcome} from '../new-run-screen/workflow-execution.js';
 import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
 import {formatLocalDateTime} from "../utils.js";
 import {SectionList, type SectionListItem} from "./section-list.js";
-import {mutedColor} from '../theme.js';
 
 export type SupportPath = ResultPath & {id: string; label: string};
 
@@ -73,7 +73,7 @@ export function RunResultsScreen({
   const [contentHeight, setContentHeight] = useState(0);
   const [view, setView] = useState<'results' | 'help'>('results');
   const [scrollOffsets, setScrollOffsets] = useState({results: 0, help: 0});
-  const visibleRows = Math.max(5, rows - 12);
+  const visibleRows = Math.max(5, rows - 15);
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
   const effectiveScrollOffset = Math.min(scrollOffsets[view], maximumScrollOffset);
 
@@ -187,7 +187,18 @@ export function RunResultsScreen({
   });
 
   return (
-    <Box flexDirection="column">
+    <Page
+      title={view === 'help' ? 'Result help' : 'Run results'}
+      detail={view === 'help' ? undefined : metadata?.name ?? manifest.label}
+      description={view === 'help'
+        ? 'Each entry explains one item of the result page. Recorded definitions were saved with this run by the workflow.'
+        : undefined}
+      shortcuts={[
+        maximumScrollOffset > 0 && '↑/↓ — Scroll · PageUp/PageDown (or fn + ↑/↓) — Page',
+        view === 'help' ? '? — Back to results' : '? — Help',
+      ]}
+      back={view === 'help' ? 'Back to results' : onBack ? 'Back' : false}
+    >
       <Box
         height={contentHeight === 0 ? undefined : visibleRows}
         overflow={contentHeight === 0 ? 'visible' : 'hidden'}
@@ -195,11 +206,7 @@ export function RunResultsScreen({
       >
         <Box ref={contentRef} marginTop={-effectiveScrollOffset} flexDirection="column" flexShrink={0}>
           {view === 'help' ? (
-            <HelpContent
-              title="Result help"
-              intro="Each entry explains one item of the result page. Recorded definitions were saved with this run by the workflow."
-              sections={helpSections}
-            />
+            <HelpContent sections={helpSections} />
           ) : <>
           <SectionList title={'Run Metadata'} items={metadataItems}>
             {runMetadata && (runMetadata.workflowId !== manifest.id || runMetadata.workflowVersion !== manifest.workflow_version) ? (
@@ -259,10 +266,6 @@ export function RunResultsScreen({
           </>}
         </Box>
       </Box>
-      <Text color={mutedColor}>
-        {maximumScrollOffset > 0 ? '↑/↓ — Scroll · PageUp/PageDown (or fn + ↑/↓) — Page · ' : ''}
-        {view === 'help' ? 'Esc or ? — Back to results' : `? — Help${onBack ? ' · Esc — Back' : ''}`}
-      </Text>
-    </Box>
+    </Page>
   );
 }

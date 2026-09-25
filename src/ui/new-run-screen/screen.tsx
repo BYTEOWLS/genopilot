@@ -4,6 +4,7 @@ import {
   discoverPackagedWorkflows,
   type DiscoveredWorkflow,
 } from '../../workflows/discovery.js';
+import {Page} from '../components/page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {
   useWorkflowSelection,
@@ -11,7 +12,6 @@ import {
   type WorkflowDiscovery,
 } from '../components/workflow-selector.js';
 import {AnnotationTransferConfigurationScreen} from './annotation-transfer-configuration.js';
-import {mutedColor} from '../theme.js';
 import {useTerminalTitle} from '../terminal-title.js';
 
 /** Discovers and selects a packaged workflow for a new run. */
@@ -61,36 +61,28 @@ export function NewRunScreen({
     );
   }
 
+  if (confirmedWorkflow) {
+    return (
+      <Page title="New run" detail={confirmedWorkflow.manifest.label} back="Back to workflows">
+        <Text wrap="wrap">{sanitizeTerminalText(confirmedWorkflow.manifest.description)}</Text>
+        <Box marginTop={1} flexDirection="column">
+          <Text color="yellow">Configuration is not available in this build.</Text>
+          <Text>The workflow has not been started.</Text>
+        </Box>
+      </Page>
+    );
+  }
+
   return (
-    <Box flexDirection="column">
-      <Text bold>New run</Text>
-      {confirmedWorkflow ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text color={mutedColor}>Selected workflow</Text>
-          <Text bold>{sanitizeTerminalText(confirmedWorkflow.manifest.label)}</Text>
-          <Text wrap="wrap">
-            {sanitizeTerminalText(confirmedWorkflow.manifest.description)}
-          </Text>
-          <Box marginTop={1} flexDirection="column">
-            <Text color="yellow">Configuration is not available in this build.</Text>
-            <Text>The workflow has not been started.</Text>
-            <Text color={mutedColor}>Esc — Back to workflows</Text>
-          </Box>
-        </Box>
-      ) : (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold underline>Select a workflow</Text>
-          <WorkflowSelector
-            selection={selection}
-            onBack={onBack}
-            onSelect={workflow => {
-              setConfirmedWorkflow(workflow);
-              onSelectedWorkflowIdChange(workflow.manifest.id);
-            }}
-            inputActive={inputActive}
-          />
-        </Box>
-      )}
-    </Box>
+    <WorkflowSelector
+      title="New run"
+      selection={selection}
+      onBack={onBack}
+      onSelect={workflow => {
+        setConfirmedWorkflow(workflow);
+        onSelectedWorkflowIdChange(workflow.manifest.id);
+      }}
+      inputActive={inputActive}
+    />
   );
 }

@@ -17,7 +17,11 @@ import {
 } from './commands/definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {NewRunScreen} from '../new-run-screen/screen.js';
-import {NcbiAccessScreen} from '../ncbi-access-screen/screen.js';
+import {AccessionsScreen} from '../accessions-screen/screen.js';
+import {fetchAssemblyMetadata, type AssemblyMetadataFetcher} from '../../accessions/ncbi-metadata.js';
+import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
+import type {AccessionCatalogLoader, AccessionCatalogUpdater} from '../../accessions/registration.js';
+import type {CacheScanner} from '../../accessions/cache-discovery.js';
 import {
   IsolatesScreen,
   type IsolateCatalogLoader,
@@ -28,14 +32,23 @@ import {checkReadPairs, type ReadPairsChecker} from '../../isolates/reads.js';
 import {OpenRunScreen, type RunDiscovery} from '../open-run-screen/screen.js';
 import {ToolingScreen} from '../tooling-screen/screen.js';
 import type {WorkflowDiscovery} from '../components/workflow-selector.js';
-import {clearNcbiApiKey, isNcbiApiKeyConfigured, writeNcbiApiKey} from '../../tooling/ncbi-api-key.js';
+import {
+  clearNcbiApiKey,
+  isNcbiApiKeyConfigured,
+  readNcbiApiKey,
+  writeNcbiApiKey,
+} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import {ToolingSection} from './tooling/section.js';
 import {useConfirmedExit} from './hooks/use-confirmed-exit.js';
 import {useTooling} from './tooling/use-tooling.js';
 import {checkForUpdate, type UpdateAvailability} from '../../self-update.js';
 import {mutedColor} from '../theme.js';
-import {HomeSuspensionContext, useHomeSuspensions} from '../home-navigation.js';
+import {
+  HomeSuspensionContext,
+  HomeSuspensionStateContext,
+  useHomeSuspensions,
+} from '../home-navigation.js';
 
 export type CliMetadata = {
   packageName: string;
@@ -71,6 +84,11 @@ export function WelcomeScreen({
   loadIsolates,
   updateIsolates,
   checkIsolateReads = checkReadPairs,
+  accessionCatalogPath = resolveToolingPaths().accessionCatalogPath,
+  loadAccessions,
+  updateAccessions,
+  fetchAccessionMetadata,
+  scanAccessionCaches,
   updateCheck,
 }: {
   metadata: CliMetadata;
@@ -93,6 +111,11 @@ export function WelcomeScreen({
   loadIsolates?: IsolateCatalogLoader;
   updateIsolates?: IsolateCatalogUpdater;
   checkIsolateReads?: ReadPairsChecker;
+  accessionCatalogPath?: string;
+  loadAccessions?: AccessionCatalogLoader;
+  updateAccessions?: AccessionCatalogUpdater;
+  fetchAccessionMetadata?: AssemblyMetadataFetcher;
+  scanAccessionCaches?: CacheScanner;
   updateCheck?: (signal?: AbortSignal) => Promise<UpdateAvailability>;
 }): React.JSX.Element {
   const {exit} = useApp();
@@ -114,6 +137,19 @@ export function WelcomeScreen({
   const updateIsolatesAtPath = useCallback<IsolateCatalogUpdater>(
     (revision, mutate) => updateIsolateCatalog(isolateCatalogPath, revision, mutate),
     [isolateCatalogPath],
+  );
+  const loadAccessionsFromPath = useCallback(
+    () => loadAccessionCatalog(accessionCatalogPath),
+    [accessionCatalogPath],
+  );
+  const updateAccessionsAtPath = useCallback<AccessionCatalogUpdater>(
+    (revision, mutate) => updateAccessionCatalog(accessionCatalogPath, revision, mutate),
+    [accessionCatalogPath],
+  );
+  // The optional key is read for every lookup, so a key saved in this session applies at once.
+  const fetchMetadataWithStoredKey = useCallback<AssemblyMetadataFetcher>(
+    async accession => fetchAssemblyMetadata(accession, {apiKey: await readNcbiApiKey(ncbiApiKeyPath)}),
+    [ncbiApiKeyPath],
   );
 
   useEffect(() => {
@@ -152,7 +188,7 @@ export function WelcomeScreen({
       case 'new-run':
       case 'open-run':
       case 'manage-isolates':
-      case 'ncbi-access':
+      case 'manage-accessions':
         setCommandMessage(undefined);
         tooling.clearCheckMessage();
         setActiveScreenId(id);
@@ -197,7 +233,7 @@ export function WelcomeScreen({
       case 'new-run':
       case 'open-run':
       case 'manage-isolates':
-      case 'ncbi-access':
+      case 'manage-accessions':
       case 'check-tooling':
         return;
       default:
@@ -273,15 +309,21 @@ export function WelcomeScreen({
             checkReads={checkIsolateReads}
           />
         );
-      case 'ncbi-access':
+      case 'manage-accessions':
         return (
-          <NcbiAccessScreen
+          <AccessionsScreen
             onBack={() => setActiveScreenId(undefined)}
             inputActive={columns >= minimumTerminalWidth}
-            checkConfigured={checkNcbiApiKeyConfigured}
-            saveKey={saveNcbiApiKey}
-            clearKey={clearStoredNcbiApiKey}
-            keyPath={ncbiApiKeyPath}
+            currentDirectory={currentDirectory}
+            catalogPath={accessionCatalogPath}
+            loadCatalog={loadAccessions ?? loadAccessionsFromPath}
+            updateCatalog={updateAccessions ?? updateAccessionsAtPath}
+            fetchMetadata={fetchAccessionMetadata ?? fetchMetadataWithStoredKey}
+            scanCaches={scanAccessionCaches}
+            checkApiKeyConfigured={checkNcbiApiKeyConfigured}
+            saveApiKey={saveNcbiApiKey}
+            clearApiKey={clearStoredNcbiApiKey}
+            apiKeyPath={ncbiApiKeyPath}
           />
         );
       case 'check-tooling':
@@ -350,16 +392,13 @@ export function WelcomeScreen({
         flexDirection="column"
       >
         <HomeSuspensionContext.Provider value={suspendHome}>
-          {renderActiveScreen()}
+          <HomeSuspensionStateContext.Provider value={homeSuspension}>
+            {renderActiveScreen()}
+          </HomeSuspensionStateContext.Provider>
         </HomeSuspensionContext.Provider>
       </Box>
 
       <Box marginTop={1} flexDirection="column">
-        {activeScreenId && homeSuspension !== 'typing' ? (
-          <Text color={mutedColor}>
-            {homeSuspension === 'busy' ? 'h — Home, once the current work finishes' : 'h — Home'}
-          </Text>
-        ) : null}
         <Text color={showConfirmation ? 'yellow' : undefined}>
           {showConfirmation ? 'Press Ctrl+C again to exit.' : 'Press Ctrl+C twice to exit.'}
         </Text>

@@ -2,6 +2,7 @@ import React, {useLayoutEffect, useRef, useState} from 'react';
 import {Box, measureElement, Text, useInput, useWindowSize, type DOMElement} from 'ink';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
+import {Page} from './page.js';
 import {Table} from './table.js';
 
 export type HelpValue = {value: string; explanation?: string};
@@ -60,23 +61,13 @@ function HelpEntryView({entry}: {entry: HelpEntry}): React.JSX.Element {
   );
 }
 
-/** Scroll content of a help page; the hosting screen owns scrolling and input. */
-export function HelpContent({
-  title,
-  intro,
-  sections,
-}: {
-  title: string;
-  intro: string;
-  sections: readonly HelpSection[];
-}): React.JSX.Element {
+/** Scroll content of a help page; the hosting page owns its title, scrolling, and input. */
+export function HelpContent({sections}: {sections: readonly HelpSection[]}): React.JSX.Element {
   return (
     <Box flexDirection="column">
-      <Text bold>{title}</Text>
-      <Text wrap="wrap" color={mutedColor}>{intro}</Text>
       {sections.map(section => (
         <Box key={section.id} marginTop={1} flexDirection="column" flexShrink={0}>
-          <Text bold underline>{section.title}</Text>
+          <Text bold>{section.title}</Text>
           {section.entries.map(entry => <HelpEntryView key={entry.id} entry={entry} />)}
         </Box>
       ))}
@@ -105,7 +96,8 @@ export function HelpPage({
   const contentRef = useRef<DOMElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
-  const visibleRows = Math.max(5, rows - 3);
+  // The page title, intro, and shortcut line take the remaining rows.
+  const visibleRows = Math.max(5, rows - 8);
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
   const effectiveScrollOffset = Math.min(scrollOffset, maximumScrollOffset);
 
@@ -137,19 +129,21 @@ export function HelpPage({
   );
 
   return (
-    <Box flexDirection="column">
+    <Page
+      title={title}
+      description={intro}
+      shortcuts={[maximumScrollOffset > 0 && '↑/↓ — Scroll · PageUp/PageDown (or fn + ↑/↓) — Page', '? — Close help']}
+      back="Close help"
+    >
       <Box
         height={contentHeight === 0 ? undefined : visibleRows}
         overflow={contentHeight === 0 ? 'visible' : 'hidden'}
         flexDirection="column"
       >
         <Box ref={contentRef} marginTop={-effectiveScrollOffset} flexDirection="column" flexShrink={0}>
-          <HelpContent title={title} intro={intro} sections={sections} />
+          <HelpContent sections={sections} />
         </Box>
       </Box>
-      <Text color={mutedColor}>
-        {maximumScrollOffset > 0 ? '↑/↓ — Scroll · PageUp/PageDown (or fn + ↑/↓) — Page · ' : ''}Esc or ? — Close help
-      </Text>
-    </Box>
+    </Page>
   );
 }

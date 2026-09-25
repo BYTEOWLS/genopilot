@@ -3,6 +3,9 @@ import {access, mkdir, readdir, readFile, rmdir, stat, writeFile} from 'node:fs/
 import {constants} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {stringify} from 'yaml';
+import {normalizeAccession} from '../../accessions/accession.js';
+import {conflictingCopiesMessage, recordedCacheState} from '../../accessions/catalog.js';
+import {readCatalogedAccessions, type AccessionCatalogReader} from '../../accessions/store.js';
 import {formatCompactUtcTimestamp} from '../timestamps.js';
 import {
   ANNOTATION_TRANSFER_CONFIGURATION_SCHEMA_VERSION,
@@ -139,7 +142,7 @@ export function buildAnnotationTransferConfiguration(
         draft.referenceSource === 'ncbi'
           ? {
               source: 'ncbi',
-              accession: draft.referenceAccession.trim(),
+              accession: normalizeAccession(draft.referenceAccession),
               ncbi_cache_mode: 'reuse',
             }
           : {
@@ -151,7 +154,7 @@ export function buildAnnotationTransferConfiguration(
         draft.targetSource === 'ncbi'
           ? {
               source: 'ncbi',
-              accession: draft.targetAccession.trim(),
+              accession: normalizeAccession(draft.targetAccession),
               ncbi_cache_mode: 'reuse',
             }
           : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.targetFasta)},
@@ -304,9 +307,24 @@ export async function discoverAnnotationTransferRuns(
 export async function validatePreparedRunPaths(
   prepared: PreparedAnnotationTransferRun,
   inspectPath: PathInspection = stat,
+  readAccessions: AccessionCatalogReader = readCatalogedAccessions,
 ): Promise<void> {
   const issues: ConfigurationValidationIssue[] = [];
   const {reference, target} = prepared.configuration.inputs;
+  const ncbiInputs = [['$.inputs.reference.accession', reference], ['$.inputs.target.accession', target]] as const;
+  if (ncbiInputs.some(([, input]) => input.source === 'ncbi')) {
+    // The catalog is optional bookkeeping: an unreadable one does not block a run, and its accession
+    // field already says it is unavailable.
+    const cataloged = await readAccessions().catch(() => []);
+    for (const [path, input] of ncbiInputs) {
+      const entry = input.source === 'ncbi'
+        ? cataloged.find(candidate => candidate.accession === input.accession)
+        : undefined;
+      if (entry && recordedCacheState(entry) === 'conflict') {
+        issues.push({path, message: conflictingCopiesMessage});
+      }
+    }
+  }
   const localFileChecks: Array<readonly [string, string]> = [];
   if (reference.source === 'local') {
     localFileChecks.push(

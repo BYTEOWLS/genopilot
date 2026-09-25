@@ -11,6 +11,7 @@ import {
   discoverWorkflowRuns,
   type DiscoveredRun,
 } from '../../workflows/run-discovery.js';
+import {Page} from '../components/page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {RunResultsScreen} from '../run-results-screen/screen.js';
 import {formatLocalDateTime} from '../utils.js';
@@ -203,27 +204,24 @@ export function OpenRunScreen({
 
   if (!selectedWorkflow) {
     return (
-      <Box flexDirection="column">
-        <Text bold underline>Open existing run</Text>
-        <WorkflowSelector
-          selection={workflowSelection}
-          onBack={onBack}
-          onSelect={workflow => void openWorkflow(workflow)}
-          inputActive={inputActive}
-        />
-      </Box>
+      <WorkflowSelector
+        title="Open existing run"
+        selection={workflowSelection}
+        onBack={onBack}
+        onSelect={workflow => void openWorkflow(workflow)}
+        inputActive={inputActive}
+      />
     );
   }
 
   return (
-    <Box flexDirection="column">
-      <Text bold underline>Open existing run</Text>
-      <Box marginTop={1} flexDirection="column" marginBottom={1}>
-        <Text>
-          Workflow: {sanitizeTerminalText(selectedWorkflow.manifest.label)}
-        </Text>
-        <Text color={mutedColor}>Run directory: {sanitizeTerminalText(collectionRoot)}</Text>
-      </Box>
+    <Page
+      title="Open existing run"
+      detail={selectedWorkflow.manifest.label}
+      description={`Run directory: ${sanitizeTerminalText(collectionRoot)}`}
+      shortcuts={['↑/↓ — Select', 'Enter — Open results', 'd — Delete']}
+      back="Back to workflows"
+    >
 
       {runState?.state === 'loading' && (
           <Text>Discovering runs…</Text>
@@ -288,7 +286,6 @@ export function OpenRunScreen({
       {runState?.state === 'ready' && runState.runs.length > visibleRunCount && (
         <Text color={mutedColor}>{runIndex + 1} of {runState.runs.length}</Text>
       )}
-      <Text color={mutedColor}>↑/↓ — Select · Enter — Open results · d — Delete · Esc — Back to workflows</Text>
-    </Box>
+    </Page>
   );
 }

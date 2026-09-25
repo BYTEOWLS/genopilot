@@ -67,6 +67,7 @@ function Harness({
   const selection = useWorkflowSelection(discoverWorkflows, preferredWorkflowId);
   return (
     <WorkflowSelector
+      title="Choose"
       selection={selection}
       selectHint="Continue"
       onSelect={onSelect}

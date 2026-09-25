@@ -2,8 +2,8 @@ import React, {useEffect, useRef, useState} from 'react';
 import {Alert} from '@inkjs/ui';
 import {Box, Text, useInput} from 'ink';
 import type {DiscoveredWorkflow} from '../../workflows/discovery.js';
+import {Page} from './page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import {mutedColor} from '../theme.js';
 
 export type WorkflowDiscovery = () => Promise<DiscoveredWorkflow[]>;
 
@@ -81,12 +81,14 @@ function moveWorkflowSelection(
 
 /** Lists discovered workflows as selectable cards and reports the chosen one. */
 export function WorkflowSelector({
+  title,
   selection,
   onSelect,
   onBack,
   selectHint,
   inputActive = true,
 }: {
+  title: string;
   selection: WorkflowSelection;
   onSelect: (workflow: DiscoveredWorkflow) => void;
   onBack: () => void;
@@ -127,7 +129,11 @@ export function WorkflowSelector({
   const selectable = discovery.state === 'ready' && discovery.workflows.length > 0;
 
   return (
-    <Box flexDirection="column">
+    <Page
+      title={title}
+      description="Select a workflow."
+      shortcuts={selectable ? ['↑/↓ — Select', `Enter — ${selectHint ?? 'Continue'}`] : []}
+    >
       {discovery.state === 'loading' ? <Text>Discovering workflows…</Text> : null}
       {discovery.state === 'failed' ? (
         <Alert variant="error" title="Workflow discovery failed.">
@@ -155,11 +161,6 @@ export function WorkflowSelector({
           </Box>
         );
       }) : null}
-      <Box marginTop={1}>
-        <Text color={mutedColor}>
-          {selectable ? `↑/↓ — Select · Enter — ${selectHint ?? 'Continue'} · ` : ''}Esc — Back
-        </Text>
-      </Box>
-    </Box>
+    </Page>
   );
 }

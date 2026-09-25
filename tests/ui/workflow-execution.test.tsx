@@ -9,6 +9,7 @@ import {render} from 'ink';
 import {
   WorkflowExecutionScreen,
   type WorkflowRun,
+  type RunFollowUp,
   type WorkflowRunResult,
   type WorkflowResultHandoff,
 } from '../../src/ui/new-run-screen/workflow-execution.js';
@@ -113,6 +114,7 @@ function renderExecution(
   rows?: number,
   resultHandoff?: WorkflowResultHandoff,
   onHomeSuspension?: (suspension: HomeSuspension | undefined) => void,
+  onSucceeded?: () => RunFollowUp | undefined,
 ): {input: TestInput; output: TestOutput; instance: ReturnType<typeof render>} {
   const input = new TestInput();
   const output = new TestOutput();
@@ -136,6 +138,7 @@ function renderExecution(
       inputActive
       stages={stages}
       resultHandoff={resultHandoff}
+      onSucceeded={onSucceeded}
     />
     </HomeSuspensionContext.Provider>,
     {
@@ -491,4 +494,126 @@ test('suspends the home shortcut while the workflow runs', async context => {
   releaseRun();
   await waitUntil(() => suspensions.length === 2, 'the finished workflow releases the shortcut');
   assert.deepEqual(suspensions, ['busy', undefined]);
+});
+
+// The follow-up tests observe the injected runner and follow-up callbacks and the notes they
+// supply, never the screen's own wording.
+
+/** Selects a start mode by its injected command and starts it. */
+async function startMode(input: TestInput, output: TestOutput, mode: 'dry-run' | 'execute'): Promise<void> {
+  await waitForOutput(output, value => value.includes('/managed/snakemake --dry-run'));
+  if (mode === 'execute') {
+    output.clearOutput();
+    input.write(ARROW_DOWN);
+    await waitForOutput(output, value => value.includes('/managed/snakemake') && !value.includes('--dry-run'));
+  }
+  input.write(ENTER);
+}
+
+test('runs the success follow-up only after a successful execution', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const modes: string[] = [];
+  let followUps = 0;
+  const {input, output, instance} = renderExecution(
+    join(root, 'events.jsonl'),
+    async run => {
+      modes.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+    undefined,
+    undefined,
+    undefined,
+    () => {
+      followUps += 1;
+      return {label: 'Test follow-up running', outcome: Promise.resolve('Test follow-up note')};
+    },
+  );
+  context.after(() => instance.unmount());
+
+  await startMode(input, output, 'dry-run');
+  await waitUntil(() => modes.length === 1, 'the dry run finishes');
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  assert.equal(followUps, 0);
+
+  // Leaving a finished dry run preselects the execution in the start options.
+  output.clearOutput();
+  input.write(ESCAPE);
+  await waitForOutput(output, value => value.includes('/managed/snakemake'));
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  input.write(ENTER);
+  await waitForOutput(output, value => value.includes('Test follow-up note'));
+  assert.deepEqual(modes, ['dry-run', 'execute']);
+  assert.equal(followUps, 1);
+});
+
+test('shows the finished run while its follow-up is still running', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  let finishFollowUp = (_note: string): void => {};
+  const {input, output, instance} = renderExecution(
+    join(root, 'events.jsonl'),
+    async run => ({...run, exitCode: 0}),
+    undefined,
+    undefined,
+    undefined,
+    () => ({
+      label: 'Test follow-up running',
+      outcome: new Promise<string>(resolve => {
+        finishFollowUp = resolve;
+      }),
+    }),
+  );
+  context.after(() => instance.unmount());
+
+  await startMode(input, output, 'execute');
+  // The follow-up's label only appears on the finished screen, so the run is shown as finished.
+  await waitForOutput(output, value => value.includes('Test follow-up running'));
+
+  finishFollowUp('Test follow-up note');
+  await waitForOutput(output, value => value.includes('Test follow-up note'));
+});
+
+test('shows a failed follow-up without changing the run', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const {input, output, instance} = renderExecution(
+    join(root, 'events.jsonl'),
+    async run => ({...run, exitCode: 0}),
+    undefined,
+    undefined,
+    undefined,
+    () => ({label: 'Test follow-up running', outcome: Promise.reject(new Error('test follow-up failure'))}),
+  );
+  context.after(() => instance.unmount());
+
+  await startMode(input, output, 'execute');
+  await waitForOutput(output, value => value.includes('test follow-up failure'));
+});
+
+test('skips the success follow-up when the execution fails', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  let executed = false;
+  let followUps = 0;
+  const {input, output, instance} = renderExecution(
+    join(root, 'events.jsonl'),
+    async run => {
+      executed = true;
+      return {...run, exitCode: 1};
+    },
+    undefined,
+    undefined,
+    undefined,
+    () => {
+      followUps += 1;
+      return undefined;
+    },
+  );
+  context.after(() => instance.unmount());
+
+  await startMode(input, output, 'execute');
+  await waitUntil(() => executed, 'the execution finishes');
+  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  assert.equal(followUps, 0);
 });

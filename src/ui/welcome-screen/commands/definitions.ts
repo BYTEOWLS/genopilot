@@ -3,37 +3,18 @@ export type CommandGroup = 'primary' | 'secondary';
 export type CommandDefinition<Id extends string = string> = {
   id: Id;
   label: string;
-  description: string;
+  /** A short hint, only where the label alone does not say what the command does. */
+  description?: string;
   group: CommandGroup;
 };
 
 export const welcomeCommands = [
-  {id: 'new-run', label: 'New run', description: 'Start a new workflow run', group: 'primary'},
-  {
-    id: 'open-run',
-    label: 'Open existing run',
-    description: 'Resume, continue, rerun, or present a run',
-    group: 'primary',
-  },
-  {id: 'help', label: 'Help', description: 'Show usage information', group: 'primary'},
-  {
-    id: 'manage-isolates',
-    label: 'Manage isolates',
-    description: 'Create, edit, and reuse isolate metadata',
-    group: 'secondary',
-  },
-  {
-    id: 'ncbi-access',
-    label: 'Manage NCBI accessions',
-    description: 'Inspect cached accessions and configure the optional NCBI Datasets API key',
-    group: 'secondary',
-  },
-  {
-    id: 'check-tooling',
-    label: 'Manage tooling',
-    description: 'Inspect the workflow runtime',
-    group: 'secondary',
-  },
+  {id: 'new-run', label: 'New run', description: 'Configure and start a workflow', group: 'primary'},
+  {id: 'open-run', label: 'Open existing run', description: 'View results or delete a run', group: 'primary'},
+  {id: 'help', label: 'Help', group: 'primary'},
+  {id: 'manage-isolates', label: 'Manage isolates', group: 'secondary'},
+  {id: 'manage-accessions', label: 'Manage NCBI accessions', group: 'secondary'},
+  {id: 'check-tooling', label: 'Manage tooling', group: 'secondary'},
 ] as const satisfies readonly CommandDefinition[];
 
 export type WelcomeCommandId = (typeof welcomeCommands)[number]['id'];
