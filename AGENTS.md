@@ -12,7 +12,7 @@ Keep the package independent of private research data, machine-specific paths, a
 - `workflows/` — packaged Snakemake assets, one directory per workflow with its entry Snakefile, manifest, and parameter definitions. `reference-consensus/` also holds its own `rules/*.smk`, `scripts/*.py`, and `envs/<name>/environment.yaml`; `shared/` holds annotation-transfer's rules, scripts, and environments together with what both workflows use, including `logging/` (the Snakemake logger plugin that records structured run events).
 - `tests/` — TypeScript application tests plus Python tests for the shared rules, their scripts, and direct-Snakemake execution.
 - `tests/fixtures/` — small synthetic, redistributable FASTA/GFF3 fixtures with known expected results.
-- [`tasks.md`](tasks.md) — pending work as checkboxes, in execution order.
+- [`resources/tasks.md`](resources/tasks.md) — open work as checkboxes, in execution order.
 - [`later.md`](later.md) — deferred and optional ideas.
 - `resources/concepts/` — design notes; `done/` holds implemented designs.
 
@@ -83,7 +83,7 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Keep user and developer documentation in [`README.md`](README.md) and package changes in [`CHANGELOG.md`](CHANGELOG.md).
 - Do not document TUI usage (screens, keys, navigation) in the README; the in-app help page covers it.
 - When changing a pinned tool version in `src/tooling/policy.ts` or a `workflows/*/envs/` directory, update the version tables under *Tooling policy* in the README in the same change.
-- Track pending work as concise checkboxes in [`tasks.md`](tasks.md). Keep rationale in design documentation rather than the task list.
+- Track open work as concise checkboxes in [`resources/tasks.md`](resources/tasks.md), linking to a concept instead of repeating its checklist, and remove items once done. Keep rationale in design documentation rather than the task list.
 - Use pnpm to build and pack locally, and npm for global test installation.
 - Ensure packed artifacts contain the compiled CLI, packaged workflows, and package documentation, but not source data, private files, tests, or development-only configuration.
 

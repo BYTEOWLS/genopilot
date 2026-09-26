@@ -1,6 +1,6 @@
 # Deferred and optional work
 
-Ideas that are intentionally outside the current task list in [`tasks.md`](tasks.md). Revisit them when a concrete requirement exists.
+Ideas that are intentionally outside the current task list in [`resources/tasks.md`](resources/tasks.md). Revisit them when a concrete requirement exists.
 
 ## Comparing LiftOn GFF3 files
 
@@ -430,6 +430,8 @@ sources:
 Never define a reproducible merge as whichever datasets currently carry a label.
 
 ## Advanced comparative genomics
+
+A comparison workflow needs its own concept first. Its first contract should define only the compatibility fields needed to compare two runs (input checksums, workflow and tool versions, effective scientific parameters, and standardized metrics) and then add its manifest; browser visualization is deferred.
 
 The first comparison remains intentionally small. Possible later analyses include:
 

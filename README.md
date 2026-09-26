@@ -190,7 +190,7 @@ CI skips these tests, so run them before merging any change to a `workflows/*/en
 
 Windows support through WSL2 is planned after the core Linux and macOS implementation is complete. Native Windows execution is out of scope.
 
-Tool version validation, actionable per-tool failure diagnostics, guided installation, stale-lock recovery, and manual rechecks are implemented. Repair tooling remains tracked in [`tasks.md`](tasks.md).
+Tool version validation, actionable per-tool failure diagnostics, guided installation, stale-lock recovery, and manual rechecks are implemented. A repair path for broken installations is deferred in [`later.md`](later.md).
 
 ## Isolate catalog
 

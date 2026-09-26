@@ -4,7 +4,7 @@
 
 This document records how annotation-transfer results are produced and presented: the persisted contracts, the design decisions, and the implemented slices. All planned slices are implemented; it is kept for reference.
 
-Code and file paths below are relative to the repository root. Remaining work is tracked in [`tasks.md`](../../../tasks.md).
+Code and file paths below are relative to the repository root. Remaining work is tracked in [`resources/tasks.md`](../../tasks.md).
 
 ## Design dogma
 
