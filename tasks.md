@@ -1,6 +1,6 @@
 # Tasks
 
-The annotation-transfer design is recorded in [`resources/concepts/done/annotation-transfer-workflow.md`](resources/concepts/done/annotation-transfer-workflow.md) and its results in [`resources/concepts/done/annotation-transfer-results.md`](resources/concepts/done/annotation-transfer-results.md). Ordered consensus work is indexed in [`resources/concepts/consensus/README.md`](resources/concepts/consensus/README.md); comparison and downstream workflows will receive separate plans when their contracts are discussed.
+The annotation-transfer design is recorded in [`resources/concepts/done/annotation-transfer-workflow.md`](resources/concepts/done/annotation-transfer-workflow.md) and its results in [`resources/concepts/done/annotation-transfer-results.md`](resources/concepts/done/annotation-transfer-results.md). Ordered consensus work is indexed in [`resources/concepts/consensus/README.md`](resources/concepts/consensus/README.md); NCBI submission preparation is planned in [`resources/concepts/ncbi-submission/README.md`](resources/concepts/ncbi-submission/README.md) and depends on [`resources/concepts/annotation-id-rewriting.md`](resources/concepts/annotation-id-rewriting.md); comparison and other downstream workflows will receive separate plans when their contracts are discussed.
 
 ## Definition of done
 
@@ -119,7 +119,8 @@ Cancellation is deferred to [`later.md`](later.md) "Workflow cancellation".
 
 ## Later workflow capabilities
 
-- [ ] Replace or extend provisional prefix-only annotation-ID rewriting with a reviewed regular-expression search-and-replacement step after raw LiftOn output, including previews, collision checks, provenance, and distinct raw/final IDs in reports.
+- [ ] Replace or extend provisional prefix-only annotation-ID rewriting with a reviewed regular-expression search-and-replacement step after raw LiftOn output, including previews, collision checks, provenance, and distinct raw/final IDs in reports ([concept](resources/concepts/annotation-id-rewriting.md)); required before NCBI submission preparation.
+- [ ] Prepare NCBI submission packages ([concept](resources/concepts/ncbi-submission/README.md)).
 - [ ] Evaluate advanced LiftOn controls only if baseline results demonstrate a need, including alignment coverage, sequence identity, extra-copy search, feature-type selection, and chromosome correspondence.
 - [ ] Add a manifest for the comparison workflow when its contract is ready; the consensus manifest exists (consensus Task 3).
 - [x] Implement isolate creation, editing, and lineage metadata management.

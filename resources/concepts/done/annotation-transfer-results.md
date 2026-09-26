@@ -220,7 +220,7 @@ Slice 2 makes the explicit contract that structural validation failure leaves Sn
 
 The current prefix-only rewrite is provisional. Do not extend it during result-page work.
 
-The later redesign is documented in [`later.md`](../../../later.md) under **Post-LiftOn identifier rewriting**. It should support a reviewed regular-expression search-and-replacement step after preserving raw LiftOn output, with previews, collision checks, provenance, and distinct raw/final IDs.
+The later redesign is documented in [Post-LiftOn identifier rewriting](../annotation-id-rewriting.md). It should support a reviewed regular-expression search-and-replacement step after preserving raw LiftOn output, with previews, collision checks, provenance, and distinct raw/final IDs.
 
 Until then:
 

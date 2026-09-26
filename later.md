@@ -2,22 +2,6 @@
 
 Ideas that are intentionally outside the current task list in [`tasks.md`](tasks.md). Revisit them when a concrete requirement exists.
 
-## Post-LiftOn identifier rewriting
-
-The current prefix-only identifier transformation is provisional. A fixed prefix is not sufficient for all source identifier schemes, and result tables cannot reliably expose final identifiers until the transformation contract is reconsidered.
-
-A later design should replace or extend prefixing with a deterministic, researcher-reviewed regular-expression search-and-replacement step after LiftOn has produced and preserved its raw GFF3. It must:
-
-- preserve the raw LiftOn GFF3 unchanged;
-- preview affected `ID`, `Parent`, and `Derives_from` values before execution;
-- record the regular expression, replacement, and affected identifiers;
-- reject collisions, broken parent references, and invalid resulting IDs;
-- distinguish raw LiftOn IDs from rewritten final IDs in reports;
-- rerun only rewriting, validation, summaries, and dependent stages when the expression changes;
-- remain separate from NCBI locus-tag-prefix requirements.
-
-Do not generalize the current implementation until representative identifier schemes demonstrate the required matching and replacement behavior.
-
 ## Comparing LiftOn GFF3 files
 
 LiftOn outputs for two assemblies of the same genome, such as an initial assembly and a later consensus, are retained but do not require semantic comparison in the first implementation. A later comparison should match features by stable transformed IDs rather than line-by-line text comparison.
@@ -60,6 +44,14 @@ Revisit once the reference-consensus workflow is complete (consensus tasks 4a–
 Reference-consensus derives each read pair's read group from Illumina read headers (`@<instrument>:<run>:<flowcell>:<lane>:…`) and fails a pair whose headers do not follow that form. Reads downloaded from a public archive often lost those headers: `fasterq-dump` from the NCBI Sequence Read Archive renames them `@SRR1234567.1`, `@SRR1234567.2`, and so on, so flowcell, lane, and barcode are gone.
 
 Supporting such reads needs its own design: where the read group comes from (for example, the run accession and the archive's run metadata), how libraries are identified for duplicate marking, and how the substitute is recorded in provenance so it is never mistaken for header-derived evidence.
+
+## Open question: IUPAC codes in isolate FASTAs
+
+**Question:** Should an isolate's ambiguous positions be visible in a FASTA as IUPAC codes rather than only as `N`?
+
+Reference-consensus writes only `A`, `C`, `G`, `T`, and `N` into `results/isolates/{isolate}/consensus.fasta` (consensus Task 4.1). An ambiguous position (enough reads, but no allele reaching `min_allele_fraction`) and an uncallable position (too few reads) both become `N`, so the FASTA alone loses that distinction and the competing alleles: a biallelic SNP with `A=55%, G=45%` could be written as `R`. The run keeps this evidence in `all-sites.bcf` (per-allele depth) and `callable-mask.bed` (the reason for every `N`), and cohort aggregation reads those rather than the FASTA, so nothing is lost for voting. The gap only affects someone who uses the isolate FASTA on its own.
+
+Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. Making the representation a configuration option would change the saved configuration schema. Decide together with the IUPAC rendering of the cohort consensus in [Task 4.3](resources/concepts/consensus/4c-combined-consensus-generation.md).
 
 ## Advanced LiftOn controls
 
