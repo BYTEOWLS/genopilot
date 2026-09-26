@@ -179,7 +179,7 @@ rule mark_duplicates:
     conda:
         str(ENVS_DIR / "short-read-calling" / "environment.yaml")
     shell:
-        "python3 {SCRIPTS_DIR_SH}/mark_duplicates.py {params.args} --threads {threads} > {log} 2>&1"
+        "python3 {SCRIPTS_DIR_SH}/samtools_markdup_per_library.py {params.args} --threads {threads} > {log} 2>&1"
 
 
 rule alignment_metrics:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Derive one read pair's read group from its Illumina read names, and checksum it.
+"""Validate one read pair's read names and record counts, derive its read group, and checksum it.
 
 Only what the pipeline's tools do not check themselves happens here:
 
