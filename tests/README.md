@@ -1,7 +1,7 @@
 # Snakemake workflow tests
 
-Python tests for the reusable Snakemake rules and scripts under
-`workflows/shared/` live alongside the TypeScript application tests in this
+Python tests for the Snakemake rules and scripts under `workflows/shared/`
+and each workflow's own directory live alongside the TypeScript application tests in this
 directory; see [`../AGENTS.md`](../AGENTS.md). The Python and TypeScript test
 runners distinguish them by filename.
 

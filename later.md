@@ -52,8 +52,14 @@ review_status
 
 Revisit once the reference-consensus workflow is complete (consensus tasks 4a–4c), when two finished workflows show what is actually reused.
 
-- **Snakemake assets:** most of `workflows/shared/` belongs to one workflow. Only the run-events logger plugin, the `ncbi-datasets-cli` environment, `resolve_input.py`, and the FASTA/GFF3 parsers inside `validate_inputs.py` are used by both. Move the rest into each workflow's own `rules/`, `scripts/`, and `envs/`. Before moving `envs/lifton/`, change `collect_run_provenance.py`: it reads the pins of every environment next to it and rejects a package pinned to two different versions.
+- **Snakemake assets:** reference-consensus keeps its own rules, scripts, and environments under `workflows/reference-consensus/` (consensus Task 4.1). Annotation-transfer's still sit in `workflows/shared/` next to what both workflows use: the run-events logger plugin, the `ncbi-datasets-cli` environment, `resolve_input.py`, and the FASTA/GFF3 parsers inside `validate_inputs.py`. Move annotation-transfer's files into its own `rules/`, `scripts/`, and `envs/`. Before moving `envs/lifton/`, change `collect_run_provenance.py`: it reads the pins of every environment next to it and rejects a package pinned to two different versions.
 - **TypeScript:** each workflow has its own `src/workflows/<id>/configuration.ts` and `run-configuration.ts`, plus a configuration screen under `src/ui/new-run-screen/`, that map generic manifest parameters to and from `config.yaml`. Check which of these a manifest-driven mapping could replace, and keep only the workflow-specific parts, such as the isolate snapshot and the review details.
+
+## Reads without Illumina headers
+
+Reference-consensus derives each read pair's read group from Illumina read headers (`@<instrument>:<run>:<flowcell>:<lane>:…`) and fails a pair whose headers do not follow that form. Reads downloaded from a public archive often lost those headers: `fasterq-dump` from the NCBI Sequence Read Archive renames them `@SRR1234567.1`, `@SRR1234567.2`, and so on, so flowcell, lane, and barcode are gone.
+
+Supporting such reads needs its own design: where the read group comes from (for example, the run accession and the archive's run metadata), how libraries are identified for duplicate marking, and how the substitute is recorded in provenance so it is never mistaken for header-derived evidence.
 
 ## Advanced LiftOn controls
 

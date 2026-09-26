@@ -12,10 +12,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ..annotation_transfer._load import FIXTURES_DIR, PROJECT_ROOT
+from ..annotation_transfer._load import FIXTURES_DIR
+from ._load import WORKFLOW_DIR
 
 SNAKEMAKE_BIN = shutil.which("snakemake")
-WORKFLOW_DIR = PROJECT_ROOT / "workflows" / "reference-consensus"
 
 
 def write_run(run_dir: Path, reads_dir: Path) -> Path:

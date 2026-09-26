@@ -15,8 +15,9 @@ What it does
   in config.yaml; the rule never asks.
 
 Maintainer notes
-  Uses the same script as resolve_inputs.smk. Requires `SCRIPTS_DIR_SH` and
-  `ENVS_DIR` from the including Snakefile. The params functions take only
+  Uses the same shared script as annotation-transfer's resolve_inputs.smk.
+  Requires `SHARED_SCRIPTS_DIR_SH` and `SHARED_ENVS_DIR` from the including
+  Snakefile. The params functions take only
   `wildcards` and repeat this rule's paths as literals, so a
   configuration-only change such as switching the cache mode is recorded in
   Snakemake's job metadata and triggers a rerun.
@@ -72,6 +73,6 @@ rule resolve_backbone:
     params:
         args=_backbone_resolve_args,
     conda:
-        str(ENVS_DIR / "ncbi-datasets-cli" / "environment.yaml")
+        str(SHARED_ENVS_DIR / "ncbi-datasets-cli" / "environment.yaml")
     shell:
-        "python3 {SCRIPTS_DIR_SH}/resolve_input.py {params.args} > {log} 2>&1"
+        "python3 {SHARED_SCRIPTS_DIR_SH}/resolve_input.py {params.args} > {log} 2>&1"

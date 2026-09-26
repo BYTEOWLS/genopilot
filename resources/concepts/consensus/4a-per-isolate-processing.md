@@ -4,6 +4,26 @@
 
 Implement the first executable scientific target: independently validate and process every selected isolate against the resolved backbone, preserve auditable intermediate results, and make each validated isolate FASTA eligible for explicit promotion into its isolate catalog entry.
 
+## Kickoff decisions
+
+- **Toolchain.** fastp for read QC and light adapter trimming, `bwa mem` for alignment, samtools for fixmate, sorting, merging, duplicate marking, statistics, and FASTA indexes, and bcftools for calling, filtering, normalization, and the consensus. All four share one pinned environment, `workflows/reference-consensus/envs/short-read-calling/`, with exact versions that have bioconda builds for linux-64 and osx-arm64.
+- **Code layout.** Everything specific to this workflow — rules, scripts, and environments — lives under `workflows/reference-consensus/`. `workflows/shared/` keeps only what annotation-transfer uses too: the run-events logger, the `ncbi-datasets-cli` environment, `resolve_input.py`, the FASTA/GFF3 parsers, and the checksum and pin helpers of the provenance script.
+- **Parallelism and determinism.** Every rule declares its `threads`, and Snakemake runs read-pair and isolate jobs side by side up to the run's CPUs. `bwa mem -K` is fixed so alignments do not depend on the thread count. Runs use `--keep-going`, so a failing isolate is reported as a failed job while the others finish.
+- **Thresholds.** `min_mapping_quality` and `min_base_quality` become the `bcftools mpileup` read and base filters. `min_depth` counts the reads left after those filters and without duplicates (the sum of `FORMAT/AD`), and `min_allele_fraction` is the winning allele's share of them. Every other tool option, including mpileup's maximum depth and BAQ, fastp's adapter, length, and poly-G options, and the bwa batch size, is passed explicitly and recorded; none is left to a tool default.
+- **Duplicates** are marked, never removed, per library through the read group's `LB`, and ignored by the caller. A fixture with two libraries proves that marking stays within a library.
+- **Read groups.** `LB` is the Illumina sample name from the R1 file name (`<sample>_S<n>…`) plus the barcode, or the isolate ID when the file name does not follow that pattern; the source is recorded. The barcode is taken from the first record, and records whose barcode differs never reject a pair. A pair whose headers are not Illumina headers fails with a clear message; renamed public-archive reads are a separate feature in [`later.md`](../../../later.md).
+- **Callability** has three states, derived from an all-sites call that covers every position with reads:
+  - `callable`: at least `min_depth` reads and one allele reaching `min_allele_fraction`;
+  - `ambiguous`: enough reads but no winning allele, which in a haploid isolate points to contamination, a mixed culture, or collapsed paralogs;
+  - `uncallable`: too few usable reads, including positions without any coverage and repeats where reads map with low quality.
+
+  The callable mask is a BED file with this state per interval. An ambiguous indel marks its backbone span `ambiguous`. The indexed all-sites BCF is kept as the evidence behind every mask decision.
+- **Isolate FASTA.** Only `A`, `C`, `G`, `T`, and `N` occur: confident alleles replace the backbone, and ambiguous or uncallable positions become `N`. The FASTA keeps the backbone's sequence IDs, and the mask says why a position is `N`. IUPAC codes are left to cohort voting ([Task 4.3](4c-combined-consensus-generation.md)).
+- **Normalized VCF.** Variant records only, left-aligned against the backbone, each with `PASS` or a named filter (`LowDepth`, `LowAlleleFraction`) so no evidence is dropped. The consensus applies only `PASS` records.
+- **Promotion candidates** are written per isolate, after its FASTA is validated, so a failing isolate cannot block its siblings.
+- **Progress.** The run-events logger adds each job's wildcards, and the execution screen shows one progress bar per isolate.
+- The configuration schema does not change.
+
 ## Pipeline
 
 For every selected isolate:

@@ -148,7 +148,7 @@ Dependabot proposes updates for the rule environments, npm, and GitHub Actions, 
 
 Every rule-environment bump changes:
 
-1. `workflows/shared/envs/<environment>/environment.yaml`: the pin itself. Run provenance reads its configured tool versions from these files, so nothing else records the version.
+1. `workflows/<shared or workflow>/envs/<environment>/environment.yaml`: the pin itself. Run provenance reads its configured tool versions from these files, so nothing else records the version.
 2. This README: the version table above.
 3. `CHANGELOG.md`: an entry under *Unreleased*.
 
@@ -166,7 +166,7 @@ Then run the full verification, including the per-rule Conda integration tests, 
 ```bash
 RUN_SNAKEMAKE_CONDA_INTEGRATION=1 python3 -m unittest discover -s tests -p "test_*.py"
 ```
-CI skips these tests, so run them before merging any change to `workflows/shared/envs/`, including Dependabot updates. Their expected coordinates on the synthetic fixtures detect changes in transfer results.
+CI skips these tests, so run them before merging any change to a `workflows/*/envs/` directory, including Dependabot updates. Their expected coordinates on the synthetic fixtures detect changes in transfer results.
 
 Windows support through WSL2 is planned after the core Linux and macOS implementation is complete. Native Windows execution is out of scope.
 

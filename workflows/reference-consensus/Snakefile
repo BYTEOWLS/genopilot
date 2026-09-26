@@ -8,10 +8,10 @@ cohort consensus.
 Steps, in the order they run (each is one rule; paths are inside the run
 directory, and every step writes its log to logs/):
 
-  1. resolve_backbone                            shared/rules/resolve_backbone.smk
+  1. resolve_backbone                            rules/resolve_backbone.smk
        Copy a local FASTA or download an NCBI accession, with a checksum.
        -> resolved/backbone.fasta
-  2. validate_run_inputs                         shared/rules/validate_run_inputs.smk
+  2. validate_run_inputs                         rules/validate_run_inputs.smk
        Check the backbone FASTA and that every read file can be read.
        -> results/input-validation.json
 
@@ -41,20 +41,25 @@ import yaml
 
 configfile: "config.yaml"
 
-# Packaged locations, relative to this Snakefile rather than the working directory.
+# Packaged locations, relative to this Snakefile rather than the working directory. This
+# workflow's own rules, scripts, and environments live next to it; shared/ holds only what
+# annotation-transfer uses too.
 WORKFLOW_DIR = Path(workflow.basedir)
-SHARED_DIR = WORKFLOW_DIR.parent / "shared"
-SCRIPTS_DIR = SHARED_DIR / "scripts"
-ENVS_DIR = SHARED_DIR / "envs"
+RULES_DIR = WORKFLOW_DIR / "rules"
+SCRIPTS_DIR = WORKFLOW_DIR / "scripts"
+ENVS_DIR = WORKFLOW_DIR / "envs"
 SCRIPTS_DIR_SH = shlex.quote(str(SCRIPTS_DIR))
+SHARED_DIR = WORKFLOW_DIR.parent / "shared"
+SHARED_ENVS_DIR = SHARED_DIR / "envs"
+SHARED_SCRIPTS_DIR_SH = shlex.quote(str(SHARED_DIR / "scripts"))
 
 # The selected isolates and their read files, from the run's isolates.yaml snapshot.
 with open(config["inputs"]["isolates_file"], encoding="utf-8") as _snapshot:
     ISOLATES = yaml.safe_load(_snapshot)["isolates"]
 
 # The steps, in the order they run; see the list at the top of this file.
-include: str(SHARED_DIR / "rules" / "resolve_backbone.smk")
-include: str(SHARED_DIR / "rules" / "validate_run_inputs.smk")
+include: str(RULES_DIR / "resolve_backbone.smk")
+include: str(RULES_DIR / "validate_run_inputs.smk")
 
 
 # The files a finished run must have. Asking for them makes Snakemake run every step above.
