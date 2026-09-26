@@ -14,6 +14,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 
 ## Application
 
+- [ ] Write the annotation-transfer README and show each workflow's documentation in the application ([concept](concepts/workflow-documentation.md)).
 - [ ] Replace the `Help` placeholder on the welcome screen with the in-app help page, and add non-interactive `--help` and `--version` output.
 - [ ] Add start and finish times, total and per-stage duration, and available resource metrics to the run results; status, creation time, effective CPUs, and validation counts are shown.
 - [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](../later.md#workflow-cancellation).
