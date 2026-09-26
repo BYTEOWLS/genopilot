@@ -139,8 +139,13 @@ The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downlo
 | minimap2 | 2.31 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
 | miniprot | 0.18 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
 | parasail-python | 1.3.4 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
-| Python | 3.11.16 | conda-forge | [`lifton`](workflows/shared/envs/lifton/environment.yaml), [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
+| Python | 3.11.16 | conda-forge | [`lifton`](workflows/shared/envs/lifton/environment.yaml), [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml), [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
 | NCBI Datasets CLI | 18.37.0 | conda-forge | [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
+| fastp | 1.3.7 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+| BWA | 0.7.19 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+| samtools | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+| BCFtools | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+| HTSlib | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
 
 Dependabot proposes updates for the rule environments, npm, and GitHub Actions, but it changes only the environment file. Runtime pins in `src/tooling/policy.ts` are updated manually, including the Pixi download checksums.
 

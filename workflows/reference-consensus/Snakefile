@@ -76,12 +76,22 @@ def read_pair_of(wildcards):
     return ISOLATES_BY_ID[wildcards.isolate]["read_pairs"][int(wildcards.pair) - 1]
 
 
+def pair_numbers(isolate_id):
+    """The 1-based numbers of an isolate's read pairs, in snapshot order."""
+    return range(1, len(ISOLATES_BY_ID[isolate_id]["read_pairs"]) + 1)
+
+
+def per_isolate(pattern):
+    """Expands an `{isolate}` path pattern over every selected isolate."""
+    return [pattern.format(isolate=isolate["id"]) for isolate in ISOLATES]
+
+
 def per_pair(pattern):
     """Expands a `{isolate}`/`{pair}` path pattern over every read pair of the snapshot."""
     return [
         pattern.format(isolate=isolate["id"], pair=number)
         for isolate in ISOLATES
-        for number in range(1, len(isolate["read_pairs"]) + 1)
+        for number in pair_numbers(isolate["id"])
     ]
 
 
@@ -89,6 +99,7 @@ def per_pair(pattern):
 include: str(RULES_DIR / "resolve_backbone.smk")
 include: str(RULES_DIR / "validate_run_inputs.smk")
 include: str(RULES_DIR / "validate_read_pair.smk")
+include: str(RULES_DIR / "align_reads.smk")
 
 
 # The files a finished run must have. Asking for them makes Snakemake run every step above.
@@ -97,3 +108,9 @@ rule all:
         "resolved/backbone.fasta",
         "results/input-validation.json",
         per_pair("results/isolates/{isolate}/pairs/{pair}/read-validation.json"),
+        per_pair("results/isolates/{isolate}/pairs/{pair}/fastp.json"),
+        per_isolate("results/isolates/{isolate}/alignment.bam"),
+        per_isolate("results/isolates/{isolate}/markdup.json"),
+        per_isolate("results/isolates/{isolate}/samtools-stats.txt"),
+        per_isolate("results/isolates/{isolate}/flagstat.json"),
+        per_isolate("results/isolates/{isolate}/coverage.tsv"),
