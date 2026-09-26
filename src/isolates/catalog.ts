@@ -112,7 +112,8 @@ function validateReadPair(
   }
 }
 
-function validateIsolate(
+/** Validates one isolate record on its own, as the catalog and a run's isolate snapshot store it. */
+export function validateIsolate(
   value: unknown,
   path: string,
   issues: IsolateCatalogValidationIssue[],

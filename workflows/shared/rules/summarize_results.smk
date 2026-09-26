@@ -1,8 +1,23 @@
-"""Collect the annotation-transfer detail table, metrics, and completion summary.
+"""Summarize the annotation transfer: per-feature table, metrics, and completion summary.
 
-The collector reads only structured GFF3/JSON/TSV evidence preserved by the
-workflow. It does not parse LiftOn or Snakemake console text. Requires
-`SCRIPTS_DIR_SH` and `ANNOTATION_GFF3` from the including Snakefile.
+What it does
+  Reports which reference features were transferred, where they landed on
+  the target, how LiftOn mapped them, their DNA and protein identity, and
+  their mutation classes, then aggregates these into metrics. Everything is
+  read from LiftOn's structured reports and the GFF3 files; console output
+  of LiftOn or Snakemake is never parsed.
+
+  Reads:  resolved/reference.gff3, results/annotation/lifton.raw.gff3, ANNOTATION_GFF3,
+          results/validation.json, results/annotation/lifton_output/
+  Writes: results/feature-transfer.tsv - one row per reference feature and target copy
+          results/metrics.json         - aggregated counts and fractions, each with its definition
+          results/summary.json         - versioned completion summary of the run, read by
+                                         GenoPilot's results screen
+
+Maintainer notes
+  Requires `SCRIPTS_DIR_SH` and `ANNOTATION_GFF3` from the including
+  Snakefile. The params function takes only `wildcards`; see
+  resolve_inputs.smk for why.
 """
 
 import shlex

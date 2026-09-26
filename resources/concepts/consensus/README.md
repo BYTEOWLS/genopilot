@@ -7,7 +7,7 @@ The first unticked item is the default next task unless its file states another 
 ## Agreed processing model
 
 1. Process every selected isolate independently and preserve its alignment, callable mask, normalized calls, metrics, and reference-guided FASTA.
-2. Combine callable isolate alleles with one vote from the T2T backbone into a per-position support table.
+2. Combine callable isolate alleles, and one vote from the T2T backbone unless the run turns it off, into a per-position support table.
 3. Produce a cohort consensus using the researcher-selected voting method: strict majority or plurality.
 4. Present ties and other unresolved evidence, save isolate-exclusion decisions, and rerun only aggregation and dependent outputs.
 
@@ -29,7 +29,7 @@ These are already implemented by the annotation-transfer work and should be reus
 - [x] 1. [Manage isolates](1-manage-isolates.md)
 - [x] 1b. [Import isolates from an Illumina delivery](1b-import-illumina-isolates.md)
 - [x] 2. [Manage accessions](2-manage-accessions.md)
-- [ ] 3. [Workflow configuration and review](3-workflow-configuration-and-review.md)
+- [x] 3. [Workflow configuration and review](3-workflow-configuration-and-review.md)
 - [ ] 4.1. [Per-isolate processing](4a-per-isolate-processing.md)
 - [ ] 4.2. [Cohort support aggregation](4b-cohort-support-aggregation.md)
 - [ ] 4.3. [Combined consensus generation](4c-combined-consensus-generation.md)

@@ -8,7 +8,7 @@ Combine the backbone and Task 4.1's per-isolate callable calls into a determinis
 
 At each relevant backbone position:
 
-- the backbone contributes one vote;
+- the backbone contributes one vote when `consensus.include_backbone_vote` is true, and none otherwise;
 - each selected isolate contributes one allele vote only when that position and call pass the configured callability filters;
 - an uncallable or filtered isolate contributes no vote;
 - an unchanged isolate contributes a backbone-allele vote only when the position is proven callable;
@@ -40,7 +40,7 @@ The initial table includes every isolate selected for analysis. Task 5 may suppl
 
 - [ ] Define the versioned support-table and summary schemas for SNPs, multiallelic sites, and normalized indels.
 - [ ] Implement callable reference-allele votes rather than treating missing VCF rows as evidence by themselves.
-- [ ] Add the one-vote backbone contribution explicitly to provenance and output.
+- [ ] Add the configured backbone contribution (one vote or none) explicitly to provenance and output.
 - [ ] Make aggregation deterministic across isolate ordering and repeated runs.
 - [ ] Emit ambiguity, callability, and allele-frequency summaries without selecting a winner.
 - [ ] Add synthetic tests for no-calls, low-quality calls, all-reference sites, multiallelic sites, normalized equivalent indels, competing indels, and one or many isolates.

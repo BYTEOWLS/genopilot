@@ -15,6 +15,11 @@ export type ParameterRow = {
   edit?: {defaultValue: string; placeholder?: string; onChange: (value: string) => void};
 };
 
+/** The label column's width for these rows, including the selection marker and a gap. */
+export function parameterLabelWidth(rows: readonly {label: string}[]): number {
+  return Math.max(...rows.map(row => row.label.length)) + 4;
+}
+
 /**
  * Parameters as one aligned list of labels and values. Editable rows show the selection marker and
  * become a text field while selected; the form owns the selection and all other keys.
@@ -23,12 +28,15 @@ export function ParameterList({
   rows,
   selectedId,
   inputActive,
+  labelWidth: sharedLabelWidth,
 }: {
   rows: readonly ParameterRow[];
   selectedId?: string;
   inputActive: boolean;
+  /** A width shared with other lists, so several lists on one page stay aligned. */
+  labelWidth?: number;
 }): React.JSX.Element {
-  const labelWidth = Math.max(...rows.map(row => row.label.length)) + 4;
+  const labelWidth = sharedLabelWidth ?? parameterLabelWidth(rows);
   return (
     <Box flexDirection="column">
       {rows.map(row => {

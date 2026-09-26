@@ -14,7 +14,7 @@
   <a href="https://www.npmjs.com/package/@byteowls/genopilot"><img src="https://img.shields.io/npm/v/@byteowls/genopilot?style=flat-square" alt="npm version" /></a>
 </p>
 
-The terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI. Linux and macOS are supported.
+The terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI, using a run configuration GenoPilot saved; the workflows do not validate edited configurations and must not be modified. Linux and macOS are supported.
 
 ## Installation
 
@@ -71,7 +71,10 @@ workflows/
 │   ├── manifest.yaml
 │   └── manifest.parameters.yaml
 ├── comparison/              Comparison workflow scaffold
-├── consensus/               Consensus workflow scaffold
+├── reference-consensus/     Cohort consensus: configuration, backbone resolution, input validation
+│   ├── Snakefile
+│   ├── manifest.yaml
+│   └── manifest.parameters.yaml
 └── shared/                  Shared rules, scripts, and environments
 ```
 

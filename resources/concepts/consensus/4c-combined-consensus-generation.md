@@ -20,7 +20,7 @@ Examples:
 | `A=4, C=3, G=3` | unresolved | `A` |
 | `A=4, C=4, G=2` | unresolved | unresolved |
 
-Both methods operate on votes already filtered by Task 4.2. There is no coverage weighting, and the backbone has weight one.
+Both methods operate on votes already filtered by Task 4.2. There is no coverage weighting, and the backbone has weight one when `consensus.include_backbone_vote` is true and casts no vote otherwise. Define how a position without any vote is represented, which can happen only when the backbone does not vote.
 
 ## Consensus and diagnostics
 

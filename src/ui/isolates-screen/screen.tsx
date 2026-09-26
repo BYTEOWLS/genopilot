@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {childIsolateIds, type Isolate} from '../../isolates/catalog.js';
 import type {ReadPairsCheck, ReadPairsChecker} from '../../isolates/reads.js';
+import {lineage, readSummary} from '../../isolates/presentation.js';
 import type {IsolateCatalogMutation, LoadedIsolateCatalog} from '../../isolates/store.js';
 import type {DirectoryReader} from '../components/path-browser.js';
 import {useHomeSuspension} from '../home-navigation.js';
@@ -33,31 +34,6 @@ const visibleIsolateCount = 10;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function readSummary(isolate: Isolate, check: ReadPairsCheck | undefined): string {
-  const count = isolate.read_pairs.length;
-  const pairs = `${String(count)} read pair${count === 1 ? '' : 's'}`;
-  const trimmedCount = isolate.read_pairs.filter(pair => pair.trimmed).length;
-  const trimmed = trimmedCount === 0 ? '' : trimmedCount === count ? ', trimmed' : ', partly trimmed';
-  if (!check) {
-    return `${pairs}${trimmed} · checking reads`;
-  }
-  const problems = check.pairs.flatMap((pair, index) => [
-    pair.r1.state === 'ok' ? undefined : `pair ${String(index + 1)} R1 ${pair.r1.state}`,
-    pair.r2.state === 'ok' ? undefined : `pair ${String(index + 1)} R2 ${pair.r2.state}`,
-  ]).filter((problem): problem is string => problem !== undefined);
-  if (check.sameFiles.length > 0) {
-    problems.push('linked duplicate files');
-  }
-  return `${pairs}${trimmed} · ${problems.length === 0 ? 'reads ok' : `reads: ${problems.join(', ')}`}`;
-}
-
-function lineage(isolate: Isolate): string {
-  const wildtype = isolate.wildtype === null
-    ? 'wild type not recorded'
-    : isolate.wildtype ? 'wild type' : 'not wild type';
-  return isolate.derived_from === null ? wildtype : `${wildtype}, derived from ${isolate.derived_from}`;
 }
 
 export function IsolatesScreen({

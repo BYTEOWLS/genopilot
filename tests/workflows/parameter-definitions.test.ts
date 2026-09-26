@@ -138,3 +138,20 @@ test('accepts an accession parameter', () => {
   });
   assert.equal(definition?.kind, 'accession');
 });
+
+test('accepts an isolate selection whose default is null, and refuses a preset one', () => {
+  const [definition] = validateParameterDefinitions({
+    schema_version: 1,
+    parameters: [{id: 'isolates', label: 'Isolates', section: 'Inputs', kind: 'isolates', required: true, default: null}],
+  });
+  assert.equal(definition?.kind, 'isolates');
+
+  assert.throws(
+    () => validateParameterDefinitions({
+      schema_version: 1,
+      parameters: [{id: 'isolates', label: 'Isolates', section: 'Inputs', kind: 'isolates', required: true, default: 'isolate-a'}],
+    }),
+    (error: unknown) => error instanceof ParameterDefinitionsValidationError &&
+      error.issues.some(issue => issue.path === '$.parameters[0].default'),
+  );
+});

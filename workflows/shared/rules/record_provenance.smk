@@ -1,9 +1,23 @@
-"""Record checksummed artifacts and run-level annotation-transfer provenance.
+"""Record the run's provenance: what was produced, from what, and with which tools.
 
-This final producer-side rule keeps direct Snakemake execution self-describing;
-the TUI is only a future reader of these persisted records. Requires
-`SCRIPTS_DIR_SH`, `ENVS_DIR`, `WORKFLOW_DIR`, and `ANNOTATION_GFF3` from the
-including Snakefile.
+What it does
+  Runs last, so a finished run describes itself without GenoPilot:
+
+  Writes: artifacts.yaml      - every input, result, and log with its SHA-256 checksum, the
+                                step that produced it, and whether it was generated or
+                                imported
+          provenance/run.json - the effective configuration, workflow and manifest versions
+                                (with the manifest's checksum), the Snakemake version,
+                                pinned and observed tool versions, the command each step
+                                ran, and the effective resources
+
+  It runs in the LiftOn environment so it can read the versions of the
+  LiftOn packages that were actually installed.
+
+Maintainer notes
+  Requires `SCRIPTS_DIR_SH`, `ENVS_DIR`, `WORKFLOW_DIR`, and
+  `ANNOTATION_GFF3` from the including Snakefile. Depending on every file it
+  records keeps this rule last in the DAG.
 """
 
 import importlib.metadata

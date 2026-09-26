@@ -2,8 +2,11 @@ import {parse, parseAllDocuments} from 'yaml';
 
 export const PARAMETER_DEFINITIONS_SCHEMA_VERSION = 1 as const;
 
-/** `accession` is a versioned NCBI assembly accession, typed or chosen from the accession catalog. */
-export type WorkflowParameterKind = 'file' | 'accession' | 'text' | 'choice' | 'integer' | 'fixed';
+/**
+ * `accession` is a versioned NCBI assembly accession, typed or chosen from the accession catalog;
+ * `isolates` is one or more isolates chosen from the isolate catalog.
+ */
+export type WorkflowParameterKind = 'file' | 'accession' | 'isolates' | 'text' | 'choice' | 'integer' | 'fixed';
 
 export type WorkflowParameterOption = {
   value: string;
@@ -50,6 +53,7 @@ const identifierPattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const parameterKinds: readonly WorkflowParameterKind[] = [
   'file',
   'accession',
+  'isolates',
   'text',
   'choice',
   'integer',
@@ -241,6 +245,9 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
         (typeof defaultValue !== 'string' || defaultValue.trim().length === 0)
       ) {
         issues.push({path: `${path}.default`, message: 'must be null or a non-empty string'});
+      }
+      if (kind === 'isolates' && defaultValue !== null && defaultValue !== undefined) {
+        issues.push({path: `${path}.default`, message: 'must be null for an isolate selection'});
       }
       if (
         kind === 'choice' &&

@@ -12,7 +12,35 @@ import {
   type WorkflowDiscovery,
 } from '../components/workflow-selector.js';
 import {AnnotationTransferConfigurationScreen} from './annotation-transfer-configuration.js';
+import {ReferenceConsensusConfigurationScreen} from './reference-consensus-configuration.js';
 import {useTerminalTitle} from '../terminal-title.js';
+
+type ConfigurationScreenProps = {
+  currentDirectory: string;
+  onBack: () => void;
+  inputActive: boolean;
+  workflow: DiscoveredWorkflow;
+};
+
+/** The configuration screen of each workflow this build can configure, by stable workflow ID. */
+const configurationScreens: Record<string, (props: ConfigurationScreenProps) => React.JSX.Element> = {
+  'annotation-transfer': ({workflow, ...props}) => (
+    <AnnotationTransferConfigurationScreen
+      {...props}
+      parameterDefinitions={workflow.parameterDefinitions}
+      stages={workflow.manifest.stages}
+      manifest={workflow.manifest}
+    />
+  ),
+  'reference-consensus': ({workflow, ...props}) => (
+    <ReferenceConsensusConfigurationScreen
+      {...props}
+      parameterDefinitions={workflow.parameterDefinitions}
+      stages={workflow.manifest.stages}
+      manifest={workflow.manifest}
+    />
+  ),
+};
 
 /** Discovers and selects a packaged workflow for a new run. */
 export function NewRunScreen({
@@ -33,6 +61,10 @@ export function NewRunScreen({
   const selection = useWorkflowSelection(discoverWorkflows, selectedWorkflowId);
   const [confirmedWorkflow, setConfirmedWorkflow] = useState<DiscoveredWorkflow>();
   useTerminalTitle({label: confirmedWorkflow?.manifest.label});
+  // An own-property check, so a workflow ID such as `constructor` never resolves to Object's.
+  const ConfigurationScreen = confirmedWorkflow && Object.hasOwn(configurationScreens, confirmedWorkflow.manifest.id)
+    ? configurationScreens[confirmedWorkflow.manifest.id]
+    : undefined;
 
   useInput(
     (_input, key) => {
@@ -44,19 +76,17 @@ export function NewRunScreen({
       isActive:
         inputActive
         && confirmedWorkflow !== undefined
-        && confirmedWorkflow.manifest.id !== 'annotation-transfer',
+        && ConfigurationScreen === undefined,
     },
   );
 
-  if (confirmedWorkflow?.manifest.id === 'annotation-transfer') {
+  if (confirmedWorkflow && ConfigurationScreen) {
     return (
-      <AnnotationTransferConfigurationScreen
+      <ConfigurationScreen
+        workflow={confirmedWorkflow}
         currentDirectory={currentDirectory}
         onBack={() => setConfirmedWorkflow(undefined)}
         inputActive={inputActive}
-        parameterDefinitions={confirmedWorkflow.parameterDefinitions}
-        stages={confirmedWorkflow.manifest.stages}
-        manifest={confirmedWorkflow.manifest}
       />
     );
   }

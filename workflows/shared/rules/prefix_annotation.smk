@@ -1,24 +1,29 @@
-"""Apply the configured identifier prefix to the raw LiftOn GFF3.
+"""Optionally prefix the IDs of the transferred annotation.
 
-A pure deterministic post-processing step, not a LiftOn feature. Depends
-only on the raw GFF3 and the configured prefix, so changing only
-`annotation.id_prefix` reruns this rule and `validate_annotation` without
-rerunning `transfer_annotation` (Snakemake's default rerun-triggers include
-`params`). Requires `SCRIPTS_DIR_SH` to be
-defined by the including Snakefile.
+What it does
+  When config.yaml sets `annotation.id_prefix`, every `ID`, `Parent`, and
+  `Derives_from` value in LiftOn's GFF3 gets that prefix, so the target
+  annotation's IDs are told apart from the reference's. Nothing else
+  changes: names, descriptions, and database references stay
+  byte-identical.
 
-`annotation.id_prefix` is optional. An empty prefix has nothing to rewrite,
-so this rule is not defined at all and no prefixed GFF3 is written; a copy
-of the raw annotation under a name promising a prefix would be misleading
-evidence. `ANNOTATION_GFF3`, defined here and consumed by every rule
-downstream, then names the raw LiftOn GFF3 instead.
+  Reads:  results/annotation/lifton.raw.gff3
+  Writes: results/annotation/lifton.prefixed.gff3 (a new file; LiftOn's output is never modified)
 
-The params function takes only `wildcards` and references this rule's own
-input/output paths as literals, rather than Snakemake's `input`/`output`
-objects: a params function with an `input`/`output` parameter is not
-recorded in Snakemake's per-job metadata (confirmed against the pinned
-Snakemake release), so a prefix-only config change would silently fail to
-trigger a rerun — exactly the behavior this rule exists to guarantee.
+  Without a prefix this step does not exist: no "prefixed" copy is written,
+  and later steps use LiftOn's raw GFF3. `ANNOTATION_GFF3`, defined below,
+  names whichever file later steps use.
+
+  Changing only the prefix reruns this step and the ones after it, but not
+  LiftOn.
+
+Maintainer notes
+  Requires `SCRIPTS_DIR_SH` from the including Snakefile. The params
+  function takes only `wildcards` and repeats this rule's paths as
+  literals: Snakemake does not record a params function that takes `input`
+  or `output` in its job metadata (confirmed against the pinned release),
+  so a prefix-only change would silently not trigger the rerun this rule
+  exists to guarantee.
 """
 
 import shlex
