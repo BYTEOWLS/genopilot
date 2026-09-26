@@ -100,6 +100,7 @@ include: str(RULES_DIR / "resolve_backbone.smk")
 include: str(RULES_DIR / "validate_run_inputs.smk")
 include: str(RULES_DIR / "validate_read_pair.smk")
 include: str(RULES_DIR / "align_reads.smk")
+include: str(RULES_DIR / "call_variants.smk")
 
 
 # The files a finished run must have. Asking for them makes Snakemake run every step above.
@@ -114,3 +115,7 @@ rule all:
         per_isolate("results/isolates/{isolate}/samtools-stats.txt"),
         per_isolate("results/isolates/{isolate}/flagstat.json"),
         per_isolate("results/isolates/{isolate}/coverage.tsv"),
+        per_isolate("results/isolates/{isolate}/all-sites.bcf"),
+        per_isolate("results/isolates/{isolate}/callable-mask.bed"),
+        per_isolate("results/isolates/{isolate}/callability.json"),
+        per_isolate("results/isolates/{isolate}/variants.vcf.gz"),

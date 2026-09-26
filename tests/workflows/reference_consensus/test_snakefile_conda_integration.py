@@ -6,6 +6,7 @@ set RUN_SNAKEMAKE_CONDA_INTEGRATION=1 and put the pinned `snakemake` and
 temporary Conda prefix, and one complete run is shared by the assertions.
 """
 
+import gzip
 import json
 import os
 import shutil
@@ -15,7 +16,7 @@ import unittest
 from pathlib import Path
 
 from ._load import WORKFLOW_DIR
-from .fixtures import write_run
+from .fixtures import EXPECTED, write_run
 
 SNAKEMAKE_BIN = shutil.which("snakemake")
 CONDA_BIN = shutil.which("conda")
@@ -77,6 +78,43 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
         # The same 40 fragments in two libraries are not duplicates of each other; only
         # fragments that happen to coincide within one library may be marked.
         self.assertLess(sum(library["markdup"]["DUPLICATE PAIR"] for library in two_libraries), 20)
+
+    def pass_variants(self, isolate: str) -> set[tuple[str, int, str, str]]:
+        variants = set()
+        path = self.run_dir / "results" / "isolates" / isolate / "variants.vcf.gz"
+        with gzip.open(path, "rt", encoding="utf-8") as vcf:
+            for line in vcf:
+                if not line.startswith("#"):
+                    chrom, position, _, ref, alt, _, status = line.split("\t")[:7]
+                    if status == "PASS":
+                        variants.add((chrom, int(position), ref, alt))
+        return variants
+
+    def mask_state(self, isolate: str, chrom: str, position: int) -> str:
+        path = self.run_dir / "results" / "isolates" / isolate / "callable-mask.bed"
+        for line in path.read_text(encoding="utf-8").splitlines():
+            name, start, end, state = line.split("\t")
+            if name == chrom and int(start) < position <= int(end):
+                return state
+        raise AssertionError(f"{chrom}:{position} is not in the mask")
+
+    def test_pass_variants_are_exactly_the_simulated_ones(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        for isolate, truth in EXPECTED["isolates"].items():
+            with self.subTest(isolate=isolate):
+                expected = {(v["contig"], v["position"], v["ref"], v["alt"]) for v in truth["variants"]}
+                self.assertEqual(self.pass_variants(isolate), expected)
+
+    def test_the_mask_marks_simulated_ambiguous_and_uncallable_positions(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        for isolate, truth in EXPECTED["isolates"].items():
+            for state, probes in truth["probes"].items():
+                for probe in probes:
+                    with self.subTest(isolate=isolate, state=state, **probe):
+                        self.assertEqual(self.mask_state(isolate, probe["contig"], probe["position"]), state)
+            for variant in truth["variants"]:
+                with self.subTest(isolate=isolate, variant=variant["position"]):
+                    self.assertEqual(self.mask_state(isolate, variant["contig"], variant["position"]), "callable")
 
     def test_temporary_trimmed_reads_and_pair_alignments_are_removed(self) -> None:
         self.assertEqual(self.result.returncode, 0, self.result.stderr)
