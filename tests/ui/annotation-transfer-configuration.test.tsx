@@ -379,8 +379,8 @@ test('edits all required fields and confirms effective options before saving', a
   assert.equal(saved?.configuration.run.id, configuration.run.id);
   // The rendered command wraps across terminal lines, so match it unwrapped.
   const unwrap = (frame: string): string => frame.replace(/\s+/g, ' ');
-  const startFrame = await waitForFrame(output, frame => unwrap(frame).includes('--printshellcmds --dry-run'));
-  assert.match(unwrap(startFrame), /--cores 3 --use-conda --conda-prefix \S+ --printshellcmds --dry-run/);
+  const startFrame = await waitForFrame(output, frame => unwrap(frame).includes('--keep-going --dry-run'));
+  assert.match(unwrap(startFrame), /--cores 3 --use-conda --conda-prefix \S+ --printshellcmds --keep-going --dry-run/);
   assert.ok(unwrap(startFrame).includes(`--directory ${review.prepared.outputDirectory}`));
 
   // Executing does not require a dry run first: selecting it shows its own exact command.

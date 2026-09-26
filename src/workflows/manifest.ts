@@ -13,6 +13,12 @@ export type WorkflowStage = {
    * A stage without rules is one whose implementation does not exist yet.
    */
   rules?: string[];
+  /**
+   * Which of the stage's rules run once for every read pair and which once for every isolate,
+   * so progress can be shown per isolate: an isolate with n read pairs runs every read-pair
+   * rule n times and every isolate rule once. The stage's other rules are not per isolate.
+   */
+  per_isolate?: {read_pair_rules: string[]; isolate_rules: string[]};
 };
 
 export type WorkflowArtifact = {
@@ -190,6 +196,46 @@ function validateStageRules(
   return valid;
 }
 
+/** Validates a stage's optional per-isolate rule split against the stage's own rules. */
+function validatePerIsolate(
+  candidate: RecordValue,
+  path: string,
+  issues: WorkflowManifestValidationIssue[],
+): boolean {
+  if (candidate.per_isolate === undefined) {
+    return true;
+  }
+  const perIsolatePath = `${path}.per_isolate`;
+  if (!isRecord(candidate.per_isolate)) {
+    issues.push({path: perIsolatePath, message: 'must be an object'});
+    return false;
+  }
+  rejectUnknownFields(candidate.per_isolate, ['read_pair_rules', 'isolate_rules'], perIsolatePath, issues);
+  const stageRules = new Set(Array.isArray(candidate.rules) ? candidate.rules : []);
+  const seen = new Set<unknown>();
+  let valid = true;
+  for (const field of ['read_pair_rules', 'isolate_rules'] as const) {
+    const rules = candidate.per_isolate[field];
+    const fieldPath = `${perIsolatePath}.${field}`;
+    if (!Array.isArray(rules) || rules.length === 0) {
+      issues.push({path: fieldPath, message: 'must be a non-empty array'});
+      valid = false;
+      continue;
+    }
+    rules.forEach((rule, index) => {
+      if (!stageRules.has(rule)) {
+        issues.push({path: `${fieldPath}[${index}]`, message: 'must be one of the stage\'s rules'});
+        valid = false;
+      } else if (seen.has(rule)) {
+        issues.push({path: `${fieldPath}[${index}]`, message: `rule '${String(rule)}' is listed twice`});
+        valid = false;
+      }
+      seen.add(rule);
+    });
+  }
+  return valid;
+}
+
 function validateStages(
   value: unknown,
   issues: WorkflowManifestValidationIssue[],
@@ -211,11 +257,12 @@ function validateStages(
       issues.push({path, message: 'must be an object'});
       return;
     }
-    rejectUnknownFields(candidate, ['id', 'label', 'description', 'rules'], path, issues);
+    rejectUnknownFields(candidate, ['id', 'label', 'description', 'rules', 'per_isolate'], path, issues);
     const validId = validateIdentifier(candidate.id, `${path}.id`, issues);
     const validLabel = requireNonEmptyString(candidate.label, `${path}.label`, issues);
     validateOptionalDescription(candidate, path, issues);
-    const validRules = validateStageRules(candidate, path, ruleOwners, issues);
+    const validRules =
+      validateStageRules(candidate, path, ruleOwners, issues) && validatePerIsolate(candidate, path, issues);
     if (validId) {
       if (ids.has(candidate.id as string)) {
         issues.push({path: `${path}.id`, message: `duplicate stage ID '${candidate.id}'`});

@@ -51,10 +51,6 @@ const packagedSnakefilePath = fileURLToPath(
   new URL('../../../workflows/reference-consensus/Snakefile', import.meta.url),
 );
 
-export const executionUnavailableReason =
-  'Per-isolate processing, aggregation, and consensus generation are not implemented yet; ' +
-  'a dry run resolves the jobs that exist so far.';
-
 async function defaultLoadIsolateCatalog(): Promise<IsolateCatalog> {
   return (await loadIsolateCatalog(resolveToolingPaths().isolateCatalogPath)).catalog;
 }
@@ -403,7 +399,11 @@ export function ReferenceConsensusConfigurationScreen({
         executeSnakemakeRun(run, onOutput as (output: WorkflowOutput) => void, signal)
       }
       resultManifest={manifest}
-      executionUnavailableReason={executionUnavailableReason}
+      executionIsolates={prepared => prepared.snapshot.isolates.map(isolate => ({
+        id: isolate.id,
+        label: isolate.name,
+        readPairs: isolate.read_pairs.length,
+      }))}
       onRunSucceeded={prepared => prepared.configuration.inputs.backbone.source === 'ncbi'
         ? {
           label: 'Recording the NCBI accession cache in the accession catalog…',

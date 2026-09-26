@@ -37,7 +37,7 @@ test('builds exact managed Snakemake commands that differ only by mode', async c
   const execution = prepareSnakemakeRun({...options, mode: 'execute'});
 
   assert.equal(dryRun.executable, paths.snakemakeExecutable);
-  assert.deepEqual(dryRun.arguments.slice(-7), [
+  assert.deepEqual(dryRun.arguments.slice(-8), [
     '--cores',
     '3',
     '--use-conda',
@@ -46,6 +46,7 @@ test('builds exact managed Snakemake commands that differ only by mode', async c
     '--conda-prefix',
     paths.condaEnvironmentsDirectory,
     '--printshellcmds',
+    '--keep-going',
     '--dry-run',
   ]);
   assert.ok(!execution.arguments.includes('--dry-run'));

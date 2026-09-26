@@ -17,7 +17,13 @@ export const RUN_EVENTS_FILENAME = 'events.jsonl';
 export type RunEvent =
   | {type: 'workflow-started'; snakemakeVersion?: string; command?: string}
   | {type: 'run-info'; jobs: Readonly<Record<string, number>>; total: number}
-  | {type: 'job-started'; jobId: number; rule: string}
+  | {
+      type: 'job-started';
+      jobId: number;
+      rule: string;
+      /** The job's wildcard values, such as the isolate and read pair it processes. */
+      wildcards?: Readonly<Record<string, string>>;
+    }
   | {type: 'job-finished'; jobId: number}
   | {type: 'job-failed'; jobId?: number; rule?: string; message?: string; logs: readonly string[]}
   | {type: 'progress'; done: number; total: number}
@@ -78,7 +84,18 @@ export function toRunEvent(line: unknown): RunEvent | undefined {
     case 'job-started': {
       const jobId = optionalInteger(record.job_id);
       const rule = optionalText(record.rule);
-      return jobId === undefined || rule === undefined ? undefined : {type: 'job-started', jobId, rule};
+      if (jobId === undefined || rule === undefined) {
+        return undefined;
+      }
+      const wildcards: Record<string, string> = {};
+      if (typeof record.wildcards === 'object' && record.wildcards !== null && !Array.isArray(record.wildcards)) {
+        for (const [name, value] of Object.entries(record.wildcards as Record<string, unknown>)) {
+          if (typeof value === 'string') {
+            wildcards[name] = value;
+          }
+        }
+      }
+      return {type: 'job-started', jobId, rule, wildcards};
     }
     case 'job-finished': {
       const jobId = optionalInteger(record.job_id);

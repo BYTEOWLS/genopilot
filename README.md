@@ -16,6 +16,17 @@
 
 The terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI, using a run configuration GenoPilot saved; the workflows do not validate edited configurations and must not be modified. Linux and macOS are supported.
 
+### Running a workflow directly
+
+Each Snakefile's header lists its steps and the direct command for a run directory GenoPilot saved. GenoPilot adds `--keep-going`, so independent jobs, such as other isolates, finish when one fails, and its run-events logger, which records each job's progress and command in the run's `events.jsonl`. To record them in a direct run too, make the packaged plugin importable and name the logger:
+
+```bash
+PYTHONPATH=<package>/workflows/shared/logging snakemake ... \
+  --logger genopilot-run-events --logger-genopilot-run-events-path <run-dir>/events.jsonl
+```
+
+Without it, the reference-consensus provenance lists its commands as unavailable.
+
 ## Installation
 
 Node.js is the only manual prerequisite because the CLI itself requires Node.js to start.
@@ -71,11 +82,15 @@ workflows/
 │   ├── manifest.yaml
 │   └── manifest.parameters.yaml
 ├── comparison/              Comparison workflow scaffold
-├── reference-consensus/     Cohort consensus: configuration, backbone resolution, input validation
+├── reference-consensus/     Cohort consensus; per-isolate processing so far
 │   ├── Snakefile
 │   ├── manifest.yaml
-│   └── manifest.parameters.yaml
-└── shared/                  Shared rules, scripts, and environments
+│   ├── manifest.parameters.yaml
+│   ├── rules/               This workflow's rules
+│   ├── scripts/             Their standard-library scripts
+│   └── envs/                Their pinned Conda environments
+└── shared/                  Annotation-transfer's rules, scripts, and environments, and what both
+                             workflows use, including the run-events logger plugin
 ```
 
 Only selected, redistributable workflow resources in this directory are included in the npm package. TypeScript application tests and Python workflow tests share `tests/`; their runners distinguish them by filename.

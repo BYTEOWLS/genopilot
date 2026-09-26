@@ -10,7 +10,15 @@ import {
   type RunProgress,
   type StageProgress,
 } from '../../workflows/run-events.js';
-import type {WorkflowManifest} from '../../workflows/manifest.js';
+import type {WorkflowManifest, WorkflowStage} from '../../workflows/manifest.js';
+import {
+  applyIsolateEvent,
+  initialIsolateProgress,
+  perIsolateRules,
+  settleIsolateProgress,
+  type IsolateProgress,
+  type ProgressIsolate,
+} from '../../workflows/isolate-progress.js';
 import {loadWorkflowResult, type LoadedWorkflowResult} from '../../workflows/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {LiveLog} from '../components/live-log.js';
@@ -19,6 +27,7 @@ import {mutedColor} from '../theme.js';
 import {useTerminalTitle, type TerminalTitleStatus} from '../terminal-title.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {Page} from '../components/page.js';
+import {IsolateProgressList, isolateProgressHeight} from './isolate-progress-list.js';
 
 // Lines kept in memory so the researcher can scroll back through a long run. Complete output
 // always remains on disk regardless of this cap; see the run's stdout/stderr log files.
@@ -32,7 +41,12 @@ const eventPollIntervalMs = 250;
 const reservedChromeLines = 17;
 const minimumVisibleLogLines = 5;
 
-export type WorkflowProgressStage = {id: string; label: string; rules?: readonly string[]};
+export type WorkflowProgressStage = {
+  id: string;
+  label: string;
+  rules?: readonly string[];
+  per_isolate?: WorkflowStage['per_isolate'];
+};
 
 const stateMarkers: Record<StageProgress['state'], {marker: string; color?: string}> = {
   pending: {marker: '·'},
@@ -197,6 +211,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   resultHandoff,
   onSucceeded,
   executionUnavailableReason,
+  isolates = [],
 }: {
   configurationPath: string;
   prepareRun: WorkflowRunPreparer<R>;
@@ -216,6 +231,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
    * available, and only the dry run can be started.
    */
   executionUnavailableReason?: string;
+  /** The run's isolates, each shown with its own progress when a stage splits its rules per isolate. */
+  isolates?: readonly ProgressIsolate[];
 }): React.JSX.Element {
   const availableModes = modeOptions.filter(option =>
     option.mode !== 'execute' || executionUnavailableReason === undefined);
@@ -224,6 +241,10 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   // Leaving would unmount the screen and abort Snakemake without waiting for its cleanup.
   useHomeSuspension(screen.state === 'running' ? 'busy' : undefined);
   const [progress, setProgress] = useState<RunProgress>(() => initialRunProgress([...stages]));
+  const initialIsolates = (): readonly IsolateProgress[] =>
+    initialIsolateProgress(isolatesRef.current, perIsolateRules(stagesRef.current));
+  const isolatesRef = useRef(isolates);
+  isolatesRef.current = isolates;
   // Lines back from the newest; 0 follows the output as it arrives.
   const [scrollOffset, setScrollOffset] = useState(0);
   // Every visit to the mode chooser re-prepares both commands so a second attempt in the same
@@ -239,6 +260,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   const eventReader = useRef(new RunEventReader());
   const eventOffset = useRef(0);
   const jobStages = useRef(new Map<number, string>());
+  const jobIsolates = useRef(new Map<number, string>());
+  const [isolateProgress, setIsolateProgress] = useState<readonly IsolateProgress[]>(initialIsolates);
 
   useEffect(() => () => abortController.current?.abort(), []);
 
@@ -247,7 +270,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   // paths on screen would drift away from the ones the next Enter actually uses.
   const prepareRunRef = useRef(prepareRun);
   prepareRunRef.current = prepareRun;
-  const {rows: terminalRows} = useWindowSize();
+  const {rows: terminalRows, columns: terminalColumns} = useWindowSize();
+  // Isolate rows share the screen with the log; beyond a quarter of it, the busiest are shown.
+  const maximumIsolateRows = Math.max(3, Math.floor(terminalRows / 4));
   const preparedRuns = useMemo(
     () => ({
       'dry-run': prepareRunRef.current('dry-run'),
@@ -272,6 +297,13 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         setProgress(current =>
           appended.events.reduce(
             (state, event) => applyRunEvent(state, event, jobStages.current, [...stagesRef.current]),
+            current,
+          ),
+        );
+        const rules = perIsolateRules(stagesRef.current);
+        setIsolateProgress(current =>
+          appended.events.reduce(
+            (state, event) => applyIsolateEvent(state, event, jobIsolates.current, rules),
             current,
           ),
         );
@@ -320,6 +352,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     eventReader.current = new RunEventReader();
     eventOffset.current = 0;
     jobStages.current = new Map();
+    jobIsolates.current = new Map();
+    setIsolateProgress(initialIsolates());
     setScrollOffset(0);
     setProgress(initialRunProgress([...stagesRef.current]));
     setScreen({state: 'running', run, logLines: []});
@@ -356,6 +390,10 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
                 },
               }
             : undefined;
+        if (result.exitCode === 0) {
+          // Jobs reused from an earlier attempt never start, so success completes every isolate.
+          setIsolateProgress(settleIsolateProgress);
+        }
         const followUp = run.mode === 'execute' && result.exitCode === 0 ? onSucceeded?.() : undefined;
         setScreen(current => ({
           state: 'finished',
@@ -428,7 +466,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   const visibleLogLines = Math.max(
     minimumVisibleLogLines,
     terminalRows - reservedChromeLines -
-      (screen.state === 'running' || screen.state === 'finished' ? progress.stages.length : 0),
+      (screen.state === 'running' || screen.state === 'finished'
+        ? progress.stages.length + isolateProgressHeight(isolateProgress.length, maximumIsolateRows)
+        : 0),
   );
   // Scrolling is clamped to what is actually behind the window, so the view can never be
   // parked past the start of the retained output.
@@ -578,6 +618,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         <Text bold color="cyan">Running {sanitizeTerminalText(label.toLowerCase())}…</Text>
       )}
       {screen.run.eventsPath ? <StageProgressList progress={progress} /> : null}
+      {screen.run.eventsPath ? (
+        <IsolateProgressList isolates={isolateProgress} maximumRows={maximumIsolateRows} width={terminalColumns} />
+      ) : null}
       <LiveLog
         title={
           effectiveScrollOffset > 0

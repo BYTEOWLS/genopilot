@@ -1,4 +1,5 @@
 import React, {useCallback, useMemo, useState} from 'react';
+import type {ProgressIsolate} from '../../workflows/isolate-progress.js';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
@@ -249,6 +250,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   resultManifest,
   onRunSucceeded,
   executionUnavailableReason,
+  executionIsolates,
   loadIsolates = readCatalogedIsolates,
 }: {
   title: string;
@@ -267,6 +269,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   onRunSucceeded?: (payload: T) => RunFollowUp | undefined;
   /** Why only a dry run can be started, while the workflow's execution is not implemented. */
   executionUnavailableReason?: string;
+  /** The saved run's isolates, whose progress the execution screen shows one by one. */
+  executionIsolates?: (payload: T) => readonly ProgressIsolate[];
   loadIsolates?: IsolateCatalogReader;
 }): React.JSX.Element {
   const editableDefinitions = useMemo(
@@ -651,6 +655,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         stages={stages}
         onSucceeded={onRunSucceeded ? () => onRunSucceeded(payload) : undefined}
         {...(executionUnavailableReason ? {executionUnavailableReason} : {})}
+        {...(executionIsolates ? {isolates: executionIsolates(payload)} : {})}
         resultHandoff={resultManifest ? {
           runDirectory: outputDirectory,
           manifest: resultManifest,

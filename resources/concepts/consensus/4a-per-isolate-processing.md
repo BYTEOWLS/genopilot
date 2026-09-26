@@ -9,7 +9,7 @@ Implement the first executable scientific target: independently validate and pro
 - **Toolchain.** fastp for read QC and light adapter trimming, `bwa mem` for alignment, samtools for fixmate, sorting, merging, duplicate marking, statistics, and FASTA indexes, and bcftools for calling, filtering, normalization, and the consensus. All four share one pinned environment, `workflows/reference-consensus/envs/short-read-calling/`, with exact versions that have bioconda builds for linux-64 and osx-arm64.
 - **Code layout.** Everything specific to this workflow — rules, scripts, and environments — lives under `workflows/reference-consensus/`. `workflows/shared/` keeps only what annotation-transfer uses too: the run-events logger, the `ncbi-datasets-cli` environment, `resolve_input.py`, the FASTA/GFF3 parsers, and the checksum and pin helpers of the provenance script.
 - **Parallelism and determinism.** Every rule declares its `threads`, and Snakemake runs read-pair and isolate jobs side by side up to the run's CPUs. `bwa mem -K` is fixed so alignments do not depend on the thread count. Runs use `--keep-going`, so a failing isolate is reported as a failed job while the others finish.
-- **Thresholds.** `min_mapping_quality` and `min_base_quality` become the `bcftools mpileup` read and base filters. `min_depth` counts the reads left after those filters and without duplicates (the sum of `FORMAT/AD`), and `min_allele_fraction` is the winning allele's share of them. Every other tool option, including mpileup's maximum depth and BAQ, fastp's adapter, length, and poly-G options, and the bwa batch size, is passed explicitly and recorded; none is left to a tool default.
+- **Thresholds.** `min_mapping_quality` and `min_base_quality` become the `bcftools mpileup` read and base filters. `min_depth` counts the reads left after those filters and without duplicates (the sum of `FORMAT/AD`), and `min_allele_fraction` is the winning allele's share of them. Every other result-changing option, including mpileup's maximum depth, skipped read flags, and indel-candidate thresholds, fastp's adapter, length, and poly-G options, and the bwa batch size, is passed explicitly. Base-alignment quality stays at the pinned bcftools default (applied only in problematic regions), which the recorded command and tool version document.
 - **Duplicates** are marked, never removed, per library through the read group's `LB`, and ignored by the caller. A fixture with two libraries proves that marking stays within a library.
 - **Read groups.** `ID` equals `PU`, `<flowcell>[.<lane>].<barcode>`, so two libraries sequenced on the same lane still get distinct IDs. `LB` is the Illumina sample name from the R1 file name (`<sample>_S<n>…`) plus the barcode, or the isolate ID when the file name does not follow that pattern; the source is recorded. The barcode is taken from the first record, and records whose barcode differs never reject a pair. A pair whose headers are not Illumina headers fails with a clear message; renamed public-archive reads are a separate feature in [`later.md`](../../../later.md).
 - **Callability** has three states, derived from an all-sites call that covers every position with reads:
@@ -87,15 +87,16 @@ Task 5 offers an explicit **Save to isolate catalog** action. On confirmation, t
 
 ## Work
 
-- [ ] Finalize the scientific toolchain, ploidy support, thresholds, and expected synthetic results.
-- [ ] Add small redistributable paired FASTQ fixtures covering reference, alternate, no-call, low-quality, SNP, and indel cases, plus an isolate with two read pairs from different runs of one library.
-- [ ] Implement full FASTQ/pair validation and checksumming for every read pair.
-- [ ] Derive read groups per pair from read headers and record them in provenance.
-- [ ] Implement pinned per-rule environments, per-pair QC, trimming, and alignment, per-isolate merging and per-library duplicate marking, and per-isolate callability, calling, normalization, and FASTA generation.
-- [ ] Validate every intermediate format before dependent rules run.
-- [ ] Emit per-isolate metrics, provenance, artifact records, and a versioned catalog-promotion manifest.
-- [ ] Validate that every promotion candidate identifies its isolate and complete source artifacts without requiring catalog access.
-- [ ] Test any positive isolate and read-pair count, trimmed input, isolated failure, resume, parameter-only reruns, direct Snakemake execution, and valid/invalid promotion candidates.
+- [x] Finalize the scientific toolchain, ploidy support, thresholds, and expected synthetic results.
+- [x] Add small redistributable paired FASTQ fixtures covering reference, alternate, no-call, low-quality, SNP, and indel cases, plus an isolate with two read pairs from different runs of one library.
+- [x] Check every read pair's Illumina read names and mate record counts, and checksum it; fastp and bwa check the record format and mate names.
+- [x] Derive read groups per pair from read headers and record them in provenance.
+- [x] Implement pinned per-rule environments, per-pair QC, trimming, and alignment, per-isolate merging and per-library duplicate marking, and per-isolate callability, calling, normalization, and FASTA generation.
+- [x] Validate every intermediate format before dependent rules run, with the tools' own checks.
+- [x] Emit per-isolate metrics, provenance, artifact records, and a versioned catalog-promotion manifest.
+- [x] Make every promotion candidate identify its isolate, its FASTA and index with checksums, the backbone, the producing run, and the workflow without catalog access; verifying a candidate before copying it is Task 5's.
+- [x] Test any positive isolate and read-pair count, trimmed input, isolated failure, resume, parameter-only reruns, and direct Snakemake execution.
+- [x] Run isolates in parallel and show per-isolate progress in the TUI.
 
 ## Acceptance
 
