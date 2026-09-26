@@ -7,6 +7,7 @@ temporary Conda prefix, and one complete run is shared by the assertions.
 """
 
 import gzip
+import hashlib
 import json
 import os
 import shutil
@@ -115,6 +116,54 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
             for variant in truth["variants"]:
                 with self.subTest(isolate=isolate, variant=variant["position"]):
                     self.assertEqual(self.mask_state(isolate, variant["contig"], variant["position"]), "callable")
+
+    def test_every_isolate_has_a_promotion_candidate_matching_its_fasta(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        for isolate in EXPECTED["isolates"]:
+            with self.subTest(isolate=isolate):
+                candidate = self.isolate_json(isolate, "promotion-candidate.json")
+                self.assertEqual(candidate["isolate_id"], isolate)
+                fasta = self.run_dir / candidate["fasta"]["path"]
+                self.assertEqual(candidate["fasta"]["sha256"], hashlib.sha256(fasta.read_bytes()).hexdigest())
+                self.assertEqual(
+                    candidate["backbone"]["sha256"],
+                    hashlib.sha256((self.run_dir / "resolved" / "backbone.fasta").read_bytes()).hexdigest(),
+                )
+                bases = "".join(
+                    line.strip() for line in fasta.read_text(encoding="utf-8").splitlines() if not line.startswith(">")
+                )
+                self.assertLessEqual(set(bases), set("ACGTN"))
+
+    def test_the_run_records_its_artifacts_and_provenance(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        artifacts = json.loads((self.run_dir / "artifacts.yaml").read_text(encoding="utf-8"))["artifacts"]
+        self.assertEqual([entry["path"] for entry in artifacts if entry.get("status") == "missing"], [])
+        backbone = next(entry for entry in artifacts if entry["id"] == "resolved-backbone")
+        self.assertEqual(backbone["origin"], "imported")
+        provenance = json.loads((self.run_dir / "provenance" / "run.json").read_text(encoding="utf-8"))
+        configured = provenance["tool_versions"]["configured"]
+        observed = provenance["tool_versions"]["observed"]
+        for tool in ("fastp", "samtools", "bcftools"):
+            self.assertEqual(observed[tool]["version"], configured[tool], tool)
+        self.assertTrue(observed["bwa"]["version"].startswith(configured["bwa"]))
+        self.assertEqual(sorted(provenance["inputs"]["read_pairs"]), ["iso-a", "iso-b", "iso-c"])
+
+    def test_a_threshold_change_reruns_calling_but_not_alignment(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        config_path = self.run_dir / "config.yaml"
+        original = config_path.read_text(encoding="utf-8")
+        self.addCleanup(config_path.write_text, original, encoding="utf-8")
+        config = json.loads(original)
+        config["calling"]["min_depth"] = 12
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+
+        dry_run = run_snakemake(self.run_dir, self.conda_prefix, "--dry-run")
+        self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
+        planned = dry_run.stdout
+        self.assertIn("classify_callability", planned)
+        self.assertIn("filter_normalize_variants", planned)
+        for rule in ("validate_read_pair", "trim_read_pair", "align_read_pair", "mark_duplicates"):
+            self.assertNotIn(f"rule {rule}:", planned, rule)
 
     def test_temporary_trimmed_reads_and_pair_alignments_are_removed(self) -> None:
         self.assertEqual(self.result.returncode, 0, self.result.stderr)
