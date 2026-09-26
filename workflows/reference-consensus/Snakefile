@@ -15,7 +15,14 @@ directory, and every step writes its log to logs/):
        Check the backbone FASTA and that every read file can be read.
        -> results/input-validation.json
 
-  Not implemented yet (listed in manifest.yaml): per-isolate read
+  Then, for every read pair of every selected isolate ({pair} is the pair's
+  1-based position in the isolate's snapshot entry):
+
+  3. validate_read_pair                          rules/validate_read_pair.smk
+       Check both FASTQ files completely and derive the pair's read group.
+       -> results/isolates/{isolate}/pairs/{pair}/read-validation.json, read-group.txt
+
+  Not implemented yet (listed in manifest.yaml): the rest of per-isolate
   processing and calling, cohort support aggregation, and consensus
   generation.
 
@@ -56,10 +63,32 @@ SHARED_SCRIPTS_DIR_SH = shlex.quote(str(SHARED_DIR / "scripts"))
 # The selected isolates and their read files, from the run's isolates.yaml snapshot.
 with open(config["inputs"]["isolates_file"], encoding="utf-8") as _snapshot:
     ISOLATES = yaml.safe_load(_snapshot)["isolates"]
+ISOLATES_BY_ID = {isolate["id"]: isolate for isolate in ISOLATES}
+
+# Isolate IDs follow the catalog's ID format; read pairs are numbered from 1.
+wildcard_constraints:
+    isolate="[a-z][a-z0-9]*(?:-[a-z0-9]+)*",
+    pair="[1-9][0-9]*",
+
+
+def read_pair_of(wildcards):
+    """The snapshot entry of the read pair named by the `isolate` and `pair` wildcards."""
+    return ISOLATES_BY_ID[wildcards.isolate]["read_pairs"][int(wildcards.pair) - 1]
+
+
+def per_pair(pattern):
+    """Expands a `{isolate}`/`{pair}` path pattern over every read pair of the snapshot."""
+    return [
+        pattern.format(isolate=isolate["id"], pair=number)
+        for isolate in ISOLATES
+        for number in range(1, len(isolate["read_pairs"]) + 1)
+    ]
+
 
 # The steps, in the order they run; see the list at the top of this file.
 include: str(RULES_DIR / "resolve_backbone.smk")
 include: str(RULES_DIR / "validate_run_inputs.smk")
+include: str(RULES_DIR / "validate_read_pair.smk")
 
 
 # The files a finished run must have. Asking for them makes Snakemake run every step above.
@@ -67,3 +96,4 @@ rule all:
     input:
         "resolved/backbone.fasta",
         "results/input-validation.json",
+        per_pair("results/isolates/{isolate}/pairs/{pair}/read-validation.json"),
