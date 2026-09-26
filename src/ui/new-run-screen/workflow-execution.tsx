@@ -212,6 +212,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   onSucceeded,
   executionUnavailableReason,
   isolates = [],
+  completedIsolates,
 }: {
   configurationPath: string;
   prepareRun: WorkflowRunPreparer<R>;
@@ -233,6 +234,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   executionUnavailableReason?: string;
   /** The run's isolates, each shown with its own progress when a stage splits its rules per isolate. */
   isolates?: readonly ProgressIsolate[];
+  /** The isolates whose results are complete, read after a failed execution; see `settleIsolateProgress`. */
+  completedIsolates?: () => Promise<ReadonlySet<string>>;
 }): React.JSX.Element {
   const availableModes = modeOptions.filter(option =>
     option.mode !== 'execute' || executionUnavailableReason === undefined);
@@ -390,9 +393,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
                 },
               }
             : undefined;
-        if (result.exitCode === 0) {
-          // Jobs reused from an earlier attempt never start, so success completes every isolate.
-          setIsolateProgress(settleIsolateProgress);
+        if (run.mode === 'execute') {
+          await settleIsolates(result.exitCode === 0);
         }
         const followUp = run.mode === 'execute' && result.exitCode === 0 ? onSucceeded?.() : undefined;
         setScreen(current => ({
@@ -415,6 +417,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
       async error => {
         liveOutput.current?.flush();
         await drainEvents(run.eventsPath);
+        if (run.mode === 'execute') {
+          await settleIsolates(false);
+        }
         const message = errorMessage(error);
         const persisted =
           run.mode === 'execute' && resultHandoff
@@ -438,6 +443,20 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         }));
       },
     );
+  };
+
+  /** Marks isolates finished in this or an earlier attempt as complete once Snakemake exits. */
+  const settleIsolates = async (succeeded: boolean): Promise<void> => {
+    let completed: ReadonlySet<string> | 'all' = 'all';
+    if (!succeeded) {
+      try {
+        completed = (await completedIsolates?.()) ?? new Set();
+      } catch {
+        // Unknown completion leaves every isolate as its events left it.
+        completed = new Set();
+      }
+    }
+    setIsolateProgress(current => settleIsolateProgress(current, completed));
   };
 
   /** Records the follow-up outcome on the finished run, also while its results are open. */
@@ -466,7 +485,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   const visibleLogLines = Math.max(
     minimumVisibleLogLines,
     terminalRows - reservedChromeLines -
-      (screen.state === 'running' || screen.state === 'finished'
+      // Only an execution shows stage and isolate progress; a dry run gives its rows to the log.
+      ((screen.state === 'running' || screen.state === 'finished') && screen.run.eventsPath
         ? progress.stages.length + isolateProgressHeight(isolateProgress.length, maximumIsolateRows)
         : 0),
   );

@@ -81,6 +81,16 @@ test('a successful run completes every isolate that did not fail, including reus
   const settled = settleIsolateProgress(fold([
     started(1, 'align_pair', 'iso-a'),
     {type: 'job-failed', jobId: 1, logs: []},
-  ]));
+  ]), 'all');
   assert.deepEqual(settled.map(isolate => [isolate.state, isolate.done]), [['failed', 0], ['completed', 0]]);
+});
+
+test('a failed run completes only the isolates the workflow reports as finished', () => {
+  const settled = settleIsolateProgress(fold([
+    started(1, 'align_pair', 'iso-b'),
+    {type: 'job-failed', jobId: 1, logs: []},
+  ]), new Set(['iso-a', 'iso-b']));
+  // iso-a finished in an earlier attempt; iso-b's failure in this attempt stands.
+  assert.deepEqual(settled.map(isolate => isolate.state), ['completed', 'failed']);
+  assert.deepEqual(settleIsolateProgress(fold([]), new Set()).map(isolate => isolate.state), ['pending', 'pending']);
 });

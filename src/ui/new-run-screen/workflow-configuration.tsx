@@ -1,8 +1,8 @@
 import React, {useCallback, useMemo, useState} from 'react';
-import type {ProgressIsolate} from '../../workflows/isolate-progress.js';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
+import type {ProgressIsolate} from '../../workflows/isolate-progress.js';
 import type {WorkflowParameterDefinition} from '../../workflows/parameter-definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AccessionField} from '../components/accession-field.js';
@@ -251,6 +251,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   onRunSucceeded,
   executionUnavailableReason,
   executionIsolates,
+  completedIsolates,
   loadIsolates = readCatalogedIsolates,
 }: {
   title: string;
@@ -271,6 +272,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   executionUnavailableReason?: string;
   /** The saved run's isolates, whose progress the execution screen shows one by one. */
   executionIsolates?: (payload: T) => readonly ProgressIsolate[];
+  /** The saved run's isolates whose results are complete, for a run that ended with a failure. */
+  completedIsolates?: (payload: T) => Promise<ReadonlySet<string>>;
   loadIsolates?: IsolateCatalogReader;
 }): React.JSX.Element {
   const editableDefinitions = useMemo(
@@ -656,6 +659,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         onSucceeded={onRunSucceeded ? () => onRunSucceeded(payload) : undefined}
         {...(executionUnavailableReason ? {executionUnavailableReason} : {})}
         {...(executionIsolates ? {isolates: executionIsolates(payload)} : {})}
+        {...(completedIsolates ? {completedIsolates: () => completedIsolates(payload)} : {})}
         resultHandoff={resultManifest ? {
           runDirectory: outputDirectory,
           manifest: resultManifest,

@@ -89,12 +89,17 @@ export function applyIsolateEvent(
 }
 
 /**
- * Settles progress once Snakemake has exited successfully: every isolate is then complete, also
- * when some of its jobs were not rerun because an earlier attempt's results were reused.
+ * Settles progress once Snakemake has exited. Jobs an earlier attempt already completed never
+ * start again, so their isolates would otherwise look pending: after a successful run every
+ * isolate is complete, and after a failed one those in `completed`, which the workflow reports
+ * from its finished outputs, are.
  */
-export function settleIsolateProgress(isolates: readonly IsolateProgress[]): readonly IsolateProgress[] {
+export function settleIsolateProgress(
+  isolates: readonly IsolateProgress[],
+  completed: ReadonlySet<string> | 'all',
+): readonly IsolateProgress[] {
   return isolates.map(isolate => {
-    if (isolate.state === 'failed') {
+    if (isolate.state === 'failed' || (completed !== 'all' && !completed.has(isolate.id))) {
       return isolate;
     }
     const {currentRule: _finished, ...rest} = isolate;

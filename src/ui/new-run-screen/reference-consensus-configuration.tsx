@@ -21,6 +21,7 @@ import type {
   ReferenceConsensusConfiguration,
   VotingMethod,
 } from '../../workflows/reference-consensus/configuration.js';
+import {completedIsolates} from '../../workflows/reference-consensus/isolate-results.js';
 import {
   applyBackboneCacheMode,
   buildReferenceConsensusRun,
@@ -404,6 +405,10 @@ export function ReferenceConsensusConfigurationScreen({
         label: isolate.name,
         readPairs: isolate.read_pairs.length,
       }))}
+      completedIsolates={prepared => completedIsolates(
+        prepared.outputDirectory,
+        prepared.snapshot.isolates.map(isolate => isolate.id),
+      )}
       onRunSucceeded={prepared => prepared.configuration.inputs.backbone.source === 'ncbi'
         ? {
           label: 'Recording the NCBI accession cache in the accession catalog…',

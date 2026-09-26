@@ -28,7 +28,13 @@ import shlex
 def _record_consensus_provenance_args(wildcards):
     args = [
         "--config-json", json.dumps(config, sort_keys=True, separators=(",", ":")),
-        "--isolates-json", json.dumps(ISOLATES, sort_keys=True, separators=(",", ":")),
+        # One short argument pair per isolate: the whole snapshot as one argument would exceed
+        # Linux's per-argument limit (128 KiB) for a few hundred isolates.
+        *[
+            value
+            for isolate in ISOLATES
+            for value in ("--isolate", isolate["id"], len(isolate["read_pairs"]))
+        ],
         "--isolates-file", config["inputs"]["isolates_file"],
         "--manifest", str(WORKFLOW_DIR / "manifest.yaml"),
         "--manifest-schema-version", 1,

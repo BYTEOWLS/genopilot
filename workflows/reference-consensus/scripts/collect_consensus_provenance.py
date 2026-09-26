@@ -77,7 +77,14 @@ def configured_versions() -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config-json", required=True)
-    parser.add_argument("--isolates-json", required=True, help="the isolate snapshot's isolates")
+    parser.add_argument(
+        "--isolate",
+        nargs=2,
+        action="append",
+        default=[],
+        metavar=("ID", "READ_PAIRS"),
+        help="a selected isolate and its number of read pairs, in snapshot order",
+    )
     parser.add_argument("--isolates-file", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--manifest-schema-version", type=int, required=True)
@@ -87,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
     config = json.loads(args.config_json)
-    isolates = json.loads(args.isolates_json)
+    isolates = [{"id": isolate_id, "read_pairs": [{}] * int(pairs)} for isolate_id, pairs in args.isolate]
     generated_at = utc_now_iso()
     backbone = read_json(Path("provenance/backbone.fasta.json"))
     workflow = {

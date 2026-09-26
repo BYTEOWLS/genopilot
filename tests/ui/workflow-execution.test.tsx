@@ -632,6 +632,7 @@ function renderIsolateExecution(
   isolates: readonly {id: string; label: string; readPairs: number}[],
   executeRun: (run: WorkflowRun) => Promise<WorkflowRunResult>,
   rows = 40,
+  completedIsolates?: () => Promise<ReadonlySet<string>>,
 ): {input: TestInput; output: TestOutput; instance: ReturnType<typeof render>} {
   const input = new TestInput();
   const output = new TestOutput();
@@ -651,6 +652,7 @@ function renderIsolateExecution(
       inputActive
       stages={isolateStages}
       isolates={isolates}
+      completedIsolates={completedIsolates}
     />,
     {
       exitOnCtrlC: false,
@@ -755,4 +757,36 @@ test('completes every isolate once the run succeeds, including reused steps', as
   await startExecution(input, output);
   const frame = await waitForOutput(output, value => value.includes('Workflow run succeeded'));
   assert.match(frame, /✔ Resumed isolate[^\n]*0\/2 done, 2 steps reused/);
+});
+
+test('after a failed run, isolates finished in an earlier attempt show as done, not pending', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const eventsPath = join(root, 'events.jsonl');
+  const {input, output, instance} = renderIsolateExecution(
+    eventsPath,
+    [
+      {id: 'iso-a', label: 'Finished earlier', readPairs: 1},
+      {id: 'iso-b', label: 'Failing again', readPairs: 1},
+      {id: 'iso-c', label: 'Never reached', readPairs: 1},
+    ],
+    async run => {
+      await appendFile(
+        eventsPath,
+        eventLine({type: 'job-started', job_id: 1, rule: 'call', wildcards: {isolate: 'iso-b'}}) +
+          eventLine({type: 'job-failed', job_id: 1, rule: 'call', logs: []}),
+      );
+      return {...run, exitCode: 1};
+    },
+    40,
+    async () => new Set(['iso-a']),
+  );
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  const allOutput = await waitForOutput(output, value => value.includes('Workflow run failed'));
+  const frame = allOutput.slice(allOutput.lastIndexOf('Isolates '));
+  assert.match(frame, /✔ Finished earlier[^\n]*0\/2 done, 2 steps reused/);
+  assert.match(frame, /✖ Failing again[^\n]*failed/);
+  assert.match(frame, /· Never reached[^\n]*pending/);
 });
