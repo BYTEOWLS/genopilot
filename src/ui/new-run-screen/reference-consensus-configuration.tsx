@@ -207,8 +207,9 @@ function isolatesSection(prepared: PreparedReferenceConsensusRun): ReviewSection
 }
 
 const votingExplanations: Record<VotingMethod, string> = {
-  'strict-majority': 'An allele wins only with more than half of all votes cast at a position.',
-  plurality: 'The allele with the unique highest vote count wins.',
+  'strict-majority': 'An allele (a base, or an inserted or deleted sequence) wins only with more than half ' +
+    'of all votes cast at a position.',
+  plurality: 'The allele (a base, or an inserted or deleted sequence) with the unique highest vote count wins.',
 };
 
 /** Outcome of a set of votes under a voting method; a tie for first place is never resolved. */
@@ -376,17 +377,13 @@ export function ReferenceConsensusConfigurationScreen({
     const {backbone} = prepared.configuration.inputs;
     return {
       ...review,
-      preReviewChoices: [{
-        id: 'backbone',
-        label: `Backbone ${backbone.source === 'ncbi' ? backbone.accession : ''}`,
-        defaultValue: 'reuse',
-        options: [
-          {value: 'reuse', label: 'Reuse cache (verify checksum first)'},
-          {value: 'refresh', label: 'Download fresh copy'},
-        ],
-      }],
-      applyPreReviewChoices: choices =>
-        prepareForReview(applyBackboneCacheMode(prepared, choices.backbone === 'refresh' ? 'refresh' : 'reuse')),
+      ncbiCache: {
+        entries: [{
+          id: 'backbone',
+          label: `Backbone ${backbone.source === 'ncbi' ? backbone.accession : ''}`,
+        }],
+        apply: modes => prepareForReview(applyBackboneCacheMode(prepared, modes.backbone ?? 'reuse')),
+      },
     };
   };
 

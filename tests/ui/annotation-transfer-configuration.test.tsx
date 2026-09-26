@@ -617,7 +617,8 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
     frame => frame.includes('GCF_000149205.2') && fieldLine(frame, 'reference-source') === undefined,
   );
 
-  input.write(SPACE);
+  // As on a choice field of the form, ↓ on the cache entry chooses its next option.
+  input.write(ARROW_DOWN);
   await waitForFrame(output, frame => frame !== cacheFrame);
   // Enter acts only on the continue button, which follows the cache choices.
   await startReview(input, output);

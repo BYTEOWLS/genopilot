@@ -1,12 +1,25 @@
-"""Resolve the consensus backbone: normalize a `local` or `ncbi` source into
-the canonical, checksummed `resolved/backbone.fasta` every later rule
-consumes. Requires `SCRIPTS_DIR_SH` and `ENVS_DIR` to be defined by the
-including Snakefile.
+"""Resolve the consensus backbone into a canonical, checksummed FASTA.
 
-As in `resolve_inputs.smk`, the params function takes only `wildcards` and
-repeats this rule's paths as literals, so a configuration-only change such
-as an NCBI cache-mode switch is recorded in Snakemake's job metadata and
-triggers a rerun.
+What it does
+  The backbone is the assembly every isolate's reads are called against. It
+  comes from a local FASTA or a versioned NCBI assembly accession; both end
+  up as the same file:
+
+    resolve_backbone  -> resolved/backbone.fasta, provenance/backbone.fasta.json
+
+  A local file is copied into the run directory. An NCBI accession is
+  downloaded with the NCBI Datasets CLI into a cache shared by all runs
+  (<output_root>/ncbi-accessions-cache/) and copied from there. Whether an
+  existing cache entry is reused (only after its checksum matches) or
+  downloaded again was decided in GenoPilot and saved as `ncbi_cache_mode`
+  in config.yaml; the rule never asks.
+
+Maintainer notes
+  Uses the same script as resolve_inputs.smk. Requires `SCRIPTS_DIR_SH` and
+  `ENVS_DIR` from the including Snakefile. The params functions take only
+  `wildcards` and repeat this rule's paths as literals, so a
+  configuration-only change such as switching the cache mode is recorded in
+  Snakemake's job metadata and triggers a rerun.
 """
 
 import shlex

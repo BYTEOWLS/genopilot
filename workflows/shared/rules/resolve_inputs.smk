@@ -1,15 +1,32 @@
-"""Per-input resolve rules: normalize a `local` or `ncbi` source into the
-canonical, checksummed `resolved/` files every later rule consumes, so
-LiftOn and downstream validation never know which source produced them.
-Requires `SCRIPTS_DIR_SH` and `ENVS_DIR` to be defined by the including
-Snakefile.
+"""Resolve the annotation-transfer inputs into canonical, checksummed files.
 
-Params functions here deliberately take only `wildcards` and reference
-this rule's own `input:`/`output:` paths as literals, rather than
-Snakemake's `input`/`output` objects: a params function with an
-`input`/`output` parameter is not recorded in Snakemake's per-job metadata
-(confirmed against the pinned Snakemake release), so a config-only change
-(e.g. an NCBI cache-mode switch) would silently fail to trigger a rerun.
+What it does
+  The reference (genome + annotation) and the target (genome) each come from
+  a local file or a versioned NCBI assembly accession. Both sources end up
+  as the same files, so no later step needs to know where an input came
+  from:
+
+    resolve_reference  -> resolved/reference.fasta, resolved/reference.gff3
+    resolve_target     -> resolved/target.fasta
+
+  A local file is copied into the run directory. An NCBI accession is
+  downloaded with the NCBI Datasets CLI into a cache shared by all runs
+  (<output_root>/ncbi-accessions-cache/) and copied from there. Whether an
+  existing cache entry is reused (only after its checksum matches) or
+  downloaded again was decided in GenoPilot and saved as `ncbi_cache_mode`
+  in config.yaml; the rule never asks.
+
+  Each resolved file gets a record in provenance/<file>.json: its SHA-256
+  checksum, its source path or accession, and for NCBI downloads the
+  Datasets CLI version.
+
+Maintainer notes
+  Requires `SCRIPTS_DIR_SH` and `ENVS_DIR` from the including Snakefile.
+  The params functions take only `wildcards` and repeat this rule's paths
+  as literals: Snakemake does not record a params function that takes
+  `input` or `output` in its job metadata (confirmed against the pinned
+  release), so a configuration-only change such as switching the cache
+  mode would silently not trigger a rerun.
 """
 
 import shlex

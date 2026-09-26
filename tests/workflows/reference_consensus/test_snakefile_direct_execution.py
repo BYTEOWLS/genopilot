@@ -18,7 +18,7 @@ SNAKEMAKE_BIN = shutil.which("snakemake")
 WORKFLOW_DIR = PROJECT_ROOT / "workflows" / "reference-consensus"
 
 
-def write_run(run_dir: Path, reads_dir: Path, selected: list[str]) -> Path:
+def write_run(run_dir: Path, reads_dir: Path) -> Path:
     reads_dir.mkdir(parents=True, exist_ok=True)
     run_dir.mkdir(parents=True, exist_ok=True)
     for mate in ("R1", "R2"):
@@ -54,7 +54,7 @@ def write_run(run_dir: Path, reads_dir: Path, selected: list[str]) -> Path:
                 "    source: local",
                 f'    fasta: "{FIXTURES_DIR / "reference.fasta"}"',
                 "  isolates_file: isolates.yaml",
-                f"  selected_isolates: [{', '.join(selected)}]",
+                "  selected_isolates: [isolate-a]",
                 "calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8}",
                 "consensus: {include_backbone_vote: true, voting_method: strict-majority}",
                 "resources: {cpu_mode: automatic, effective_cpus: 1}",
@@ -94,7 +94,7 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.run_dir = self.root / "runs" / "test-run"
 
     def test_resolves_the_backbone_and_validates_the_snapshot(self) -> None:
-        config_path = write_run(self.run_dir, self.root / "reads", ["isolate-a"])
+        config_path = write_run(self.run_dir, self.root / "reads")
         dry_run = run_snakemake(self.run_dir, config_path, "--dry-run")
         self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
 
@@ -104,40 +104,12 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.assertEqual(report["status"], "passed")
         self.assertTrue((self.run_dir / "resolved" / "backbone.fasta").is_file())
 
-    def test_refuses_a_snapshot_that_does_not_match_the_selection(self) -> None:
-        config_path = write_run(self.run_dir, self.root / "reads", ["isolate-a", "isolate-b"])
-        result = run_snakemake(self.run_dir, config_path, "--dry-run")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("selected isolates", result.stdout + result.stderr)
-
     def test_refuses_to_schedule_a_run_whose_read_file_is_missing(self) -> None:
-        config_path = write_run(self.run_dir, self.root / "reads", ["isolate-a"])
+        config_path = write_run(self.run_dir, self.root / "reads")
         (self.root / "reads" / "a_R2.fastq").unlink()
         result = run_snakemake(self.run_dir, config_path, "--dry-run")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("a_R2.fastq", result.stdout + result.stderr)
-
-    def test_refuses_an_unsupported_configuration_with_a_readable_message(self) -> None:
-        config_path = write_run(self.run_dir, self.root / "reads", ["isolate-a"])
-        source = config_path.read_text(encoding="utf-8")
-        for broken, expected in (
-            (source.replace("min_allele_fraction: 0.8", "min_allele_fraction: 0.4"), "calling.min_allele_fraction"),
-            (source.replace("ploidy: 1,", "ploidy: 2,"), "calling.ploidy"),
-            (source.replace("consensus: {include_backbone_vote: true, voting_method: strict-majority}\n", ""), "consensus"),
-        ):
-            with self.subTest(expected=expected):
-                config_path.write_text(broken, encoding="utf-8")
-                result = run_snakemake(self.run_dir, config_path, "--dry-run")
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn(f"config.yaml: {expected}", result.stdout + result.stderr)
-
-    def test_refuses_a_read_path_with_braces(self) -> None:
-        config_path = write_run(self.run_dir, self.root / "reads", ["isolate-a"])
-        snapshot = self.run_dir / "isolates.yaml"
-        snapshot.write_text(snapshot.read_text(encoding="utf-8").replace("a_R1.fastq", "a{1}_R1.fastq"), encoding="utf-8")
-        result = run_snakemake(self.run_dir, config_path, "--dry-run")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("must not contain", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

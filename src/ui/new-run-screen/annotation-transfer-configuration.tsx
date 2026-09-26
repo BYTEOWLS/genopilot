@@ -278,22 +278,14 @@ export function AnnotationTransferConfigurationScreen({
     }
     return {
       ...review,
-      preReviewChoices: cacheEntries.map(entry => ({
-        id: entry.input,
-        label: `${entry.input === 'reference' ? 'Reference' : 'Target'} ${entry.accession}`,
-        defaultValue: 'reuse',
-        options: [
-          {value: 'reuse', label: 'Reuse cache (verify checksum first)'},
-          {value: 'refresh', label: 'Download fresh copy'},
-        ],
-      })),
-      applyPreReviewChoices: choices =>
-        prepareForReview(
-          applyNcbiCacheModes(prepared, {
-            reference: choices.reference === 'refresh' ? 'refresh' : 'reuse',
-            target: choices.target === 'refresh' ? 'refresh' : 'reuse',
-          }),
-        ),
+      ncbiCache: {
+        entries: cacheEntries.map(entry => ({
+          id: entry.input,
+          label: `${entry.input === 'reference' ? 'Reference' : 'Target'} ${entry.accession}`,
+        })),
+        apply: modes =>
+          prepareForReview(applyNcbiCacheModes(prepared, {reference: modes.reference, target: modes.target})),
+      },
     };
   };
 

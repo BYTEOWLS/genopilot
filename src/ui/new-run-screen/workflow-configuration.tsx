@@ -25,6 +25,7 @@ import {mutedColor} from '../theme.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {EditPage, Page} from '../components/page.js';
 import {ParameterList, parameterLabelWidth} from '../components/parameter-list.js';
+import {NcbiCacheDecisionPage, type NcbiCacheEntry, type NcbiCacheModes} from './ncbi-cache-decision.js';
 
 // Chrome this screen renders around the windowed field list: the page title and description,
 // margins, the continue button, and the shortcut line. Space consumed by an outer wrapper (such as
@@ -51,13 +52,6 @@ export type WorkflowFormValues = Record<string, string>;
 
 export type PreviousWorkflowRun = {label: string; values: WorkflowFormValues};
 
-export type PreReviewChoice = {
-  id: string;
-  label: string;
-  options: readonly {value: string; label: string}[];
-  defaultValue: string;
-};
-
 /** A review section beyond the form's own fields, such as the resolved inputs in detail. */
 export type ReviewSection = {id: string; title: string; rows: readonly {label: string; value: string}[]};
 
@@ -70,8 +64,14 @@ export type PreparedWorkflowRun<T> = {
   details?: readonly ReviewSection[];
   /** Problems that do not stop the run but that the researcher should see first. */
   warnings?: readonly string[];
-  preReviewChoices?: readonly PreReviewChoice[];
-  applyPreReviewChoices?: (values: Readonly<Record<string, string>>) => PreparedWorkflowRun<T>;
+  /**
+   * Cached NCBI inputs the researcher decides to reuse or download again before the review, and
+   * how those decisions are applied; kept together so a decision can never be dropped.
+   */
+  ncbiCache?: {
+    entries: readonly NcbiCacheEntry[];
+    apply: (modes: NcbiCacheModes) => PreparedWorkflowRun<T>;
+  };
 };
 
 export type WorkflowRunPreparation<T> = (
@@ -89,12 +89,7 @@ type ScreenState<T> =
   | {state: 'editing'}
   | {state: 'validating'}
   | {state: 'invalid'; messages: string[]}
-  | {
-      state: 'pre-review-choices';
-      prepared: PreparedWorkflowRun<T>;
-      selectedIndex: number;
-      values: Record<string, string>;
-    }
+  | {state: 'ncbi-cache-decision'; ncbiCache: NonNullable<PreparedWorkflowRun<T>['ncbiCache']>}
   // `scroll` is the first review row shown when the review is taller than the terminal.
   | {state: 'review'; prepared: PreparedWorkflowRun<T>; scroll: number}
   | {state: 'saving'; prepared: PreparedWorkflowRun<T>; scroll: number}
@@ -410,14 +405,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
     setScreen({state: 'validating'});
     prepareRun(values).then(
       prepared => {
-        const choices = prepared.preReviewChoices ?? [];
-        if (choices.length > 0) {
-          setScreen({
-            state: 'pre-review-choices',
-            prepared,
-            selectedIndex: 0,
-            values: Object.fromEntries(choices.map(choice => [choice.id, choice.defaultValue])),
-          });
+        if (prepared.ncbiCache && prepared.ncbiCache.entries.length > 0) {
+          setScreen({state: 'ncbi-cache-decision', ncbiCache: prepared.ncbiCache});
         } else {
           setScreen({state: 'review', prepared, scroll: 0});
         }
@@ -442,39 +431,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       if (browserId) {
         return;
       }
-      if (screen.state === 'pre-review-choices') {
-        const choices = screen.prepared.preReviewChoices ?? [];
-        const selectedChoice = choices[screen.selectedIndex];
-        // The rows are the choices, then the continue button at index `choices.length`.
-        const rowCount = choices.length + 1;
-        if (key.escape) {
-          setScreen({state: 'editing'});
-        } else if (key.tab || key.upArrow || key.downArrow) {
-          const offset = key.upArrow || (key.tab && key.shift) ? -1 : 1;
-          setScreen({
-            ...screen,
-            selectedIndex: (screen.selectedIndex + offset + rowCount) % rowCount,
-          });
-        } else if (input === ' ' && selectedChoice) {
-          const currentIndex = Math.max(
-            0,
-            selectedChoice.options.findIndex(
-              option => option.value === screen.values[selectedChoice.id],
-            ),
-          );
-          const option = selectedChoice.options[(currentIndex + 1) % selectedChoice.options.length];
-          if (option) {
-            setScreen({
-              ...screen,
-              values: {...screen.values, [selectedChoice.id]: option.value},
-            });
-          }
-        } else if (key.return && screen.selectedIndex === choices.length) {
-          const prepared = screen.prepared.applyPreReviewChoices?.(screen.values);
-          if (prepared) {
-            setScreen({state: 'review', prepared, scroll: 0});
-          }
-        }
+      if (screen.state === 'ncbi-cache-decision') {
+        // The cache decision page owns its own keys, including the Esc that returns here.
         return;
       }
       if (screen.state === 'review') {
@@ -629,33 +587,15 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
     );
   }
 
-  if (screen.state === 'pre-review-choices') {
-    const choices = screen.prepared.preReviewChoices ?? [];
+  if (screen.state === 'ncbi-cache-decision') {
+    const {ncbiCache} = screen;
     return (
-      <EditPage
-        title="NCBI cache entries found"
-        description="Choose whether to verify and reuse each cache entry or download it again."
-        shortcuts={[
-          'Tab/↑/↓ — Entry',
-          screen.selectedIndex === choices.length ? 'Enter — Continue to review' : 'Space — Select',
-        ]}
-        saveLabel="Continue to review"
-        saveSelected={screen.selectedIndex === choices.length}
-      >
-        {choices.map((choice, index) => (
-          <Box key={choice.id} marginTop={index === 0 ? 0 : 1} flexDirection="column">
-            <Text color={index === screen.selectedIndex ? 'cyan' : undefined}>
-              {index === screen.selectedIndex ? '›' : ' '} {sanitizeTerminalText(choice.label)}
-            </Text>
-            {choice.options.map(option => (
-              <Text key={option.value} color={screen.values[choice.id] === option.value ? undefined : mutedColor}>
-                {'    '}({screen.values[choice.id] === option.value ? '●' : ' '}){' '}
-                {sanitizeTerminalText(option.label)}
-              </Text>
-            ))}
-          </Box>
-        ))}
-      </EditPage>
+      <NcbiCacheDecisionPage
+        entries={ncbiCache.entries}
+        inputActive={inputActive}
+        onBack={() => setScreen({state: 'editing'})}
+        onContinue={modes => setScreen({state: 'review', prepared: ncbiCache.apply(modes), scroll: 0})}
+      />
     );
   }
 

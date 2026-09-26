@@ -172,6 +172,7 @@ function renderScreen(
     inspectRun?: (prepared: PreparedReferenceConsensusRun) => Promise<RunInspection>;
     saveRun?: (prepared: PreparedReferenceConsensusRun) => Promise<string>;
     executeSnakemakeRun?: typeof executeSnakemakeRun;
+    backboneCached?: boolean;
     rows?: number;
   } = {},
 ) {
@@ -197,7 +198,7 @@ function renderScreen(
         return options.inspectRun ? options.inspectRun(prepared) : {sameFiles: []};
       }}
       saveRun={options.saveRun ?? (async () => '/research/runs/config.yaml')}
-      checkBackboneCache={async () => false}
+      checkBackboneCache={async () => options.backboneCached ?? false}
       checkNcbiApiKey={async () => true}
       discoverPreviousRuns={async () => []}
       executeSnakemakeRun={options.executeSnakemakeRun}
@@ -308,6 +309,38 @@ test('configures a run from cataloged isolates, reviews it, and allows only a dr
   await press(input, ENTER);
   await waitUntil(() => executedModes.length === 2, 'the second dry run starts');
   assert.deepEqual(executedModes, ['dry-run', 'dry-run']);
+});
+
+test('asks how to handle a cached backbone and saves the decision', async context => {
+  let saved: PreparedReferenceConsensusRun | undefined;
+  const {input, output, reviewed} = renderScreen(context, {
+    rows: 80,
+    backboneCached: true,
+    saveRun: async prepared => {
+      saved = prepared;
+      return `${prepared.outputDirectory}/config.yaml`;
+    },
+  });
+  await waitForFrame(output, frame => selectedLine(frame) !== undefined);
+  await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
+  await chooseIsolates(input, output, ['wild-type']);
+  await startReview(input, output);
+
+  await waitUntil(() => reviewed.length === 1, 'the run is prepared');
+  // The cache decision replaces the form and names the cached accession.
+  const cacheFrame = await waitForFrame(
+    output,
+    frame => frame.includes('GCF_000149205.2') && fieldLine(frame, 'isolates') === undefined,
+  );
+  // As on a choice field of the form, ↓ on the cache entry chooses its next option.
+  await press(input, ARROW_DOWN);
+  await waitForFrame(output, frame => frame !== cacheFrame);
+  await startReview(input, output);
+  await waitForFrame(output, frame => frame.includes(reviewed[0]!.configuration.run.id));
+  await press(input, ENTER);
+  await waitUntil(() => saved !== undefined, 'the run is saved');
+  const backbone = saved?.configuration.inputs.backbone;
+  assert.equal(backbone?.source === 'ncbi' ? backbone.ncbi_cache_mode : undefined, 'refresh');
 });
 
 test('scrolls a review taller than the terminal', async context => {

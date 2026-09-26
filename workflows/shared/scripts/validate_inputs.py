@@ -285,8 +285,8 @@ def main(argv: list[str] | None = None) -> int:
     args.output.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     # Always succeeds: a "failed" status is carried in the report itself so
     # Snakemake preserves it as diagnostic evidence instead of deleting the
-    # output of a failed job. A later stage gates on this report's status
-    # before LiftOn runs, rather than this script failing the job directly.
+    # output of a failed job. transfer_annotation checks this report's status
+    # (require_passed_validation.py) and refuses to start LiftOn unless it passed.
     return 0
 
 

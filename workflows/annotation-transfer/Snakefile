@@ -1,11 +1,43 @@
-"""Entry point for the annotation-transfer workflow.
+"""Annotation transfer: copy a reference genome's gene annotation onto a target genome.
 
-Invoked with `--directory <run-dir> --configfile <run-dir>/config.yaml` so
-every relative path below resolves inside that run's isolated workspace.
-Rules are added incrementally according to tasks.md. Resource
-locations are relative to this Snakefile's own packaged directory so the
-CLI resolves workflow assets independently of the caller's working
-directory.
+Steps, in the order they run (each is one rule; paths are inside the run
+directory, and every step writes its log to logs/):
+
+  1. resolve_reference, resolve_target           shared/rules/resolve_inputs.smk
+       Copy local files or download NCBI accessions, with checksums.
+       -> resolved/reference.fasta, resolved/reference.gff3, resolved/target.fasta
+  2. validate_inputs                             shared/rules/validate_inputs.smk
+       Check the structure of the FASTA and GFF3 inputs; LiftOn only starts
+       when this report passed.
+       -> results/input-validation.json
+  3. transfer_annotation                         shared/rules/transfer_annotation.smk
+       LiftOn maps the reference gene models onto the target genome.
+       -> results/annotation/lifton.raw.gff3, results/annotation/lifton_output/
+  4. prefix_annotation (only with an ID prefix)  shared/rules/prefix_annotation.smk
+       Prefix the feature IDs of the transferred annotation.
+       -> results/annotation/lifton.prefixed.gff3
+  5. validate_annotation                         shared/rules/validate_annotation.smk
+       Check the structure of the final annotation.
+       -> results/validation.json
+  6. summarize_annotation_transfer               shared/rules/summarize_results.smk
+       Per-feature table, metrics, and completion summary.
+       -> results/feature-transfer.tsv, results/metrics.json, results/summary.json
+  7. record_annotation_transfer_provenance       shared/rules/record_provenance.smk
+       Checksums, tool versions, and commands of the whole run.
+       -> artifacts.yaml, provenance/run.json
+
+Running without GenoPilot: GenoPilot saves config.yaml into a new run
+directory. The same run can then be started directly with
+
+  snakemake --snakefile <package>/workflows/annotation-transfer/Snakefile \
+    --directory <run-dir> --configfile <run-dir>/config.yaml \
+    --cores <n> --use-conda
+
+The workflow trusts config.yaml as GenoPilot saved it and does not check it
+again; do not edit the configuration or the packaged workflow.
+
+Packaged rules, scripts, and environments are found relative to this file,
+never relative to the working directory.
 """
 
 import shlex
@@ -13,12 +45,14 @@ from pathlib import Path
 
 configfile: "config.yaml"
 
+# Packaged locations, relative to this Snakefile rather than the working directory.
 WORKFLOW_DIR = Path(workflow.basedir)
 SHARED_DIR = WORKFLOW_DIR.parent / "shared"
 SCRIPTS_DIR = SHARED_DIR / "scripts"
 ENVS_DIR = SHARED_DIR / "envs"
 SCRIPTS_DIR_SH = shlex.quote(str(SCRIPTS_DIR))
 
+# The steps, in the order they run; see the list at the top of this file.
 include: str(SHARED_DIR / "rules" / "resolve_inputs.smk")
 include: str(SHARED_DIR / "rules" / "validate_inputs.smk")
 include: str(SHARED_DIR / "rules" / "transfer_annotation.smk")
@@ -28,6 +62,7 @@ include: str(SHARED_DIR / "rules" / "summarize_results.smk")
 include: str(SHARED_DIR / "rules" / "record_provenance.smk")
 
 
+# The files a finished run must have. Asking for them makes Snakemake run every step above.
 rule all:
     input:
         "results/input-validation.json",

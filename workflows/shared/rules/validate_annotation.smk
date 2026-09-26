@@ -1,10 +1,20 @@
-"""Validate the transferred GFF3's structure and ID/Parent relationships.
+"""Check the structure of the final transferred annotation.
 
-Validates `ANNOTATION_GFF3` — the prefixed GFF3 when an annotation ID
-prefix is configured, the raw LiftOn GFF3 when none is — so the file this
-gates is always the one downstream stages consume. Requires
-`SCRIPTS_DIR_SH` and `ANNOTATION_GFF3` to be defined by the including
-Snakefile.
+What it does
+  Runs the same GFF3 checks as input validation (columns, coordinates,
+  strands, CDS phase, IDs, and Parent relationships) on the annotation later
+  steps use: the prefixed GFF3 when an ID prefix is configured, otherwise
+  LiftOn's raw GFF3.
+
+  Reads:  ANNOTATION_GFF3 (defined in prefix_annotation.smk)
+  Writes: results/validation.json (status "passed" or "failed", and every problem found)
+
+  The job succeeds even when validation fails, so the report is kept as
+  evidence.
+
+Maintainer notes
+  Requires `SCRIPTS_DIR_SH` and `ANNOTATION_GFF3` from the including
+  Snakefile.
 """
 
 rule validate_annotation:

@@ -1,13 +1,24 @@
-"""Validate a consensus run's inputs before any per-isolate processing:
-the resolved backbone FASTA and every read file of the isolate snapshot.
-Requires `SCRIPTS_DIR_SH` and `ISOLATES` (the snapshot's isolates) to be
-defined by the including Snakefile.
+"""Check a consensus run's inputs before any isolate is processed.
 
-Every read file is a declared input, so Snakemake itself refuses to
-schedule the run when one is missing. The Snakefile has already refused
-paths containing braces, which Snakemake cannot declare as inputs. The params function takes only
-`wildcards`; the snapshot is immutable for a run, so its arguments change
-only when the snapshot does.
+What it does
+  Checks that the backbone FASTA is well formed and that every read file of
+  every selected isolate exists, is readable, and is not empty. The content
+  of the FASTQ files is checked later, during per-isolate processing.
+
+  Reads:  resolved/backbone.fasta, every R1/R2 file listed in isolates.yaml
+  Writes: results/input-validation.json
+
+  Every read file is a declared input, so Snakemake itself refuses to
+  schedule the run while one is missing. Unlike annotation-transfer input
+  validation, a failed validation fails this job, and the report is printed
+  into its log as evidence.
+
+Maintainer notes
+  Requires `SCRIPTS_DIR_SH` and `ISOLATES` (the snapshot's isolates) from the
+  including Snakefile. GenoPilot refuses read paths containing braces before
+  it saves the snapshot, because Snakemake cannot declare them as inputs.
+  The params function takes only `wildcards`; the snapshot never changes
+  for a run, so its arguments change only when the snapshot does.
 """
 
 import shlex

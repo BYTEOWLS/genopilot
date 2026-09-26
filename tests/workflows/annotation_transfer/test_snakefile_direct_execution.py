@@ -509,6 +509,38 @@ class DirectExecutionContractTests(unittest.TestCase):
             self.assertEqual(summary["status"], "validation-failed")
             self.assertTrue((run_dir / "provenance" / "run.json").is_file())
 
+    def test_failed_input_validation_stops_the_run_before_lifton(self) -> None:
+        """The input report is kept as evidence, and LiftOn never starts on invalid inputs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir, config_path, bin_dir, _env = self.prepare(Path(tmp))
+            broken_gff3 = Path(tmp) / "broken.gff3"
+            broken_gff3.write_text(
+                "##gff-version 3\nchr1\tsrc\tmRNA\t1\t10\t.\t+\t.\tID=m1;Parent=missing\n",
+                encoding="utf-8",
+            )
+            config_path.write_text(
+                config_path.read_text(encoding="utf-8").replace(
+                    str(FIXTURES_DIR / "reference.gff3"), str(broken_gff3)
+                ),
+                encoding="utf-8",
+            )
+            started = Path(tmp) / "lifton-started"
+            env = fake_lifton_environment(bin_dir, "interrupt", FAKE_LIFTON_STARTED=str(started))
+
+            result = run_snakemake(run_dir, config_path, env=env)
+
+            self.assertNotEqual(result.returncode, 0)
+            report = json.loads(
+                (run_dir / "results" / "input-validation.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(report["status"], "failed")
+            self.assertFalse(started.exists())
+            self.assertFalse((run_dir / "results" / "annotation" / "lifton.raw.gff3").exists())
+            self.assertIn(
+                "input-validation.json",
+                (run_dir / "logs" / "transfer-annotation.log").read_text(encoding="utf-8"),
+            )
+
     def test_interrupted_run_resumes_in_the_same_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

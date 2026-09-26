@@ -30,6 +30,7 @@ Keep the package independent of private research data, machine-specific paths, a
 
 - Use Snakemake as the only workflow scheduler.
 - Keep every workflow runnable directly without the TUI.
+- Validate configurations only in the application. Snakefiles trust the saved `config.yaml` and its snapshots and do not repeat that validation in Python; direct runs are supported only with unmodified packaged workflows and application-saved configurations. Validation a run needs — resolved inputs, input files, and intermediate outputs — stays in the workflow's rules.
 - Keep Snakemake rules non-interactive.
 - Stop at explicit decision targets, let the TUI save decisions to YAML, and then invoke the next target.
 - Reuse completed upstream artifacts when only decisions or reports change.
@@ -37,7 +38,7 @@ Keep the package independent of private research data, machine-specific paths, a
 
 Write rule scripts against the standard library only, so their tests run without a provisioned environment. Give a rule a `params:` function only when an argument is not already a fixed literal, and let that function take `wildcards` alone, repeating its rule's paths as literals: a params function that declares an `input` or `output` parameter is not recorded in Snakemake's per-job metadata, so a configuration-only change would silently fail to trigger a rerun.
 
-Validate imported artifacts and record their checksums, versions, configuration compatibility, and generated/imported/cached origin. Never manipulate timestamps to trick Snakemake. Clearly label cached or imported stages and never simulate expensive computation.
+Validate imported artifacts and record their checksums, versions, configuration compatibility, and generated/imported/cached origin. An input file from outside the workflow is `imported`, including a verified reuse of the NCBI download cache (recorded through `downloaded: false`); `cached` is reserved for a stage whose results are reused from elsewhere instead of computed in this run. Never manipulate timestamps to trick Snakemake. Clearly label cached or imported stages and never simulate expensive computation.
 
 ## Scientific and reproducibility guidelines
 
