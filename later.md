@@ -48,6 +48,13 @@ consensus_protein_status
 review_status
 ```
 
+## Workflow code layout
+
+Revisit once the reference-consensus workflow is complete (consensus tasks 4a–4c), when two finished workflows show what is actually reused.
+
+- **Snakemake assets:** most of `workflows/shared/` belongs to one workflow. Only the run-events logger plugin, the `ncbi-datasets-cli` environment, `resolve_input.py`, and the FASTA/GFF3 parsers inside `validate_inputs.py` are used by both. Move the rest into each workflow's own `rules/`, `scripts/`, and `envs/`. Before moving `envs/lifton/`, change `collect_run_provenance.py`: it reads the pins of every environment next to it and rejects a package pinned to two different versions.
+- **TypeScript:** each workflow has its own `src/workflows/<id>/configuration.ts` and `run-configuration.ts`, plus a configuration screen under `src/ui/new-run-screen/`, that map generic manifest parameters to and from `config.yaml`. Check which of these a manifest-driven mapping could replace, and keep only the workflow-specific parts, such as the isolate snapshot and the review details.
+
 ## Advanced LiftOn controls
 
 The first annotation-transfer workflow uses one pinned same-species profile without researcher-facing LiftOn tuning. Revisit advanced controls only if baseline results demonstrate a concrete need.
