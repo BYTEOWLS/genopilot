@@ -49,12 +49,12 @@
   "dependencies": {
     "@inkjs/ui": "2.0.0",
     "ink": "7.1.1",
-    "react": "19.2.8",
+    "react": "19.3.0",
     "yaml": "2.9.1"
   },
   "devDependencies": {
     "@types/node": "26.6.2",
-    "@types/react": "19.2.18",
+    "@types/react": "19.3.0",
     "tsx": "4.23.15",
     "typescript": "7.0.2"
   }
