@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: If you use GenoPilot in your research, please cite the exact version you used.
+type: software
+title: GenoPilot
+abstract: >-
+  Guided, reproducible genome workflows for researchers without deep
+  bioinformatics expertise. A terminal interface configures and runs packaged,
+  pinned Snakemake workflows that remain runnable directly through Snakemake.
+authors:
+  - family-names: Oberwasserlechner
+    given-names: Michael
+version: 0.1.0
+license: MIT
+repository-code: https://github.com/BYTEOWLS/genopilot
+url: https://www.npmjs.com/package/@byteowls/genopilot
+keywords:
+  - bioinformatics
+  - genomics
+  - reproducibility
+  - Snakemake
+  - consensus genome
+  - annotation transfer
+  - terminal user interface
