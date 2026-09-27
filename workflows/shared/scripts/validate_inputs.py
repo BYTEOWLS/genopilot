@@ -3,10 +3,13 @@
 
 Checks FASTA structure, GFF3 structure and ID/Parent relationships, and the
 cross-references between the reference GFF3 and reference FASTA. Emits the
-`input-validation` artifact (see manifest.yaml). Kept dependency-free
-(standard library only) since these are structural checks, not sequence
-analysis. See AGENTS.md "Scientific and reproducibility guidelines": validate
-inputs before dependent stages run.
+annotation-transfer `input-validation` artifact (see its manifest.yaml).
+Its FASTA parser is also imported by reference-consensus's
+validate_run_inputs.py.
+
+Kept dependency-free (standard library only) since these are structural
+checks, not sequence analysis. See AGENTS.md "Scientific and reproducibility
+guidelines": validate inputs before dependent stages run.
 """
 
 from __future__ import annotations

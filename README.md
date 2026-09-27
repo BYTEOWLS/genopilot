@@ -16,6 +16,17 @@
 
 The terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI, using a run configuration GenoPilot saved; the workflows do not validate edited configurations and must not be modified. Linux and macOS are supported.
 
+## Running a workflow directly
+
+Each Snakefile's header lists its steps and the direct command for a run directory GenoPilot saved. GenoPilot adds `--keep-going`, so independent jobs, such as other isolates, finish when one fails, and its run-events logger, which records each job's progress and command in the run's `events.jsonl`. To record them in a direct run too, make the packaged plugin importable and name the logger:
+
+```bash
+PYTHONPATH=<package>/workflows/shared/logging snakemake ... \
+  --logger genopilot-run-events --logger-genopilot-run-events-path <run-dir>/events.jsonl
+```
+
+Without it, the reference-consensus provenance lists its commands as unavailable.
+
 ## Installation
 
 Node.js is the only manual prerequisite because the CLI itself requires Node.js to start.
@@ -71,11 +82,15 @@ workflows/
 │   ├── manifest.yaml
 │   └── manifest.parameters.yaml
 ├── comparison/              Comparison workflow scaffold
-├── reference-consensus/     Cohort consensus: configuration, backbone resolution, input validation
+├── reference-consensus/     Cohort consensus; per-isolate processing so far
 │   ├── Snakefile
 │   ├── manifest.yaml
-│   └── manifest.parameters.yaml
-└── shared/                  Shared rules, scripts, and environments
+│   ├── manifest.parameters.yaml
+│   ├── rules/               This workflow's rules
+│   ├── scripts/             Their standard-library scripts
+│   └── envs/                Their pinned Conda environments
+└── shared/                  Annotation-transfer's rules, scripts, and environments, and what both
+                             workflows use, including the run-events logger plugin
 ```
 
 Only selected, redistributable workflow resources in this directory are included in the npm package. TypeScript application tests and Python workflow tests share `tests/`; their runners distinguish them by filename.
@@ -139,8 +154,13 @@ The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downlo
 | minimap2 | 2.31 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
 | miniprot | 0.18 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
 | parasail-python | 1.3.4 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
-| Python | 3.11.16 | conda-forge | [`lifton`](workflows/shared/envs/lifton/environment.yaml), [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
+| Python | 3.11.16 | conda-forge | [`lifton`](workflows/shared/envs/lifton/environment.yaml), [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml), [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
 | NCBI Datasets CLI | 18.37.0 | conda-forge | [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
+| fastp | 1.3.7 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+| BWA | 0.7.19 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+| samtools | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+| BCFtools | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+| HTSlib | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
 
 Dependabot proposes updates for the rule environments, npm, and GitHub Actions, but it changes only the environment file. Runtime pins in `src/tooling/policy.ts` are updated manually, including the Pixi download checksums.
 
@@ -148,7 +168,7 @@ Dependabot proposes updates for the rule environments, npm, and GitHub Actions, 
 
 Every rule-environment bump changes:
 
-1. `workflows/shared/envs/<environment>/environment.yaml`: the pin itself. Run provenance reads its configured tool versions from these files, so nothing else records the version.
+1. `workflows/<shared or workflow>/envs/<environment>/environment.yaml`: the pin itself. Run provenance reads its configured tool versions from these files, so nothing else records the version.
 2. This README: the version table above.
 3. `CHANGELOG.md`: an entry under *Unreleased*.
 
@@ -166,11 +186,11 @@ Then run the full verification, including the per-rule Conda integration tests, 
 ```bash
 RUN_SNAKEMAKE_CONDA_INTEGRATION=1 python3 -m unittest discover -s tests -p "test_*.py"
 ```
-CI skips these tests, so run them before merging any change to `workflows/shared/envs/`, including Dependabot updates. Their expected coordinates on the synthetic fixtures detect changes in transfer results.
+CI skips these tests, so run them before merging any change to a `workflows/*/envs/` directory, including Dependabot updates. Their expected coordinates on the synthetic fixtures detect changes in transfer results.
 
 Windows support through WSL2 is planned after the core Linux and macOS implementation is complete. Native Windows execution is out of scope.
 
-Tool version validation, actionable per-tool failure diagnostics, guided installation, stale-lock recovery, and manual rechecks are implemented. Repair tooling remains tracked in [`tasks.md`](tasks.md).
+Tool version validation, actionable per-tool failure diagnostics, guided installation, stale-lock recovery, and manual rechecks are implemented. A repair path for broken installations is deferred in [`later.md`](later.md).
 
 ## Isolate catalog
 

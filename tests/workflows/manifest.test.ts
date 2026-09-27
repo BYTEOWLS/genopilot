@@ -158,6 +158,38 @@ test('rejects duplicate stage and artifact identifiers and artifact paths', () =
   assert.ok(messages.some(message => message.includes('duplicate artifact path')));
 });
 
+test('accepts a per-isolate split of a stage\'s own rules', () => {
+  const value = manifest();
+  const stages = value.stages as Array<Record<string, unknown>>;
+  stages[1] = {
+    ...stages[1],
+    rules: ['index', 'align_pair', 'call_isolate'],
+    per_isolate: {read_pair_rules: ['align_pair'], isolate_rules: ['call_isolate']},
+  };
+
+  const parsed = validateWorkflowManifest(value);
+
+  assert.deepEqual(parsed.stages[1]?.per_isolate, {read_pair_rules: ['align_pair'], isolate_rules: ['call_isolate']});
+});
+
+test('rejects a per-isolate split with foreign, repeated, missing, or unknown entries', () => {
+  const value = manifest();
+  const stages = value.stages as Array<Record<string, unknown>>;
+  stages[1] = {
+    ...stages[1],
+    rules: ['align_pair', 'call_isolate'],
+    per_isolate: {read_pair_rules: ['align_pair', 'other_rule'], isolate_rules: ['align_pair'], extra: []},
+  };
+  stages[2] = {...stages[2], rules: ['review_rule'], per_isolate: {read_pair_rules: []}};
+  const paths = validationIssues(value).map(issue => issue.path);
+
+  assert.ok(paths.includes('$.stages[1].per_isolate.read_pair_rules[1]'));
+  assert.ok(paths.includes('$.stages[1].per_isolate.isolate_rules[0]'));
+  assert.ok(paths.includes('$.stages[1].per_isolate.extra'));
+  assert.ok(paths.includes('$.stages[2].per_isolate.read_pair_rules'));
+  assert.ok(paths.includes('$.stages[2].per_isolate.isolate_rules'));
+});
+
 test('rejects artifacts that reference unknown stages', () => {
   const value = manifest();
   const artifacts = value.artifacts as Array<Record<string, unknown>>;

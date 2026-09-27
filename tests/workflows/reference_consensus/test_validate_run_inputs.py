@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ..annotation_transfer._load import load_script
+from ._load import load_script
 
 validate_run_inputs = load_script("validate_run_inputs")
 

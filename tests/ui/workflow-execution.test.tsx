@@ -617,3 +617,176 @@ test('skips the success follow-up when the execution fails', async context => {
   await new Promise<void>(resolve => setTimeout(resolve, 50));
   assert.equal(followUps, 0);
 });
+
+const isolateStages = [
+  {
+    id: 'process',
+    label: 'Process',
+    rules: ['index', 'align_pair', 'call'],
+    per_isolate: {read_pair_rules: ['align_pair'], isolate_rules: ['call']},
+  },
+];
+
+function renderIsolateExecution(
+  eventsPath: string,
+  isolates: readonly {id: string; label: string; readPairs: number}[],
+  executeRun: (run: WorkflowRun) => Promise<WorkflowRunResult>,
+  rows = 40,
+  completedIsolates?: () => Promise<ReadonlySet<string>>,
+): {input: TestInput; output: TestOutput; instance: ReturnType<typeof render>} {
+  const input = new TestInput();
+  const output = new TestOutput();
+  output.rows = rows;
+  const instance = render(
+    <WorkflowExecutionScreen
+      configurationPath="/run/config.yaml"
+      prepareRun={mode => ({
+        mode,
+        command: `/managed/snakemake${mode === 'dry-run' ? ' --dry-run' : ''}`,
+        stdoutLogPath: '/run/logs/stdout.log',
+        stderrLogPath: '/run/logs/stderr.log',
+        ...(mode === 'execute' ? {eventsPath} : {}),
+      })}
+      executeRun={executeRun}
+      onBack={() => {}}
+      inputActive
+      stages={isolateStages}
+      isolates={isolates}
+      completedIsolates={completedIsolates}
+    />,
+    {
+      exitOnCtrlC: false,
+      interactive: true,
+      patchConsole: false,
+      stdin: input as unknown as NodeJS.ReadStream,
+      stdout: output as unknown as NodeJS.WriteStream,
+    },
+  );
+  return {input, output, instance};
+}
+
+test('follows every isolate through its own jobs and marks only the failing one', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const eventsPath = join(root, 'events.jsonl');
+  let releaseRun = (): void => {};
+  const finished = new Promise<void>(resolve => {
+    releaseRun = resolve;
+  });
+  const isolates = [
+    {id: 'iso-a', label: 'First isolate', readPairs: 2},
+    {id: 'iso-b', label: 'Second isolate', readPairs: 1},
+  ];
+  const {input, output, instance} = renderIsolateExecution(eventsPath, isolates, async run => {
+    await finished;
+    return {...run, exitCode: 1};
+  });
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  // Two read pairs and one isolate rule, and one read pair and one isolate rule.
+  const pendingFrame = await waitForOutput(output, value => value.includes('First isolate'));
+  assert.match(pendingFrame, /· First isolate[^\n]*0\/3/);
+  assert.match(pendingFrame, /· Second isolate[^\n]*0\/2/);
+
+  await appendFile(
+    eventsPath,
+    eventLine({type: 'run-info', jobs: {index: 1, align_pair: 3, call: 2}, total: 6}) +
+      eventLine({type: 'job-started', job_id: 1, rule: 'index', wildcards: {}}) +
+      eventLine({type: 'job-started', job_id: 2, rule: 'align_pair', wildcards: {isolate: 'iso-a', pair: '1'}}) +
+      eventLine({type: 'job-started', job_id: 3, rule: 'align_pair', wildcards: {isolate: 'iso-b', pair: '1'}}) +
+      eventLine({type: 'job-finished', job_id: 3}) +
+      eventLine({type: 'job-started', job_id: 4, rule: 'call', wildcards: {isolate: 'iso-b'}}),
+  );
+  output.clearOutput();
+  const runningFrame = await waitForOutput(output, value => /● Second isolate[^\n]*1\/2/.test(value));
+  assert.match(runningFrame, /● First isolate[^\n]*0\/3 running align pair/);
+
+  await appendFile(
+    eventsPath,
+    eventLine({type: 'job-failed', job_id: 4, rule: 'call', logs: []}) +
+      eventLine({type: 'job-finished', job_id: 2}),
+  );
+  releaseRun();
+  const finalFrame = await waitForOutput(output, value => value.includes('Workflow run failed'));
+  assert.match(finalFrame, /✖ Second isolate[^\n]*1\/2 failed/);
+  assert.match(finalFrame, /● First isolate[^\n]*1\/3/);
+});
+
+test('keeps failing and running isolates visible when the terminal is short', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const eventsPath = join(root, 'events.jsonl');
+  const isolates = Array.from({length: 8}, (_, index) => ({
+    id: `iso-${String(index + 1)}`,
+    label: `Isolate number ${String(index + 1)}`,
+    readPairs: 1,
+  }));
+  const {input, output, instance} = renderIsolateExecution(eventsPath, isolates, async run => {
+    await appendFile(
+      eventsPath,
+      eventLine({type: 'job-started', job_id: 7, rule: 'align_pair', wildcards: {isolate: 'iso-8', pair: '1'}}) +
+        eventLine({type: 'job-failed', job_id: 7, rule: 'align_pair', logs: []}),
+    );
+    return {...run, exitCode: 1};
+  }, 16);
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  const allOutput = await waitForOutput(output, value => value.includes('Workflow run failed'));
+  // Only the final frame counts; earlier frames rightly listed other isolates.
+  const frame = allOutput.slice(allOutput.lastIndexOf('Isolates '));
+  // A quarter of 16 rows fits four isolates: the failed one first, then the others in order.
+  assert.match(frame, /✖ Isolate number 8/);
+  assert.match(frame, /· Isolate number 3/);
+  assert.ok(!frame.includes('Isolate number 4'));
+  assert.match(frame, /… 4 more isolates/);
+});
+
+test('completes every isolate once the run succeeds, including reused steps', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const eventsPath = join(root, 'events.jsonl');
+  const {input, output, instance} = renderIsolateExecution(
+    eventsPath,
+    [{id: 'iso-a', label: 'Resumed isolate', readPairs: 1}],
+    async run => ({...run, exitCode: 0}),
+  );
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  const frame = await waitForOutput(output, value => value.includes('Workflow run succeeded'));
+  assert.match(frame, /✔ Resumed isolate[^\n]*0\/2 done, 2 steps reused/);
+});
+
+test('after a failed run, isolates finished in an earlier attempt show as done, not pending', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const eventsPath = join(root, 'events.jsonl');
+  const {input, output, instance} = renderIsolateExecution(
+    eventsPath,
+    [
+      {id: 'iso-a', label: 'Finished earlier', readPairs: 1},
+      {id: 'iso-b', label: 'Failing again', readPairs: 1},
+      {id: 'iso-c', label: 'Never reached', readPairs: 1},
+    ],
+    async run => {
+      await appendFile(
+        eventsPath,
+        eventLine({type: 'job-started', job_id: 1, rule: 'call', wildcards: {isolate: 'iso-b'}}) +
+          eventLine({type: 'job-failed', job_id: 1, rule: 'call', logs: []}),
+      );
+      return {...run, exitCode: 1};
+    },
+    40,
+    async () => new Set(['iso-a']),
+  );
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  const allOutput = await waitForOutput(output, value => value.includes('Workflow run failed'));
+  const frame = allOutput.slice(allOutput.lastIndexOf('Isolates '));
+  assert.match(frame, /✔ Finished earlier[^\n]*0\/2 done, 2 steps reused/);
+  assert.match(frame, /✖ Failing again[^\n]*failed/);
+  assert.match(frame, /· Never reached[^\n]*pending/);
+});

@@ -7,6 +7,7 @@ import {render} from 'ink';
 import type {Isolate, IsolateCatalog} from '../../src/isolates/catalog.js';
 import {ReferenceConsensusConfigurationScreen} from '../../src/ui/new-run-screen/reference-consensus-configuration.js';
 import type {executeSnakemakeRun} from '../../src/workflows/execution.js';
+import {parseWorkflowManifest} from '../../src/workflows/manifest.js';
 import {parseParameterDefinitions} from '../../src/workflows/parameter-definitions.js';
 import type {
   PreparedReferenceConsensusRun,
@@ -16,6 +17,10 @@ import type {
 const packagedParameterDefinitions = parseParameterDefinitions(
   readFileSync(new URL('../../workflows/reference-consensus/manifest.parameters.yaml', import.meta.url), 'utf8'),
 );
+
+const packagedStages = parseWorkflowManifest(
+  readFileSync(new URL('../../workflows/reference-consensus/manifest.yaml', import.meta.url), 'utf8'),
+).stages;
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -188,6 +193,7 @@ function renderScreen(
       inputActive
       availableCpus={4}
       parameterDefinitions={packagedParameterDefinitions}
+      stages={packagedStages}
       loadIsolateCatalogSnapshot={async () => {
         snapshotLoads += 1;
         return options.catalog ?? catalog;
@@ -246,7 +252,7 @@ test('requires at least one isolate before preparing the run', async context => 
   assert.equal(snapshotLoads(), 0);
 });
 
-test('configures a run from cataloged isolates, reviews it, and allows only a dry run', async context => {
+test('configures a run from cataloged isolates, reviews it, and starts a dry run or an execution', async context => {
   const executedModes: string[] = [];
   let saved: PreparedReferenceConsensusRun | undefined;
   const {input, output, reviewed} = renderScreen(context, {
@@ -295,20 +301,18 @@ test('configures a run from cataloged isolates, reviews it, and allows only a dr
   const onStartPage = (next: string): boolean =>
     next.includes('--dry-run') && next.includes('workflows/reference-consensus/Snakefile');
   await waitForFrame(output, onStartPage);
-  // Execution is listed but cannot be chosen: moving down keeps the dry run selected.
-  await press(input, ARROW_DOWN);
-  await waitForFrame(output, onStartPage);
   await press(input, ENTER);
   await waitUntil(() => executedModes.length === 1, 'the dry run starts');
   assert.deepEqual(executedModes, ['dry-run']);
-  // After the dry run, Esc offers the dry run again rather than the unavailable execution.
+  // After the dry run, the workflow itself can be executed, and its isolates are followed.
   await waitForFrame(output, next => next.includes('Job stats'));
+  // Back on the start page, the execution is preselected once a dry run has passed.
   await press(input, ESCAPE);
-  await waitForFrame(output, onStartPage);
-  await press(input, ARROW_DOWN);
+  await waitForFrame(output, next => next.includes('workflows/reference-consensus/Snakefile') && !next.includes('--dry-run'));
   await press(input, ENTER);
-  await waitUntil(() => executedModes.length === 2, 'the second dry run starts');
-  assert.deepEqual(executedModes, ['dry-run', 'dry-run']);
+  await waitUntil(() => executedModes.length === 2, 'the execution starts');
+  assert.deepEqual(executedModes, ['dry-run', 'execute']);
+  await waitForFrame(output, next => next.includes(snapshot.isolates[0]!.name) && next.includes(snapshot.isolates[1]!.name));
 });
 
 test('asks how to handle a cached backbone and saves the decision', async context => {

@@ -9,10 +9,10 @@ Keep the package independent of private research data, machine-specific paths, a
 ## Repository map
 
 - `src/` — TypeScript/Ink CLI.
-- `workflows/` — packaged Snakemake assets: `annotation-transfer/` holds the entry Snakefile, manifest, and parameter definitions; `shared/` holds `rules/*.smk`, `scripts/*.py`, `envs/<name>/environment.yaml`, and `logging/` (the Snakemake logger plugin that records structured run events).
+- `workflows/` — packaged Snakemake assets, one directory per workflow with its entry Snakefile, manifest, parameter definitions, and `README.md` documenting its science and outputs. `reference-consensus/` also holds its own `rules/*.smk`, `scripts/*.py`, and `envs/<name>/environment.yaml`; `shared/` holds annotation-transfer's rules, scripts, and environments together with what both workflows use, including `logging/` (the Snakemake logger plugin that records structured run events).
 - `tests/` — TypeScript application tests plus Python tests for the shared rules, their scripts, and direct-Snakemake execution.
 - `tests/fixtures/` — small synthetic, redistributable FASTA/GFF3 fixtures with known expected results.
-- [`tasks.md`](tasks.md) — pending work as checkboxes, in execution order.
+- [`resources/tasks.md`](resources/tasks.md) — open work as checkboxes, in execution order.
 - [`later.md`](later.md) — deferred and optional ideas.
 - `resources/concepts/` — design notes; `done/` holds implemented designs.
 
@@ -82,8 +82,9 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Treat `package.json` as the source for the displayed command name, description, author, and version.
 - Keep user and developer documentation in [`README.md`](README.md) and package changes in [`CHANGELOG.md`](CHANGELOG.md).
 - Do not document TUI usage (screens, keys, navigation) in the README; the in-app help page covers it.
-- When changing a pinned tool version in `src/tooling/policy.ts` or `workflows/shared/envs/`, update the version tables under *Tooling policy* in the README in the same change.
-- Track pending work as concise checkboxes in [`tasks.md`](tasks.md). Keep rationale in design documentation rather than the task list.
+- Document each workflow's inputs, parameters, steps, scientific decisions, and outputs in its `workflows/<id>/README.md`, using only the Markdown subset in [`resources/concepts/workflow-documentation.md`](resources/concepts/workflow-documentation.md), and update it in the same change as the workflow.
+- When changing a pinned tool version in `src/tooling/policy.ts` or a `workflows/*/envs/` directory, update the version tables under *Tooling policy* in the README in the same change.
+- Track open work as concise checkboxes in [`resources/tasks.md`](resources/tasks.md), linking to a concept instead of repeating its checklist, and remove items once done. Keep rationale in design documentation rather than the task list.
 - Use pnpm to build and pack locally, and npm for global test installation.
 - Ensure packed artifacts contain the compiled CLI, packaged workflows, and package documentation, but not source data, private files, tests, or development-only configuration.
 

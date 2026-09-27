@@ -77,6 +77,25 @@ class TranslationTests(unittest.TestCase):
         self.assertEqual(event["rule"], "resolve_reference")
         self.assertEqual(event["threads"], 4)
         self.assertEqual(event["logs"], ["logs/resolve-reference.log"])
+        self.assertEqual(event["outputs"], [])
+        self.assertEqual(event["wildcards"], {})
+        self.assertIsNone(event["command"])
+
+    def test_reports_a_started_job_with_its_outputs_wildcards_and_command(self) -> None:
+        event = events.translate(
+            record(
+                event="job_info",
+                jobid=4,
+                rule_name="align_read_pair",
+                output=["results/isolates/iso-a/pairs/2/aligned.bam"],
+                wildcards={"isolate": "iso-a", "pair": 2},
+                shellcmd="  bwa mem -t 8 ref.fasta r1.fq r2.fq | samtools sort -o out.bam -  ",
+            )
+        )
+
+        self.assertEqual(event["outputs"], ["results/isolates/iso-a/pairs/2/aligned.bam"])
+        self.assertEqual(event["wildcards"], {"isolate": "iso-a", "pair": "2"})
+        self.assertEqual(event["command"], "  bwa mem -t 8 ref.fasta r1.fq r2.fq | samtools sort -o out.bam -  ")
 
     def test_reports_a_finished_job_by_the_identifier_snakemake_gives_it(self) -> None:
         # Snakemake names this field `job_id` when a job finishes and `jobid` everywhere else.

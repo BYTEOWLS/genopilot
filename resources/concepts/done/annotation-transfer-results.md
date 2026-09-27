@@ -4,7 +4,7 @@
 
 This document records how annotation-transfer results are produced and presented: the persisted contracts, the design decisions, and the implemented slices. All planned slices are implemented; it is kept for reference.
 
-Code and file paths below are relative to the repository root. Remaining work is tracked in [`tasks.md`](../../../tasks.md).
+Code and file paths below are relative to the repository root. Remaining work is tracked in [`resources/tasks.md`](../../tasks.md).
 
 ## Design dogma
 
@@ -220,7 +220,7 @@ Slice 2 makes the explicit contract that structural validation failure leaves Sn
 
 The current prefix-only rewrite is provisional. Do not extend it during result-page work.
 
-The later redesign is documented in [`later.md`](../../../later.md) under **Post-LiftOn identifier rewriting**. It should support a reviewed regular-expression search-and-replacement step after preserving raw LiftOn output, with previews, collision checks, provenance, and distinct raw/final IDs.
+The later redesign is documented in [Post-LiftOn identifier rewriting](../annotation-id-rewriting.md). It should support a reviewed regular-expression search-and-replacement step after preserving raw LiftOn output, with previews, collision checks, provenance, and distinct raw/final IDs.
 
 Until then:
 

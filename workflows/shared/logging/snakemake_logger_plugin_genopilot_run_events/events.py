@@ -69,6 +69,12 @@ def _counts(value: Any) -> Dict[str, int]:
     return counts
 
 
+def _wildcards(value: Any) -> Dict[str, str]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {str(name): str(item) for name, item in value.items()}
+
+
 def format_timestamp(created: Any) -> str:
     """Formats a `logging.LogRecord.created` epoch value as an ISO 8601 UTC instant."""
     seconds = created if isinstance(created, (int, float)) else 0.0
@@ -106,6 +112,10 @@ def translate(fields: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
         event["threads"] = _integer(fields.get("threads"))
         event["reason"] = _text(fields.get("reason"))
         event["logs"] = _paths(fields.get("log"))
+        event["outputs"] = _paths(fields.get("output"))
+        event["wildcards"] = _wildcards(fields.get("wildcards"))
+        # Snakemake reports the command only for shell rules, and only as it will run.
+        event["command"] = _text(fields.get("shellcmd"))
     elif event_type == "job-finished":
         event["job_id"] = _integer(fields.get("job_id"))
     elif event_type == "job-failed":

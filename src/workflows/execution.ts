@@ -109,6 +109,9 @@ export function prepareSnakemakeRun({
     '--conda-prefix',
     paths.condaEnvironmentsDirectory,
     '--printshellcmds',
+    // One failing job, such as one isolate's, must not stop independent jobs; the run still
+    // fails, and every failed job stays visible in the events and logs.
+    '--keep-going',
     ...(mode === 'dry-run' ? ['--dry-run'] : []),
     ...(eventsPath
       ? ['--logger', runEventsLoggerName, `--logger-${runEventsLoggerName}-path`, eventsPath]

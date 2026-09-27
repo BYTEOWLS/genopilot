@@ -5,8 +5,9 @@ label: Build a reference-guided cohort consensus
 description: >
   Call every selected isolate's paired reads against one backbone assembly, combine the callable
   isolate alleles with an optional backbone vote, and build a cohort consensus by strict majority
-  or plurality. Per-isolate processing, aggregation, and consensus generation are not
-  implemented yet; this build configures the run, resolves the backbone, and validates the inputs.
+  or plurality. Per-isolate processing is implemented: every isolate gets its alignment, callable
+  mask, normalized variants, and reference-guided FASTA. Cohort aggregation and consensus
+  generation are not implemented yet.
 entry_snakefile: Snakefile
 parameter-definitions: manifest.parameters.yaml
 stages:
@@ -23,13 +24,41 @@ stages:
     rules: [validate_run_inputs]
   - id: process-isolates
     label: Process isolates
-    description: Validate, align, and call every isolate independently against the backbone.
+    description: >
+      Trim, align, and call every isolate independently against the backbone, then build its
+      callable mask, normalized variants, and reference-guided FASTA.
+    rules:
+      - index_backbone
+      - validate_read_pair
+      - trim_read_pair
+      - align_read_pair
+      - mark_duplicates
+      - alignment_metrics
+      - call_all_sites
+      - classify_callability
+      - filter_normalize_variants
+      - build_isolate_consensus
+      - summarize_isolate
+    per_isolate:
+      read_pair_rules: [validate_read_pair, trim_read_pair, align_read_pair]
+      isolate_rules:
+        - mark_duplicates
+        - alignment_metrics
+        - call_all_sites
+        - classify_callability
+        - filter_normalize_variants
+        - build_isolate_consensus
+        - summarize_isolate
   - id: aggregate-support
     label: Aggregate cohort support
     description: Combine the backbone and callable isolate votes into a per-position support table.
   - id: generate-consensus
     label: Generate consensus
     description: Select the cohort allele at each position with the configured voting method.
+  - id: record-provenance
+    label: Record provenance
+    description: Checksums, tool versions, and commands of the whole run.
+    rules: [record_consensus_provenance]
 artifacts:
   - id: resolved-backbone
     label: Resolved backbone FASTA
@@ -42,3 +71,15 @@ artifacts:
     path: results/input-validation.json
     type: json
     produced_by: validate-inputs
+  - id: artifact-index
+    label: Artifact index
+    description: Checksummed records of the backbone, every isolate's results, logs, and benchmarks.
+    path: artifacts.yaml
+    type: yaml
+    produced_by: record-provenance
+  - id: run-provenance
+    label: Run provenance
+    description: Effective configuration, commands, tool versions, resources, and input provenance.
+    path: provenance/run.json
+    type: json
+    produced_by: record-provenance

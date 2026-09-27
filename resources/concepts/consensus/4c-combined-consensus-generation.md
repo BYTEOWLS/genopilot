@@ -34,7 +34,7 @@ Produce:
 - affected sequence IDs and coordinates;
 - complete checksums and provenance linking the support table, voting method, backbone, and selected isolates.
 
-Before implementation, finalize how unresolved SNPs appear in the diagnostic FASTA (`IUPAC`, `N`, or retained backbone with a mandatory report), how unresolved indels are represented, and the minimum callable-isolate requirement. Never silently turn uncertainty into a concrete publication base.
+Before implementation, finalize how unresolved SNPs appear in the diagnostic FASTA (`IUPAC`, `N`, or retained backbone with a mandatory report), how unresolved indels are represented, and the minimum callable-isolate requirement. Never silently turn uncertainty into a concrete publication base. Task 4.1 writes only `A/C/G/T/N` into isolate FASTAs, so IUPAC codes first become possible here: an unresolved SNP whose tied alleles are known, such as `A=5, G=5`, could be written as `R`. Decide at this task's kickoff whether IUPAC is the fixed representation or a researcher-selectable option.
 
 The result is described as a cohort consensus that may combine alleles from different isolates. It is not represented as the genome of one individual or as de novo/T2T assembly.
 

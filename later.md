@@ -1,22 +1,6 @@
 # Deferred and optional work
 
-Ideas that are intentionally outside the current task list in [`tasks.md`](tasks.md). Revisit them when a concrete requirement exists.
-
-## Post-LiftOn identifier rewriting
-
-The current prefix-only identifier transformation is provisional. A fixed prefix is not sufficient for all source identifier schemes, and result tables cannot reliably expose final identifiers until the transformation contract is reconsidered.
-
-A later design should replace or extend prefixing with a deterministic, researcher-reviewed regular-expression search-and-replacement step after LiftOn has produced and preserved its raw GFF3. It must:
-
-- preserve the raw LiftOn GFF3 unchanged;
-- preview affected `ID`, `Parent`, and `Derives_from` values before execution;
-- record the regular expression, replacement, and affected identifiers;
-- reject collisions, broken parent references, and invalid resulting IDs;
-- distinguish raw LiftOn IDs from rewritten final IDs in reports;
-- rerun only rewriting, validation, summaries, and dependent stages when the expression changes;
-- remain separate from NCBI locus-tag-prefix requirements.
-
-Do not generalize the current implementation until representative identifier schemes demonstrate the required matching and replacement behavior.
+Ideas that are intentionally outside the current task list in [`resources/tasks.md`](resources/tasks.md). Revisit them when a concrete requirement exists.
 
 ## Comparing LiftOn GFF3 files
 
@@ -52,8 +36,22 @@ review_status
 
 Revisit once the reference-consensus workflow is complete (consensus tasks 4a–4c), when two finished workflows show what is actually reused.
 
-- **Snakemake assets:** most of `workflows/shared/` belongs to one workflow. Only the run-events logger plugin, the `ncbi-datasets-cli` environment, `resolve_input.py`, and the FASTA/GFF3 parsers inside `validate_inputs.py` are used by both. Move the rest into each workflow's own `rules/`, `scripts/`, and `envs/`. Before moving `envs/lifton/`, change `collect_run_provenance.py`: it reads the pins of every environment next to it and rejects a package pinned to two different versions.
+- **Snakemake assets:** reference-consensus keeps its own rules, scripts, and environments under `workflows/reference-consensus/` (consensus Task 4.1). Annotation-transfer's still sit in `workflows/shared/` next to what both workflows use: the run-events logger plugin, the `ncbi-datasets-cli` environment, `resolve_input.py`, and the FASTA/GFF3 parsers inside `validate_inputs.py`. Move annotation-transfer's files into its own `rules/`, `scripts/`, and `envs/`. Before moving `envs/lifton/`, change `collect_run_provenance.py`: it reads the pins of every environment next to it and rejects a package pinned to two different versions.
 - **TypeScript:** each workflow has its own `src/workflows/<id>/configuration.ts` and `run-configuration.ts`, plus a configuration screen under `src/ui/new-run-screen/`, that map generic manifest parameters to and from `config.yaml`. Check which of these a manifest-driven mapping could replace, and keep only the workflow-specific parts, such as the isolate snapshot and the review details.
+
+## Reads without Illumina headers
+
+Reference-consensus derives each read pair's read group from Illumina read headers (`@<instrument>:<run>:<flowcell>:<lane>:…`) and fails a pair whose headers do not follow that form. Reads downloaded from a public archive often lost those headers: `fasterq-dump` from the NCBI Sequence Read Archive renames them `@SRR1234567.1`, `@SRR1234567.2`, and so on, so flowcell, lane, and barcode are gone.
+
+Supporting such reads needs its own design: where the read group comes from (for example, the run accession and the archive's run metadata), how libraries are identified for duplicate marking, and how the substitute is recorded in provenance so it is never mistaken for header-derived evidence.
+
+## Open question: IUPAC codes in isolate FASTAs
+
+**Question:** Should an isolate's ambiguous positions be visible in a FASTA as IUPAC codes rather than only as `N`?
+
+Reference-consensus writes only `A`, `C`, `G`, `T`, and `N` into `results/isolates/{isolate}/consensus.fasta` (consensus Task 4.1). An ambiguous position (enough reads, but no allele reaching `min_allele_fraction`) and an uncallable position (too few reads) both become `N`, so the FASTA alone loses that distinction and the competing alleles: a biallelic SNP with `A=55%, G=45%` could be written as `R`. The run keeps this evidence in `all-sites.bcf` (per-allele depth) and `callable-mask.bed` (the reason for every `N`), and cohort aggregation reads those rather than the FASTA, so nothing is lost for voting. The gap only affects someone who uses the isolate FASTA on its own.
+
+Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. Making the representation a configuration option would change the saved configuration schema. Decide together with the IUPAC rendering of the cohort consensus in [Task 4.3](resources/concepts/consensus/4c-combined-consensus-generation.md).
 
 ## Advanced LiftOn controls
 
@@ -432,6 +430,8 @@ sources:
 Never define a reproducible merge as whichever datasets currently carry a label.
 
 ## Advanced comparative genomics
+
+A comparison workflow needs its own concept first. Its first contract should define only the compatibility fields needed to compare two runs (input checksums, workflow and tool versions, effective scientific parameters, and standardized metrics) and then add its manifest; browser visualization is deferred.
 
 The first comparison remains intentionally small. Possible later analyses include:
 

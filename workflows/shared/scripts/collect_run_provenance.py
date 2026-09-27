@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
 """Write the annotation-transfer artifact index and run provenance records.
 
-The records are produced by Snakemake after the scientific summary, so direct
-workflow execution has the same provenance contract as TUI-driven execution.
+Runs last, after the scientific summary, so direct workflow execution has
+the same provenance contract as TUI-driven execution:
+
+  --artifacts   every artifact of the run with its checksum, size, stage,
+                and origin, plus the workflow, its manifest checksum, and the
+                effective configuration's checksum (JSON, which is valid YAML)
+  --provenance  the run and its effective configuration, requested and
+                effective resources, the command of every stage, configured
+                and observed tool versions, and the provenance of the resolved
+                reference and target inputs
+
+Its checksum, JSON, and configured-version helpers are also imported by
+reference-consensus's collect_consensus_provenance.py.
+
 Only Python's standard library is used by the implementation and its tests.
 """
 

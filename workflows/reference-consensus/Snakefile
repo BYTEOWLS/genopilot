@@ -8,16 +8,47 @@ cohort consensus.
 Steps, in the order they run (each is one rule; paths are inside the run
 directory, and every step writes its log to logs/):
 
-  1. resolve_backbone                            shared/rules/resolve_backbone.smk
+  1. resolve_backbone                    rules/resolve_backbone.smk
        Copy a local FASTA or download an NCBI accession, with a checksum.
        -> resolved/backbone.fasta
-  2. validate_run_inputs                         shared/rules/validate_run_inputs.smk
+  2. validate_run_inputs                 rules/validate_run_inputs.smk
        Check the backbone FASTA and that every read file can be read.
        -> results/input-validation.json
+  3. index_backbone                      rules/align_reads.smk
+       -> resolved/backbone.fasta.{amb,ann,bwt,pac,sa,fai}
 
-  Not implemented yet (listed in manifest.yaml): per-isolate read
-  processing and calling, cohort support aggregation, and consensus
-  generation.
+  Then for every read pair of every selected isolate ({pair} is the pair's
+  1-based position in the isolate's snapshot entry), in
+  results/isolates/{isolate}/pairs/{pair}/:
+
+  4. validate_read_pair                  rules/validate_read_pair.smk
+       Derive the read group from the Illumina read names; checksum the files.
+  5. trim_read_pair                      rules/align_reads.smk
+       fastp read QC and light adapter trimming.
+  6. align_read_pair                     rules/align_reads.smk
+       bwa mem with the pair's read group.
+
+  And for every isolate, in results/isolates/{isolate}/:
+
+  7. mark_duplicates, alignment_metrics  rules/align_reads.smk
+       Merge the pairs, mark duplicates per library, report alignment metrics.
+  8. call_all_sites, classify_callability, filter_normalize_variants
+                                         rules/call_variants.smk
+       Haploid calls at every covered position, the callable mask, and the
+       normalized variants.
+  9. build_isolate_consensus             rules/build_consensus.smk
+       The isolate's reference-guided FASTA.
+ 10. summarize_isolate                   rules/build_consensus.smk
+       Metrics, the isolate's provenance, and its promotion candidate.
+
+ 11. record_consensus_provenance         rules/record_provenance.smk
+       Checksums, tool versions, and commands of the whole run.
+       -> artifacts.yaml, provenance/run.json
+
+  Not implemented yet (listed in manifest.yaml): cohort support aggregation
+  and consensus generation.
+
+Every file a run produces is listed in scripts/artifacts.py.
 
 The isolates and their read files come from isolates.yaml, a snapshot of the
 isolate catalog that GenoPilot saved next to config.yaml when the run was
@@ -28,37 +59,76 @@ into a new run directory. The same run can then be started directly with
 
   snakemake --snakefile <package>/workflows/reference-consensus/Snakefile \
     --directory <run-dir> --configfile <run-dir>/config.yaml \
-    --cores <n> --use-conda
+    --cores <n> --use-conda --keep-going
+
+`--keep-going` lets the other isolates finish when one fails. Commands are
+recorded in provenance/run.json only when the run also uses GenoPilot's run
+events logger (see the GenoPilot README).
 
 The workflow trusts config.yaml and isolates.yaml as GenoPilot saved them and
 does not check them again; do not edit them or the packaged workflow.
 """
 
 import shlex
+import sys
 from pathlib import Path
 
 import yaml
 
 configfile: "config.yaml"
 
-# Packaged locations, relative to this Snakefile rather than the working directory.
+# Packaged locations, relative to this Snakefile rather than the working directory. This
+# workflow's own rules, scripts, and environments live next to it; shared/ holds only what
+# annotation-transfer uses too.
 WORKFLOW_DIR = Path(workflow.basedir)
-SHARED_DIR = WORKFLOW_DIR.parent / "shared"
-SCRIPTS_DIR = SHARED_DIR / "scripts"
-ENVS_DIR = SHARED_DIR / "envs"
+RULES_DIR = WORKFLOW_DIR / "rules"
+SCRIPTS_DIR = WORKFLOW_DIR / "scripts"
+ENVS_DIR = WORKFLOW_DIR / "envs"
 SCRIPTS_DIR_SH = shlex.quote(str(SCRIPTS_DIR))
+SHARED_DIR = WORKFLOW_DIR.parent / "shared"
+SHARED_ENVS_DIR = SHARED_DIR / "envs"
+SHARED_SCRIPTS_DIR_SH = shlex.quote(str(SHARED_DIR / "scripts"))
+
+sys.path.insert(0, str(SCRIPTS_DIR))
+from artifacts import run_artifacts
 
 # The selected isolates and their read files, from the run's isolates.yaml snapshot.
 with open(config["inputs"]["isolates_file"], encoding="utf-8") as _snapshot:
     ISOLATES = yaml.safe_load(_snapshot)["isolates"]
+ISOLATES_BY_ID = {isolate["id"]: isolate for isolate in ISOLATES}
+
+# Every output a finished run must have, from the artifact list.
+DECLARED_ARTIFACTS = [entry["path"] for entry in run_artifacts(ISOLATES) if entry["declared"]]
+
+# Isolate IDs follow the catalog's ID format; read pairs are numbered from 1.
+wildcard_constraints:
+    isolate="[a-z][a-z0-9]*(?:-[a-z0-9]+)*",
+    pair="[1-9][0-9]*",
+
+
+def read_pair_of(wildcards):
+    """The snapshot entry of the read pair named by the `isolate` and `pair` wildcards."""
+    return ISOLATES_BY_ID[wildcards.isolate]["read_pairs"][int(wildcards.pair) - 1]
+
+
+def pair_numbers(isolate_id):
+    """The 1-based numbers of an isolate's read pairs, in snapshot order."""
+    return range(1, len(ISOLATES_BY_ID[isolate_id]["read_pairs"]) + 1)
+
 
 # The steps, in the order they run; see the list at the top of this file.
-include: str(SHARED_DIR / "rules" / "resolve_backbone.smk")
-include: str(SHARED_DIR / "rules" / "validate_run_inputs.smk")
+include: str(RULES_DIR / "resolve_backbone.smk")
+include: str(RULES_DIR / "validate_run_inputs.smk")
+include: str(RULES_DIR / "validate_read_pair.smk")
+include: str(RULES_DIR / "align_reads.smk")
+include: str(RULES_DIR / "call_variants.smk")
+include: str(RULES_DIR / "build_consensus.smk")
+include: str(RULES_DIR / "record_provenance.smk")
 
 
 # The files a finished run must have. Asking for them makes Snakemake run every step above.
 rule all:
     input:
-        "resolved/backbone.fasta",
-        "results/input-validation.json",
+        DECLARED_ARTIFACTS,
+        "artifacts.yaml",
+        "provenance/run.json",

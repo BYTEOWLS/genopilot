@@ -1,0 +1,213 @@
+{
+  "seed": 20260926,
+  "repeat": {
+    "source": {
+      "contig": "chr1",
+      "start": 301,
+      "end": 900
+    },
+    "copy": {
+      "contig": "chr2",
+      "start": 901,
+      "end": 1500
+    }
+  },
+  "isolates": {
+    "iso-a": {
+      "read_pairs": [
+        {
+          "r1": "reads/iso-a/IsoA_S1_R1_001.fastq.gz",
+          "r2": "reads/iso-a/IsoA_S1_R2_001.fastq.gz",
+          "trimmed": false,
+          "read_pairs": 810,
+          "instrument": "SIM01",
+          "run": 7,
+          "flowcell": "FCA0001",
+          "lane": null,
+          "barcode": "ACGTACGT+TTGCAGCA"
+        }
+      ],
+      "shared_fragments": 0,
+      "variants": [
+        {
+          "contig": "chr1",
+          "position": 1100,
+          "ref": "G",
+          "alt": "T",
+          "type": "snp"
+        },
+        {
+          "contig": "chr1",
+          "position": 1500,
+          "ref": "G",
+          "alt": "A",
+          "type": "snp"
+        },
+        {
+          "contig": "chr2",
+          "position": 300,
+          "ref": "C",
+          "alt": "A",
+          "type": "snp"
+        },
+        {
+          "contig": "chr1",
+          "type": "insertion",
+          "position": 1800,
+          "ref": "G",
+          "alt": "GGAT"
+        },
+        {
+          "contig": "chr1",
+          "type": "deletion",
+          "position": 2200,
+          "ref": "ATCCT",
+          "alt": "A"
+        }
+      ],
+      "probes": {
+        "ambiguous": [
+          {
+            "contig": "chr2",
+            "position": 600
+          }
+        ],
+        "uncallable": [
+          {
+            "contig": "chr1",
+            "position": 600
+          },
+          {
+            "contig": "chr2",
+            "position": 1200
+          },
+          {
+            "contig": "chr2",
+            "position": 1800
+          },
+          {
+            "contig": "chr2",
+            "position": 2075
+          }
+        ]
+      }
+    },
+    "iso-b": {
+      "read_pairs": [
+        {
+          "r1": "reads/iso-b/IsoB_S2_L001_R1_001.fastq.gz",
+          "r2": "reads/iso-b/IsoB_S2_L001_R2_001.fastq.gz",
+          "trimmed": false,
+          "read_pairs": 405,
+          "instrument": "SIM01",
+          "run": 7,
+          "flowcell": "FCA0001",
+          "lane": 1,
+          "barcode": "GATCGATC+AACCGGTT"
+        },
+        {
+          "r1": "reads/iso-b/IsoB_S2_L003_R1_001.fastq.gz",
+          "r2": "reads/iso-b/IsoB_S2_L003_R2_001.fastq.gz",
+          "trimmed": true,
+          "read_pairs": 405,
+          "instrument": "SIM02",
+          "run": 12,
+          "flowcell": "FCB0002",
+          "lane": 3,
+          "barcode": "GATCGATC+AACCGGTT"
+        }
+      ],
+      "shared_fragments": 40,
+      "variants": [
+        {
+          "contig": "chr1",
+          "position": 1100,
+          "ref": "G",
+          "alt": "T",
+          "type": "snp"
+        },
+        {
+          "contig": "chr1",
+          "position": 2500,
+          "ref": "G",
+          "alt": "T",
+          "type": "snp"
+        },
+        {
+          "contig": "chr2",
+          "position": 400,
+          "ref": "A",
+          "alt": "G",
+          "type": "snp"
+        }
+      ],
+      "probes": {
+        "uncallable": [
+          {
+            "contig": "chr1",
+            "position": 600
+          },
+          {
+            "contig": "chr2",
+            "position": 1200
+          }
+        ]
+      }
+    },
+    "iso-c": {
+      "read_pairs": [
+        {
+          "r1": "reads/iso-c/IsoC_S3_L001_R1_001.fastq.gz",
+          "r2": "reads/iso-c/IsoC_S3_L001_R2_001.fastq.gz",
+          "trimmed": false,
+          "read_pairs": 405,
+          "instrument": "SIM01",
+          "run": 7,
+          "flowcell": "FCA0001",
+          "lane": 1,
+          "barcode": "CTAGCTAG+GGTTAACC"
+        },
+        {
+          "r1": "reads/iso-c/IsoC_S4_L001_R1_001.fastq.gz",
+          "r2": "reads/iso-c/IsoC_S4_L001_R2_001.fastq.gz",
+          "trimmed": false,
+          "read_pairs": 405,
+          "instrument": "SIM01",
+          "run": 7,
+          "flowcell": "FCA0001",
+          "lane": 1,
+          "barcode": "TGCATGCA+CCAATTGG"
+        }
+      ],
+      "shared_fragments": 40,
+      "variants": [
+        {
+          "contig": "chr1",
+          "position": 1500,
+          "ref": "G",
+          "alt": "A",
+          "type": "snp"
+        },
+        {
+          "contig": "chr2",
+          "position": 300,
+          "ref": "C",
+          "alt": "T",
+          "type": "snp"
+        }
+      ],
+      "probes": {
+        "uncallable": [
+          {
+            "contig": "chr1",
+            "position": 600
+          },
+          {
+            "contig": "chr2",
+            "position": 1200
+          }
+        ]
+      }
+    }
+  }
+}

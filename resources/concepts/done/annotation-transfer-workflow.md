@@ -124,7 +124,7 @@ Consistent schemas and isolated run directories make completed runs comparable. 
 
 ### Incremental delivery
 
-This workflow is intentionally split across multiple implementation sessions. [`tasks.md`](../../../tasks.md) is the authoritative execution order and definition-of-done tracker. Define each persisted contract when the first concrete producer or consumer needs it rather than designing every later contract up front:
+This workflow is intentionally split across multiple implementation sessions. [`resources/tasks.md`](../../tasks.md) is the authoritative execution order and definition-of-done tracker. Define each persisted contract when the first concrete producer or consumer needs it rather than designing every later contract up front:
 
 1. define and validate the generic workflow-manifest contract;
 2. define the minimal versioned `annotation-transfer` configuration contract for required inputs, prefix, CPU selection, and run location/identity, without advanced LiftOn options;
