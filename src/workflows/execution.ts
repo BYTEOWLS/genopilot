@@ -28,6 +28,11 @@ export type SnakemakeRun = {
   stderrLogPath: string;
   /** Where the run's structured progress events are appended; absent for a dry run. */
   eventsPath?: string;
+  /**
+   * Where a dry run writes the events of what it would schedule, in a file of its own so they
+   * never mix with the run's record of what actually happened; absent unless requested.
+   */
+  dryRunEventsPath?: string;
 };
 
 /**
@@ -77,6 +82,10 @@ export function prepareSnakemakeRun({
   configurationPath,
   snakefilePath,
   cores,
+  targets = [],
+  logDirectory = 'logs',
+  recordDryRunEvents = false,
+  rerunIncomplete = false,
   paths = resolveToolingPaths(),
   startedAt = new Date(),
 }: {
@@ -85,13 +94,24 @@ export function prepareSnakemakeRun({
   configurationPath: string;
   snakefilePath: string;
   cores: number;
+  /** Run-relative files to build instead of the workflow's default target. */
+  targets?: readonly string[];
+  /** The run-relative directory of this attempt's Snakemake logs. */
+  logDirectory?: string;
+  /** Whether a dry run writes what it would schedule as events next to its logs. */
+  recordDryRunEvents?: boolean;
+  /** Whether outputs of jobs an interrupted attempt left incomplete are recomputed instead of refused. */
+  rerunIncomplete?: boolean;
   paths?: ToolingPaths;
   startedAt?: Date;
 }): SnakemakeRun {
   const directory = resolve(runDirectory);
+  const logPrefix = join(directory, logDirectory, `snakemake-${mode}.${formatCompactUtcTimestamp(startedAt)}`);
   // Only a real execution records progress events: a dry run schedules nothing, and its
   // preview must not be mixed into the run's record of what actually happened.
   const eventsPath = mode === 'execute' ? join(directory, RUN_EVENTS_FILENAME) : undefined;
+  const dryRunEventsPath = mode === 'dry-run' && recordDryRunEvents ? `${logPrefix}.events.jsonl` : undefined;
+  const loggerPath = eventsPath ?? dryRunEventsPath;
   const arguments_ = [
     '--snakefile',
     resolve(snakefilePath),
@@ -112,16 +132,13 @@ export function prepareSnakemakeRun({
     // One failing job, such as one isolate's, must not stop independent jobs; the run still
     // fails, and every failed job stays visible in the events and logs.
     '--keep-going',
+    ...(rerunIncomplete ? ['--rerun-incomplete'] : []),
     ...(mode === 'dry-run' ? ['--dry-run'] : []),
-    ...(eventsPath
-      ? ['--logger', runEventsLoggerName, `--logger-${runEventsLoggerName}-path`, eventsPath]
+    ...(loggerPath
+      ? ['--logger', runEventsLoggerName, `--logger-${runEventsLoggerName}-path`, loggerPath]
       : []),
+    ...targets,
   ];
-  const logPrefix = join(
-    directory,
-    'logs',
-    `snakemake-${mode}.${formatCompactUtcTimestamp(startedAt)}`,
-  );
   return {
     mode,
     executable: paths.snakemakeExecutable,
@@ -131,6 +148,7 @@ export function prepareSnakemakeRun({
     stdoutLogPath: `${logPrefix}.stdout.log`,
     stderrLogPath: `${logPrefix}.stderr.log`,
     ...(eventsPath ? {eventsPath} : {}),
+    ...(dryRunEventsPath ? {dryRunEventsPath} : {}),
   };
 }
 
@@ -176,7 +194,7 @@ export async function executeSnakemakeRun(
     LC_ALL: process.env.LC_ALL,
     PATH: [paths.managedBinDirectory, '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(delimiter),
     PIXI_HOME: paths.pixiHome,
-    ...(prepared.eventsPath ? {PYTHONPATH: loggerDirectory} : {}),
+    ...(prepared.eventsPath || prepared.dryRunEventsPath ? {PYTHONPATH: loggerDirectory} : {}),
     ...(apiKey ? {NCBI_API_KEY: apiKey} : {}),
   };
   const stdoutFile = await open(prepared.stdoutLogPath, 'wx', 0o600);

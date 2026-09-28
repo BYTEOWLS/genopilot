@@ -1,3 +1,4 @@
+import {stat} from 'node:fs/promises';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
@@ -22,7 +23,7 @@ import {
 import {loadWorkflowResult, type LoadedWorkflowResult} from '../../workflows/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {LiveLog} from '../components/live-log.js';
-import {RunResultsScreen} from '../run-results-screen/screen.js';
+import {RunResultsScreen, type CohortRerun} from '../run-results-screen/screen.js';
 import {mutedColor} from '../theme.js';
 import {useTerminalTitle, type TerminalTitleStatus} from '../terminal-title.js';
 import {useHomeSuspension} from '../home-navigation.js';
@@ -125,6 +126,12 @@ export type WorkflowRun = {
   eventsPath?: string;
 };
 
+/**
+ * Checks a finished, successful dry run before its execution is offered: nothing when it may be
+ * executed, otherwise why not.
+ */
+export type DryRunGate<R extends WorkflowRun> = (run: R) => Promise<{allowed: true} | {allowed: false; reason: string}>;
+
 export type WorkflowRunResult = WorkflowRun & {exitCode: number | null};
 
 export type WorkflowRunPreparer<R extends WorkflowRun> = (mode: WorkflowRunMode) => R;
@@ -150,12 +157,14 @@ export type WorkflowResultHandoff = {
   runDirectory: string;
   manifest: WorkflowManifest;
   loadResult?: typeof loadWorkflowResult;
+  /** Lets the results review a reference-consensus cohort and rerun its iterations. */
+  cohortRerun?: CohortRerun;
 };
 
 type PersistedRunResult = {
   loaded: LoadedWorkflowResult;
   outcome: WorkflowExecutionOutcome;
-  handoff: Pick<WorkflowResultHandoff, 'runDirectory' | 'manifest'>;
+  handoff: Pick<WorkflowResultHandoff, 'runDirectory' | 'manifest' | 'cohortRerun'>;
 };
 
 type FinishedExecution = {
@@ -166,6 +175,8 @@ type FinishedExecution = {
   error?: string;
   /** What the success follow-up reported, e.g. that a downloaded accession was cataloged. */
   followUp?: {text: string; error: boolean};
+  /** What the dry-run gate decided about this dry run. */
+  gate?: {allowed: boolean; text: string};
   // Present once a finished execution's persisted results are loaded and can be opened.
   result?: PersistedRunResult;
 };
@@ -188,6 +199,14 @@ const modeOptions: readonly {mode: WorkflowRunMode; label: string; description: 
     description: 'Execute the jobs and write results into the run directory.',
   },
 ];
+
+async function defaultFileSize(path: string): Promise<number> {
+  try {
+    return (await stat(path)).size;
+  } catch {
+    return 0;
+  }
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -213,6 +232,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   executionUnavailableReason,
   isolates = [],
   completedIsolates,
+  dryRunGate,
+  fileSize = defaultFileSize,
+  labels = {},
 }: {
   configurationPath: string;
   prepareRun: WorkflowRunPreparer<R>;
@@ -236,9 +258,22 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   isolates?: readonly ProgressIsolate[];
   /** The isolates whose results are complete, read after a failed execution; see `settleIsolateProgress`. */
   completedIsolates?: () => Promise<ReadonlySet<string>>;
+  /**
+   * When given, the execution is offered only after a dry run on this screen succeeded and passed
+   * this check, which reads what the dry run would schedule.
+   */
+  dryRunGate?: DryRunGate<R>;
+  /** The size of the event file before an execution appends to it; 0 when it does not exist. */
+  fileSize?: (path: string) => Promise<number>;
+  /** Wording for starting something other than a newly configured run, such as a cohort iteration. */
+  labels?: {title?: string; intro?: string; back?: string};
 }): React.JSX.Element {
+  const [gateReason, setGateReason] = useState<string | undefined>(
+    dryRunGate ? 'Available once a dry run shows that only the expected steps would run.' : undefined,
+  );
+  const unavailableReason = executionUnavailableReason ?? gateReason;
   const availableModes = modeOptions.filter(option =>
-    option.mode !== 'execute' || executionUnavailableReason === undefined);
+    option.mode !== 'execute' || unavailableReason === undefined);
   const [screen, setScreen] = useState<ExecutionState<R>>({state: 'ready', mode: 'dry-run'});
   useTerminalTitle({status: terminalTitleStatus(screen)});
   // Leaving would unmount the screen and abort Snakemake without waiting for its cleanup.
@@ -286,7 +321,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
 
   /** Applies everything appended to the event file since the last read. */
   const drainEvents = useCallback(async (eventsPath: string | undefined): Promise<void> => {
-    if (!eventsPath) {
+    if (!eventsPath || eventOffset.current < 0) {
       return;
     }
     try {
@@ -353,7 +388,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     const controller = new AbortController();
     abortController.current = controller;
     eventReader.current = new RunEventReader();
-    eventOffset.current = 0;
+    // Unknown until the event file's current size is read below; nothing is read before that.
+    eventOffset.current = -1;
     jobStages.current = new Map();
     jobIsolates.current = new Map();
     setIsolateProgress(initialIsolates());
@@ -371,11 +407,17 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
       // offset with the new lines; following (offset 0) stays pinned to the end.
       setScrollOffset(current => (current === 0 ? 0 : current + lines.length));
     });
-    executeRun(
-      run,
-      output => liveOutput.current?.append(output.stream, output.text),
-      controller.signal,
-    ).then(
+    // The event file is appended to by every attempt in the run directory, so this attempt's
+    // progress starts where the file ended.
+    const startOffset = run.eventsPath ? fileSize(run.eventsPath).catch(() => 0) : Promise.resolve(0);
+    startOffset.then(offset => {
+      eventOffset.current = offset;
+      return executeRun(
+        run,
+        output => liveOutput.current?.append(output.stream, output.text),
+        controller.signal,
+      );
+    }).then(
       async result => {
         liveOutput.current?.flush();
         // The last events can land after the final poll, so drain once more before settling.
@@ -397,12 +439,14 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
           await settleIsolates(result.exitCode === 0);
         }
         const followUp = run.mode === 'execute' && result.exitCode === 0 ? onSucceeded?.() : undefined;
+        const gate = run.mode === 'dry-run' && dryRunGate ? await checkGate(run, result.exitCode === 0) : undefined;
         setScreen(current => ({
           state: 'finished',
           run: result,
           logLines: current.state === 'running' ? current.logLines : [],
           exitCode: result.exitCode,
           ...(followUp ? {followUp: {text: followUp.label, error: false}} : {}),
+          ...(gate ? {gate} : {}),
           ...(persisted ? {result: persisted} : {}),
         }));
         // The run is finished either way; its follow-up may take a while and must not hold the
@@ -443,6 +487,27 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         }));
       },
     );
+  };
+
+  /** Applies the dry-run gate to a finished dry run and offers or withholds the execution. */
+  const checkGate = async (run: R, succeeded: boolean): Promise<{allowed: boolean; text: string}> => {
+    if (!succeeded) {
+      const text = 'The dry run failed, so the execution is not offered.';
+      setGateReason(text);
+      return {allowed: false, text};
+    }
+    let decision: Awaited<ReturnType<DryRunGate<R>>>;
+    try {
+      decision = await (dryRunGate as DryRunGate<R>)(run);
+    } catch (error) {
+      decision = {allowed: false, reason: `The dry run could not be checked: ${errorMessage(error)}`};
+    }
+    if (decision.allowed) {
+      setGateReason(undefined);
+      return {allowed: true, text: 'Only the expected steps would run; the execution is available.'};
+    }
+    setGateReason(decision.reason);
+    return {allowed: false, text: decision.reason};
   };
 
   /** Marks isolates finished in this or an earlier attempt as complete once Snakemake exits. */
@@ -546,7 +611,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         // A finished dry run is a step towards executing, so Esc offers the mode chooser again
         // with the execution preselected. A finished execution has nothing left to choose.
         if (screen.run.mode === 'dry-run') {
-          returnToModes(executionUnavailableReason === undefined ? 'execute' : 'dry-run');
+          returnToModes(unavailableReason === undefined ? 'execute' : 'dry-run');
         } else {
           onBack();
         }
@@ -578,6 +643,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         executionOutcome={result.outcome}
         onBack={() => setScreen(screen.finished)}
         inputActive={inputActive}
+        {...(result.handoff.cohortRerun ? {cohortRerun: result.handoff.cohortRerun} : {})}
       />
     );
   }
@@ -586,11 +652,11 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     const run = preparedRuns[screen.mode];
     return (
       <Page
-        title="Start run"
+        title={labels.title ?? 'Start run'}
         shortcuts={[availableModes.length > 1 && '↑/↓ — Choose', 'Enter — Start']}
-        back="Back to workflow"
+        back={labels.back ?? 'Back to workflow'}
       >
-        <Alert variant="info">Configuration saved. Choose how to start this run.</Alert>
+        <Alert variant="info">{labels.intro ?? 'Configuration saved. Choose how to start this run.'}</Alert>
         <Text>{sanitizeTerminalText(configurationPath)}</Text>
         <Box marginTop={1} flexDirection="column">
           {modeOptions.map(option => {
@@ -604,7 +670,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
                 </Text>
                 <Text color={mutedColor} wrap="wrap">
                   {'      '}
-                  {unavailable ? executionUnavailableReason : option.description}
+                  {unavailable ? unavailableReason : option.description}
                 </Text>
               </Box>
             );
@@ -628,7 +694,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
       title={label}
       shortcuts={[finished && screen.run.mode === 'execute' && screen.result && 'Enter — View results']}
       // Leaving a running workflow would abort it, so Esc waits until it finishes.
-      back={!finished ? false : screen.run.mode === 'dry-run' ? 'Start options' : 'Back to workflow'}
+      back={!finished ? false : screen.run.mode === 'dry-run' ? 'Start options' : labels.back ?? 'Back to workflow'}
     >
       {finished ? (
         <Alert variant={succeeded ? 'success' : 'error'}>
@@ -663,6 +729,11 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
       {error ? <Text color="red">{sanitizeTerminalText(error)}</Text> : null}
       {finished && exitCode !== undefined && exitCode !== null && exitCode !== 0 ? (
         <Text color="red">Snakemake exited with code {String(exitCode)}.</Text>
+      ) : null}
+      {finished && screen.gate ? (
+        <Text color={screen.gate.allowed ? 'green' : 'yellow'} wrap="wrap">
+          {sanitizeTerminalText(screen.gate.text)}
+        </Text>
       ) : null}
       {finished && screen.followUp ? (
         <Text color={screen.followUp.error ? 'yellow' : mutedColor} wrap="wrap">

@@ -1,4 +1,5 @@
 import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import React, {useState} from 'react';
 import {Alert, ConfirmInput} from '@inkjs/ui';
 import {Box, Text, useInput, useWindowSize} from 'ink';
@@ -198,6 +199,7 @@ export function OpenRunScreen({
         formatDateTime={formatDateTime}
         onBack={() => setOpenedRun(undefined)}
         inputActive={inputActive}
+        cohortRerun={{snakefilePath: fileURLToPath(new URL(selectedWorkflow.manifest.entry_snakefile, selectedWorkflow.directoryUrl))}}
       />
     );
   }

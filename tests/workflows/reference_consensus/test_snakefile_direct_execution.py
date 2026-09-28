@@ -7,6 +7,7 @@ FASTA, input validation, and read-pair validation.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -14,12 +15,25 @@ import unittest
 from pathlib import Path
 
 from ._load import WORKFLOW_DIR
+from ..annotation_transfer._load import PROJECT_ROOT
 from .fixtures import FIXTURES_DIR, write_decision, write_run
 
 SNAKEMAKE_BIN = shutil.which("snakemake")
 
 
-def run_snakemake(run_dir: Path, config_path: Path, *extra_args: str) -> subprocess.CompletedProcess:
+LOGGER_DIR = PROJECT_ROOT / "workflows" / "shared" / "logging"
+
+
+def dry_run_jobs(events_path: Path) -> dict:
+    """The jobs per rule of the last `run-info` event the run-events logger wrote."""
+    events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    plans = [event for event in events if event["type"] == "run-info"]
+    return plans[-1]["jobs"] if plans else {}
+
+
+def run_snakemake(
+    run_dir: Path, config_path: Path, *extra_args: str, env: dict | None = None,
+) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
             SNAKEMAKE_BIN,
@@ -31,6 +45,7 @@ def run_snakemake(run_dir: Path, config_path: Path, *extra_args: str) -> subproc
         ],
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
@@ -135,6 +150,43 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.assertIn("--voter iso-b results/isolates/iso-b/variants.vcf.gz", initial.stdout)
         self.assertIn("results/cohort/initial/support-sites.tsv", initial.stdout)
         self.assertNotIn("iteration-2", initial.stdout)
+
+    def test_an_iteration_dry_run_reports_its_jobs_as_run_events(self) -> None:
+        """GenoPilot executes an iteration only when its dry run's run-info counts no other rule than
+        the three cohort rules; see consensus Task 5.3."""
+        config_path = write_run(self.run_dir, ["iso-a", "iso-b"])
+        target = write_decision(self.run_dir, 2, ["iso-a"], ["iso-b"], {"voting_method": "plurality"})
+        # The voter's finished per-isolate results, as an earlier attempt left them.
+        voter_outputs = ["variants.vcf.gz", "variants.vcf.gz.csi", "callable-mask.bed"]
+        for path in ["resolved/backbone.fasta", "resolved/backbone.fasta.fai",
+                     *(f"results/isolates/iso-a/{name}" for name in voter_outputs)]:
+            (self.run_dir / path).parent.mkdir(parents=True, exist_ok=True)
+            (self.run_dir / path).write_text("placeholder\n", encoding="utf-8")
+        env = {**os.environ, "PYTHONPATH": str(LOGGER_DIR)}
+
+        def dry_run(name: str) -> dict:
+            # GenoPilot creates this directory for the dry run's own logs before starting it.
+            events = self.run_dir / f"logs/cohort/iteration-2/{name}.events.jsonl"
+            events.parent.mkdir(parents=True, exist_ok=True)
+            result = run_snakemake(
+                self.run_dir, config_path, "--dry-run", "--rerun-incomplete",
+                "--logger", "genopilot-run-events", "--logger-genopilot-run-events-path", str(events),
+                target, env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return dry_run_jobs(events)
+
+        self.assertEqual(
+            dry_run("allowed"),
+            {"aggregate_support": 1, "generate_consensus": 1, "record_iteration_provenance": 1},
+        )
+        # Without the voter's callable mask, Snakemake would recompute it, which GenoPilot refuses.
+        (self.run_dir / "results/isolates/iso-a/callable-mask.bed").unlink()
+        refused = dry_run("refused")
+        self.assertIn("classify_callability", refused)
+        self.assertEqual(refused.get("aggregate_support"), 1)
+        # A dry run records its plan in its own file, never in the run's events.jsonl.
+        self.assertFalse((self.run_dir / "events.jsonl").exists())
 
     def test_an_iteration_without_a_saved_decision_is_refused_by_name(self) -> None:
         config_path = write_run(self.run_dir, ["iso-a", "iso-b"])

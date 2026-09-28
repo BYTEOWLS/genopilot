@@ -27,6 +27,7 @@ import {useHomeSuspension} from '../home-navigation.js';
 import {EditPage, Page} from '../components/page.js';
 import {ParameterList, parameterLabelWidth} from '../components/parameter-list.js';
 import {NcbiCacheDecisionPage, type NcbiCacheEntry, type NcbiCacheModes} from './ncbi-cache-decision.js';
+import type {CohortRerun} from '../run-results-screen/screen.js';
 
 // Chrome this screen renders around the windowed field list: the page title and description,
 // margins, the continue button, and the shortcut line. Space consumed by an outer wrapper (such as
@@ -248,6 +249,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   previousRuns = [],
   stages = [],
   resultManifest,
+  resultCohortRerun,
   onRunSucceeded,
   executionUnavailableReason,
   executionIsolates,
@@ -266,6 +268,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   previousRuns?: readonly PreviousWorkflowRun[];
   stages?: readonly WorkflowProgressStage[];
   resultManifest?: WorkflowManifest;
+  /** Lets the run's results review a reference-consensus cohort and rerun its iterations. */
+  resultCohortRerun?: CohortRerun;
   /** Follow-up bookkeeping after a successful execution, or nothing when none is needed. */
   onRunSucceeded?: (payload: T) => RunFollowUp | undefined;
   /** Why only a dry run can be started, while the workflow's execution is not implemented. */
@@ -663,6 +667,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         resultHandoff={resultManifest ? {
           runDirectory: outputDirectory,
           manifest: resultManifest,
+          ...(resultCohortRerun ? {cohortRerun: resultCohortRerun} : {}),
         } : undefined}
       />
     );

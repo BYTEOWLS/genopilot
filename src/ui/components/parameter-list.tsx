@@ -13,6 +13,8 @@ export type ParameterRow = {
   muted?: boolean;
   /** Present for a row the researcher can edit; it becomes a text field while selected. */
   edit?: {defaultValue: string; placeholder?: string; onChange: (value: string) => void};
+  /** A row the form changes with its own keys, such as a choice; it is selectable but never a text field. */
+  choice?: boolean;
 };
 
 /** The label column's width for these rows, including the selection marker and a gap. */
@@ -40,11 +42,12 @@ export function ParameterList({
   return (
     <Box flexDirection="column">
       {rows.map(row => {
-        const selected = row.id === selectedId && row.edit !== undefined;
+        const editable = row.edit !== undefined || row.choice === true;
+        const selected = row.id === selectedId && editable;
         return (
           <Box key={row.id}>
             <Box width={labelWidth} flexShrink={0}>
-              <Text color={selected ? 'cyan' : undefined} bold={row.edit !== undefined}>
+              <Text color={selected ? 'cyan' : undefined} bold={editable}>
                 {selected ? '› ' : '  '}{sanitizeTerminalText(row.label)}
               </Text>
             </Box>

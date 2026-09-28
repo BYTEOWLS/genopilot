@@ -1,31 +1,52 @@
 import {existsSync} from 'node:fs';
-import {basename, relative, resolve} from 'node:path';
-import React, {useLayoutEffect, useRef, useState} from 'react';
+import {basename, join, relative, resolve} from 'node:path';
+import React, {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {Alert} from '@inkjs/ui';
 import {Box, measureElement, Text, useInput, useWindowSize, type DOMElement} from 'ink';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
 import {
   isAnnotationTransferResult,
   isReferenceConsensusResult,
+  loadWorkflowResult,
   type LoadedWorkflowResult,
   type ResultShell,
 } from '../../workflows/results.js';
+import {executeSnakemakeRun, type SnakemakeRun} from '../../workflows/execution.js';
+import {
+  saveNextCohortDecision,
+  type CohortDecisionDraft,
+} from '../../workflows/reference-consensus/cohort-decision.js';
+import {
+  checkIterationDryRun,
+  iterationName,
+  iterationRules,
+  prepareIterationRun,
+} from '../../workflows/reference-consensus/iteration-run.js';
+import {readCohortSites, siteFilters} from '../../workflows/reference-consensus/sites.js';
 import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AnnotationTransferResults, annotationTransferHelpSections} from './annotation-transfer-results.js';
 import {
+  cohortSiteTables,
   consensusTabs,
+  filteredSites,
   initialConsensusView,
   ReferenceConsensusResults,
   referenceConsensusHelpSections,
   selectableTableHeaderLines,
   type ConsensusView,
+  type SitesState,
 } from './reference-consensus-results.js';
+import {CohortReviewScreen} from './cohort-review.js';
 import {Page} from '../components/page.js';
 import {HelpContent} from '../components/help.js';
 import {TabBar} from '../components/tabs.js';
 import {runHelpSections} from './run-help.js';
-import type {WorkflowExecutionOutcome} from '../new-run-screen/workflow-execution.js';
+import {
+  WorkflowExecutionScreen,
+  type WorkflowExecutionOutcome,
+  type WorkflowRunExecutor,
+} from '../new-run-screen/workflow-execution.js';
 import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
 import {formatLocalDateTime} from "../utils.js";
 import {SectionList, type SectionListItem} from "./section-list.js";
@@ -58,17 +79,35 @@ export function missingResultPaths(
   ].filter(value => !value.available).map(value => value.absolutePath))];
 }
 
+/**
+ * What a results screen needs to review a reference-consensus cohort and rerun its iterations.
+ * Without it, the review and continue actions are not offered.
+ */
+export type CohortRerun = {
+  /** The packaged Snakefile of the run's workflow. */
+  snakefilePath: string;
+  prepareRun?: typeof prepareIterationRun;
+  executeRun?: WorkflowRunExecutor<SnakemakeRun>;
+  checkDryRun?: typeof checkIterationDryRun;
+  saveDecision?: (runDirectory: string, draft: CohortDecisionDraft) => Promise<number>;
+  loadResult?: typeof loadWorkflowResult;
+};
+
+type ScreenMode = {kind: 'results'} | {kind: 'review'} | {kind: 'rerun'; iteration: number};
+
 /** Generic run-result shell. Workflow-specific interpretation is delegated explicitly. */
 export function RunResultsScreen({
   runDirectory,
   manifest,
-  loaded,
+  loaded: initiallyLoaded,
   onBack,
   inputActive = true,
   pathExists = existsSync,
   executionOutcome,
   runMetadata,
   formatDateTime = formatLocalDateTime,
+  cohortRerun,
+  readSites = readCohortSites,
 }: {
   runDirectory: string;
   manifest: WorkflowManifest;
@@ -79,16 +118,49 @@ export function RunResultsScreen({
   executionOutcome?: WorkflowExecutionOutcome;
   runMetadata?: ExistingRunMetadata;
   formatDateTime?: (value: string) => string;
+  cohortRerun?: CohortRerun;
+  readSites?: typeof readCohortSites;
 }): React.JSX.Element {
   const {columns, rows} = useWindowSize();
   const contentRef = useRef<DOMElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
   const [view, setView] = useState<'results' | 'help'>('results');
   const [scrollOffsets, setScrollOffsets] = useState({results: 0, help: 0});
+  // Reloaded from disk after a cohort iteration ran from this screen.
+  const [loaded, setLoaded] = useState(initiallyLoaded);
+  const [mode, setMode] = useState<ScreenMode>({kind: 'results'});
   const consensus = isReferenceConsensusResult(loaded) ? loaded.result : undefined;
   const [consensusView, setConsensusView] = useState<ConsensusView | undefined>(
     () => consensus ? initialConsensusView(consensus) : undefined,
   );
+  const [sites, setSites] = useState<SitesState>();
+  const sitesCohort = consensus && consensusView?.tab === 'sites' ? consensus.cohorts[consensusView.cohortIndex] : undefined;
+  const sitesTables = cohortSiteTables(sitesCohort);
+  const sitesCohortId = sitesTables ? sitesCohort?.id : undefined;
+  const loadedSitesCohortId = sites && sites.state !== 'failed' ? sites.cohortId : undefined;
+
+  // The Sites tab reads the selected cohort's tables once, when it is first shown; leaving the tab
+  // or choosing another cohort before they are read cancels the reading.
+  useEffect(() => {
+    if (!sitesCohortId || !sitesTables || loadedSitesCohortId === sitesCohortId) {
+      return;
+    }
+    const controller = new AbortController();
+    setSites({cohortId: sitesCohortId, state: 'loading'});
+    readSites({...sitesTables, signal: controller.signal}).then(
+      value => setSites({cohortId: sitesCohortId, state: 'ready', sites: value}),
+      error => {
+        if (!controller.signal.aborted) {
+          setSites({cohortId: sitesCohortId, state: 'failed', message: error instanceof Error ? error.message : String(error)});
+        }
+      },
+    );
+    return () => {
+      controller.abort();
+      setSites(current => current?.state === 'loading' ? undefined : current);
+    };
+    // The tables are derived from the cohort, so its ID is enough to decide when to read again.
+  }, [sitesCohortId]);
   // The tab bar takes two more rows above the scrolled content.
   const visibleRows = Math.max(5, rows - (consensus ? 17 : 15));
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
@@ -98,7 +170,7 @@ export function RunResultsScreen({
     if (contentRef.current) {
       setContentHeight(measureElement(contentRef.current).height);
     }
-  }, [columns, rows, loaded, view, consensusView]);
+  }, [columns, rows, loaded, view, consensusView, sites]);
 
   const scrollBy = (delta: number): void => {
     setScrollOffsets(current => ({
@@ -121,19 +193,68 @@ export function RunResultsScreen({
     });
   };
 
+  /** Handles a key of the Sites tab; false when the key is the shell's to handle. */
+  const sitesKey = (
+    input: string,
+    key: {upArrow: boolean; downArrow: boolean; return: boolean; escape: boolean},
+    current: ConsensusView,
+  ): boolean => {
+    if (current.siteDetail) {
+      if (key.escape) {
+        setConsensusView({...current, siteDetail: false});
+        return true;
+      }
+      return key.upArrow || key.downArrow || key.return;
+    }
+    if (input === 'f') {
+      const next = siteFilters[(siteFilters.indexOf(current.siteFilter) + 1) % siteFilters.length]!;
+      setConsensusView({...current, siteFilter: next, siteIndex: 0});
+      return true;
+    }
+    const listed = sites?.state === 'ready' && sites.cohortId === sitesCohortId
+      ? filteredSites(sites.sites, current.siteFilter).length
+      : 0;
+    if (listed > 0 && (key.upArrow || key.downArrow)) {
+      setConsensusView({...current, siteIndex: Math.max(0, Math.min(listed - 1, current.siteIndex + (key.upArrow ? -1 : 1)))});
+      return true;
+    }
+    if (listed > 0 && key.return) {
+      setConsensusView({...current, siteDetail: true, siteIndex: Math.min(current.siteIndex, listed - 1)});
+      setScrollOffsets(offsets => ({...offsets, results: 0}));
+      return true;
+    }
+    return false;
+  };
+
   /** Handles a key of the consensus tabs; false when the key is the shell's to handle. */
-  const consensusKey = (key: {upArrow: boolean; downArrow: boolean; return: boolean; escape: boolean}): boolean => {
+  const consensusKey = (
+    input: string,
+    key: {upArrow: boolean; downArrow: boolean; return: boolean; escape: boolean},
+  ): boolean => {
     if (!consensus || !consensusView) {
       return false;
     }
     const {tab, isolateDetail} = consensusView;
+    if (cohortRerun && input === 'r') {
+      setMode({kind: 'review'});
+      return true;
+    }
+    if (tab === 'sites') {
+      return sitesKey(input, key, consensusView);
+    }
+    const selectedCohort = consensus.cohorts[consensusView.cohortIndex];
+    if (cohortRerun && tab === 'cohorts' && input === 'c' && selectedCohort?.state === 'pending') {
+      setMode({kind: 'rerun', iteration: selectedCohort.iteration});
+      return true;
+    }
     const listed = tab === 'isolates' && !isolateDetail ? consensus.isolates.length
       : tab === 'cohorts' ? consensus.cohorts.length
         : 0;
     if (listed > 0 && (key.upArrow || key.downArrow)) {
       const field = tab === 'isolates' ? 'isolateIndex' : 'cohortIndex';
       const index = Math.max(0, Math.min(listed - 1, consensusView[field] + (key.upArrow ? -1 : 1)));
-      setConsensusView({...consensusView, [field]: index});
+      // The Sites tab follows the selected cohort, so its list starts over with another one.
+      setConsensusView({...consensusView, [field]: index, ...(field === 'cohortIndex' ? {siteIndex: 0, siteDetail: false} : {})});
       revealRow(index);
       return true;
     }
@@ -150,13 +271,38 @@ export function RunResultsScreen({
     return false;
   };
 
+  /** Reloads the result after an iteration ran and selects that iteration. */
+  const returnFromRerun = async (iteration: number): Promise<void> => {
+    let reloaded = loaded;
+    try {
+      reloaded = await (cohortRerun?.loadResult ?? loadWorkflowResult)(runDirectory, manifest);
+    } catch {
+      // The earlier result stays shown; opening the run again reads it anew.
+    }
+    setLoaded(reloaded);
+    const result = isReferenceConsensusResult(reloaded) ? reloaded.result : undefined;
+    if (result) {
+      const index = result.cohorts.findIndex(cohort => cohort.id === iterationName(iteration));
+      setConsensusView(current => ({
+        ...(current ?? initialConsensusView(result)),
+        tab: 'cohorts',
+        cohortIndex: index >= 0 ? index : result.cohorts.length - 1,
+        isolateDetail: false,
+        siteIndex: 0,
+        siteDetail: false,
+      }));
+    }
+    setScrollOffsets({results: 0, help: 0});
+    setMode({kind: 'results'});
+  };
+
   useInput((input, key) => {
-    if (!inputActive) {
+    if (!inputActive || mode.kind !== 'results') {
       return;
     }
     if (view === 'help' && (key.escape || input === '?')) {
       setView('results');
-    } else if (view === 'results' && consensusKey(key)) {
+    } else if (view === 'results' && consensusKey(input, key)) {
       return;
     } else if (key.escape) {
       onBack?.();
@@ -300,8 +446,52 @@ export function RunResultsScreen({
   );
   const runFilesSection = <SectionList title="Run Files" description="" items={runFileItems} />;
 
+  if (mode.kind === 'review' && consensus && cohortRerun && isReferenceConsensusResult(loaded)) {
+    const save = cohortRerun.saveDecision ?? saveNextCohortDecision;
+    return (
+      <CohortReviewScreen
+        result={consensus}
+        configuration={loaded.configuration}
+        saveDecision={draft => save(runDirectory, draft)}
+        onSaved={iteration => setMode({kind: 'rerun', iteration})}
+        onCancel={() => setMode({kind: 'results'})}
+        inputActive={inputActive}
+      />
+    );
+  }
+  if (mode.kind === 'rerun' && cohortRerun && isReferenceConsensusResult(loaded)) {
+    const {iteration} = mode;
+    const prepare = cohortRerun.prepareRun ?? prepareIterationRun;
+    const execute = cohortRerun.executeRun ?? ((run, onOutput, signal) => executeSnakemakeRun(run, onOutput, signal));
+    const check = cohortRerun.checkDryRun ?? checkIterationDryRun;
+    const allowed = new Set<string>(iterationRules);
+    return (
+      <WorkflowExecutionScreen
+        configurationPath={join(resolve(runDirectory), 'decisions', `${iterationName(iteration)}.yaml`)}
+        prepareRun={runMode => prepare({
+          runDirectory: resolve(runDirectory),
+          iteration,
+          mode: runMode,
+          snakefilePath: cohortRerun.snakefilePath,
+          cores: loaded.configuration.resources.effective_cpus,
+        })}
+        executeRun={execute}
+        dryRunGate={run => check(run, iteration)}
+        stages={manifest.stages.filter(stage => stage.rules?.some(rule => allowed.has(rule)))}
+        onBack={() => void returnFromRerun(iteration)}
+        inputActive={inputActive}
+        labels={{
+          title: `Rerun iteration ${String(iteration)}`,
+          intro: 'Decision saved. Dry-run the iteration first: it may run only when nothing but the cohort steps would run.',
+          back: 'Back to results',
+        }}
+      />
+    );
+  }
+
   const listTab = consensusView && (consensusView.tab === 'cohorts' ||
-    (consensusView.tab === 'isolates' && !consensusView.isolateDetail));
+    (consensusView.tab === 'isolates' && !consensusView.isolateDetail) ||
+    (consensusView.tab === 'sites' && !consensusView.siteDetail));
   let shortcuts: string[];
   if (view === 'help') {
     shortcuts = ['? — Back to results'];
@@ -311,6 +501,12 @@ export function RunResultsScreen({
       listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 ? '↑/↓ — Scroll' : '',
       maximumScrollOffset > 0 ? 'PageUp/PageDown (or fn + ↑/↓) — Page' : '',
       consensusView?.tab === 'isolates' && !consensusView.isolateDetail ? 'Enter — Isolate details' : '',
+      consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'f — Filter' : '',
+      consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'Enter — Locus details' : '',
+      cohortRerun && consensus ? 'r — Review' : '',
+      cohortRerun && consensusView?.tab === 'cohorts' && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending'
+        ? 'c — Continue iteration'
+        : '',
       '? — Help',
     ];
   }
@@ -319,6 +515,8 @@ export function RunResultsScreen({
     back = 'Back to results';
   } else if (consensusView?.isolateDetail) {
     back = 'Back to isolates';
+  } else if (consensusView?.tab === 'sites' && consensusView.siteDetail) {
+    back = 'Back to sites';
   }
 
   return (
@@ -330,7 +528,7 @@ export function RunResultsScreen({
           tabs={consensusTabs}
           activeId={consensusView.tab}
           onChange={tab => {
-            setConsensusView({...consensusView, tab, isolateDetail: false});
+            setConsensusView({...consensusView, tab, isolateDetail: false, siteDetail: false});
             setScrollOffsets(current => ({...current, results: 0}));
           }}
           inputActive={inputActive}
@@ -357,6 +555,8 @@ export function RunResultsScreen({
               formatDateTime={formatDateTime}
               overviewHeader={<>{metadataSection}{outcomeSection}{statusSection}</>}
               filesHeader={<>{runDirectorySection}{runFilesSection}</>}
+              sites={sites}
+              visibleRows={visibleRows}
             />
           ) : <>
           {metadataSection}

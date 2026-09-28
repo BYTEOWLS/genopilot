@@ -6,6 +6,15 @@ Ideas that are intentionally outside the current task list in [`resources/tasks.
 
 A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](resources/concepts/reruns.md). Its release basics are tracked in consensus Tasks 5.1 and 5.3 and the task list; the rest waits for a concrete use case.
 
+## Cohort decision preview
+
+Consensus [Task 5.3](concepts/consensus/5c-review-and-rerun.md) saves and runs a cohort decision without previewing it. A preview would show, before saving, how many unresolved loci and `N` bases a proposed decision creates or resolves, computed from the support tables of an aggregated cohort whose voters include every proposed voter.
+
+- It needs the voting rule of `generate_consensus.py` a second time in TypeScript; share its test cases with the Python tests so the two cannot drift.
+- It cannot be exact at a locus where a removed voter's own variant joined overlapping records of others: without that voter, the locus may split. Count such loci as "computed by the rerun" instead of guessing.
+- Turning the backbone vote on cannot be previewed from a table built without it outside the loci, where the backbone bases are not recorded.
+- The intervals table grows with the cohort, so the preview streams it on request rather than on every change.
+
 ## Performance review
 
 Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](resources/concepts/systems-check.md).

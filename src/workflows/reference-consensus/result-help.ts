@@ -117,6 +117,29 @@ export const referenceConsensusExplanations: Record<string, string> = {
     'change in unresolved loci means the decision resolved them.',
 
   // Run files
+  // Sites
+  'sites.filter': 'Which loci of the iteration selected on the Iterations tab are listed: ties, no majority, loci with ' +
+    'competing indels (also selected ones), or every unresolved locus. Runs of bases outside every locus that stayed ' +
+    'unresolved, such as regions where no isolate is callable, are counted on the overview but not listed here.',
+  'sites.position': 'Where the locus lies on the backbone: the sequence name and the 1-based position, or its first ' +
+    'and last base when it spans several.',
+  'sites.backbone_allele': 'The backbone\'s own sequence at the locus.',
+  'sites.alleles': 'Every allele that received a vote, the backbone\'s first, each with its number of votes. The ' +
+    'backbone\'s own vote, when it casts one, is counted for the backbone allele. Long alleles are shortened in the ' +
+    'list; the detail shows them whole.',
+  'sites.outcome': 'The allele the voting method selected, or why the locus stayed unresolved; see Unresolved reasons ' +
+    'below.',
+  'sites.flags': 'The support flags of the locus; see Support flags below.',
+  'site.backbone_vote': 'Whether the backbone cast its own vote at this locus. It does not when the cohort excludes its ' +
+    'vote or its allele contains a base other than A, C, G, or T.',
+  'site.callable': 'How many isolates voted here: callable over the whole locus, with variants that could be applied. ' +
+    'The minimum of callable isolates is compared with this number.',
+  'site.total_votes': 'All votes cast at the locus: the voting isolates and the backbone\'s own vote.',
+  'site.allele': 'One version of the locus that received at least one vote.',
+  'site.allele_votes': 'How many voters chose this version, the backbone\'s own vote included.',
+  'site.call': 'What the isolate voted for, or why it cast no vote here: ambiguous or uncallable at a base of the ' +
+    'locus (see Callability below), or unsupported when its own variants could not be applied together.',
+
   'run.configuration': 'The saved run configuration the workflow read (YAML).',
   'run.snapshot': 'The selected isolates and their read files as the catalog described them when the run was created. ' +
     'Later catalog edits do not change it.',
@@ -219,6 +242,23 @@ export const referenceConsensusTerms: HelpEntry[] = [
     label: 'Cohort consensus',
     explanation: 'The backbone\'s structure with the cohort\'s most supported allele at every locus. It can combine ' +
       'alleles no single isolate carries together, so it is not the genome of one individual and not an assembly.',
+  },
+  {
+    id: 'term.review',
+    label: 'Reviewing a cohort',
+    explanation: 'Review (r) saves a decision: which isolates vote and the cohort settings, with a reason. It becomes ' +
+      'the next iteration and never changes an earlier one. Excluding an isolate removes its votes everywhere, never at ' +
+      'single positions, and an isolate whose processing failed can be excluded to complete the cohort without it. ' +
+      'Wild-type status and lineage are shown to inform the decision; they never select anything.',
+  },
+  {
+    id: 'term.rerun',
+    label: 'Rerunning an iteration',
+    explanation: 'A saved decision runs only the cohort steps: support aggregation, consensus generation, and the ' +
+      'iteration\'s provenance. A dry run first shows what Snakemake would do. When it would also run a per-isolate ' +
+      'step, for example because a voter\'s results are older than a changed rule, the rerun is refused, because that ' +
+      'would recompute evidence: such a change needs a new run. The decision then stays saved as a pending iteration. ' +
+      'A pending iteration, also an interrupted one, is continued with c on the Iterations tab.',
   },
   {id: 'term.isolate_states', label: 'Isolate states', values: isolateStates},
   {id: 'term.cohort_states', label: 'Cohort states', values: cohortStates},
