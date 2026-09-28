@@ -4,6 +4,18 @@
 
 Combine the backbone and Task 4.1's per-isolate callable calls into a deterministic support table without yet choosing the final cohort base.
 
+## Kickoff decisions
+
+- **Evidence.** Votes come from each isolate's normalized `variants.vcf.gz`, of which only `PASS` records count, and its `callable-mask.bed`. The isolate FASTAs are not used: indels shift their coordinates, `N` merges ambiguous and uncallable bases, equivalent indels are recognized only as normalized records, and a FASTA carries no evidence behind a base.
+- **Loci.** `PASS` records of different isolates whose backbone spans overlap form one locus. Every voter's allele there is the locus's backbone sequence with its own records applied. A SNP inside another isolate's deletion, competing indels, and different SNPs at one base are therefore one ballot with at most one vote per voter. This is fixed behavior, not a configuration option, because it only represents the evidence and does not judge it; the workflow README explains it with an example for researchers without a bioinformatics background.
+- **An isolate's vote.** It votes only when every base of the position or locus is `callable`; otherwise it is `ambiguous` when any base is ambiguous, and `uncallable` otherwise. A SNP and an indel the caller reports at the same position are combined into one allele. Its other overlapping records within a locus, or an allele with another base than `A/C/G/T` (a symbolic allele, for example), make it `unsupported`, without a vote.
+- **The mask is authoritative.** A `PASS` record on a base the mask marks ambiguous, such as a SNP inside an ambiguous indel's span, casts no vote, just as the isolate FASTA shows `N` there. This settles the question Task 4.1 left open.
+- **The backbone's vote.** One vote when `consensus.include_backbone_vote` is true, none otherwise, and never where its base is not `A/C/G/T`. Soft-masked bases are compared uppercase.
+- **A failed isolate** blocks aggregation, because the rule depends on every selected isolate; excluding it is a Task 5 decision with a reason.
+- **Determinism.** Contigs follow the backbone, positions ascend, isolate columns are sorted by ID, and alleles list the backbone allele first, then by votes and alphabetically. The support outputs carry no timestamps.
+- **Voters** are every `selected_isolates` ID in the initial run. The script takes the voters as arguments, so Task 5 can pass a saved subset.
+- **Configuration.** Only the backbone vote is read, so changing it reruns aggregation alone and changing the voting method does not.
+
 ## Voting evidence
 
 At each relevant backbone position:
@@ -15,7 +27,7 @@ At each relevant backbone position:
 - isolate coverage depth never creates multiple votes;
 - aggregation is independent of isolate-list order.
 
-Use normalized VCF plus callable masks as authority. The generated isolate FASTAs are validation and reuse artifacts, not the aggregation input, because a copied backbone base in a FASTA may represent a no-call and indels can shift sequence coordinates.
+Use normalized VCF plus callable masks as authority. The generated isolate FASTAs are validation and reuse artifacts, not the aggregation input (see *Kickoff decisions*).
 
 ## Support output
 
@@ -32,19 +44,25 @@ Emit a versioned TSV (compressed and indexed if required by realistic genome siz
 
 Do not force SNP and indel evidence into one lossy base column. IUPAC rendering and winner selection belong to Task 4.3.
 
+The outputs, in `results/cohort/initial/`, use 1-based inclusive coordinates, are bgzip-compressed and indexed with tabix, and start with a `## schema_version: 1` line and a `#`-prefixed header:
+
+- `support-sites.tsv.gz`, one row per locus: `chrom`, `start`, `end`, `backbone_allele`, `backbone_votes`, `alleles`, `allele_votes`, `callable_isolates`, `total_votes`, `flags` (`snp`, `indel`, `multiallelic`, `overlapping`, `competing_indel`, `unsupported`, `backbone_not_acgt`), and one `isolate:<id>` column per isolate holding its allele's index or `ambiguous`, `uncallable`, or `unsupported`;
+- `support-intervals.tsv.gz`, every backbone base in runs of constant voter states: `chrom`, `start`, `end`, `backbone_votes`, `callable_isolates`, `ambiguous_isolates`, `uncallable_isolates`, and `states`, one letter per isolate (`c`, `a`, `u`) in the order of a `## isolates:` header line. Inside a locus, its row in the sites table is authoritative. The letters cost one byte per isolate and row, and the script updates only the isolates whose state changes at a boundary, so large cohorts stay fast;
+- `support-summary.json`: voters, the backbone vote, input checksums, bases by callable isolates and by total votes, site counts per flag and of disagreeing loci, the allele frequency spectrum of biallelic loci, and per-isolate base and vote counts.
+
 ## Rerun boundary
 
 The initial table includes every isolate selected for analysis. Task 5 may supply a saved voting subset; aggregation must be able to regenerate from existing Task 4.1 artifacts without rerunning QC, alignment, or calling. Preserve the initial all-selected support output when a reviewed decision creates a later iteration.
 
 ## Work
 
-- [ ] Define the versioned support-table and summary schemas for SNPs, multiallelic sites, and normalized indels.
-- [ ] Implement callable reference-allele votes rather than treating missing VCF rows as evidence by themselves.
-- [ ] Add the configured backbone contribution (one vote or none) explicitly to provenance and output.
-- [ ] Make aggregation deterministic across isolate ordering and repeated runs.
-- [ ] Emit ambiguity, callability, and allele-frequency summaries without selecting a winner.
-- [ ] Add synthetic tests for no-calls, low-quality calls, all-reference sites, multiallelic sites, normalized equivalent indels, competing indels, and one or many isolates.
-- [ ] Verify direct Snakemake targeting and reuse of all Task 4.1 outputs.
+- [x] Define the versioned support-table and summary schemas for SNPs, multiallelic sites, and normalized indels.
+- [x] Implement callable reference-allele votes rather than treating missing VCF rows as evidence by themselves.
+- [x] Add the configured backbone contribution (one vote or none) explicitly to provenance and output.
+- [x] Make aggregation deterministic across isolate ordering and repeated runs.
+- [x] Emit ambiguity, callability, and allele-frequency summaries without selecting a winner.
+- [x] Add synthetic tests for no-calls, low-quality calls, all-reference sites, multiallelic sites, normalized equivalent indels, competing indels, and one or many isolates.
+- [x] Verify direct Snakemake targeting and reuse of all Task 4.1 outputs.
 
 ## Acceptance
 

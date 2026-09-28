@@ -98,6 +98,14 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         log = (self.run_dir / "logs/isolates/public-reads/pairs/1/validate-read-pair.log").read_text(encoding="utf-8")
         self.assertIn("not an Illumina read name", log)
 
+    def test_a_complete_run_aggregates_support_over_every_selected_isolate(self) -> None:
+        config_path = write_run(self.run_dir, ["iso-a", "iso-b"])
+        result = run_snakemake(self.run_dir, config_path, "--dry-run", "--printshellcmds")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("rule aggregate_support:", result.stdout)
+        for isolate in ("iso-a", "iso-b"):
+            self.assertIn(f"--voter {isolate} results/isolates/{isolate}/variants.vcf.gz", result.stdout)
+
     def test_refuses_to_schedule_a_run_whose_read_file_is_missing(self) -> None:
         reads_dir = self.root / "copied"
         shutil.copytree(FIXTURES_DIR / "reads" / "iso-c", reads_dir)

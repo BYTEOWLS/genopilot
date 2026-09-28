@@ -2,7 +2,8 @@
 
 ## Goal
 
-Present the complete initial run, make ties and supporting evidence reviewable, save post-run voting decisions, and rerun only cohort aggregation and dependent outputs after isolates are excluded or the voting method changes.
+Present the complete initial run, make ties and supporting evidence reviewable, save post-run voting decisions,
+and rerun only cohort aggregation and dependent outputs after isolates are excluded or the voting method changes.
 
 ## Initial results
 
@@ -17,6 +18,8 @@ Show:
 - paths to the support table, initial cohort FASTA, diagnostics, provenance, and complete logs.
 
 Labels state their counting unit and remain presentation-only. Machine-readable artifacts are authoritative.
+
+The help for scientific terms explains a locus that spans several bases, why overlapping variants of different isolates form one ballot, and every support flag, so the results stay understandable without a bioinformatics background.
 
 ## Review action
 

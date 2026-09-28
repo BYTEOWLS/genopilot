@@ -2,7 +2,7 @@
 
 Builds one consensus genome from the paired Illumina reads of many isolates. Every isolate's reads are called against one backbone assembly. The isolates' alleles, and optionally the backbone's, then vote at each position, and the winning allele by strict majority or plurality forms the cohort consensus.
 
-Status: per-isolate processing is implemented. Every isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA. Cohort support aggregation and consensus generation are not implemented yet.
+Status: per-isolate processing and cohort support aggregation are implemented. Every isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA, and the votes of the backbone and the callable isolates are counted at every backbone position. Consensus generation, which picks the winning allele, is not implemented yet.
 
 ## Inputs
 
@@ -16,14 +16,14 @@ The reads must keep their original Illumina read names, because the read groups 
 | Parameter | Default | Meaning |
 |---|---|---|
 | Voting method | strict majority | Not used yet. Strict majority needs more than half of the votes cast; plurality needs the unique highest vote count. |
-| Backbone vote | yes | Not used yet. Whether the backbone casts one vote next to the callable isolates. |
+| Backbone vote | yes | Whether the backbone casts one vote next to the callable isolates. |
 | Ploidy | 1 | Fixed: isolates are called haploid. |
 | Minimum read depth | 10 | Reads needed at a position, counted after the quality filters and without duplicates. |
 | Minimum mapping quality | 20 | Reads mapped with a lower quality are not counted. |
 | Minimum base quality | 20 | Bases with a lower quality are not counted. |
 | Minimum allele fraction | 0.8 | Share of the counted reads the winning allele needs; above 0.5 and at most 1. |
 
-The voting parameters are saved with the run and take effect once consensus generation is implemented.
+The voting method is saved with the run and takes effect once consensus generation is implemented.
 
 ## Steps
 
@@ -49,9 +49,13 @@ And for every isolate:
 12. **Build isolate consensus**: apply the `PASS` variants to the backbone and mask every base that is not callable with `N`.
 13. **Summarize isolate**: metrics, provenance, and the promotion candidate.
 
+Once every isolate is processed:
+
+14. **Aggregate support**: count the backbone's and the callable isolates' votes at every backbone position (see *Cohort support*).
+
 Finally, **record provenance** writes the run's artifact index and provenance record.
 
-Isolates are processed independently and in parallel. A failing isolate is reported as a failed job while the others finish.
+Isolates are processed independently and in parallel. A failing isolate is reported as a failed job while the others finish. The cohort steps then do not run, so an isolate never drops out of the vote unnoticed; leaving it out is a separate, reviewed decision.
 
 ## Read groups
 
@@ -113,9 +117,65 @@ The isolate FASTA is the backbone with the isolate's `PASS` variants applied and
 
 The FASTA is checked before anything depends on it: samtools must index it, its sequences must match the backbone's in name and order, and it must contain no other characters.
 
+## The backbone's role
+
+Short reads cannot be assembled into a complete genome on their own, so every isolate is read against the backbone. The backbone supplies the coordinates, so a position such as `chr1:1100` means the same base in every isolate, and it supplies the genome's structure: its chromosomes, their order, and its repeats. A complete telomere-to-telomere (T2T) assembly, built from long reads, is the best available choice.
+
+This has known limits, which apply to every result of this workflow:
+
+- **Reference bias**: regions where an isolate differs strongly from the backbone map poorly and become uncallable, so the consensus leans towards the backbone there.
+- **Structural variation is not seen**: sequence the isolates have but the backbone lacks, such as extra genes or large insertions, and rearrangements do not appear. The consensus has the backbone's architecture with the cohort's alleles.
+- **Backbone-only regions**: where no isolate is callable, as in repeats, the backbone's vote is the only evidence, or there is none when the backbone does not vote.
+- **The backbone is one strain**: its vote counts like one more isolate. When the backbone's strain is also among the isolates, that strain votes twice.
+
+## Cohort support
+
+Before a winner is chosen, the evidence is counted like ballots at every backbone position:
+
+- the backbone casts one vote when the backbone vote is on, but not where its own base is not `A`, `C`, `G`, or `T`, such as `N` in an assembly gap;
+- every isolate that is callable at the position casts one vote: for its variant allele when it has a `PASS` variant there, and for the backbone allele otherwise;
+- an ambiguous or uncallable isolate casts no vote, so missing evidence never counts as agreement with the backbone;
+- read depth never adds votes: an isolate with 200 reads counts the same as one with 20.
+
+The votes come from each isolate's normalized variants and callable mask, not from its FASTA. In the FASTA, indels shift the positions, so the same position number means different bases in different isolates, and `N` no longer says whether the reads disagreed or were missing.
+
+### Overlapping variants
+
+A variant covers one or more backbone bases: a SNP covers one base, a deletion covers the bases it removes plus the base before them, and an insertion covers the base it follows. Two variants overlap when they cover a common base. Within one haploid isolate this should not happen, but variants of different isolates often do. For example, around `chr1:2200`:
+
+```text
+position  2200 2201 2202 2203 2204
+backbone    A    T    C    C    T
+isolate 1   A    -    -    -    -     deletion of TCCT
+isolate 2   A    T    C    C    T     no variant
+isolate 3   A    T    G    C    T     SNP C to G at 2202
+```
+
+Counted base by base, isolate 1 has no base at 2202 at all, so it could neither vote for `C` nor for `G`, although its reads clearly show the deletion. Overlapping variants of different isolates therefore form one **locus**, and every voter chooses one complete version of it:
+
+| Allele of 2200–2204 | Voters | Votes |
+|---|---|---|
+| `ATCCT` | backbone, isolate 2 | 2 |
+| `A` | isolate 1 | 1 |
+| `ATGCT` | isolate 3 | 1 |
+
+Every voter casts at most one vote at a locus, and it votes only when every base of the locus is callable for it. Such a locus is flagged, so it can be reviewed. Most loci are a single SNP and are unaffected. This is how the evidence is written down, not a choice between scientific methods, so it is not a parameter.
+
+### Flags
+
+| Flag | Meaning |
+|---|---|
+| `snp` | a single base, and no isolate's variant there is an indel |
+| `indel` | at least one isolate's variant or allele is longer or shorter than the backbone allele |
+| `multiallelic` | more than two alleles, the backbone's included, for example backbone `C`, one isolate `A`, another `T` |
+| `overlapping` | variants of different isolates with different spans were merged into this locus |
+| `competing_indel` | an indel competes with at least one other non-backbone allele |
+| `unsupported` | an isolate's variants could not be applied, for example its own variants overlap or its allele is not written in `A`, `C`, `G`, and `T`; it casts no vote. A base change and an indel at the same position, which the caller reports as two variants, are combined and supported |
+| `backbone_not_acgt` | the backbone's allele has another base than `A`, `C`, `G`, or `T`; the backbone casts no vote |
+
 ## Outputs
 
-Paths are inside the run directory.
+Paths are inside the run directory. Positions in the support tables are 1-based and inclusive, like in a VCF.
 
 | Path | Content |
 |---|---|
@@ -135,6 +195,9 @@ Paths are inside the run directory.
 | `results/isolates/<isolate>/metrics.json` | the isolate's metrics |
 | `results/isolates/<isolate>/provenance.json` | the isolate's read pairs, parameters, tool versions, and checksums |
 | `results/isolates/<isolate>/promotion-candidate.json` | what is needed to copy the isolate FASTA into the isolate catalog |
+| `results/cohort/initial/support-sites.tsv.gz` | one row per variant locus: the backbone allele and its vote, the alleles and their votes, flags, and every isolate's allele or state; indexed with tabix |
+| `results/cohort/initial/support-intervals.tsv.gz` | every backbone base in runs with the same voters: the backbone vote, the number of callable, ambiguous, and uncallable isolates, and every isolate's state as one letter (`c` callable, `a` ambiguous, `u` uncallable) in the order of the `## isolates:` header line, so `cau` means the first isolate is callable, the second ambiguous, and the third uncallable; inside a locus, the sites table is authoritative; indexed with tabix |
+| `results/cohort/initial/support-summary.json` | voters, the backbone vote, input checksums, bases by number of votes, loci per flag, the allele frequency spectrum, and per-isolate counts |
 | `artifacts.yaml` | every artifact of the run with its checksum and origin |
 | `provenance/run.json` | configuration, inputs, tool versions, and commands of the whole run |
 | `logs/` | the log and benchmark of every step |
@@ -150,5 +213,6 @@ Every option that changes a result is set explicitly rather than left to a tool 
 - **fastp**: adapters detected for paired-end reads; quality filtering off, because the aligner soft-clips and the caller weighs base qualities; reads shorter than 30 bp dropped; poly-G tails of at least 10 bases trimmed on every instrument.
 - **bwa mem**: a fixed batch size, so alignments do not depend on the number of threads.
 - **bcftools mpileup**: maximum depth 10000; unmapped, secondary, QC-failed, and duplicate reads skipped; indel candidates need at least 2 reads and a 5% share. Base-alignment quality stays at the pinned default, which the recorded command and version document.
+- **bgzip and tabix** (HTSlib): compress and index the support tables.
 
 Trimmed input runs through the same steps, which then change little. Untrimmed input is preferred, because aggressive provider trimming mostly discards data the aligner and caller could use. Whether an isolate's reads were trimmed is recorded in its metrics and provenance.

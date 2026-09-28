@@ -41,12 +41,17 @@ directory, and every step writes its log to logs/):
  10. summarize_isolate                   rules/build_consensus.smk
        Metrics, the isolate's provenance, and its promotion candidate.
 
- 11. record_consensus_provenance         rules/record_provenance.smk
+  Then, once every isolate is processed:
+
+ 11. aggregate_support                   rules/aggregate_support.smk
+       The backbone's and the callable isolates' votes at every position.
+       -> results/cohort/initial/support-sites.tsv.gz, support-intervals.tsv.gz,
+          support-summary.json
+ 12. record_consensus_provenance         rules/record_provenance.smk
        Checksums, tool versions, and commands of the whole run.
        -> artifacts.yaml, provenance/run.json
 
-  Not implemented yet (listed in manifest.yaml): cohort support aggregation
-  and consensus generation.
+  Not implemented yet (listed in manifest.yaml): consensus generation.
 
 Every file a run produces is listed in scripts/artifacts.py.
 
@@ -61,7 +66,8 @@ into a new run directory. The same run can then be started directly with
     --directory <run-dir> --configfile <run-dir>/config.yaml \
     --cores <n> --use-conda --keep-going
 
-`--keep-going` lets the other isolates finish when one fails. Commands are
+`--keep-going` lets the other isolates finish when one fails; the cohort
+steps then do not run. Commands are
 recorded in provenance/run.json only when the run also uses GenoPilot's run
 events logger (see the GenoPilot README).
 
@@ -123,6 +129,7 @@ include: str(RULES_DIR / "validate_read_pair.smk")
 include: str(RULES_DIR / "align_reads.smk")
 include: str(RULES_DIR / "call_variants.smk")
 include: str(RULES_DIR / "build_consensus.smk")
+include: str(RULES_DIR / "aggregate_support.smk")
 include: str(RULES_DIR / "record_provenance.smk")
 
 

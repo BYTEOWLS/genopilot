@@ -82,7 +82,7 @@ workflows/
 │   ├── manifest.yaml
 │   └── manifest.parameters.yaml
 ├── comparison/              Comparison workflow scaffold
-├── reference-consensus/     Cohort consensus; per-isolate processing so far
+├── reference-consensus/     Cohort consensus; per-isolate processing and support aggregation so far
 │   ├── Snakefile
 │   ├── manifest.yaml
 │   ├── manifest.parameters.yaml

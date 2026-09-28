@@ -165,6 +165,69 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
         for rule in ("validate_read_pair", "trim_read_pair", "align_read_pair", "mark_duplicates"):
             self.assertNotIn(f"rule {rule}:", planned, rule)
 
+    def support_rows(self, name: str) -> list[dict[str, str]]:
+        path = self.run_dir / "results" / "cohort" / "initial" / f"support-{name}.tsv.gz"
+        self.assertTrue(Path(f"{path}.tbi").is_file())
+        with gzip.open(path, "rt", encoding="utf-8") as table:
+            lines = table.read().splitlines()
+        header = next(line for line in lines if not line.startswith("##")).lstrip("#").split("\t")
+        return [dict(zip(header, line.split("\t"))) for line in lines if not line.startswith("#")]
+
+    def test_support_counts_one_vote_per_callable_voter_at_every_variant(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        sites = {(row["chrom"], int(row["start"])): row for row in self.support_rows("sites")}
+        expected = {
+            # iso-a and iso-b carry T; the backbone and the callable iso-c vote G.
+            ("chr1", 1100): ("chr1", "1100", "G,T", "2,2", "snp"),
+            ("chr1", 1500): ("chr1", "1500", "G,A", "2,2", "snp"),
+            # iso-a A, iso-c T, the backbone and iso-b C.
+            ("chr2", 300): ("chr2", "300", "C,A,T", "2,1,1", "snp,multiallelic"),
+            ("chr1", 1800): ("chr1", "1800", "G,GGAT", "3,1", "indel"),
+            ("chr1", 2200): ("chr1", "2204", "ATCCT,A", "3,1", "indel"),
+        }
+        for key, (chrom, end, alleles, votes, flags) in expected.items():
+            with self.subTest(site=key):
+                row = sites[key]
+                self.assertEqual((row["chrom"], row["end"], row["alleles"], row["allele_votes"], row["flags"]),
+                                 (chrom, end, alleles, votes, flags))
+        simulated = {(v["contig"], v["position"]) for truth in EXPECTED["isolates"].values() for v in truth["variants"]}
+        self.assertEqual(set(sites), simulated)
+
+    def test_only_the_backbone_votes_inside_the_repeat(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        repeat = EXPECTED["repeat"]["copy"]
+        middle = (repeat["start"] + repeat["end"]) // 2
+        row = next(
+            row for row in self.support_rows("intervals")
+            if row["chrom"] == repeat["contig"] and int(row["start"]) <= middle <= int(row["end"])
+        )
+        self.assertEqual((row["backbone_votes"], row["callable_isolates"], row["states"]), ("1", "0", "uuu"))
+        summary = json.loads(
+            (self.run_dir / "results" / "cohort" / "initial" / "support-summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(summary["voters"], ["iso-a", "iso-b", "iso-c"])
+        self.assertTrue(summary["include_backbone_vote"])
+
+    def test_a_voting_change_reruns_only_aggregation(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        config_path = self.run_dir / "config.yaml"
+        original = config_path.read_text(encoding="utf-8")
+        self.addCleanup(config_path.write_text, original, encoding="utf-8")
+
+        config = json.loads(original)
+        config["consensus"]["voting_method"] = "plurality"
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+        method_only = run_snakemake(self.run_dir, self.conda_prefix, "--dry-run")
+        self.assertEqual(method_only.returncode, 0, method_only.stderr)
+        self.assertNotIn("rule aggregate_support:", method_only.stdout)
+
+        config["consensus"]["include_backbone_vote"] = False
+        config_path.write_text(json.dumps(config), encoding="utf-8")
+        backbone_vote = run_snakemake(self.run_dir, self.conda_prefix, "--dry-run")
+        self.assertEqual(backbone_vote.returncode, 0, backbone_vote.stderr)
+        self.assertIn("rule aggregate_support:", backbone_vote.stdout)
+        for rule in ("call_all_sites", "classify_callability", "filter_normalize_variants", "build_isolate_consensus"):
+            self.assertNotIn(f"rule {rule}:", backbone_vote.stdout, rule)
+
     def test_temporary_trimmed_reads_and_pair_alignments_are_removed(self) -> None:
         self.assertEqual(self.result.returncode, 0, self.result.stderr)
         pair_dir = self.run_dir / "results" / "isolates" / "iso-b" / "pairs" / "2"
