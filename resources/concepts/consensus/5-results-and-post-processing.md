@@ -55,6 +55,9 @@ The rerun targets support aggregation, consensus generation, validation, metrics
 
 ### Excluding a failed isolate
 
+This and the iterations above are the release basics of the [reruns concept](../reruns.md), which also explains why every other configuration change creates a new run.
+
+
 A failed isolate stops the cohort stages, so a run with one never completes (see [Task 4.2](4b-cohort-support-aggregation.md#kickoff-decisions)). When the failure can be fixed, rerunning the same run directory redoes only that isolate. When it cannot, for example because its reads are unusable, the researcher excludes it with a reason in the same run directory instead of creating a new run, which would align and call every other isolate again.
 
 - The same review offers exclusion for a run whose only failures are isolates; the decision lists them under `excluded_from_voting` with the reason, as for any exclusion.
