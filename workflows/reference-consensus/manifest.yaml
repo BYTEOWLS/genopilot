@@ -3,12 +3,10 @@ workflow_version: 1
 id: reference-consensus
 label: Build a reference-guided cohort consensus
 description: >
-  Call every selected isolate's paired reads against one backbone assembly, combine the callable
-  isolate alleles with an optional backbone vote, and build a cohort consensus by strict majority
-  or plurality. Per-isolate processing and cohort support aggregation are implemented: every
-  isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA, and
-  the backbone's and callable isolates' votes are counted at every position. Consensus generation
-  is not implemented yet.
+  Build one consensus genome for a cohort of isolates from their paired Illumina reads. Each
+  isolate is compared with a backbone assembly and gets its own genome; the isolates, and
+  optionally the backbone, then vote at every position for the cohort consensus. Uncertain and
+  tied positions are reported for review.
 entry_snakefile: Snakefile
 parameter-definitions: manifest.parameters.yaml
 stages:
