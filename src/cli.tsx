@@ -27,6 +27,9 @@ if (!commandName) {
   throw new Error('package.json must define a CLI command in "bin".');
 }
 
+// Show the command name in `ps` instead of the node/tsx invocation.
+process.title = commandName;
+
 // Keep displayed identity in sync with package.json instead of duplicating it.
 const metadata: CliMetadata = {
   packageName: packageJson.name,
