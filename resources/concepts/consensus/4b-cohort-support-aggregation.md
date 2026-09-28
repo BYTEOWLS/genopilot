@@ -4,6 +4,8 @@
 
 Combine the backbone and Task 4.1's per-isolate callable calls into a deterministic support table without yet choosing the final cohort base.
 
+The ballots are explained for researchers in the [workflow README](../../../workflows/reference-consensus/README.md#cohort-support).
+
 ## Kickoff decisions
 
 - **Evidence.** Votes come from each isolate's normalized `variants.vcf.gz`, of which only `PASS` records count, and its `callable-mask.bed`. The isolate FASTAs are not used: indels shift their coordinates, `N` merges ambiguous and uncallable bases, equivalent indels are recognized only as normalized records, and a FASTA carries no evidence behind a base.

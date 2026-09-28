@@ -4,7 +4,7 @@
 
 Replace annotation transfer's provisional prefix-only identifier transformation with a deterministic, researcher-reviewed regular-expression find-and-replace step. A fixed prefix is not enough for every source identifier scheme, and result tables cannot reliably expose final identifiers until this contract exists.
 
-This is a prerequisite of [NCBI submission preparation](ncbi-submission/README.md), which reuses the same step unchanged. Implement it first, in annotation transfer.
+This is a prerequisite of [INSDC submission preparation](insdc-submission/README.md), which reuses the same step unchanged. Implement it first, in annotation transfer.
 
 ## Contract
 
@@ -14,7 +14,7 @@ This is a prerequisite of [NCBI submission preparation](ncbi-submission/README.m
 - The raw LiftOn GFF3 is never modified; the step writes a separate file and an `id-mapping.tsv` (old ID, new ID, feature type, sequence ID, start).
 - Validation in the application rejects a pattern that does not compile. After rewriting, the step fails on an invalid resulting GFF3 ID, two distinct IDs that collapse into one, and a `Parent` or `Derives_from` that no longer resolves.
 - Changing only the expression or replacement reruns rewriting, validation, summaries, and dependent stages, not LiftOn.
-- It stays separate from NCBI locus-tag requirements; locus tags belong to the submission workflow.
+- It stays separate from INSDC locus-tag requirements; locus tags belong to the submission workflow.
 
 ## Review
 
@@ -24,7 +24,7 @@ Result views and the per-feature transfer TSV distinguish raw LiftOn IDs from fi
 
 ## Code
 
-One script in `workflows/shared/scripts/` replaces `prefix_gff3.py`, keeping its attribute allowlist and its tests for multi-valued parents, discontinuous features, and missing IDs. It is placed in shared code because NCBI submission is a concrete second use.
+One script in `workflows/shared/scripts/` replaces `prefix_gff3.py`, keeping its attribute allowlist and its tests for multi-valued parents, discontinuous features, and missing IDs. It is placed in shared code because INSDC submission is a concrete second use.
 
 The manifest parameter `annotation-id-regex` ("Annotation ID find (regex)") already exists, but nothing reads it yet. Until this task lands it must be hidden or marked as a placeholder, and `annotation-id-prefix` becomes the replacement field.
 

@@ -283,7 +283,10 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   const prepared = reviewed[0]!;
   const {configuration, snapshot} = prepared;
   assert.deepEqual(configuration.inputs.selected_isolates, ['mutant-one', 'wild-type']);
-  assert.deepEqual(configuration.consensus, {include_backbone_vote: false, voting_method: 'plurality'});
+  // The consensus settings left alone keep the manifest's defaults.
+  assert.deepEqual(configuration.consensus, {
+    include_backbone_vote: false, voting_method: 'plurality', min_callable_isolates: 0, unresolved_snp: 'n',
+  });
   assert.equal(configuration.calling.min_depth, 105);
   assert.equal(configuration.calling.ploidy, 1);
   assert.deepEqual(snapshot.isolates.map(entry => entry.id), ['mutant-one', 'wild-type']);

@@ -33,6 +33,7 @@ import {
   parseReferenceConsensusConfiguration,
   validateReferenceConsensusConfiguration,
   type ReferenceConsensusConfiguration,
+  type UnresolvedSnp,
   type VotingMethod,
 } from './configuration.js';
 import {ISOLATE_SNAPSHOT_SCHEMA_VERSION, validateIsolateSnapshot, type IsolateSnapshot} from './snapshot.js';
@@ -44,6 +45,8 @@ export type ReferenceConsensusDraft = {
   isolateIds: readonly string[];
   votingMethod: VotingMethod;
   includeBackboneVote: boolean;
+  minCallableIsolates: string;
+  unresolvedSnp: UnresolvedSnp;
   minDepth: string;
   minMappingQuality: string;
   minBaseQuality: string;
@@ -121,6 +124,8 @@ export function buildReferenceConsensusRun(
     consensus: {
       include_backbone_vote: draft.includeBackboneVote,
       voting_method: draft.votingMethod,
+      min_callable_isolates: parseThreshold(draft.minCallableIsolates),
+      unresolved_snp: draft.unresolvedSnp,
     },
     resources: {
       cpu_mode: draft.cpuMode,

@@ -63,6 +63,26 @@ parameters:
         label: The backbone casts one vote
       - value: 'no'
         label: Only callable isolates vote
+  - id: min-callable-isolates
+    label: Minimum callable isolates
+    section: Consensus
+    kind: integer
+    required: true
+    default: '0'
+    hidden: false
+    preview: Voting isolates a position needs; below it the consensus writes N
+  - id: unresolved-snp
+    label: Unresolved SNPs
+    section: Consensus
+    kind: choice
+    required: true
+    default: n
+    hidden: false
+    options:
+      - value: n
+        label: Write N
+      - value: iupac
+        label: Write the IUPAC code of the voted alleles (A or G is R)
   - id: ploidy
     label: Ploidy
     section: Per-isolate calling

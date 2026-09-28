@@ -8,9 +8,9 @@ Every task includes proportionate unit tests in the same change. A task is not c
 
 ## Workflows
 
-- [ ] Reference-guided cohort consensus, from Task 4.3 on ([concept](concepts/consensus/README.md)).
-- [ ] Post-LiftOn identifier rewriting ([concept](concepts/annotation-id-rewriting.md)); required before NCBI submission.
-- [ ] NCBI submission preparation ([concept](concepts/ncbi-submission/README.md)).
+- [ ] Reference-guided cohort consensus, from Task 5 on ([concept](concepts/consensus/README.md)).
+- [ ] Post-LiftOn identifier rewriting ([concept](concepts/annotation-id-rewriting.md)); required before INSDC submission.
+- [ ] INSDC submission preparation (NCBI, ENA, or DDBJ): genome and isolate reads ([concept](concepts/insdc-submission/README.md)).
 
 ## Application
 

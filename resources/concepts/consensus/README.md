@@ -4,6 +4,8 @@ This directory is the ordered plan for building a T2T-backed cohort consensus fr
 
 The first unticked item is the default next task unless its file states another dependency. Keep completed items and task files as the implementation record.
 
+The science behind these tasks, with the tools used and their references, is explained for researchers in the [workflow README](../../../workflows/reference-consensus/README.md). The [science background](science-background.md) keeps the tools considered instead and why they were not used.
+
 ## Agreed processing model
 
 1. Process every selected isolate independently and preserve its alignment, callable mask, normalized calls, metrics, and reference-guided FASTA.
@@ -32,7 +34,7 @@ These are already implemented by the annotation-transfer work and should be reus
 - [x] 3. [Workflow configuration and review](3-workflow-configuration-and-review.md)
 - [x] 4.1. [Per-isolate processing](4a-per-isolate-processing.md)
 - [x] 4.2. [Cohort support aggregation](4b-cohort-support-aggregation.md)
-- [ ] 4.3. [Combined consensus generation](4c-combined-consensus-generation.md)
+- [x] 4.3. [Combined consensus generation](4c-combined-consensus-generation.md)
 - [ ] 5. [Results and post-processing](5-results-and-post-processing.md)
 
 Tasks 1 and 2 may be implemented independently. Task 1b builds on Task 1 and is optional for the later tasks. Task 3 depends on both catalogs. Execution tasks 4.1–4.3 are sequential Snakemake targets but remain separate vertical slices because each produces independently testable scientific artifacts. Task 5 depends on their persisted result contracts.

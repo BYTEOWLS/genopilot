@@ -207,18 +207,58 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
         self.assertEqual(summary["voters"], ["iso-a", "iso-b", "iso-c"])
         self.assertTrue(summary["include_backbone_vote"])
 
-    def test_a_voting_change_reruns_only_aggregation(self) -> None:
+    def consensus_rows(self) -> dict[tuple[str, int], dict[str, str]]:
+        path = self.run_dir / "results" / "cohort" / "initial" / "consensus-sites.tsv.gz"
+        self.assertTrue(Path(f"{path}.tbi").is_file())
+        with gzip.open(path, "rt", encoding="utf-8") as table:
+            lines = table.read().splitlines()
+        header = next(line for line in lines if not line.startswith("##")).lstrip("#").split("\t")
+        rows = [dict(zip(header, line.split("\t"))) for line in lines if not line.startswith("#")]
+        return {(row["chrom"], int(row["start"])): row for row in rows if row["kind"] == "locus"}
+
+    def test_the_consensus_decides_every_simulated_locus_by_strict_majority(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        rows = self.consensus_rows()
+        expected = {
+            ("chr1", 1100): ("unresolved", "tie", "N"),          # G=2, T=2
+            ("chr1", 1500): ("unresolved", "tie", "N"),          # G=2, A=2
+            ("chr2", 300): ("unresolved", "no_majority", "N"),   # C=2, A=1, T=1
+            ("chr1", 1800): ("selected", ".", "G"),              # G=3, GGAT=1
+            ("chr1", 2200): ("selected", ".", "ATCCT"),          # ATCCT=3, A=1
+            ("chr1", 2500): ("selected", ".", "G"),              # only iso-b carries T
+            ("chr2", 400): ("selected", ".", "A"),               # only iso-b carries G
+        }
+        self.assertEqual(set(rows), set(expected))
+        for key, (status, reason, written) in expected.items():
+            with self.subTest(site=key):
+                row = rows[key]
+                self.assertEqual((row["status"], row["reason"], row["written"]), (status, reason, written))
+        consensus = self.run_dir / "results" / "cohort" / "initial" / "consensus.fasta"
+        names = [line.split("\t")[0] for line in Path(f"{consensus}.fai").read_text(encoding="utf-8").splitlines()]
+        backbone = self.run_dir / "resolved" / "backbone.fasta.fai"
+        self.assertEqual(names, [line.split("\t")[0] for line in backbone.read_text(encoding="utf-8").splitlines()])
+        summary = json.loads(consensus.with_name("consensus-summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(summary["voting_method"], "strict-majority")
+        self.assertEqual(summary["loci"]["selected"], 4)
+        self.assertEqual(summary["loci"]["unresolved"], {"tie": 2, "no_majority": 1, "no_votes": 0, "few_callable": 0})
+        self.assertGreater(summary["bases"]["backbone_only"], 0)  # the repeat
+
+    def test_a_voting_change_reruns_only_consensus_generation_or_aggregation(self) -> None:
         self.assertEqual(self.result.returncode, 0, self.result.stderr)
         config_path = self.run_dir / "config.yaml"
         original = config_path.read_text(encoding="utf-8")
         self.addCleanup(config_path.write_text, original, encoding="utf-8")
 
         config = json.loads(original)
-        config["consensus"]["voting_method"] = "plurality"
-        config_path.write_text(json.dumps(config), encoding="utf-8")
-        method_only = run_snakemake(self.run_dir, self.conda_prefix, "--dry-run")
-        self.assertEqual(method_only.returncode, 0, method_only.stderr)
-        self.assertNotIn("rule aggregate_support:", method_only.stdout)
+        for key, value in (("voting_method", "plurality"), ("min_callable_isolates", 1), ("unresolved_snp", "iupac")):
+            changed = json.loads(original)
+            changed["consensus"][key] = value
+            config_path.write_text(json.dumps(changed), encoding="utf-8")
+            consensus_only = run_snakemake(self.run_dir, self.conda_prefix, "--dry-run")
+            with self.subTest(setting=key):
+                self.assertEqual(consensus_only.returncode, 0, consensus_only.stderr)
+                self.assertIn("rule generate_consensus:", consensus_only.stdout)
+                self.assertNotIn("rule aggregate_support:", consensus_only.stdout)
 
         config["consensus"]["include_backbone_vote"] = False
         config_path.write_text(json.dumps(config), encoding="utf-8")

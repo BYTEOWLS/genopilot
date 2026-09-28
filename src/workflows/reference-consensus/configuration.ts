@@ -26,6 +26,10 @@ export const ISOLATE_SNAPSHOT_FILENAME = 'isolates.yaml' as const;
 export type VotingMethod = 'strict-majority' | 'plurality';
 export const votingMethods: readonly VotingMethod[] = ['strict-majority', 'plurality'];
 
+/** How the consensus writes an unresolved SNP: `N`, or the IUPAC code of the alleles that got votes. */
+export type UnresolvedSnp = 'n' | 'iupac';
+export const unresolvedSnpRepresentations: readonly UnresolvedSnp[] = ['n', 'iupac'];
+
 export type BackboneInput =
   | {source: 'local'; fasta: string}
   | {source: 'ncbi'; accession: string; ncbi_cache_mode?: NcbiCacheMode};
@@ -63,6 +67,8 @@ export type ReferenceConsensusConfiguration = {
   consensus: {
     include_backbone_vote: boolean;
     voting_method: VotingMethod;
+    min_callable_isolates: number;
+    unresolved_snp: UnresolvedSnp;
   };
   resources: ResourceSettings;
   run: RunDetails;
@@ -207,13 +213,19 @@ function validateCalling(
 
 function validateConsensus(
   value: unknown,
+  selectedIsolates: number | undefined,
   issues: ConfigurationValidationIssue[],
 ): ReferenceConsensusConfiguration['consensus'] | undefined {
   const consensus = requireObject(value, '$.consensus', issues);
   if (!consensus) {
     return undefined;
   }
-  rejectUnknownFields(consensus, ['include_backbone_vote', 'voting_method'], '$.consensus', issues);
+  rejectUnknownFields(
+    consensus,
+    ['include_backbone_vote', 'voting_method', 'min_callable_isolates', 'unresolved_snp'],
+    '$.consensus',
+    issues,
+  );
   let valid = true;
   if (typeof consensus.include_backbone_vote !== 'boolean') {
     issues.push({path: '$.consensus.include_backbone_vote', message: 'must be true or false'});
@@ -223,6 +235,20 @@ function validateConsensus(
     issues.push({
       path: '$.consensus.voting_method',
       message: `must be one of: ${votingMethods.join(', ')}`,
+    });
+    valid = false;
+  }
+  const minimumPath = '$.consensus.min_callable_isolates';
+  if (!validateInteger(consensus.min_callable_isolates, minimumPath, 0, issues)) {
+    valid = false;
+  } else if (selectedIsolates !== undefined && (consensus.min_callable_isolates as number) > selectedIsolates) {
+    issues.push({path: minimumPath, message: 'must not exceed the number of selected isolates'});
+    valid = false;
+  }
+  if (!unresolvedSnpRepresentations.includes(consensus.unresolved_snp as UnresolvedSnp)) {
+    issues.push({
+      path: '$.consensus.unresolved_snp',
+      message: `must be one of: ${unresolvedSnpRepresentations.join(', ')}`,
     });
     valid = false;
   }
@@ -250,7 +276,7 @@ export function validateReferenceConsensusConfiguration(
 
   const inputs = validateInputs(value.inputs, issues);
   const calling = validateCalling(value.calling, issues);
-  const consensus = validateConsensus(value.consensus, issues);
+  const consensus = validateConsensus(value.consensus, inputs?.selected_isolates.length, issues);
   const resources = validateResources(value.resources, issues);
   const run = validateRun(value.run, issues);
 

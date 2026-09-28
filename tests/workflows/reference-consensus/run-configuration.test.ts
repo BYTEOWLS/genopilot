@@ -69,6 +69,8 @@ async function fixture(context: TestContext): Promise<{root: string; catalog: Is
     isolateIds: ['isolate-b', 'isolate-a'],
     votingMethod: 'strict-majority',
     includeBackboneVote: true,
+    minCallableIsolates: '1',
+    unresolvedSnp: 'iupac',
     minDepth: '10',
     minMappingQuality: '20',
     minBaseQuality: '20',
@@ -99,7 +101,9 @@ test('snapshots every selected isolate with all read pairs in selection order', 
   assert.deepEqual(configuration.calling, {
     ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8,
   });
-  assert.deepEqual(configuration.consensus, {include_backbone_vote: true, voting_method: 'strict-majority'});
+  assert.deepEqual(configuration.consensus, {
+    include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 1, unresolved_snp: 'iupac',
+  });
   assert.deepEqual(configuration.resources, {cpu_mode: 'manual', manual_limit: 2, effective_cpus: 2});
   assert.equal(configuration.run.id, '2026-09-25_100000000_Cohort-one');
   assert.equal(prepared.outputDirectory, join(root, 'runs', 'reference-consensus', configuration.run.id));
@@ -129,6 +133,13 @@ test('refuses a selected isolate that is no longer cataloged and an empty or inv
     () => buildReferenceConsensusRun({...draft, minAlleleFraction: '0.4'}, catalog, root, 8, now),
     error => issuesOf(error).some(issue => issue.path === '$.calling.min_allele_fraction'),
   );
+  // An empty minimum is not silently read as zero, and it cannot exceed the two selected isolates.
+  for (const minCallableIsolates of ['', '3']) {
+    assert.throws(
+      () => buildReferenceConsensusRun({...draft, minCallableIsolates}, catalog, root, 8, now),
+      error => issuesOf(error).some(issue => issue.path === '$.consensus.min_callable_isolates'),
+    );
+  }
 });
 
 test('blocks a missing read file and an unreadable backbone before review', async context => {

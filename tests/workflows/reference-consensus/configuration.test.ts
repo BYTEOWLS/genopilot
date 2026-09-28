@@ -17,7 +17,12 @@ const validConfiguration = {
     selected_isolates: ['isolate-a', 'isolate-b'],
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
-  consensus: {include_backbone_vote: true, voting_method: 'strict-majority'},
+  consensus: {
+    include_backbone_vote: true,
+    voting_method: 'strict-majority',
+    min_callable_isolates: 0,
+    unresolved_snp: 'n',
+  },
   resources: {cpu_mode: 'automatic', effective_cpus: 8},
   run: {output_root: '/analysis/runs', id: '2026-01-01_120000000_example', created_at: '2026-01-01T12:00:00.000Z'},
 };
@@ -60,6 +65,8 @@ calling:
 consensus:
   include_backbone_vote: false
   voting_method: plurality
+  min_callable_isolates: 1
+  unresolved_snp: iupac
 resources:
   cpu_mode: manual
   manual_limit: 2
@@ -72,6 +79,8 @@ run:
   assert.deepEqual(parsed.inputs.backbone, {source: 'local', fasta: '/data/backbone.fa'});
   assert.equal(parsed.consensus.include_backbone_vote, false);
   assert.equal(parsed.consensus.voting_method, 'plurality');
+  assert.equal(parsed.consensus.min_callable_isolates, 1);
+  assert.equal(parsed.consensus.unresolved_snp, 'iupac');
   assert.equal(parsed.calling.min_mapping_quality, 0);
 });
 
@@ -121,6 +130,31 @@ test('requires an explicit voting method and backbone-vote decision', () => {
   assert.deepEqual(issuePaths(withChange(value => {
     delete value.consensus.include_backbone_vote;
   })), ['$.consensus.include_backbone_vote']);
+});
+
+test('bounds the minimum of callable isolates by the selected isolates', () => {
+  for (const minimum of [-1, 1.5, '1', undefined]) {
+    assert.deepEqual(issuePaths(withChange(value => {
+      value.consensus.min_callable_isolates = minimum;
+    })), ['$.consensus.min_callable_isolates']);
+  }
+  assert.deepEqual(issuePaths(withChange(value => {
+    value.consensus.min_callable_isolates = 3;
+  })), ['$.consensus.min_callable_isolates']);
+  assert.doesNotThrow(() => validateReferenceConsensusConfiguration(withChange(value => {
+    value.consensus.min_callable_isolates = 2;
+  })));
+});
+
+test('requires an explicit representation of unresolved SNPs', () => {
+  for (const representation of ['IUPAC', 'backbone', undefined]) {
+    assert.deepEqual(issuePaths(withChange(value => {
+      value.consensus.unresolved_snp = representation;
+    })), ['$.consensus.unresolved_snp']);
+  }
+  assert.doesNotThrow(() => validateReferenceConsensusConfiguration(withChange(value => {
+    value.consensus.unresolved_snp = 'iupac';
+  })));
 });
 
 test('refuses an unversioned accession and a backbone mixing both sources', () => {
