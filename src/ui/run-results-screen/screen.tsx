@@ -4,12 +4,26 @@ import React, {useLayoutEffect, useRef, useState} from 'react';
 import {Alert} from '@inkjs/ui';
 import {Box, measureElement, Text, useInput, useWindowSize, type DOMElement} from 'ink';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
-import type {LoadedWorkflowResult} from '../../workflows/results.js';
+import {
+  isAnnotationTransferResult,
+  isReferenceConsensusResult,
+  type LoadedWorkflowResult,
+  type ResultShell,
+} from '../../workflows/results.js';
 import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AnnotationTransferResults, annotationTransferHelpSections} from './annotation-transfer-results.js';
+import {
+  consensusTabs,
+  initialConsensusView,
+  ReferenceConsensusResults,
+  referenceConsensusHelpSections,
+  selectableTableHeaderLines,
+  type ConsensusView,
+} from './reference-consensus-results.js';
 import {Page} from '../components/page.js';
 import {HelpContent} from '../components/help.js';
+import {TabBar} from '../components/tabs.js';
 import {runHelpSections} from './run-help.js';
 import type {WorkflowExecutionOutcome} from '../new-run-screen/workflow-execution.js';
 import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
@@ -35,13 +49,11 @@ export function runSupportPaths(runDirectory: string, pathExists: (path: string)
 
 /** Lists the distinct absolute paths of linked results and support files that are unavailable. */
 export function missingResultPaths(
-  result: Extract<LoadedWorkflowResult, {kind: 'compatible'}>['result'],
+  shell: ResultShell,
   supportPaths: readonly SupportPath[],
 ): string[] {
   return [...new Set([
-    result.metricsPath,
-    ...Object.values(result.reports),
-    ...Object.values(result.evidence),
+    ...shell.linkedPaths,
     ...supportPaths,
   ].filter(value => !value.available).map(value => value.absolutePath))];
 }
@@ -73,7 +85,12 @@ export function RunResultsScreen({
   const [contentHeight, setContentHeight] = useState(0);
   const [view, setView] = useState<'results' | 'help'>('results');
   const [scrollOffsets, setScrollOffsets] = useState({results: 0, help: 0});
-  const visibleRows = Math.max(5, rows - 15);
+  const consensus = isReferenceConsensusResult(loaded) ? loaded.result : undefined;
+  const [consensusView, setConsensusView] = useState<ConsensusView | undefined>(
+    () => consensus ? initialConsensusView(consensus) : undefined,
+  );
+  // The tab bar takes two more rows above the scrolled content.
+  const visibleRows = Math.max(5, rows - (consensus ? 17 : 15));
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
   const effectiveScrollOffset = Math.min(scrollOffsets[view], maximumScrollOffset);
 
@@ -81,7 +98,7 @@ export function RunResultsScreen({
     if (contentRef.current) {
       setContentHeight(measureElement(contentRef.current).height);
     }
-  }, [columns, rows, loaded, view]);
+  }, [columns, rows, loaded, view, consensusView]);
 
   const scrollBy = (delta: number): void => {
     setScrollOffsets(current => ({
@@ -90,12 +107,57 @@ export function RunResultsScreen({
     }));
   };
 
+  /** Scrolls the least needed to show the row `index` of the table at the top of the content. */
+  const revealRow = (index: number): void => {
+    const line = selectableTableHeaderLines + index;
+    setScrollOffsets(current => {
+      let offset = Math.min(current.results, maximumScrollOffset);
+      if (line < offset + selectableTableHeaderLines) {
+        offset = Math.max(0, line - selectableTableHeaderLines);
+      } else if (line >= offset + visibleRows) {
+        offset = line - visibleRows + 1;
+      }
+      return {...current, results: offset};
+    });
+  };
+
+  /** Handles a key of the consensus tabs; false when the key is the shell's to handle. */
+  const consensusKey = (key: {upArrow: boolean; downArrow: boolean; return: boolean; escape: boolean}): boolean => {
+    if (!consensus || !consensusView) {
+      return false;
+    }
+    const {tab, isolateDetail} = consensusView;
+    const listed = tab === 'isolates' && !isolateDetail ? consensus.isolates.length
+      : tab === 'cohorts' ? consensus.cohorts.length
+        : 0;
+    if (listed > 0 && (key.upArrow || key.downArrow)) {
+      const field = tab === 'isolates' ? 'isolateIndex' : 'cohortIndex';
+      const index = Math.max(0, Math.min(listed - 1, consensusView[field] + (key.upArrow ? -1 : 1)));
+      setConsensusView({...consensusView, [field]: index});
+      revealRow(index);
+      return true;
+    }
+    if (tab === 'isolates' && !isolateDetail && key.return && listed > 0) {
+      setConsensusView({...consensusView, isolateDetail: true});
+      setScrollOffsets(current => ({...current, results: 0}));
+      return true;
+    }
+    if (tab === 'isolates' && isolateDetail && key.escape) {
+      setConsensusView({...consensusView, isolateDetail: false});
+      revealRow(consensusView.isolateIndex);
+      return true;
+    }
+    return false;
+  };
+
   useInput((input, key) => {
     if (!inputActive) {
       return;
     }
     if (view === 'help' && (key.escape || input === '?')) {
       setView('results');
+    } else if (view === 'results' && consensusKey(key)) {
+      return;
     } else if (key.escape) {
       onBack?.();
     } else if (input === '?') {
@@ -113,7 +175,8 @@ export function RunResultsScreen({
 
   const compatible = loaded.kind === 'compatible' ? loaded : undefined;
   const incompatible = loaded.kind === 'incompatible' ? loaded : undefined;
-  const result = compatible?.result;
+  const shell = compatible?.shell;
+  const annotationTransfer = isAnnotationTransferResult(loaded) ? loaded.result : undefined;
   const configuration = compatible?.configuration;
   const metadata = configuration ? {
     id: configuration.run.id,
@@ -124,23 +187,12 @@ export function RunResultsScreen({
 
   const supportPaths = runSupportPaths(runDirectory, pathExists);
   let missingPaths: string[];
-  if (result) {
-    missingPaths = missingResultPaths(result, supportPaths);
+  if (shell) {
+    missingPaths = missingResultPaths(shell, supportPaths);
   } else {
     missingPaths = supportPaths
         .filter(value => !value.available)
         .map(value => value.absolutePath);
-  }
-
-  let statusVariant: any;
-  if (result?.status === 'completed') {
-    statusVariant = 'success';
-  } else {
-    if (result?.status === 'completed-with-warnings') {
-      statusVariant = 'warning';
-    } else {
-      statusVariant = 'error';
-    }
   }
 
   const runFileItems: SectionListItem[] = [];
@@ -171,33 +223,124 @@ export function RunResultsScreen({
     label: 'Workflow',
     value: `${sanitizeTerminalText(manifest.label)} (${sanitizeTerminalText(manifest.id)}@${String(manifest.workflow_version)})`,
   });
-  if (result || metadata?.createdAt) {
-    metadataItems.push({id: 'run.created', label: 'Created', value: formatDateTime(result?.run.createdAt ?? metadata?.createdAt ?? '')});
+  if (metadata?.createdAt) {
+    metadataItems.push({id: 'run.created', label: 'Created', value: formatDateTime(metadata.createdAt)});
   }
-  if (result) {
-    metadataItems.push({id: 'run.summary_generated', label: 'Summary generated', value: formatDateTime(result.generatedAt)});
-    metadataItems.push({id: 'run.effective_cpus', label: 'Effective CPUs', value: String(result.run.effectiveCpus)});
+  if (shell?.generatedAt) {
+    metadataItems.push({id: 'run.summary_generated', label: 'Results written', value: formatDateTime(shell.generatedAt)});
+  }
+  if (shell) {
+    metadataItems.push({id: 'run.effective_cpus', label: 'Effective CPUs', value: String(shell.effectiveCpus)});
   }
 
+  let workflowSections: ReturnType<typeof annotationTransferHelpSections> = [];
+  if (annotationTransfer) {
+    workflowSections = annotationTransferHelpSections(annotationTransfer);
+  } else if (consensus) {
+    workflowSections = referenceConsensusHelpSections(consensus);
+  }
   const helpSections = runHelpSections({
     metadataItems,
     fileItems: runFileItems,
-    hasStatus: result !== undefined,
-    workflowSections: result ? annotationTransferHelpSections(result) : [],
+    status: annotationTransfer ? 'annotation-transfer' : consensus ? 'reference-consensus' : undefined,
+    workflowSections,
   });
+
+  const metadataSection = (
+    <SectionList title={'Run Metadata'} items={metadataItems}>
+      {runMetadata && (runMetadata.workflowId !== manifest.id || runMetadata.workflowVersion !== manifest.workflow_version) ? (
+          <Alert variant="warning">
+            Saved workflow identity is different from the current one: {sanitizeTerminalText(runMetadata.workflowId)}:v{String(runMetadata.workflowVersion)}
+          </Alert>
+      ) : null}
+    </SectionList>
+  );
+  const runDirectorySection = (
+    <SectionList title="Run Directory" items={[]}>
+      <Box marginTop={1}>
+        <Text wrap="truncate-start">{runDirectory}</Text>
+      </Box>
+    </SectionList>
+  );
+  const outcomeSection = executionOutcome ? (
+    <Box marginTop={1} flexDirection="column">
+      <Alert variant={executionOutcome.succeeded ? 'success' : 'error'}>
+        {executionOutcome.succeeded
+          ? shell
+            ? 'Workflow execution completed; persisted results were reloaded from disk.'
+            : 'Workflow execution completed, but persisted results cannot be interpreted.'
+          : 'Workflow execution failed; any persisted evidence produced before failure is shown below.'}
+      </Alert>
+      {executionOutcome.exitCode !== undefined && executionOutcome.exitCode !== null && executionOutcome.exitCode !== 0 ? (
+        <Alert variant="error">Snakemake exited with code {String(executionOutcome.exitCode)}.</Alert>
+      ) : null}
+      {executionOutcome.error ? <Alert variant="error">{sanitizeTerminalText(executionOutcome.error)}</Alert> : null}
+    </Box>
+  ) : null;
+  const statusSection = shell ? (
+    <Box marginTop={1} flexDirection="column">
+      <Alert variant={shell.status.variant}>{sanitizeTerminalText(shell.status.explanation)}</Alert>
+      {missingPaths.length > 0 ? (
+        <Alert variant="warning">
+          {String(missingPaths.length)} linked result {missingPaths.length === 1 ? 'path is' : 'paths are'} missing. Available results remain visible below.
+        </Alert>
+      ) : null}
+    </Box>
+  ) : (
+    <Box marginTop={1} flexDirection="column">
+      <Alert variant="warning">Persisted results cannot be interpreted by this application.</Alert>
+      <Text wrap="wrap">{sanitizeTerminalText(incompatible?.error.message ?? 'Unknown compatibility error.')}</Text>
+      {incompatible?.error.path ? <Text>{sanitizeTerminalText(incompatible.error.path)}</Text> : null}
+      {missingPaths.length > 0 ? (
+        <Alert variant="warning">
+          {String(missingPaths.length)} run {missingPaths.length === 1 ? 'path is' : 'paths are'} currently missing.
+        </Alert>
+      ) : null}
+    </Box>
+  );
+  const runFilesSection = <SectionList title="Run Files" description="" items={runFileItems} />;
+
+  const listTab = consensusView && (consensusView.tab === 'cohorts' ||
+    (consensusView.tab === 'isolates' && !consensusView.isolateDetail));
+  let shortcuts: string[];
+  if (view === 'help') {
+    shortcuts = ['? — Back to results'];
+  } else {
+    shortcuts = [
+      consensus ? 'Tab/←/→ — Switch tab' : '',
+      listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 ? '↑/↓ — Scroll' : '',
+      maximumScrollOffset > 0 ? 'PageUp/PageDown (or fn + ↑/↓) — Page' : '',
+      consensusView?.tab === 'isolates' && !consensusView.isolateDetail ? 'Enter — Isolate details' : '',
+      '? — Help',
+    ];
+  }
+  let back: string | false = onBack ? 'Back' : false;
+  if (view === 'help') {
+    back = 'Back to results';
+  } else if (consensusView?.isolateDetail) {
+    back = 'Back to isolates';
+  }
 
   return (
     <Page
       title={view === 'help' ? 'Result help' : 'Run results'}
       detail={view === 'help' ? undefined : metadata?.name ?? manifest.label}
+      header={consensusView && view === 'results' ? (
+        <TabBar
+          tabs={consensusTabs}
+          activeId={consensusView.tab}
+          onChange={tab => {
+            setConsensusView({...consensusView, tab, isolateDetail: false});
+            setScrollOffsets(current => ({...current, results: 0}));
+          }}
+          inputActive={inputActive}
+        />
+      ) : undefined}
       description={view === 'help'
         ? 'Each entry explains one item of the result page. Recorded definitions were saved with this run by the workflow.'
         : undefined}
-      shortcuts={[
-        maximumScrollOffset > 0 && '↑/↓ — Scroll · PageUp/PageDown (or fn + ↑/↓) — Page',
-        view === 'help' ? '? — Back to results' : '? — Help',
-      ]}
-      back={view === 'help' ? 'Back to results' : onBack ? 'Back' : false}
+      shortcuts={shortcuts}
+      back={back}
     >
       <Box
         height={contentHeight === 0 ? undefined : visibleRows}
@@ -207,62 +350,21 @@ export function RunResultsScreen({
         <Box ref={contentRef} marginTop={-effectiveScrollOffset} flexDirection="column" flexShrink={0}>
           {view === 'help' ? (
             <HelpContent sections={helpSections} />
+          ) : consensus && consensusView ? (
+            <ReferenceConsensusResults
+              result={consensus}
+              view={consensusView}
+              formatDateTime={formatDateTime}
+              overviewHeader={<>{metadataSection}{outcomeSection}{statusSection}</>}
+              filesHeader={<>{runDirectorySection}{runFilesSection}</>}
+            />
           ) : <>
-          <SectionList title={'Run Metadata'} items={metadataItems}>
-            {runMetadata && (runMetadata.workflowId !== manifest.id || runMetadata.workflowVersion !== manifest.workflow_version) ? (
-                <Alert variant="warning">
-                  Saved workflow identity is different from the current one: {sanitizeTerminalText(runMetadata.workflowId)}:v{String(runMetadata.workflowVersion)}
-                </Alert>
-            ) : null}
-          </SectionList>
-
-          <SectionList title="Run Directory" items={[]}>
-            <Box marginTop={1}>
-              <Text wrap="truncate-start">{runDirectory}</Text>
-            </Box>
-          </SectionList>
-
-          {executionOutcome ? (
-            <Box marginTop={1} flexDirection="column">
-              <Alert variant={executionOutcome.succeeded ? 'success' : 'error'}>
-                {executionOutcome.succeeded
-                  ? result
-                    ? 'Workflow execution completed; persisted results were reloaded from disk.'
-                    : 'Workflow execution completed, but persisted results cannot be interpreted.'
-                  : 'Workflow execution failed; any persisted evidence produced before failure is shown below.'}
-              </Alert>
-              {executionOutcome.exitCode !== undefined && executionOutcome.exitCode !== null && executionOutcome.exitCode !== 0 ? (
-                <Alert variant="error">Snakemake exited with code {String(executionOutcome.exitCode)}.</Alert>
-              ) : null}
-              {executionOutcome.error ? <Alert variant="error">{sanitizeTerminalText(executionOutcome.error)}</Alert> : null}
-            </Box>
-          ) : null}
-
-          {result ? (
-            <Box marginTop={1} flexDirection="column">
-              <Alert variant={statusVariant}>{sanitizeTerminalText(result.statusExplanation)}</Alert>
-              {missingPaths.length > 0 ? (
-                <Alert variant="warning">
-                  {String(missingPaths.length)} linked result {missingPaths.length === 1 ? 'path is' : 'paths are'} missing. Available results remain visible below.
-                </Alert>
-              ) : null}
-            </Box>
-          ) : (
-            <Box marginTop={1} flexDirection="column">
-              <Alert variant="warning">Persisted results cannot be interpreted by this application.</Alert>
-              <Text wrap="wrap">{sanitizeTerminalText(incompatible?.error.message ?? 'Unknown compatibility error.')}</Text>
-              {incompatible?.error.path ? <Text>{sanitizeTerminalText(incompatible.error.path)}</Text> : null}
-              {missingPaths.length > 0 ? (
-                <Alert variant="warning">
-                  {String(missingPaths.length)} run {missingPaths.length === 1 ? 'path is' : 'paths are'} currently missing.
-                </Alert>
-              ) : null}
-            </Box>
-          )}
-
-          {result ? <AnnotationTransferResults result={result} /> : null}
-
-          <SectionList title="Run Files" description="" items={runFileItems} />
+          {metadataSection}
+          {runDirectorySection}
+          {outcomeSection}
+          {statusSection}
+          {annotationTransfer ? <AnnotationTransferResults result={annotationTransfer} /> : null}
+          {runFilesSection}
           </>}
         </Box>
       </Box>

@@ -53,6 +53,28 @@ Revisit once the reference-consensus workflow is complete (consensus tasks 4a–
 
 - **Snakemake assets:** reference-consensus keeps its own rules, scripts, and environments under `workflows/reference-consensus/` (consensus Task 4.1). Annotation-transfer's still sit in `workflows/shared/` next to what both workflows use: the run-events logger plugin, the `ncbi-datasets-cli` environment, `resolve_input.py`, and the FASTA/GFF3 parsers inside `validate_inputs.py`. Move annotation-transfer's files into its own `rules/`, `scripts/`, and `envs/`. Before moving `envs/lifton/`, change `collect_run_provenance.py`: it reads the pins of every environment next to it and rejects a package pinned to two different versions.
 - **TypeScript:** each workflow has its own `src/workflows/<id>/configuration.ts` and `run-configuration.ts`, plus a configuration screen under `src/ui/new-run-screen/`, that map generic manifest parameters to and from `config.yaml`. Check which of these a manifest-driven mapping could replace, and keep only the workflow-specific parts, such as the isolate snapshot and the review details.
+- **Workflow-specific UI in shared components:** the generic screens know each workflow by name. Give every workflow one module that owns its result reader, result body, help, status wording, and the configuration screen, and let the shared shells only dispatch to it by workflow ID and version. Where it bleeds today:
+  - `src/ui/run-results-screen/screen.tsx` holds the reference-consensus tab state, its list and detail keys, and the scroll-follow logic, and chooses each workflow's body and help.
+  - `src/ui/run-results-screen/run-help.ts` keeps both workflows' run-status explanations.
+  - `src/workflows/results.ts` imports both workflows' configuration and result types for its union and dispatch.
+  - `ResultPath` is defined in `src/workflows/annotation-transfer/results.ts` but used by both workflows and the shell.
+  - `src/ui/new-run-screen/screen.tsx` chooses each workflow's configuration screen.
+
+## Saved annotations in the isolate catalog
+
+Builds on the saved sequences of consensus [Task 5.4](concepts/consensus/5d-saved-isolate-sequences.md).
+
+- **Saved sequence as a target.** Annotation transfer gains a third target source next to a local FASTA and an NCBI accession: a sequence saved in the isolate catalog. The run records the sequence's ID and checksum and resolves it like any other imported input, so it stays runnable without the TUI.
+- **Saving the GFF3.** From an annotation-transfer result whose target was a saved sequence, the transferred GFF3 can be saved back to the catalog. It belongs to that exact sequence, because its coordinates are only valid on that FASTA, so it is stored under the sequence rather than beside it:
+
+  ```text
+  isolates/sequences/<sequence-id>/annotations/<annotation-id>/annotation.gff3
+  ```
+
+  with a record under the sequence's entry in `isolates.yaml`: its origin (`generated`), the producing run and workflow, the reference it was transferred from, its checksum, and the checksum of the sequence it annotates. Saving refuses a GFF3 whose run targeted another sequence or another checksum.
+- **One sequence, several annotations.** A sequence can hold annotations transferred from different references or with different settings, each named like a saved sequence.
+- **Removal.** Removing a sequence removes its annotations, after confirming both.
+- **Final IDs.** Take this up after [post-LiftOn identifier rewriting](concepts/annotation-id-rewriting.md), so a saved annotation carries its final, rewritten IDs rather than raw LiftOn IDs.
 
 ## Reads without Illumina headers
 

@@ -1,0 +1,529 @@
+import React from 'react';
+import {Box, Text} from 'ink';
+import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
+import {
+  cohortPathKeys,
+  isolatePathKeys,
+  unresolvedReasons,
+  type CohortCounts,
+  type CohortResult,
+  type IsolateResult,
+  type RecordIssue,
+  type ReferenceConsensusResult,
+} from '../../workflows/reference-consensus/results.js';
+import {
+  referenceConsensusExplanations,
+  referenceConsensusTerms,
+} from '../../workflows/reference-consensus/result-help.js';
+import type {HelpSection} from '../components/help.js';
+import {ParameterList, parameterLabelWidth, type ParameterRow} from '../components/parameter-list.js';
+import type {TabDefinition} from '../components/tabs.js';
+import {Table} from '../components/table.js';
+import {sanitizeTerminalText} from '../sanitize.js';
+
+export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'files';
+
+export const consensusTabs: readonly TabDefinition<ConsensusTabId>[] = [
+  {id: 'overview', label: 'Overview'},
+  {id: 'isolates', label: 'Isolates'},
+  {id: 'cohorts', label: 'Iterations'},
+  {id: 'files', label: 'Files'},
+];
+
+/** What the result page shows of a reference-consensus run; the shell owns it with its input. */
+export type ConsensusView = {
+  tab: ConsensusTabId;
+  isolateIndex: number;
+  cohortIndex: number;
+  /** The selected isolate's detail replaces the isolate list while open. */
+  isolateDetail: boolean;
+};
+
+export function initialConsensusView(result: ReferenceConsensusResult): ConsensusView {
+  const active = result.cohorts.findIndex(cohort => cohort.id === result.activeCohortId);
+  return {tab: 'overview', isolateIndex: 0, cohortIndex: active >= 0 ? active : result.cohorts.length - 1, isolateDetail: false};
+}
+
+/** Lines above the first row of a selectable table: its header and the header's rule. */
+export const selectableTableHeaderLines = 2;
+
+export type RowSection = {id: string; title: string; rows: ParameterRow[]};
+
+type DateFormatter = (value: string) => string;
+
+function integer(value: number): string {
+  return value.toLocaleString('en-US');
+}
+
+function share(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function yesNo(value: boolean): string {
+  return value ? 'yes' : 'no';
+}
+
+function cohortName(cohort: CohortResult): string {
+  return cohort.iteration === 1 ? '1 (initial)' : String(cohort.iteration);
+}
+
+function pathRow(id: string, label: string, path: ResultPath): ParameterRow {
+  return {id, label, value: `${path.path}${path.available ? '' : ' (missing)'}`, muted: !path.available};
+}
+
+function votingMethod(value: string): string {
+  return value === 'strict-majority' ? 'strict majority' : value;
+}
+
+/** The counts of a cohort in display order; the overview and the comparison share them. */
+export function countRows(counts: CohortCounts): {id: string; label: string; value: number}[] {
+  const reasonLabels: Record<typeof unresolvedReasons[number], string> = {
+    tie: 'Unresolved loci: tie',
+    no_majority: 'Unresolved loci: no majority',
+    no_votes: 'Unresolved loci: no votes',
+    few_callable: 'Unresolved loci: too few callable isolates',
+  };
+  return [
+    {id: 'counts.loci_selected', label: 'Selected loci', value: counts.lociSelected},
+    {id: 'counts.loci_changed', label: 'Selected loci differing from the backbone', value: counts.lociChanged},
+    ...unresolvedReasons.map(reason => ({
+      id: `counts.loci_unresolved.${reason}`,
+      label: reasonLabels[reason],
+      value: counts.lociUnresolved[reason],
+    })),
+    {id: 'counts.loci_multiallelic', label: 'Multiallelic loci', value: counts.multiallelicLoci},
+    {id: 'counts.loci_competing_indel', label: 'Loci with competing indels', value: counts.competingIndelLoci},
+    {id: 'counts.bases_backbone_only', label: 'Bases from the backbone vote alone', value: counts.basesBackboneOnly},
+    {id: 'counts.bases_iupac', label: 'Bases written as IUPAC codes', value: counts.basesIupac},
+    {
+      id: 'counts.bases_n',
+      label: 'Bases written as N',
+      value: Object.values(counts.basesN).reduce((total, count) => total + count, 0),
+    },
+  ];
+}
+
+function settingsRows(cohort: CohortResult): ParameterRow[] {
+  if (!cohort.settings || !cohort.voters) {
+    return [];
+  }
+  return [
+    {id: 'cohort.voting_method', label: 'Voting method', value: votingMethod(cohort.settings.voting_method)},
+    {id: 'backbone.vote', label: 'Backbone votes', value: yesNo(cohort.settings.include_backbone_vote)},
+    {id: 'cohort.min_callable_isolates', label: 'Minimum callable isolates', value: String(cohort.settings.min_callable_isolates)},
+    {id: 'cohort.unresolved_snp', label: 'Unresolved SNPs written as', value: cohort.settings.unresolved_snp === 'n' ? 'N' : 'IUPAC code'},
+    {id: 'cohort.voters', label: `Voting isolates (${String(cohort.voters.length)})`, value: cohort.voters.join(', ')},
+  ];
+}
+
+function activeCohort(result: ReferenceConsensusResult): CohortResult | undefined {
+  return result.cohorts.find(cohort => cohort.id === result.activeCohortId);
+}
+
+export function overviewSections(result: ReferenceConsensusResult): RowSection[] {
+  const backbone = result.backbone;
+  const active = activeCohort(result);
+  let origin = backbone.origin ?? 'unknown';
+  if (backbone.downloaded !== undefined) {
+    origin += backbone.downloaded ? ', downloaded in this run' : ', reused from the verified download cache';
+  }
+  const backboneRows: ParameterRow[] = [
+    {id: 'backbone.source', label: 'Source', value: backbone.source === 'ncbi' ? 'NCBI accession' : backbone.source === 'local' ? 'local file' : 'unknown', muted: !backbone.source},
+    {id: 'backbone.identity', label: backbone.source === 'ncbi' ? 'Accession' : 'File', value: backbone.accession ?? backbone.path ?? 'not recorded', muted: !(backbone.accession ?? backbone.path)},
+    {id: 'backbone.checksum', label: 'SHA-256', value: backbone.sha256 ?? 'not recorded', muted: !backbone.sha256},
+    {id: 'backbone.origin', label: 'Origin', value: origin},
+  ];
+  const cohortRows: ParameterRow[] = active
+    ? [{id: 'cohort.active', label: 'Active iteration', value: cohortName(active)}, ...settingsRows(active)]
+    : [{id: 'cohort.active', label: 'Active iteration', value: 'none completed yet', muted: true}];
+  const sections: RowSection[] = [
+    {id: 'backbone', title: 'Backbone', rows: backboneRows},
+    {id: 'active-cohort', title: 'Active Cohort', rows: cohortRows},
+  ];
+  if (active?.counts) {
+    sections.push({
+      id: 'counts',
+      title: 'Consensus',
+      rows: countRows(active.counts).map(row => ({id: row.id, label: row.label, value: integer(row.value)})),
+    });
+  }
+  return sections;
+}
+
+export const isolateColumns: readonly {id: string; label: string}[] = [
+  {id: 'isolates.id', label: 'Isolate'},
+  {id: 'isolates.wildtype', label: 'Wild type'},
+  {id: 'isolates.derived_from', label: 'Derived from'},
+  {id: 'isolates.state', label: 'State'},
+  {id: 'isolates.mean_depth', label: 'Depth'},
+  {id: 'isolates.callable_fraction', label: 'Callable'},
+  {id: 'isolates.snps', label: 'SNPs'},
+  {id: 'isolates.indels', label: 'Indels'},
+  {id: 'isolates.votes', label: 'Votes'},
+  {id: 'isolates.candidate', label: 'Candidate'},
+];
+
+function wildtype(value: boolean | null): string {
+  return value === null ? '—' : yesNo(value);
+}
+
+function votes(isolate: IsolateResult, result: ReferenceConsensusResult): boolean {
+  return activeCohort(result)?.voters?.includes(isolate.id) ?? false;
+}
+
+export function isolateTableRows(result: ReferenceConsensusResult): string[][] {
+  return result.isolates.map(isolate => [
+    isolate.id,
+    wildtype(isolate.wildtype),
+    isolate.derivedFrom ?? '—',
+    isolate.state,
+    isolate.metrics ? isolate.metrics.meanDepth.toFixed(1) : '—',
+    isolate.metrics ? share(isolate.metrics.callableFraction) : '—',
+    isolate.metrics ? integer(isolate.metrics.snps) : '—',
+    isolate.metrics ? integer(isolate.metrics.indels) : '—',
+    yesNo(votes(isolate, result)),
+    isolate.promotionCandidate ? 'available' : '—',
+  ]);
+}
+
+const isolatePathLabels: Record<typeof isolatePathKeys[number], string> = {
+  'alignment': 'Alignment (BAM)',
+  'alignment-index': 'Alignment index',
+  'variants': 'Variants (VCF)',
+  'variants-index': 'Variants index',
+  'callable-mask': 'Callable mask (BED)',
+  'consensus-mask': 'N mask (BED)',
+  'consensus-fasta': 'Isolate FASTA',
+  'consensus-fasta-index': 'Isolate FASTA index',
+  'consensus-chain': 'Coordinate chain',
+  'metrics': 'Metrics',
+  'provenance': 'Provenance',
+  'promotion-candidate': 'Promotion candidate',
+  'logs': 'Logs',
+};
+
+export function isolateDetailSections(isolate: IsolateResult, result: ReferenceConsensusResult): RowSection[] {
+  const metrics = isolate.metrics;
+  const summary: ParameterRow[] = [
+    {id: 'isolates.id', label: 'ID', value: isolate.id},
+    {id: 'isolate.name', label: 'Name', value: isolate.name},
+    {id: 'isolates.wildtype', label: 'Wild type', value: wildtype(isolate.wildtype)},
+    {id: 'isolates.derived_from', label: 'Derived from', value: isolate.derivedFrom ?? '—'},
+    {id: 'isolates.state', label: 'State', value: isolate.state},
+    {id: 'isolates.votes', label: 'Votes in the active cohort', value: yesNo(votes(isolate, result))},
+    {id: 'isolates.candidate', label: 'Promotion candidate', value: isolate.promotionCandidate ? 'available' : 'not available'},
+  ];
+  const quality: ParameterRow[] = metrics ? [
+    {id: 'isolate.trimmed', label: 'Reads trimmed by the provider', value: metrics.trimmed},
+    {id: 'isolates.mean_depth', label: 'Mean depth (reads per base)', value: metrics.meanDepth.toFixed(1)},
+    {id: 'isolate.covered_fraction', label: 'Covered backbone bases', value: share(metrics.coveredFraction)},
+    {id: 'isolates.callable_fraction', label: 'Callable backbone bases', value: share(metrics.callableFraction)},
+    {id: 'isolates.snps', label: 'PASS SNPs', value: integer(metrics.snps)},
+    {id: 'isolates.indels', label: 'PASS indels', value: integer(metrics.indels)},
+  ] : [];
+  const sections: RowSection[] = [{id: 'isolate', title: 'Isolate', rows: summary}];
+  if (quality.length > 0) {
+    sections.push({id: 'isolate-quality', title: 'Reads and Calls', rows: quality});
+  }
+  sections.push({
+    id: 'isolate-files',
+    title: 'Files',
+    rows: isolatePathKeys.map(key => pathRow(`isolate.path.${key}`, isolatePathLabels[key], isolate.paths[key])),
+  });
+  return sections;
+}
+
+export const cohortColumns: readonly {id: string; label: string}[] = [
+  {id: 'cohorts.iteration', label: 'Iteration'},
+  {id: 'cohorts.state', label: 'State'},
+  {id: 'cohorts.date', label: 'Date'},
+  {id: 'cohorts.voters', label: 'Voters'},
+  {id: 'cohorts.reason', label: 'Reason'},
+];
+
+export function cohortTableRows(result: ReferenceConsensusResult, formatDateTime: DateFormatter): string[][] {
+  return result.cohorts.map(cohort => {
+    const date = cohort.finishedAt ?? cohort.decidedAt;
+    return [
+      `${cohortName(cohort)}${cohort.id === result.activeCohortId ? ' · active' : ''}`,
+      cohort.state,
+      date ? formatDateTime(date) : '—',
+      cohort.voters ? String(cohort.voters.length) : '—',
+      cohort.reason ?? '—',
+    ];
+  });
+}
+
+const cohortPathLabels: Record<typeof cohortPathKeys[number], string> = {
+  'support-sites': 'Support table (sites)',
+  'support-intervals': 'Support table (intervals)',
+  'support-summary': 'Support summary',
+  'consensus-fasta': 'Cohort consensus FASTA',
+  'consensus-sites': 'Consensus sites',
+  'consensus-summary': 'Consensus summary',
+  'decision': 'Decision',
+  'provenance': 'Provenance',
+  'logs': 'Logs',
+};
+
+export function cohortDetailSections(cohort: CohortResult, formatDateTime: DateFormatter): RowSection[] {
+  const rows: ParameterRow[] = [{id: 'cohort.state', label: 'State', value: cohort.state}];
+  if (cohort.decidedAt) {
+    rows.push({id: 'cohort.decided_at', label: 'Decision saved', value: formatDateTime(cohort.decidedAt)});
+  }
+  if (cohort.finishedAt) {
+    rows.push({id: 'cohort.finished_at', label: 'Finished', value: formatDateTime(cohort.finishedAt)});
+  }
+  if (cohort.reason) {
+    rows.push({id: 'cohort.reason', label: 'Reason', value: cohort.reason});
+  }
+  rows.push(...settingsRows(cohort));
+  if (cohort.excluded.length > 0) {
+    rows.push({
+      id: 'cohort.excluded',
+      label: `Excluded isolates (${String(cohort.excluded.length)})`,
+      value: cohort.excluded.map(isolate => `${isolate.id} (${isolate.processing})`).join(', '),
+    });
+  }
+  if (cohort.initialAggregated !== undefined) {
+    rows.push({id: 'cohort.initial_aggregated', label: 'Initial cohort existed', value: yesNo(cohort.initialAggregated)});
+  }
+  return [
+    {id: 'cohort', title: `Iteration ${cohortName(cohort)}`, rows},
+    {
+      id: 'cohort-files',
+      title: 'Files',
+      rows: cohortPathKeys.flatMap(key => {
+        const path = cohort.paths[key];
+        return path ? [pathRow(`cohort.path.${key}`, cohortPathLabels[key], path)] : [];
+      }),
+    },
+  ];
+}
+
+/**
+ * The comparison of a cohort with the baseline, the first completed cohort: both values, the
+ * change, and the count's label last, where the table lets it wrap.
+ */
+export function comparisonRows(baseline: CohortCounts, inspected: CohortCounts): string[][] {
+  const before = countRows(baseline);
+  return countRows(inspected).map((row, index) => {
+    const change = row.value - before[index]!.value;
+    return [integer(before[index]!.value), integer(row.value), change > 0 ? `+${integer(change)}` : integer(change), row.label];
+  });
+}
+
+export function consensusFileSections(result: ReferenceConsensusResult): RowSection[] {
+  return [{
+    id: 'consensus-files',
+    title: 'Run Records',
+    rows: [
+      pathRow('run.configuration', 'Run configuration', result.runFiles.configuration),
+      pathRow('run.snapshot', 'Isolate snapshot', result.runFiles.snapshot),
+      pathRow('run.input_validation', 'Input validation', result.runFiles.inputValidation),
+      pathRow('backbone.fasta', 'Resolved backbone FASTA', result.backbone.paths.fasta),
+      pathRow('backbone.provenance', 'Backbone provenance', result.backbone.paths.provenance),
+    ],
+  }];
+}
+
+/** Every item ID the view can render, with its label, grouped like the tabs. */
+function helpItems(result: ReferenceConsensusResult): {id: string; title: string; items: {id: string; label: string}[]}[] {
+  const sample = result.isolates[0];
+  const sampleCohort = result.cohorts.at(-1)!;
+  const unique = (items: {id: string; label: string}[]): {id: string; label: string}[] =>
+    items.filter((item, index) => items.findIndex(other => other.id === item.id) === index);
+  const allCounts: CohortCounts = {
+    lociSelected: 0, lociChanged: 0, multiallelicLoci: 0, competingIndelLoci: 0, basesBackboneOnly: 0, basesIupac: 0,
+    lociUnresolved: {tie: 0, no_majority: 0, no_votes: 0, few_callable: 0},
+    basesN: {tie: 0, no_majority: 0, no_votes: 0, few_callable: 0, backbone_not_acgt: 0},
+  };
+  const everyCohortRow: CohortResult = {
+    ...sampleCohort,
+    // Every optional row present, so each gets a help entry.
+    decidedAt: '-', finishedAt: '-', reason: '-', initialAggregated: false,
+    excluded: [{id: '-', processing: 'incomplete'}],
+    voters: sampleCohort.voters ?? [],
+    settings: sampleCohort.settings ?? {include_backbone_vote: true, voting_method: 'plurality', min_callable_isolates: 0, unresolved_snp: 'n'},
+    paths: Object.fromEntries(cohortPathKeys.map(key => [key, {path: '', absolutePath: '', available: true}])),
+  };
+  const format = (value: string): string => value;
+  return [
+    {
+      id: 'overview',
+      title: 'Overview',
+      items: unique([
+        ...overviewSections(result).flatMap(section => section.rows),
+        ...settingsRows(everyCohortRow),
+        ...countRows(allCounts),
+      ]),
+    },
+    {
+      id: 'isolates',
+      title: 'Isolates',
+      items: unique([
+        ...isolateColumns,
+        ...(sample ? isolateDetailSections({...sample, metrics: sample.metrics ?? {meanDepth: 0, coveredFraction: 0, callableFraction: 0, snps: 0, indels: 0, trimmed: ''}}, result).flatMap(section => section.rows) : []),
+        {id: 'isolate.issues', label: 'Unreadable records'},
+      ]),
+    },
+    {
+      id: 'cohorts',
+      title: 'Iterations',
+      items: unique([
+        ...cohortColumns,
+        ...cohortDetailSections(everyCohortRow, format).flatMap(section => section.rows),
+        {id: 'comparison', label: 'Comparison with the first completed cohort'},
+        {id: 'cohort.issues', label: 'Unreadable or contradicting records'},
+      ]),
+    },
+    {id: 'consensus-files', title: 'Run Records', items: consensusFileSections(result).flatMap(section => section.rows)},
+  ];
+}
+
+/** Help entries for every item the reference-consensus view renders, then the scientific terms. */
+export function referenceConsensusHelpSections(result: ReferenceConsensusResult): HelpSection[] {
+  return [
+    ...helpItems(result).map(group => ({
+      id: group.id,
+      title: group.title,
+      entries: group.items.map(item => ({
+        id: item.id,
+        label: item.label,
+        explanation: referenceConsensusExplanations[item.id],
+      })),
+    })),
+    {id: 'terms', title: 'Terms', entries: referenceConsensusTerms},
+  ];
+}
+
+function Sections({sections}: {sections: readonly RowSection[]}): React.JSX.Element {
+  const labelWidth = parameterLabelWidth(sections.flatMap(section => section.rows));
+  return (
+    <Box flexDirection="column">
+      {sections.map(section => (
+        <Box key={section.id} marginTop={1} flexDirection="column" flexShrink={0}>
+          <Text bold>{section.title}</Text>
+          <ParameterList rows={section.rows} inputActive={false} labelWidth={labelWidth} />
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+function Issues({issues}: {issues: readonly RecordIssue[]}): React.JSX.Element | null {
+  if (issues.length === 0) {
+    return null;
+  }
+  return (
+    <Box marginTop={1} flexDirection="column" flexShrink={0}>
+      <Text color="yellow" bold>Records that cannot be interpreted</Text>
+      {issues.map(issue => (
+        <Text key={`${issue.path}:${issue.message}`} color="yellow" wrap="wrap">
+          {'! '}{sanitizeTerminalText(issue.path)}: {sanitizeTerminalText(issue.message)}
+        </Text>
+      ))}
+    </Box>
+  );
+}
+
+function Comparison({result, cohort}: {result: ReferenceConsensusResult; cohort: CohortResult}): React.JSX.Element | null {
+  const baseline = result.cohorts.find(candidate => candidate.id === result.baselineCohortId);
+  if (!baseline?.counts || !cohort.counts || baseline.id === cohort.id) {
+    return null;
+  }
+  return (
+    <Box marginTop={1} flexDirection="column" flexShrink={0}>
+      <Text bold>Compared with iteration {cohortName(baseline)}</Text>
+      <Table
+        header={[`Iteration ${String(baseline.iteration)}`, `Iteration ${String(cohort.iteration)}`, 'Change', 'Count']}
+        rows={comparisonRows(baseline.counts, cohort.counts)}
+      />
+    </Box>
+  );
+}
+
+/**
+ * The tab content of a reference-consensus result. Selectable tables come first in their tab, so
+ * the shell can keep the selected row in view from its index alone.
+ */
+export function ReferenceConsensusResults({
+  result,
+  view,
+  formatDateTime,
+  overviewHeader,
+  filesHeader,
+}: {
+  result: ReferenceConsensusResult;
+  view: ConsensusView;
+  formatDateTime: DateFormatter;
+  /** Run metadata and status, shown above the overview. */
+  overviewHeader: React.ReactNode;
+  /** Run directory and run files, shown above the workflow's own records. */
+  filesHeader: React.ReactNode;
+}): React.JSX.Element {
+  switch (view.tab) {
+    case 'overview':
+      return (
+        <Box flexDirection="column">
+          {overviewHeader}
+          {result.initialNotAggregatedReason ? (
+            <Box marginTop={1}>
+              <Text color="yellow" wrap="wrap">
+                The initial cohort of all selected isolates was never aggregated. The first decision explains why:{' '}
+                {sanitizeTerminalText(result.initialNotAggregatedReason)}
+              </Text>
+            </Box>
+          ) : null}
+          <Sections sections={overviewSections(result)} />
+          <Issues issues={result.backbone.issues} />
+        </Box>
+      );
+    case 'isolates': {
+      const isolate = result.isolates[view.isolateIndex];
+      if (view.isolateDetail && isolate) {
+        return (
+          <Box flexDirection="column">
+            <Sections sections={isolateDetailSections(isolate, result)} />
+            <Issues issues={isolate.issues} />
+          </Box>
+        );
+      }
+      return (
+        <Box flexDirection="column">
+          <Table
+            header={isolateColumns.map(column => column.label)}
+            rows={isolateTableRows(result)}
+            selectedRow={view.isolateIndex}
+          />
+        </Box>
+      );
+    }
+    case 'cohorts': {
+      const cohort = result.cohorts[view.cohortIndex];
+      return (
+        <Box flexDirection="column">
+          <Table
+            header={cohortColumns.map(column => column.label)}
+            rows={cohortTableRows(result, formatDateTime)}
+            selectedRow={view.cohortIndex}
+          />
+          {cohort ? (
+            <>
+              <Sections sections={cohortDetailSections(cohort, formatDateTime)} />
+              <Comparison result={result} cohort={cohort} />
+              <Issues issues={cohort.issues} />
+            </>
+          ) : null}
+        </Box>
+      );
+    }
+    case 'files':
+      return (
+        <Box flexDirection="column">
+          {filesHeader}
+          <Sections sections={consensusFileSections(result)} />
+        </Box>
+      );
+  }
+}

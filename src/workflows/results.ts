@@ -13,7 +13,18 @@ import {
   AnnotationTransferResultError,
   readAnnotationTransferResult,
   type AnnotationTransferResult,
+  type ResultPath,
 } from './annotation-transfer/results.js';
+import {
+  ISOLATE_SNAPSHOT_FILENAME,
+  parseReferenceConsensusConfiguration,
+  REFERENCE_CONSENSUS_WORKFLOW_ID,
+  REFERENCE_CONSENSUS_WORKFLOW_VERSION,
+  ReferenceConsensusConfigurationError,
+  type ReferenceConsensusConfiguration,
+} from './reference-consensus/configuration.js';
+import {readReferenceConsensusResult, type ReferenceConsensusResult} from './reference-consensus/results.js';
+import {parseIsolateSnapshot, type IsolateSnapshot} from './reference-consensus/snapshot.js';
 
 export type WorkflowResultCompatibilityError = {
   kind:
@@ -28,14 +39,120 @@ export type WorkflowResultCompatibilityError = {
   issues?: readonly {path: string; message: string}[];
 };
 
+/** What the workflow-independent result shell and run discovery need from every workflow's result. */
+export type ResultShell = {
+  /** The run's state for the run list: a scientific status, or `incomplete` while no result exists. */
+  runStatus: 'completed' | 'completed-with-warnings' | 'validation-failed' | 'incomplete';
+  status: {variant: 'success' | 'warning' | 'error'; explanation: string};
+  generatedAt?: string;
+  effectiveCpus: number;
+  /** Paths that should exist now; unavailable ones are reported as missing. */
+  linkedPaths: readonly ResultPath[];
+};
+
+export type CompatibleAnnotationTransferResult = {
+  kind: 'compatible';
+  workflow: {id: typeof ANNOTATION_TRANSFER_WORKFLOW_ID; version: typeof ANNOTATION_TRANSFER_WORKFLOW_VERSION};
+  configuration: AnnotationTransferConfiguration;
+  result: AnnotationTransferResult;
+  shell: ResultShell;
+};
+
+export type CompatibleReferenceConsensusResult = {
+  kind: 'compatible';
+  workflow: {id: typeof REFERENCE_CONSENSUS_WORKFLOW_ID; version: typeof REFERENCE_CONSENSUS_WORKFLOW_VERSION};
+  configuration: ReferenceConsensusConfiguration;
+  snapshot: IsolateSnapshot;
+  result: ReferenceConsensusResult;
+  shell: ResultShell;
+};
+
 export type LoadedWorkflowResult =
-  | {
-      kind: 'compatible';
-      workflow: {id: typeof ANNOTATION_TRANSFER_WORKFLOW_ID; version: typeof ANNOTATION_TRANSFER_WORKFLOW_VERSION};
-      configuration: AnnotationTransferConfiguration;
-      result: AnnotationTransferResult;
-    }
+  | CompatibleAnnotationTransferResult
+  | CompatibleReferenceConsensusResult
   | {kind: 'incompatible'; error: WorkflowResultCompatibilityError};
+
+export function isAnnotationTransferResult(loaded: LoadedWorkflowResult): loaded is CompatibleAnnotationTransferResult {
+  return loaded.kind === 'compatible' && loaded.workflow.id === ANNOTATION_TRANSFER_WORKFLOW_ID;
+}
+
+export function isReferenceConsensusResult(loaded: LoadedWorkflowResult): loaded is CompatibleReferenceConsensusResult {
+  return loaded.kind === 'compatible' && loaded.workflow.id === REFERENCE_CONSENSUS_WORKFLOW_ID;
+}
+
+/** The shell's view of an annotation-transfer result. */
+export function annotationTransferShell(result: AnnotationTransferResult, effectiveCpus: number): ResultShell {
+  let variant: ResultShell['status']['variant'];
+  if (result.status === 'completed') {
+    variant = 'success';
+  } else if (result.status === 'completed-with-warnings') {
+    variant = 'warning';
+  } else {
+    variant = 'error';
+  }
+  return {
+    runStatus: result.status,
+    status: {variant, explanation: result.statusExplanation},
+    generatedAt: result.generatedAt,
+    effectiveCpus,
+    linkedPaths: [result.metricsPath, ...Object.values(result.reports), ...Object.values(result.evidence)],
+  };
+}
+
+function referenceConsensusShell(result: ReferenceConsensusResult): ResultShell {
+  return {
+    runStatus: result.activeCohortId ? 'completed' : 'incomplete',
+    status: result.status,
+    ...(result.generatedAt ? {generatedAt: result.generatedAt} : {}),
+    effectiveCpus: result.effectiveCpus,
+    linkedPaths: result.linkedPaths,
+  };
+}
+
+async function loadReferenceConsensusResult(
+  directory: string,
+  configurationPath: string,
+  source: string,
+): Promise<LoadedWorkflowResult> {
+  let configuration: ReferenceConsensusConfiguration;
+  try {
+    configuration = parseReferenceConsensusConfiguration(source);
+  } catch (error) {
+    return {
+      kind: 'incompatible',
+      error: {
+        kind: 'invalid-configuration',
+        message: `Saved run configuration is invalid: ${detail(error)}`,
+        path: configurationPath,
+        ...(error instanceof ReferenceConsensusConfigurationError ? {issues: error.issues} : {}),
+      },
+    };
+  }
+  const snapshotPath = resolve(directory, ISOLATE_SNAPSHOT_FILENAME);
+  let snapshot: IsolateSnapshot;
+  try {
+    snapshot = parseIsolateSnapshot(await readFile(snapshotPath, 'utf8'), configuration.inputs.selected_isolates);
+  } catch (error) {
+    return {
+      kind: 'incompatible',
+      error: {
+        kind: errorCode(error) === 'ENOENT' ? 'missing-configuration' : 'invalid-configuration',
+        message: `Saved isolate snapshot cannot be used: ${detail(error)}`,
+        path: snapshotPath,
+        ...(error instanceof ReferenceConsensusConfigurationError ? {issues: error.issues} : {}),
+      },
+    };
+  }
+  const result = await readReferenceConsensusResult(directory, configuration, snapshot);
+  return {
+    kind: 'compatible',
+    workflow: {id: REFERENCE_CONSENSUS_WORKFLOW_ID, version: REFERENCE_CONSENSUS_WORKFLOW_VERSION},
+    configuration,
+    snapshot,
+    result,
+    shell: referenceConsensusShell(result),
+  };
+}
 
 type WorkflowIdentity = {id: string; version: number};
 
@@ -108,6 +225,9 @@ export async function loadWorkflowResult(
       },
     };
   }
+  if (identity.id === REFERENCE_CONSENSUS_WORKFLOW_ID && identity.version === REFERENCE_CONSENSUS_WORKFLOW_VERSION) {
+    return loadReferenceConsensusResult(directory, configurationPath, source);
+  }
   if (identity.id !== ANNOTATION_TRANSFER_WORKFLOW_ID || identity.version !== ANNOTATION_TRANSFER_WORKFLOW_VERSION) {
     return {
       kind: 'incompatible',
@@ -173,6 +293,7 @@ export async function loadWorkflowResult(
       workflow: {id: ANNOTATION_TRANSFER_WORKFLOW_ID, version: ANNOTATION_TRANSFER_WORKFLOW_VERSION},
       configuration,
       result,
+      shell: annotationTransferShell(result, configuration.resources.effective_cpus),
     };
   } catch (error) {
     if (error instanceof AnnotationTransferResultError) {
