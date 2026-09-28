@@ -13,9 +13,9 @@ The ballots are explained for researchers in the [workflow README](../../../work
 - **An isolate's vote.** It votes only when every base of the position or locus is `callable`; otherwise it is `ambiguous` when any base is ambiguous, and `uncallable` otherwise. A SNP and an indel the caller reports at the same position are combined into one allele. Its other overlapping records within a locus, or an allele with another base than `A/C/G/T` (a symbolic allele, for example), make it `unsupported`, without a vote.
 - **The mask is authoritative.** A `PASS` record on a base the mask marks ambiguous, such as a SNP inside an ambiguous indel's span, casts no vote, just as the isolate FASTA shows `N` there. This settles the question Task 4.1 left open.
 - **The backbone's vote.** One vote when `consensus.include_backbone_vote` is true, none otherwise, and never where its base is not `A/C/G/T`. Soft-masked bases are compared uppercase.
-- **A failed isolate** blocks aggregation, because the rule depends on every selected isolate; excluding it is a Task 5 decision with a reason.
+- **A failed isolate** blocks aggregation, because the rule depends on every selected isolate; excluding it is a Task 5.1 decision with a reason.
 - **Determinism.** Contigs follow the backbone, positions ascend, isolate columns are sorted by ID, and alleles list the backbone allele first, then by votes and alphabetically. The support outputs carry no timestamps.
-- **Voters** are every `selected_isolates` ID in the initial run. The script takes the voters as arguments, so Task 5 can pass a saved subset.
+- **Voters** are every `selected_isolates` ID in the initial run. The script takes the voters as arguments, so Task 5.1 can pass a saved subset.
 - **Configuration.** Only the backbone vote is read, so changing it reruns aggregation alone and changing the voting method does not.
 
 ## Voting evidence
@@ -54,7 +54,7 @@ The outputs, in `results/cohort/initial/`, use 1-based inclusive coordinates, ar
 
 ## Rerun boundary
 
-The initial table includes every isolate selected for analysis. Task 5 may supply a saved voting subset; aggregation must be able to regenerate from existing Task 4.1 artifacts without rerunning QC, alignment, or calling. Preserve the initial all-selected support output when a reviewed decision creates a later iteration.
+The initial table includes every isolate selected for analysis. Task 5.1 may supply a saved voting subset; aggregation must be able to regenerate from existing Task 4.1 artifacts without rerunning QC, alignment, or calling. Preserve the initial all-selected support output when a reviewed decision creates a later iteration.
 
 ## Work
 

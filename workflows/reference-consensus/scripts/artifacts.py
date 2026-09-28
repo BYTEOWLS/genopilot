@@ -4,6 +4,8 @@ The Snakefile asks for the declared outputs below to schedule the run, and
 the provenance steps checksum every entry, so the two cannot drift apart.
 Paths are patterns inside the run directory: `{isolate}` is an isolate ID and
 `{pair}` the 1-based position of a read pair in the isolate's snapshot entry.
+A run's declared artifacts are its initial run's; an iteration's cohort
+artifacts come from `cohort_artifacts` and are recorded in its own provenance.
 
 `declared` is false for logs and benchmarks: Snakemake does not treat them
 as outputs a rule can be asked for, so they are recorded when present but
@@ -91,21 +93,27 @@ ISOLATE_SUMMARY_ARTIFACTS = [
 ]
 
 
-_COHORT = "results/cohort/initial"
-COHORT_ARTIFACTS = [
-    _artifact("support-sites", f"{_COHORT}/support-sites.tsv.gz", "tsv", "aggregate-support"),
-    _artifact("support-sites-index", f"{_COHORT}/support-sites.tsv.gz.tbi", "index", "aggregate-support"),
-    _artifact("support-intervals", f"{_COHORT}/support-intervals.tsv.gz", "tsv", "aggregate-support"),
-    _artifact("support-intervals-index", f"{_COHORT}/support-intervals.tsv.gz.tbi", "index", "aggregate-support"),
-    _artifact("support-summary", f"{_COHORT}/support-summary.json", "json", "aggregate-support"),
-    *_log("aggregate-support", "logs/cohort/initial/aggregate-support", "aggregate-support"),
-    _artifact("cohort-consensus-fasta", f"{_COHORT}/consensus.fasta", "fasta", "generate-consensus"),
-    _artifact("cohort-consensus-fasta-index", f"{_COHORT}/consensus.fasta.fai", "index", "generate-consensus"),
-    _artifact("consensus-sites", f"{_COHORT}/consensus-sites.tsv.gz", "tsv", "generate-consensus"),
-    _artifact("consensus-sites-index", f"{_COHORT}/consensus-sites.tsv.gz.tbi", "index", "generate-consensus"),
-    _artifact("consensus-summary", f"{_COHORT}/consensus-summary.json", "json", "generate-consensus"),
-    *_log("generate-consensus", "logs/cohort/initial/generate-consensus", "generate-consensus"),
-]
+def cohort_artifacts(cohort: str) -> list[dict]:
+    """The outputs and logs of a cohort: `initial` or an `iteration-<n>` of a saved decision."""
+    directory = f"results/cohort/{cohort}"
+    logs = f"logs/cohort/{cohort}"
+    return [
+        _artifact("support-sites", f"{directory}/support-sites.tsv.gz", "tsv", "aggregate-support"),
+        _artifact("support-sites-index", f"{directory}/support-sites.tsv.gz.tbi", "index", "aggregate-support"),
+        _artifact("support-intervals", f"{directory}/support-intervals.tsv.gz", "tsv", "aggregate-support"),
+        _artifact("support-intervals-index", f"{directory}/support-intervals.tsv.gz.tbi", "index", "aggregate-support"),
+        _artifact("support-summary", f"{directory}/support-summary.json", "json", "aggregate-support"),
+        *_log("aggregate-support", f"{logs}/aggregate-support", "aggregate-support"),
+        _artifact("cohort-consensus-fasta", f"{directory}/consensus.fasta", "fasta", "generate-consensus"),
+        _artifact("cohort-consensus-fasta-index", f"{directory}/consensus.fasta.fai", "index", "generate-consensus"),
+        _artifact("consensus-sites", f"{directory}/consensus-sites.tsv.gz", "tsv", "generate-consensus"),
+        _artifact("consensus-sites-index", f"{directory}/consensus-sites.tsv.gz.tbi", "index", "generate-consensus"),
+        _artifact("consensus-summary", f"{directory}/consensus-summary.json", "json", "generate-consensus"),
+        *_log("generate-consensus", f"{logs}/generate-consensus", "generate-consensus"),
+    ]
+
+
+COHORT_ARTIFACTS = cohort_artifacts("initial")
 
 
 def _expand(entry: dict, **wildcards) -> dict:

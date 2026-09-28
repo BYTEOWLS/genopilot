@@ -20,7 +20,7 @@ Illumina writes one R1/R2 pair per lane per sequencing run. A library sequenced 
 
 `trimmed` records whether the provider already adapter- or quality-trimmed or filtered the pair. Untrimmed reads are preferred because the workflow applies its own pinned, recorded QC to every isolate; trimmed reads remain allowed because some deliveries contain nothing else. File names cannot tell trimmed from untrimmed reads — a provider may deliver both under identical names — so the researcher sets the flag, defaulting to untrimmed. One isolate may mix trimmed and untrimmed pairs, for example a trimmed first delivery and an untrimmed top-up; the workflow trims every pair itself, and the isolate list shows such an isolate as partly trimmed.
 
-Generated isolate-genome records are not part of schema version 1. They arrive with the first action that creates them, **Save to isolate catalog** in [Task 5](5-results-and-post-processing.md#catalog-owned-isolate-genomes), as a deliberate schema revision.
+Generated isolate-genome records are not part of schema version 1. They arrive with the first action that creates them, **Save to isolate catalog** in [Task 5.4](5d-catalog-owned-genomes.md), as a deliberate schema revision.
 
 Example shape:
 
@@ -73,7 +73,7 @@ Catalog writes must be private, atomic, and safe against two application instanc
 - [x] Show lineage and read state without treating labels as behavioral selectors.
 - [x] Add tests for validation, lineage cycles, linked or reused read files, mixed trimming, adding and removing pairs, concurrent/failed writes, corruption, resizing, keyboard input, and persistence across restarts.
 
-Generated-genome records, promotion and removal primitives, integrity display, and orphan maintenance moved to [Task 5](5-results-and-post-processing.md#catalog-owned-isolate-genomes), where the first action that creates them lives.
+Generated-genome records, promotion and removal primitives, integrity display, and orphan maintenance moved to [Task 5.4](5d-catalog-owned-genomes.md), where the first action that creates them lives.
 
 ## Acceptance
 

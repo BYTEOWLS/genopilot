@@ -211,10 +211,15 @@ function validateCalling(
   return valid ? (calling as CallingSettings) : undefined;
 }
 
-function validateConsensus(
+/**
+ * Validates the cohort settings of a configuration or a cohort decision. `voters` is how many
+ * isolates can vote, which bounds the minimum of callable isolates, and `voterLabel` names them.
+ */
+export function validateConsensus(
   value: unknown,
-  selectedIsolates: number | undefined,
+  voters: number | undefined,
   issues: ConfigurationValidationIssue[],
+  voterLabel = 'selected isolates',
 ): ReferenceConsensusConfiguration['consensus'] | undefined {
   const consensus = requireObject(value, '$.consensus', issues);
   if (!consensus) {
@@ -241,8 +246,8 @@ function validateConsensus(
   const minimumPath = '$.consensus.min_callable_isolates';
   if (!validateInteger(consensus.min_callable_isolates, minimumPath, 0, issues)) {
     valid = false;
-  } else if (selectedIsolates !== undefined && (consensus.min_callable_isolates as number) > selectedIsolates) {
-    issues.push({path: minimumPath, message: 'must not exceed the number of selected isolates'});
+  } else if (voters !== undefined && (consensus.min_callable_isolates as number) > voters) {
+    issues.push({path: minimumPath, message: `must not exceed the number of ${voterLabel}`});
     valid = false;
   }
   if (!unresolvedSnpRepresentations.includes(consensus.unresolved_snp as UnresolvedSnp)) {

@@ -4,7 +4,7 @@ Ideas that are intentionally outside the current task list in [`resources/tasks.
 
 ## Reruns of existing runs
 
-A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](resources/concepts/reruns.md). Its release basics are tracked in Task 5 and the task list; the rest waits for a concrete use case.
+A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](resources/concepts/reruns.md). Its release basics are tracked in consensus Tasks 5.1 and 5.3 and the task list; the rest waits for a concrete use case.
 
 ## Performance review
 
@@ -121,9 +121,7 @@ interrupted run directory should look like when it is opened again.
 
 ### Interactive-decision manifest contract
 
-Workflow-manifest schema version 1 supports the current non-interactive annotation-transfer workflow and contains no interactive-decision fields. Do not predict an execution contract before a workflow actually needs one.
-
-When implementation reaches the first consensus decision boundary, define the smallest manifest and saved-decision contract required by that concrete workflow. At that point, decide whether explicit Snakemake targets, stage references, or another mechanism is necessary, update the schema version deliberately, and add migration or compatibility handling for persisted manifests. Snakemake must remain the execution authority; the TUI must not become a second scheduler.
+The first decision boundary, the reference-consensus cohort iterations, needed no manifest fields: a saved decision file and an explicit Snakemake target per iteration are enough ([consensus Task 5.1](concepts/consensus/5a-cohort-iterations.md)). Workflow-manifest schema version 1 therefore still contains no interactive-decision fields. Revisit this when a second workflow needs decisions and the TUI would otherwise hard-code its targets. Snakemake must remain the execution authority; the TUI must not become a second scheduler.
 
 Potential additions after the core run/resume/presentation interface works:
 

@@ -8,7 +8,7 @@ A run directory cannot simply be rerun with an edited `config.yaml`: Snakemake r
 
 ## Model
 
-- **Cohort-only changes** stay in the same run as a new iteration: the voting isolates, including excluding a failed isolate, the voting method, and the backbone vote. Nothing per-isolate reruns, and every earlier iteration is kept in its own directory. [Task 5](consensus/5-results-and-post-processing.md) defines the saved decision and the iteration layout.
+- **Cohort-only changes** stay in the same run as a new iteration: the voting isolates, including excluding a failed isolate, and the cohort settings: the voting method, the backbone vote, the minimum of callable isolates, and the unresolved-SNP representation. Nothing per-isolate reruns, and every earlier iteration is kept in its own directory. [Task 5.1](consensus/5a-cohort-iterations.md) defines the saved decision and the iteration layout.
 - **Every other change** creates a new run in its own directory: calling thresholds, the backbone, the selected isolates' reads, or anything else a per-isolate step reads. The source run is never modified, and the new run computes everything again.
 
 A run's saved `config.yaml` and `isolates.yaml` are never edited after it was created, by GenoPilot or by a researcher; the workflow README already says so for direct runs.
@@ -17,7 +17,7 @@ A run's saved `config.yaml` and `isolates.yaml` are never edited after it was cr
 
 These are required before a release, because without them a run with one unusable isolate cannot be completed without recomputing the whole cohort, or a failed run cannot be finished from GenoPilot. They are tracked where they are designed:
 
-- cohort iterations in the same run, and excluding failed isolates as the first iteration: [Task 5](consensus/5-results-and-post-processing.md);
+- cohort iterations in the same run, and excluding failed isolates as the first iteration: [Task 5.1](consensus/5a-cohort-iterations.md), and running them from GenoPilot: [Task 5.3](consensus/5c-review-and-rerun.md);
 - resuming an incomplete run in its own directory after its cause was fixed: [`tasks.md`](../tasks.md).
 
 A changed per-isolate configuration already works as a new run: the configuration form is prefilled from a previous run, and the source run stays unchanged.

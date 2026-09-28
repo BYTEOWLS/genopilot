@@ -35,9 +35,12 @@ These are already implemented by the annotation-transfer work and should be reus
 - [x] 4.1. [Per-isolate processing](4a-per-isolate-processing.md)
 - [x] 4.2. [Cohort support aggregation](4b-cohort-support-aggregation.md)
 - [x] 4.3. [Combined consensus generation](4c-combined-consensus-generation.md)
-- [ ] 5. [Results and post-processing](5-results-and-post-processing.md)
+- [x] 5.1. [Cohort iterations](5a-cohort-iterations.md)
+- [ ] 5.2. [Results view](5b-results-view.md)
+- [ ] 5.3. [Review and rerun](5c-review-and-rerun.md)
+- [ ] 5.4. [Catalog-owned isolate genomes](5d-catalog-owned-genomes.md)
 
-Tasks 1 and 2 may be implemented independently. Task 1b builds on Task 1 and is optional for the later tasks. Task 3 depends on both catalogs. Execution tasks 4.1–4.3 are sequential Snakemake targets but remain separate vertical slices because each produces independently testable scientific artifacts. Task 5 depends on their persisted result contracts.
+Tasks 1 and 2 may be implemented independently. Task 1b builds on Task 1 and is optional for the later tasks. Task 3 depends on both catalogs. Execution tasks 4.1–4.3 are sequential Snakemake targets but remain separate vertical slices because each produces independently testable scientific artifacts. Tasks 5.1–5.3 depend on their persisted result contracts and build on each other; Task 5.4 needs only Task 4.1's promotion candidates.
 
 ## Terminology
 

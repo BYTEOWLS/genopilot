@@ -60,8 +60,10 @@ stages:
     rules: [generate_consensus]
   - id: record-provenance
     label: Record provenance
-    description: Checksums, tool versions, and commands of the whole run.
-    rules: [record_consensus_provenance]
+    description: >
+      Checksums, tool versions, and commands of the whole run, or of one iteration of a saved
+      cohort decision.
+    rules: [record_consensus_provenance, record_iteration_provenance]
 artifacts:
   - id: resolved-backbone
     label: Resolved backbone FASTA
