@@ -57,6 +57,13 @@ Finally, **record provenance** writes the run's artifact index and provenance re
 
 Isolates are processed independently and in parallel. A failing isolate is reported as a failed job while the others finish. The cohort steps then do not run, so an isolate never drops out of the vote unnoticed; leaving it out is a separate, reviewed decision.
 
+The other isolates still finish, although the cohort steps wait, because:
+
+- every failure shows up in one pass, instead of one per attempt, which matters when a run takes hours;
+- finished isolates are kept, and the next attempt in the same run directory redoes only what is missing: the fixed isolate and the cohort steps;
+- each isolate's results, such as its FASTA, variants, and callable mask, are valid on their own, also without a cohort consensus;
+- an isolate that cannot be fixed can be excluded later with a reason, in the same run, without processing the others again.
+
 ## Read groups
 
 A read group labels where reads came from: the sequencing run, lane, library, and sample. Every read in a BAM file carries its read group, so reads from different read pairs remain distinguishable after they are merged into one isolate alignment.

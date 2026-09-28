@@ -53,6 +53,15 @@ created_at: 2026-01-01T13:00:00.000Z
 
 The rerun targets support aggregation, consensus generation, validation, metrics, and result summaries only. It reuses all per-isolate artifacts. Preserve the initial result and every reviewed iteration in separate, checksummed locations rather than overwriting diagnostic evidence. The result screen makes the active iteration clear and allows earlier iterations to be inspected.
 
+### Excluding a failed isolate
+
+A failed isolate stops the cohort stages, so a run with one never completes (see [Task 4.2](4b-cohort-support-aggregation.md#kickoff-decisions)). When the failure can be fixed, rerunning the same run directory redoes only that isolate. When it cannot, for example because its reads are unusable, the researcher excludes it with a reason in the same run directory instead of creating a new run, which would align and call every other isolate again.
+
+- The same review offers exclusion for a run whose only failures are isolates; the decision lists them under `excluded_from_voting` with the reason, as for any exclusion.
+- There is no all-selected initial support output in such a run, so this decision creates the first cohort iteration, and the result states that the all-selected cohort was never aggregated and why.
+- The failed isolate's logs and partial artifacts stay in place as evidence; the run's provenance records it as failed and excluded, not as missing.
+- The rerun targets only the cohort outputs and provenance, because a run's default target still asks for every selected isolate. Run provenance must therefore accept a failed, excluded isolate, which today it does not: it depends on every declared artifact.
+
 Changing an isolate's catalog metadata after the run does not rewrite the run snapshot or its decision. Saving a result to the catalog copies it into managed storage using Task 4.1's validated promotion manifest; scientific outputs never depend on that user-local action.
 
 ## Catalog-owned isolate genomes
@@ -115,9 +124,10 @@ Annotation transfer, legacy-reference comparison, repeat analysis, antiSMASH, an
 - [ ] Implement tie/disagreement navigation and whole-isolate voting selection.
 - [ ] Implement voting-method changes and an evidence-based before/after preview.
 - [ ] Validate and atomically save a reasoned decision before preparing the rerun.
+- [ ] Allow excluding failed isolates within the same run, create the first cohort iteration without them, and record them as failed and excluded in provenance.
 - [ ] Invoke explicit Snakemake targets without implementing a scheduler in TypeScript.
 - [ ] Preserve and load every iteration, including failure, interruption, resume, and incompatible-artifact states.
-- [ ] Add tests for exclusion, method changes, no-op decisions, retained upstream artifacts, iteration comparison, catalog promotion, contained genome paths, symlink escape, orphan recovery, missing generated artifacts, resizing, cancellation, and complete logs.
+- [ ] Add tests for exclusion, excluding a failed isolate without reprocessing the others, method changes, no-op decisions, retained upstream artifacts, iteration comparison, catalog promotion, contained genome paths, symlink escape, orphan recovery, missing generated artifacts, resizing, cancellation, and complete logs.
 
 ## Acceptance
 

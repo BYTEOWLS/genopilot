@@ -67,7 +67,9 @@ into a new run directory. The same run can then be started directly with
     --cores <n> --use-conda --keep-going
 
 `--keep-going` lets the other isolates finish when one fails; the cohort
-steps then do not run. Commands are
+steps then do not run. Their results are kept, so every failure shows up in
+one pass and the next attempt in the same run directory redoes only what is
+missing. Commands are
 recorded in provenance/run.json only when the run also uses GenoPilot's run
 events logger (see the GenoPilot README).
 
