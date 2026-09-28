@@ -85,7 +85,7 @@ One isolate failing validation or execution must be visible as a failed job and 
 
 The scientific workflow writes a versioned promotion manifest describing each successfully validated isolate FASTA, its isolate ID, checksum, backbone identity/checksum, producing run, workflow version, and creation time. This keeps direct Snakemake execution independent of user-local TUI state.
 
-Task 5.4 offers an explicit **Save to isolate catalog** action. On confirmation, the TUI uses its promotion primitive to copy the FASTA, index, and compact provenance into `genomes/<isolate-id>/<genome-id>/`, verify the copy, and append its authoritative record to `isolates.yaml`. Never offer or promote a partial, failed, missing, or checksum-invalid FASTA. Repeating promotion is idempotent for the same genome identity and checksum; another run or backbone creates a separate record rather than replacing an older genome.
+Task 5.4 offers an explicit **Save to isolate catalog** action. On confirmation, the TUI uses its promotion primitive to copy the FASTA, index, and compact provenance into the catalog's `sequences/<sequence-id>/`, verify the copy, and append its authoritative record to `isolates.yaml`. Never offer or promote a partial, failed, missing, or checksum-invalid FASTA. Repeating promotion is idempotent for the same sequence identity and checksum; another run or backbone creates a separate record rather than replacing an older one.
 
 ## Work
 
@@ -102,4 +102,4 @@ Task 5.4 offers an explicit **Save to isolate catalog** action. On confirmation,
 
 ## Acceptance
 
-The target runs directly through Snakemake and produces independently inspectable, scientifically validated artifacts for every isolate. Each successful FASTA can later be copied into catalog-owned storage without making catalog mutation part of the scientific DAG or overwriting older genome records.
+The target runs directly through Snakemake and produces independently inspectable, scientifically validated artifacts for every isolate. Each successful FASTA can later be saved to the isolate catalog without making catalog mutation part of the scientific DAG or overwriting older saved sequences.

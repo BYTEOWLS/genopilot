@@ -4,7 +4,7 @@
 
 Let a saved, reasoned decision change which isolates vote and how the cohort consensus is chosen, and rerun only cohort aggregation and its dependent outputs in the same run directory. Each earlier result stays in place. A run with an unusable isolate becomes completable without processing the other isolates again.
 
-This is the workflow-side contract that Tasks [5.2](5b-results-view.md) (results view), [5.3](5c-review-and-rerun.md) (review and rerun), and [5.4](5d-catalog-owned-genomes.md) (catalog-owned genomes) build on. It covers the release basics of the [reruns concept](../reruns.md), which also explains why every other configuration change creates a new run.
+This is the workflow-side contract that Tasks [5.2](5b-results-view.md) (results view), [5.3](5c-review-and-rerun.md) (review and rerun), and [5.4](5d-saved-isolate-sequences.md) (saved isolate sequences) build on. It covers the release basics of the [reruns concept](../reruns.md), which also explains why every other configuration change creates a new run.
 
 ## Kickoff decisions
 

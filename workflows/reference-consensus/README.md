@@ -2,7 +2,7 @@
 
 Builds one consensus genome from the paired Illumina reads of many isolates. Every isolate's reads are called against one backbone assembly. The isolates' alleles, and optionally the backbone's, then vote at each position, and the winning allele by strict majority or plurality forms the cohort consensus.
 
-Status: the initial cohort consensus is implemented. Every isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA. The votes of the backbone and the callable isolates are counted at every backbone position, and the configured voting method picks the winning allele or leaves the position unresolved. A saved cohort decision reruns only the cohort steps as a new iteration, for example to exclude an isolate (see *Iterations*); GenoPilot does not yet offer a screen to review ties and save such a decision.
+Status: the initial cohort consensus is implemented. Every isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA. The votes of the backbone and the callable isolates are counted at every backbone position, and the configured voting method picks the winning allele or leaves the position unresolved. A saved cohort decision reruns only the cohort steps as a new iteration, for example to exclude an isolate (see *Iterations*). GenoPilot shows the results of every isolate and iteration, but does not yet offer a screen to review ties and save such a decision.
 
 ## Inputs
 

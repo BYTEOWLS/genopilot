@@ -8,8 +8,8 @@ const runExplanations: Record<string, string> = {
   'run.workflow': 'Workflow label with its stable identifier and version. Results are interpreted by identifier and ' +
     'version, so a changed label does not affect loading.',
   'run.created': 'Time the run workspace was created, shown in local time.',
-  'run.summary_generated': 'Time the workflow wrote the completion summary, shown in local time. A later rerun of ' +
-    'the summary stage updates it.',
+  'run.summary_generated': 'Time the workflow wrote the results shown, in local time: the completion summary, or the ' +
+    'provenance of the active cohort. A later rerun of that stage updates it.',
   'run.effective_cpus': 'Number of CPUs the workflow was allowed to use after applying the selected CPU mode.',
   'run.stdout': 'Complete standard output of the Snakemake process for the execution that just ended.',
   'run.stderr': 'Complete standard error of the Snakemake process for the execution that just ended.',
@@ -20,7 +20,7 @@ const runExplanations: Record<string, string> = {
   'run.logs': 'Directory containing the complete logs of every workflow step.',
 };
 
-const statusEntry: HelpEntry = {
+const annotationTransferStatusEntry: HelpEntry = {
   id: 'run.status',
   label: 'Run status',
   explanation: 'The scientific status saved by the workflow. A Snakemake process that exits successfully can still ' +
@@ -41,6 +41,19 @@ const statusEntry: HelpEntry = {
   ],
 };
 
+const referenceConsensusStatusEntry: HelpEntry = {
+  id: 'run.status',
+  label: 'Run status',
+  explanation: 'Whether a cohort consensus is available, worked out from the records the workflow wrote: it is ' +
+    'available once any cohort completed, and the active one is the latest. Without one, the status names the ' +
+    'isolates that have not completed. Paths marked missing should exist but do not.',
+};
+
+const statusEntries: Record<'annotation-transfer' | 'reference-consensus', HelpEntry> = {
+  'annotation-transfer': annotationTransferStatusEntry,
+  'reference-consensus': referenceConsensusStatusEntry,
+};
+
 function entries(items: readonly {id: string; label: string}[]): HelpEntry[] {
   return items.map(item => ({id: item.id, label: item.label, explanation: runExplanations[item.id]}));
 }
@@ -49,16 +62,17 @@ function entries(items: readonly {id: string; label: string}[]): HelpEntry[] {
 export function runHelpSections({
   metadataItems,
   fileItems,
-  hasStatus,
+  status,
   workflowSections,
 }: {
   metadataItems: readonly {id: string; label: string}[];
   fileItems: readonly {id: string; label: string}[];
-  hasStatus: boolean;
+  /** The workflow whose status the page shows; undefined when the results cannot be interpreted. */
+  status?: keyof typeof statusEntries;
   workflowSections: readonly HelpSection[];
 }): HelpSection[] {
   return [
-    {id: 'run-metadata', title: 'Run Metadata', entries: [...entries(metadataItems), ...(hasStatus ? [statusEntry] : [])]},
+    {id: 'run-metadata', title: 'Run Metadata', entries: [...entries(metadataItems), ...(status ? [statusEntries[status]] : [])]},
     ...workflowSections,
     {id: 'run-files', title: 'Run Files', entries: entries(fileItems)},
   ];

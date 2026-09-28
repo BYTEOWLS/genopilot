@@ -36,9 +36,9 @@ These are already implemented by the annotation-transfer work and should be reus
 - [x] 4.2. [Cohort support aggregation](4b-cohort-support-aggregation.md)
 - [x] 4.3. [Combined consensus generation](4c-combined-consensus-generation.md)
 - [x] 5.1. [Cohort iterations](5a-cohort-iterations.md)
-- [ ] 5.2. [Results view](5b-results-view.md)
+- [x] 5.2. [Results view](5b-results-view.md)
 - [ ] 5.3. [Review and rerun](5c-review-and-rerun.md)
-- [ ] 5.4. [Catalog-owned isolate genomes](5d-catalog-owned-genomes.md)
+- [ ] 5.4. [Saved isolate sequences](5d-saved-isolate-sequences.md)
 
 Tasks 1 and 2 may be implemented independently. Task 1b builds on Task 1 and is optional for the later tasks. Task 3 depends on both catalogs. Execution tasks 4.1–4.3 are sequential Snakemake targets but remain separate vertical slices because each produces independently testable scientific artifacts. Tasks 5.1–5.3 depend on their persisted result contracts and build on each other; Task 5.4 needs only Task 4.1's promotion candidates.
 
@@ -48,5 +48,5 @@ Tasks 1 and 2 may be implemented independently. Task 1b builds on Task 1 and is 
 - **Legacy reference**: an older assembly, such as a Sanger-era reference, used later for comparison or annotation transfer; it is not a cohort vote unless a future design explicitly says otherwise.
 - **Isolate**: a biological sample with reusable metadata and one or more paired R1/R2 read sets.
 - **Read pair**: one R1/R2 FASTQ pair, typically one lane of one sequencing run; a library sequenced several times has several pairs whose reads add up.
-- **Isolate genome**: a reference-guided FASTA generated for one isolate from its calls against a particular backbone.
+- **Isolate FASTA**: the reference-guided consensus of one isolate, generated from its calls against a particular backbone. It has the backbone's structure and is not an assembly; saved to the isolate catalog, it is a *saved sequence* of the kind `reference-guided-consensus`.
 - **Cohort consensus**: the potentially mosaic sequence selected from the backbone and callable isolate votes. It is not claimed to be the genome of one biological individual.

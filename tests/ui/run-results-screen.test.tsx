@@ -9,7 +9,11 @@ import {
   runSupportPaths,
 } from '../../src/ui/run-results-screen/screen.js';
 import type {WorkflowManifest} from '../../src/workflows/manifest.js';
-import type {LoadedWorkflowResult} from '../../src/workflows/results.js';
+import {
+  annotationTransferShell,
+  type CompatibleAnnotationTransferResult,
+  type LoadedWorkflowResult,
+} from '../../src/workflows/results.js';
 import {
   annotationTransferHelpSections,
   annotationTransferSections,
@@ -61,8 +65,8 @@ function path(name: string, available = true) {
   return {path: `results/${name}`, absolutePath: `/runs/result-42/results/${name}`, available};
 }
 
-function compatibleResult(): Extract<LoadedWorkflowResult, {kind: 'compatible'}> {
-  return {
+function compatibleResult(): CompatibleAnnotationTransferResult {
+  const loaded: Omit<CompatibleAnnotationTransferResult, 'shell'> = {
     kind: 'compatible',
     workflow: {id: 'annotation-transfer', version: 1},
     configuration: {
@@ -136,6 +140,16 @@ function compatibleResult(): Extract<LoadedWorkflowResult, {kind: 'compatible'}>
       metricsPath: path('metrics.json'),
     },
   };
+  return {...loaded, shell: annotationTransferShell(loaded.result, loaded.configuration.resources.effective_cpus)};
+}
+
+/** Recomputes the shell after a test changed the annotation-transfer result it derives from. */
+function refreshed(loaded: LoadedWorkflowResult): LoadedWorkflowResult {
+  if (loaded.kind !== 'compatible' || loaded.workflow.id !== 'annotation-transfer') {
+    return loaded;
+  }
+  const annotation = loaded as CompatibleAnnotationTransferResult;
+  return {...annotation, shell: annotationTransferShell(annotation.result, annotation.configuration.resources.effective_cpus)};
 }
 
 function renderScreen(
@@ -155,7 +169,7 @@ function renderScreen(
     <RunResultsScreen
       runDirectory="/runs/result-42"
       manifest={manifest}
-      loaded={loaded}
+      loaded={refreshed(loaded)}
       inputActive={options.inputActive ?? false}
       onBack={options.onBack}
       pathExists={options.pathExists ?? (() => true)}
@@ -206,7 +220,7 @@ test('reports unavailable generated reports as missing result paths', () => {
   const supportPaths = runSupportPaths('/runs/result-42', () => true);
   assert.ok(supportPaths.every(supportPath => supportPath.available));
   assert.deepEqual(
-    missingResultPaths(loaded.result, supportPaths),
+    missingResultPaths(loaded.shell, supportPaths),
     ['/runs/result-42/results/validation.json'],
   );
 });
@@ -224,7 +238,7 @@ test('checks support and canonical metrics paths independently from generated re
     ['provenance/run.json', 'logs'],
   );
   assert.deepEqual(
-    missingResultPaths(loaded.result, supportPaths).sort(),
+    missingResultPaths(loaded.shell, supportPaths).sort(),
     [
       '/runs/result-42/logs',
       '/runs/result-42/provenance/run.json',
@@ -375,7 +389,7 @@ test('explains every run-level result item', () => {
   const sections = runHelpSections({
     metadataItems: ids.map(id => ({id, label: id})),
     fileItems: fileIds.map(id => ({id, label: id})),
-    hasStatus: true,
+    status: 'annotation-transfer',
     workflowSections: [],
   });
   const entries = sections.flatMap(section => section.entries);

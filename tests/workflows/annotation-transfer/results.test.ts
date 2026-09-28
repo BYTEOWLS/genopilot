@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
 import type {WorkflowManifest} from '../../../src/workflows/manifest.js';
-import {loadWorkflowResult} from '../../../src/workflows/results.js';
+import {isAnnotationTransferResult, loadWorkflowResult} from '../../../src/workflows/results.js';
 
 function manifest(overrides: Partial<WorkflowManifest> = {}): WorkflowManifest {
   return {
@@ -273,7 +273,7 @@ test('keeps valid metrics available while reporting each missing artifact separa
   const loaded = await loadWorkflowResult(directory, manifest());
 
   assert.equal(loaded.kind, 'compatible');
-  if (loaded.kind === 'compatible') {
+  if (isAnnotationTransferResult(loaded)) {
     assert.equal(loaded.result.transfer.referenceFeatures, 3);
     assert.equal(loaded.result.evidence.raw_gff3?.available, true);
     assert.equal(loaded.result.evidence.run_manifest?.available, false);

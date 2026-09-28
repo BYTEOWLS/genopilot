@@ -67,7 +67,7 @@ function metadataFromConfiguration(
 
 function runStatus(loaded: LoadedWorkflowResult): ExistingRunStatus {
   if (loaded.kind === 'compatible') {
-    return loaded.result.status;
+    return loaded.shell.runStatus;
   }
   switch (loaded.error.kind) {
     case 'missing-summary':
@@ -86,11 +86,7 @@ function missingLinkedPaths(loaded: LoadedWorkflowResult): number {
   if (loaded.kind !== 'compatible') {
     return 0;
   }
-  return new Set([
-    loaded.result.metricsPath,
-    ...Object.values(loaded.result.reports),
-    ...Object.values(loaded.result.evidence),
-  ].filter(path => !path.available).map(path => path.absolutePath)).size;
+  return new Set(loaded.shell.linkedPaths.filter(path => !path.available).map(path => path.absolutePath)).size;
 }
 
 function errorCode(error: unknown): string | undefined {

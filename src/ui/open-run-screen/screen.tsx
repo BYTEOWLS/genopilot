@@ -65,7 +65,7 @@ function RunStatus({run}: {run: DiscoveredRun}): React.JSX.Element {
     case 'validation-failed':
       return <Alert variant="error">Validation failed</Alert>;
     case 'incomplete':
-      return <Alert variant="warning">Incomplete or process failed (summary missing)</Alert>;
+      return <Alert variant="warning">Incomplete, interrupted, or failed</Alert>;
     case 'corrupt':
       return <Alert variant="error">Saved result is corrupt</Alert>;
     case 'incompatible':

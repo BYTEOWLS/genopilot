@@ -71,7 +71,7 @@ Verify each point against the node's current pages and the pinned validator at k
 
 Nothing about an organism, its genetic code, its organelles, or its gene structure is built in; every such value comes from the saved configuration.
 
-Choosing an annotation-transfer run or a catalog isolate genome directly, instead of paths, is a later convenience once both sides have stable result contracts.
+Choosing an annotation-transfer run or a saved isolate sequence directly, instead of paths, is a later convenience once both sides have stable result contracts.
 
 ## Stages
 

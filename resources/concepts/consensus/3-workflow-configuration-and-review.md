@@ -94,7 +94,7 @@ Show:
 - run directory (the exact Snakemake command follows on the start page, before a run begins);
 - NCBI API key as configured/not set only when needed.
 
-Generated isolate genomes already in the catalog are informative but are not substituted for the selected raw reads in a fresh run. Continue-from-artifact behavior belongs to a later explicit compatibility design.
+Isolate sequences already saved in the catalog are informative but are not substituted for the selected raw reads in a fresh run. Continue-from-artifact behavior belongs to a later explicit compatibility design.
 
 ## Work
 

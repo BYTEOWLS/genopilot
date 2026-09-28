@@ -8,7 +8,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 
 ## Workflows
 
-- [ ] Reference-guided cohort consensus, from Task 5.2 on ([concept](concepts/consensus/README.md)).
+- [ ] Reference-guided cohort consensus, from Task 5.3 on ([concept](concepts/consensus/README.md)).
 - [ ] Post-LiftOn identifier rewriting ([concept](concepts/annotation-id-rewriting.md)); required before INSDC submission.
 - [ ] INSDC submission preparation (NCBI, ENA, or DDBJ): genome and isolate reads ([concept](concepts/insdc-submission/README.md)).
 
@@ -20,6 +20,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 - [ ] Show a systems check before a run: free disk against an estimate, CPUs, and memory, and duration estimates from the machine's completed runs ([concept](concepts/systems-check.md)).
 - [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](../later.md#workflow-cancellation).
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
+- [ ] Separate workflow-specific UI and result code from the shared screens, so each workflow plugs in through one module ([notes](../later.md#workflow-code-layout)).
 
 ## Integration and packaging
 
