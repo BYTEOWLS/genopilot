@@ -89,6 +89,8 @@ function previousRunFormValues(configuration: ReferenceConsensusConfiguration): 
     isolates: selected_isolates.join(','),
     'voting-method': configuration.consensus.voting_method,
     'include-backbone-vote': configuration.consensus.include_backbone_vote ? 'yes' : 'no',
+    'min-callable-isolates': String(configuration.consensus.min_callable_isolates),
+    'unresolved-snp': configuration.consensus.unresolved_snp,
     'min-depth': String(configuration.calling.min_depth),
     'min-mapping-quality': String(configuration.calling.min_mapping_quality),
     'min-base-quality': String(configuration.calling.min_base_quality),
@@ -118,6 +120,8 @@ function draftFromValues(values: WorkflowFormValues, currentDirectory: string): 
     isolateIds: parseIsolateSelection(values.isolates ?? ''),
     votingMethod: values['voting-method'] === 'plurality' ? 'plurality' : 'strict-majority',
     includeBackboneVote: values['include-backbone-vote'] !== 'no',
+    minCallableIsolates: values['min-callable-isolates'] ?? '',
+    unresolvedSnp: values['unresolved-snp'] === 'iupac' ? 'iupac' : 'n',
     minDepth: values['min-depth'] ?? '',
     minMappingQuality: values['min-mapping-quality'] ?? '',
     minBaseQuality: values['min-base-quality'] ?? '',
@@ -236,6 +240,7 @@ const votingExamples: readonly (readonly string[])[] = [
 function votingSection(configuration: ReferenceConsensusConfiguration): ReviewSection {
   const method = configuration.consensus.voting_method;
   const includeBackbone = configuration.consensus.include_backbone_vote;
+  const minimum = configuration.consensus.min_callable_isolates;
   return {
     id: 'voting',
     title: 'Voting',
@@ -246,6 +251,19 @@ function votingSection(configuration: ReferenceConsensusConfiguration): ReviewSe
         value: includeBackbone
           ? 'The backbone casts one vote; each callable isolate casts one. Uncallable isolates do not vote.'
           : 'Only callable isolates vote; the backbone supplies the coordinates.',
+      },
+      {
+        label: 'Minimum',
+        value: minimum === 0
+          ? 'No minimum of callable isolates; a position without any vote is written as N.'
+          : `A position needs ${String(minimum)} voting isolate${minimum === 1 ? '' : 's'}; below that it is written as N.`,
+      },
+      {
+        label: 'Unresolved',
+        value: (configuration.consensus.unresolved_snp === 'iupac'
+          ? 'An unresolved SNP is written as the IUPAC code of its voted alleles (A or G is R); '
+          : 'An unresolved SNP is written as N; ') +
+          'an unresolved indel as N over its backbone span.',
       },
       ...votingExamples.map((votes, index) => ({
         label: `Example ${String(index + 1)}`,

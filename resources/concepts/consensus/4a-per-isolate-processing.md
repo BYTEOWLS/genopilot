@@ -4,6 +4,8 @@
 
 Implement the first executable scientific target: independently validate and process every selected isolate against the resolved backbone, preserve auditable intermediate results, and make each validated isolate FASTA eligible for explicit promotion into its isolate catalog entry.
 
+The science behind reads, alignment, duplicates, callability, and variants is explained for researchers in the [workflow README](../../../workflows/reference-consensus/README.md); the tools considered instead are in the [science background](science-background.md).
+
 ## Kickoff decisions
 
 - **Toolchain.** fastp for read QC and light adapter trimming, `bwa mem` for alignment, samtools for fixmate, sorting, merging, duplicate marking, statistics, and FASTA indexes, and bcftools for calling, filtering, normalization, and the consensus. All four share one pinned environment, `workflows/reference-consensus/envs/short-read-calling/`, with exact versions that have bioconda builds for linux-64 and osx-arm64.

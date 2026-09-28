@@ -14,7 +14,7 @@ Keep the package independent of private research data, machine-specific paths, a
 - `tests/fixtures/` — small synthetic, redistributable FASTA/GFF3 fixtures with known expected results.
 - [`resources/tasks.md`](resources/tasks.md) — open work as checkboxes, in execution order.
 - [`later.md`](later.md) — deferred and optional ideas.
-- `resources/concepts/` — design notes; `done/` holds implemented designs.
+- `resources/concepts/` — design notes; `done/` holds implemented designs. A concept directory may hold a `science-background.md` with design-time research, such as the tools considered; the science researchers need, with tool references, belongs in the workflow README.
 
 ## Architecture boundaries
 

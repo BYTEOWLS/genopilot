@@ -54,7 +54,10 @@ stages:
     rules: [aggregate_support]
   - id: generate-consensus
     label: Generate consensus
-    description: Select the cohort allele at each position with the configured voting method.
+    description: >
+      Select the cohort allele at each position with the configured voting method and record every
+      selected and unresolved site.
+    rules: [generate_consensus]
   - id: record-provenance
     label: Record provenance
     description: Checksums, tool versions, and commands of the whole run.
@@ -91,6 +94,28 @@ artifacts:
     path: results/cohort/initial/support-summary.json
     type: json
     produced_by: aggregate-support
+  - id: cohort-consensus
+    label: Cohort consensus FASTA
+    description: >
+      The backbone with the winning allele at every locus; unresolved positions are N, or an IUPAC
+      code for an unresolved SNP when configured.
+    path: results/cohort/initial/consensus.fasta
+    type: fasta
+    produced_by: generate-consensus
+  - id: consensus-sites
+    label: Consensus sites
+    description: >
+      Every locus with its decision, reason, and the sequence written, and every run of unresolved
+      bases outside the loci.
+    path: results/cohort/initial/consensus-sites.tsv.gz
+    type: tsv
+    produced_by: generate-consensus
+  - id: consensus-summary
+    label: Consensus summary
+    description: Policies, input checksums, loci by decision and reason, and bases per representation.
+    path: results/cohort/initial/consensus-summary.json
+    type: json
+    produced_by: generate-consensus
   - id: artifact-index
     label: Artifact index
     description: Checksummed records of the backbone, every isolate's results, logs, and benchmarks.

@@ -66,7 +66,11 @@ Supporting such reads needs its own design: where the read group comes from (for
 
 Reference-consensus writes only `A`, `C`, `G`, `T`, and `N` into `results/isolates/{isolate}/consensus.fasta` (consensus Task 4.1). An ambiguous position (enough reads, but no allele reaching `min_allele_fraction`) and an uncallable position (too few reads) both become `N`, so the FASTA alone loses that distinction and the competing alleles: a biallelic SNP with `A=55%, G=45%` could be written as `R`. The run keeps this evidence in `all-sites.bcf` (per-allele depth) and `callable-mask.bed` (the reason for every `N`), and cohort aggregation reads those rather than the FASTA, so nothing is lost for voting. The gap only affects someone who uses the isolate FASTA on its own.
 
-Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. Making the representation a configuration option would change the saved configuration schema. Decide together with the IUPAC rendering of the cohort consensus in [Task 4.3](resources/concepts/consensus/4c-combined-consensus-generation.md).
+Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. The cohort consensus already lets the researcher choose `N` or IUPAC codes for unresolved SNPs ([Task 4.3](concepts/consensus/4c-combined-consensus-generation.md#kickoff-decisions)); an isolate FASTA option would follow the same rule.
+
+## Consensus chain file
+
+The cohort consensus FASTA is shorter or longer than the backbone wherever a deletion or insertion won (consensus Task 4.3). Its sites table gives every locus's backbone and consensus span, which is enough to relate the two by hand. A chain file, like the isolate FASTA's `consensus.chain`, would let tools such as liftover tools map any backbone coordinate or annotation onto the consensus. Add it when a downstream step needs coordinate mapping that LiftOn's own alignment does not provide.
 
 ## Advanced LiftOn controls
 

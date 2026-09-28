@@ -105,6 +105,8 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.assertIn("rule aggregate_support:", result.stdout)
         for isolate in ("iso-a", "iso-b"):
             self.assertIn(f"--voter {isolate} results/isolates/{isolate}/variants.vcf.gz", result.stdout)
+        self.assertIn("rule generate_consensus:", result.stdout)
+        self.assertIn("--voting-method strict-majority --min-callable-isolates 0 --unresolved-snp n", result.stdout)
 
     def test_refuses_to_schedule_a_run_whose_read_file_is_missing(self) -> None:
         reads_dir = self.root / "copied"

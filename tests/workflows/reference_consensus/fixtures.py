@@ -66,7 +66,12 @@ def write_run(
             "selected_isolates": [isolate["id"] for isolate in isolates],
         },
         "calling": {**DEFAULT_CALLING, **(calling or {})},
-        "consensus": {"include_backbone_vote": True, "voting_method": "strict-majority"},
+        "consensus": {
+            "include_backbone_vote": True,
+            "voting_method": "strict-majority",
+            "min_callable_isolates": 0,
+            "unresolved_snp": "n",
+        },
         "resources": {"cpu_mode": "automatic", "effective_cpus": effective_cpus},
         "run": {
             "output_root": str(run_dir.parent),

@@ -2,7 +2,7 @@
 
 Builds one consensus genome from the paired Illumina reads of many isolates. Every isolate's reads are called against one backbone assembly. The isolates' alleles, and optionally the backbone's, then vote at each position, and the winning allele by strict majority or plurality forms the cohort consensus.
 
-Status: per-isolate processing and cohort support aggregation are implemented. Every isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA, and the votes of the backbone and the callable isolates are counted at every backbone position. Consensus generation, which picks the winning allele, is not implemented yet.
+Status: the initial cohort consensus is implemented. Every isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA. The votes of the backbone and the callable isolates are counted at every backbone position, and the configured voting method picks the winning allele or leaves the position unresolved. Reviewing ties and excluding isolates in a later iteration is not implemented yet.
 
 ## Inputs
 
@@ -15,15 +15,41 @@ The reads must keep their original Illumina read names, because the read groups 
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| Voting method | strict majority | Not used yet. Strict majority needs more than half of the votes cast; plurality needs the unique highest vote count. |
+| Voting method | strict majority | Strict majority needs more than half of the votes cast; plurality needs the unique highest vote count. |
 | Backbone vote | yes | Whether the backbone casts one vote next to the callable isolates. |
+| Minimum callable isolates | 0 | Voting isolates a position needs; below it the consensus writes `N`. At most the number of selected isolates. |
+| Unresolved SNPs | N | How an unresolved SNP (a tie or no majority) is written: `N`, or the IUPAC code of the alleles that received votes. |
 | Ploidy | 1 | Fixed: isolates are called haploid. |
 | Minimum read depth | 10 | Reads needed at a position, counted after the quality filters and without duplicates. |
 | Minimum mapping quality | 20 | Reads mapped with a lower quality are not counted. |
 | Minimum base quality | 20 | Bases with a lower quality are not counted. |
 | Minimum allele fraction | 0.8 | Share of the counted reads the winning allele needs; above 0.5 and at most 1. |
 
-The voting method is saved with the run and takes effect once consensus generation is implemented.
+## Background
+
+This section explains the terms the rest of this page uses. Numbers in brackets, such as [1], refer to the *References* at the end.
+
+### Reads and quality
+
+Every isolate is sequenced with Illumina paired-end sequencing [1]: its DNA is broken into fragments a few hundred bases long, and each fragment is read from both ends. The two reads of a fragment land in two FASTQ files, R1 and R2 [2]. Every letter of a read carries a base quality, a Phred score for the chance that the letter is wrong [3]: 20 means 1 error in 100, and 30 means 1 in 1,000. Reads are trimmed only lightly [4] (see *Tools*).
+
+### Alignment
+
+Short reads cannot be assembled into a complete genome on their own, so each read is aligned, or mapped, to the backbone [5, 6] and stored in a BAM file [7]. The aligner reports a mapping quality: its confidence that the read belongs where it was placed. It is low when a read fits equally well in several places, as in repeats and duplicated genes, and such reads are not counted. **Depth**, or coverage, is the number of usable reads at a position. The best backbone is a telomere-to-telomere (T2T) assembly, complete from end to end and built from long reads [8].
+
+### Haploid isolates
+
+Isolates are called haploid: each has one copy of every position, so a clean isolate shows a single **allele**, one variant form of the position. Mixed reads at a position therefore point to contamination, a mixed culture, or reads of duplicated genes collapsed onto one copy, never to a heterozygous site as in a diploid organism. This is why a position with mixed reads is *ambiguous* rather than a call (see *Callability*).
+
+### Variants
+
+Variant calling lists where an isolate differs from the backbone, in a VCF file [9]:
+
+- **SNP**: one base exchanged for another;
+- **indel**: bases inserted or deleted;
+- **multiallelic site**: more than two alleles at one position across the cohort, for example backbone `C`, one isolate `A`, another `T`.
+
+The same deletion in a repeat, such as one `A` removed from `AAAA`, can be written at several positions. **Normalization** writes every variant in one canonical form: shifted as far left as possible, with one record per alternative allele [10]. The same event then looks the same in every isolate and can be counted.
 
 ## Steps
 
@@ -52,6 +78,7 @@ And for every isolate:
 Once every isolate is processed:
 
 14. **Aggregate support**: count the backbone's and the callable isolates' votes at every backbone position (see *Cohort support*).
+15. **Generate consensus**: pick the winning allele at every position with the voting method, and record every selected and unresolved site (see *Cohort consensus*).
 
 Finally, **record provenance** writes the run's artifact index and provenance record.
 
@@ -104,11 +131,11 @@ PCR duplicates arise when one library preparation is amplified, so the same libr
 
 Duplicates are therefore marked per library, using the read groups' `LB`. Each library's read pairs are merged and marked on their own, and the marked libraries are then merged into the isolate's alignment. samtools markdup alone would compare read groups, which are one per read pair, instead of libraries.
 
-Duplicates are marked, never removed, and the variant caller ignores them.
+Duplicates are marked, never removed, and the variant caller ignores them [11]. Removing them has little effect on the accuracy of the calls [12], and marking keeps the evidence in the alignment.
 
 ## Callability
 
-Every backbone base of an isolate gets one of three states. Depth is the number of reads at the position after the mapping-quality, base-quality, and duplicate filters.
+Every backbone base of an isolate gets one of three states, from the calls of bcftools [11, 13]. Depth is the number of reads at the position after the mapping-quality, base-quality, and duplicate filters.
 
 | State | Meaning |
 |---|---|
@@ -126,12 +153,12 @@ The FASTA is checked before anything depends on it: samtools must index it, its 
 
 ## The backbone's role
 
-Short reads cannot be assembled into a complete genome on their own, so every isolate is read against the backbone. The backbone supplies the coordinates, so a position such as `chr1:1100` means the same base in every isolate, and it supplies the genome's structure: its chromosomes, their order, and its repeats. A complete telomere-to-telomere (T2T) assembly, built from long reads, is the best available choice.
+Short reads cannot be assembled into a complete genome on their own, so every isolate is read against the backbone. The backbone supplies the coordinates, so a position such as `chr1:1100` means the same base in every isolate, and it supplies the genome's structure: its chromosomes, their order, and its repeats. A complete telomere-to-telomere (T2T) assembly, built from long reads, is the best available choice [8].
 
 This has known limits, which apply to every result of this workflow:
 
-- **Reference bias**: regions where an isolate differs strongly from the backbone map poorly and become uncallable, so the consensus leans towards the backbone there.
-- **Structural variation is not seen**: sequence the isolates have but the backbone lacks, such as extra genes or large insertions, and rearrangements do not appear. The consensus has the backbone's architecture with the cohort's alleles.
+- **Reference bias**: regions where an isolate differs strongly from the backbone map poorly and become uncallable, so the consensus leans towards the backbone there [14].
+- **Structural variation is not seen**: sequence the isolates have but the backbone lacks, such as extra genes or large insertions, and rearrangements do not appear. The consensus has the backbone's architecture with the cohort's alleles. Pangenome graphs are designed to represent such variation [15].
 - **Backbone-only regions**: where no isolate is callable, as in repeats, the backbone's vote is the only evidence, or there is none when the backbone does not vote.
 - **The backbone is one strain**: its vote counts like one more isolate. When the backbone's strain is also among the isolates, that strain votes twice.
 
@@ -180,6 +207,33 @@ Every voter casts at most one vote at a locus, and it votes only when every base
 | `unsupported` | an isolate's variants could not be applied, for example its own variants overlap or its allele is not written in `A`, `C`, `G`, and `T`; it casts no vote. A base change and an indel at the same position, which the caller reports as two variants, are combined and supported |
 | `backbone_not_acgt` | the backbone's allele has another base than `A`, `C`, `G`, or `T`; the backbone casts no vote |
 
+## Cohort consensus
+
+The consensus counts the ballots of the support table. At every locus, and in every run of bases outside the loci, it decides in this order:
+
+1. **No votes**: nobody voted, because the backbone does not vote and no isolate is callable. The position is unresolved.
+2. **Too few callable isolates**: fewer isolates voted than the minimum of callable isolates. The position is unresolved, also when the backbone voted.
+3. **The voting method**: with strict majority, an allele wins with more than half of the votes cast; with plurality, the allele with the unique highest count wins. Otherwise the position is unresolved, as a tie when several alleles share the highest count, and as no majority otherwise.
+
+| Votes | Strict majority | Plurality |
+|---|---|---|
+| `A=6, C=4` | `A` | `A` |
+| `A=5, C=5` | unresolved (tie) | unresolved (tie) |
+| `A=4, C=3, G=3` | unresolved (no majority) | `A` |
+| `A=4, C=4, G=2` | unresolved (tie) | unresolved (tie) |
+
+A winning allele replaces the locus's whole backbone span. When a deletion wins, the consensus becomes shorter, and when an insertion wins, longer, so a position in the consensus can differ from the same position in the backbone. The consensus sites table lists both coordinates.
+
+An unresolved position never becomes a concrete base:
+
+- **An unresolved SNP**, where every allele that received a vote is one base, is written as `N`, or as the IUPAC ambiguity code of those alleles [16] when *Unresolved SNPs* is set so. For example, `A=5, G=5` becomes `R` (`A` or `G`), and `A=4, C=3, G=3` becomes `V` (`A`, `C`, or `G`). Some tools and submission checks do not accept every IUPAC code, so `N` is the default.
+- **An unresolved indel** is always written as `N` for every backbone base of the locus, because no IUPAC code can say "`ATCCT` or `A`". The consensus therefore keeps the backbone's length there. For example, in the locus of *Overlapping variants* (backbone `ATCCT` at `chr1:2200–2204`), when the backbone does not vote, the three isolates vote `A`, `ATCCT`, and `ATGCT` once each, and the consensus holds `NNNNN` there.
+- **Positions without enough votes** are written as `N` for every base.
+
+A base where only the backbone voted keeps the backbone base when the minimum of callable isolates is 0. Such bases, for example in repeats no isolate can be called in, are counted as *backbone only* in the summary. With a minimum of 1 or more, they become `N` instead. A backbone base that is not `A`, `C`, `G`, or `T`, such as `N` in an assembly gap, stays `N`. Lowercase soft-masking is dropped, as in the isolate FASTA.
+
+The result is a cohort consensus: the backbone's structure with the cohort's most supported alleles. It can combine alleles that no single isolate carries together. It is not the genome of one individual and not an assembly.
+
 ## Outputs
 
 Paths are inside the run directory. Positions in the support tables are 1-based and inclusive, like in a VCF.
@@ -205,6 +259,9 @@ Paths are inside the run directory. Positions in the support tables are 1-based 
 | `results/cohort/initial/support-sites.tsv.gz` | one row per variant locus: the backbone allele and its vote, the alleles and their votes, flags, and every isolate's allele or state; indexed with tabix |
 | `results/cohort/initial/support-intervals.tsv.gz` | every backbone base in runs with the same voters: the backbone vote, the number of callable, ambiguous, and uncallable isolates, and every isolate's state as one letter (`c` callable, `a` ambiguous, `u` uncallable) in the order of the `## isolates:` header line, so `cau` means the first isolate is callable, the second ambiguous, and the third uncallable; inside a locus, the sites table is authoritative; indexed with tabix |
 | `results/cohort/initial/support-summary.json` | voters, the backbone vote, input checksums, bases by number of votes, loci per flag, the allele frequency spectrum, and per-isolate counts |
+| `results/cohort/initial/consensus.fasta` | the cohort consensus, with the backbone's sequence names and order, and its index |
+| `results/cohort/initial/consensus-sites.tsv.gz` | one row per locus of the support table with its decision (`selected` or `unresolved`), reason (`tie`, `no_majority`, `no_votes`, `few_callable`), selected allele, the sequence written, its span in the backbone and in the consensus, votes, and flags; and one row per run of unresolved bases outside the loci (`kind` `region`), which are `N` throughout; indexed with tabix |
+| `results/cohort/initial/consensus-summary.json` | the voting method, the minimum, the SNP representation, voters, checksums of the inputs and the FASTA, sequence lengths, loci by decision and reason (also per support flag and by total votes), and bases written from the backbone alone, as IUPAC codes, and as `N` per reason |
 | `artifacts.yaml` | every artifact of the run with its checksum and origin |
 | `provenance/run.json` | configuration, inputs, tool versions, and commands of the whole run |
 | `logs/` | the log and benchmark of every step |
@@ -213,13 +270,47 @@ Trimmed reads and per-pair alignments are temporary: the isolate's alignment kee
 
 ## Tools
 
-All steps run in one pinned environment: fastp 1.3.7, bwa 0.7.19, samtools 1.24, bcftools 1.24, and htslib 1.24.
+Every scientific step runs in one pinned environment; Snakemake schedules the steps.
+
+| Tool | Version | Role | Reference |
+|---|---|---|---|
+| Snakemake | 9.26.1 | scheduling, per-step environments, reruns | [17] |
+| fastp | 1.3.7 | read QC and light adapter trimming | [4] |
+| bwa mem | 0.7.19 | read alignment | [5, 6] |
+| samtools | 1.24 | sorting, duplicate marking, alignment statistics, FASTA indexes | [7, 11] |
+| bcftools | 1.24 | pileup, haploid calling, normalization, isolate FASTA | [11, 13] |
+| htslib (bgzip, tabix) | 1.24 | compressed, indexed support and consensus tables | [11, 18] |
+
+Callability, cohort support, and consensus generation are small scripts that read these tools' outputs.
+
+Publications that use this workflow's results should cite the tools above, next to the GenoPilot version that produced them.
 
 Every option that changes a result is set explicitly rather than left to a tool default:
 
 - **fastp**: adapters detected for paired-end reads; quality filtering off, because the aligner soft-clips and the caller weighs base qualities; reads shorter than 30 bp dropped; poly-G tails of at least 10 bases trimmed on every instrument.
 - **bwa mem**: a fixed batch size, so alignments do not depend on the number of threads.
 - **bcftools mpileup**: maximum depth 10000; unmapped, secondary, QC-failed, and duplicate reads skipped; indel candidates need at least 2 reads and a 5% share. Base-alignment quality stays at the pinned default, which the recorded command and version document.
-- **bgzip and tabix** (HTSlib): compress and index the support tables.
+- **bgzip and tabix** (HTSlib): compress and index the support and consensus tables.
 
 Trimmed input runs through the same steps, which then change little. Untrimmed input is preferred, because aggressive provider trimming mostly discards data the aligner and caller could use. Whether an isolate's reads were trimmed is recorded in its metrics and provenance.
+
+## References
+
+1. Bentley DR, et al. Accurate whole human genome sequencing using reversible terminator chemistry. Nature 456:53–59 (2008). doi:10.1038/nature07517
+2. Cock PJA, Fields CJ, Goto N, Heuer ML, Rice PM. The Sanger FASTQ file format for sequences with quality scores, and the Solexa/Illumina FASTQ variants. Nucleic Acids Res 38:1767–1771 (2010). doi:10.1093/nar/gkp1137
+3. Ewing B, Green P. Base-calling of automated sequencer traces using Phred. II. Error probabilities. Genome Res 8:186–194 (1998). doi:10.1101/gr.8.3.186
+4. Chen S, Zhou Y, Chen Y, Gu J. fastp: an ultra-fast all-in-one FASTQ preprocessor. Bioinformatics 34:i884–i890 (2018). doi:10.1093/bioinformatics/bty560
+5. Li H, Durbin R. Fast and accurate short read alignment with Burrows–Wheeler transform. Bioinformatics 25:1754–1760 (2009). doi:10.1093/bioinformatics/btp324
+6. Li H. Aligning sequence reads, clone sequences and assembly contigs with BWA-MEM. arXiv:1303.3997 (2013).
+7. Li H, et al. The Sequence Alignment/Map format and SAMtools. Bioinformatics 25:2078–2079 (2009). doi:10.1093/bioinformatics/btp352
+8. Nurk S, et al. The complete sequence of a human genome. Science 376:44–53 (2022). doi:10.1126/science.abj6987
+9. Danecek P, et al. The variant call format and VCFtools. Bioinformatics 27:2156–2158 (2011). doi:10.1093/bioinformatics/btr330
+10. Tan A, Abecasis GR, Kang HM. Unified representation of genetic variants. Bioinformatics 31:2202–2204 (2015). doi:10.1093/bioinformatics/btv112
+11. Danecek P, et al. Twelve years of SAMtools and BCFtools. GigaScience 10:giab008 (2021). doi:10.1093/gigascience/giab008
+12. Ebbert MTW, et al. Evaluating the necessity of PCR duplicate removal from next-generation sequencing data and a comparison of approaches. BMC Bioinformatics 17(Suppl 7):239 (2016). doi:10.1186/s12859-016-1097-3
+13. Li H. A statistical framework for SNP calling, mutation discovery, association mapping and population genetical parameter estimation from sequencing data. Bioinformatics 27:2987–2993 (2011). doi:10.1093/bioinformatics/btr509
+14. Günther T, Nettelblad C. The presence and impact of reference bias on population genomic studies of prehistoric human populations. PLoS Genet 15:e1008302 (2019). doi:10.1371/journal.pgen.1008302
+15. Eizenga JM, et al. Pangenome graphs. Annu Rev Genomics Hum Genet 21:139–162 (2020). doi:10.1146/annurev-genom-120219-080406
+16. Cornish-Bowden A. Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984. Nucleic Acids Res 13:3021–3030 (1985). doi:10.1093/nar/13.9.3021
+17. Mölder F, et al. Sustainable data analysis with Snakemake. F1000Research 10:33 (2021). doi:10.12688/f1000research.29032.2
+18. Li H. Tabix: fast retrieval of sequence features from generic TAB-delimited files. Bioinformatics 27:718–719 (2011). doi:10.1093/bioinformatics/btq671

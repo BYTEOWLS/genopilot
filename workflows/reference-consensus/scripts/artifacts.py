@@ -99,6 +99,12 @@ COHORT_ARTIFACTS = [
     _artifact("support-intervals-index", f"{_COHORT}/support-intervals.tsv.gz.tbi", "index", "aggregate-support"),
     _artifact("support-summary", f"{_COHORT}/support-summary.json", "json", "aggregate-support"),
     *_log("aggregate-support", "logs/cohort/initial/aggregate-support", "aggregate-support"),
+    _artifact("cohort-consensus-fasta", f"{_COHORT}/consensus.fasta", "fasta", "generate-consensus"),
+    _artifact("cohort-consensus-fasta-index", f"{_COHORT}/consensus.fasta.fai", "index", "generate-consensus"),
+    _artifact("consensus-sites", f"{_COHORT}/consensus-sites.tsv.gz", "tsv", "generate-consensus"),
+    _artifact("consensus-sites-index", f"{_COHORT}/consensus-sites.tsv.gz.tbi", "index", "generate-consensus"),
+    _artifact("consensus-summary", f"{_COHORT}/consensus-summary.json", "json", "generate-consensus"),
+    *_log("generate-consensus", "logs/cohort/initial/generate-consensus", "generate-consensus"),
 ]
 
 

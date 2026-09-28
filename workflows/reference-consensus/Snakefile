@@ -47,11 +47,14 @@ directory, and every step writes its log to logs/):
        The backbone's and the callable isolates' votes at every position.
        -> results/cohort/initial/support-sites.tsv.gz, support-intervals.tsv.gz,
           support-summary.json
- 12. record_consensus_provenance         rules/record_provenance.smk
+ 12. generate_consensus                  rules/generate_consensus.smk
+       The winning allele at every position by the configured voting method,
+       and a record of every selected and unresolved site.
+       -> results/cohort/initial/consensus.fasta, consensus-sites.tsv.gz,
+          consensus-summary.json
+ 13. record_consensus_provenance         rules/record_provenance.smk
        Checksums, tool versions, and commands of the whole run.
        -> artifacts.yaml, provenance/run.json
-
-  Not implemented yet (listed in manifest.yaml): consensus generation.
 
 Every file a run produces is listed in scripts/artifacts.py.
 
@@ -132,6 +135,7 @@ include: str(RULES_DIR / "align_reads.smk")
 include: str(RULES_DIR / "call_variants.smk")
 include: str(RULES_DIR / "build_consensus.smk")
 include: str(RULES_DIR / "aggregate_support.smk")
+include: str(RULES_DIR / "generate_consensus.smk")
 include: str(RULES_DIR / "record_provenance.smk")
 
 
