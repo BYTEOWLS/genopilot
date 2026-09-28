@@ -3,7 +3,7 @@
 `write_run` saves a `config.yaml` and `isolates.yaml` shaped exactly like the
 ones GenoPilot saves, selecting fixture isolates by ID (see
 `tests/fixtures/reference-consensus/README.md`) plus any extra isolates a test
-builds itself.
+builds itself. `write_decision` saves a cohort decision for an iteration.
 """
 
 from __future__ import annotations
@@ -82,3 +82,32 @@ def write_run(
     config_path = run_dir / "config.yaml"
     config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
     return config_path
+
+
+def write_decision(
+    run_dir: Path,
+    iteration: int,
+    voting_isolates: list[str],
+    excluded_from_voting: list[str],
+    consensus: dict | None = None,
+) -> str:
+    """Writes decisions/iteration-<n>.yaml and returns the iteration's provenance target."""
+    decision = {
+        "schema_version": 1,
+        "iteration": iteration,
+        "voting_isolates": voting_isolates,
+        "excluded_from_voting": excluded_from_voting,
+        "consensus": {
+            "include_backbone_vote": True,
+            "voting_method": "strict-majority",
+            "min_callable_isolates": 0,
+            "unresolved_snp": "n",
+            **(consensus or {}),
+        },
+        "reason": "Test decision.",
+        "created_at": "2026-09-26T10:00:00.000Z",
+    }
+    path = run_dir / "decisions" / f"iteration-{iteration}.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(decision, indent=2) + "\n", encoding="utf-8")
+    return f"provenance/cohort/iteration-{iteration}.json"

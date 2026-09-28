@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 from ._load import WORKFLOW_DIR
-from .fixtures import FIXTURES_DIR, write_run
+from .fixtures import FIXTURES_DIR, write_decision, write_run
 
 SNAKEMAKE_BIN = shutil.which("snakemake")
 
@@ -107,6 +107,70 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
             self.assertIn(f"--voter {isolate} results/isolates/{isolate}/variants.vcf.gz", result.stdout)
         self.assertIn("rule generate_consensus:", result.stdout)
         self.assertIn("--voting-method strict-majority --min-callable-isolates 0 --unresolved-snp n", result.stdout)
+
+    def test_an_iteration_schedules_only_its_voting_isolates_and_its_decision(self) -> None:
+        config_path = write_run(self.run_dir, ["iso-a", "iso-b", "iso-c"])
+        target = write_decision(
+            self.run_dir, 2, ["iso-a", "iso-c"], ["iso-b"],
+            {"voting_method": "plurality", "include_backbone_vote": False, "min_callable_isolates": 1,
+             "unresolved_snp": "iupac"},
+        )
+        result = run_snakemake(self.run_dir, config_path, "--dry-run", "--printshellcmds", target)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        planned = result.stdout
+        for rule in ("aggregate_support", "generate_consensus", "record_iteration_provenance"):
+            self.assertIn(f"rule {rule}:", planned, rule)
+        self.assertNotIn("rule record_consensus_provenance:", planned)
+        self.assertIn("--include-backbone-vote no --voter iso-a", planned)
+        self.assertIn("--voter iso-c results/isolates/iso-c/variants.vcf.gz", planned)
+        self.assertNotIn("--voter iso-b", planned)
+        self.assertNotIn("results/isolates/iso-b/", planned)
+        self.assertIn("--voting-method plurality --min-callable-isolates 1 --unresolved-snp iupac", planned)
+        self.assertIn("results/cohort/iteration-2/support-sites.tsv", planned)
+        self.assertNotIn("results/cohort/initial/", planned)
+
+        # The run's default target is still the initial run over every selected isolate.
+        initial = run_snakemake(self.run_dir, config_path, "--dry-run", "--printshellcmds")
+        self.assertEqual(initial.returncode, 0, initial.stderr)
+        self.assertIn("--voter iso-b results/isolates/iso-b/variants.vcf.gz", initial.stdout)
+        self.assertIn("results/cohort/initial/support-sites.tsv", initial.stdout)
+        self.assertNotIn("iteration-2", initial.stdout)
+
+    def test_an_iteration_without_a_saved_decision_is_refused_by_name(self) -> None:
+        config_path = write_run(self.run_dir, ["iso-a", "iso-b"])
+        missing = run_snakemake(self.run_dir, config_path, "--dry-run", "provenance/cohort/iteration-5.json")
+        self.assertNotEqual(missing.returncode, 0)
+        self.assertIn("decisions/iteration-5.yaml does not exist", missing.stdout + missing.stderr)
+
+        # Iteration 1 is the initial cohort, never a saved decision.
+        write_decision(self.run_dir, 1, ["iso-a"], ["iso-b"])
+        first = run_snakemake(self.run_dir, config_path, "--dry-run", "provenance/cohort/iteration-1.json")
+        self.assertNotEqual(first.returncode, 0)
+        self.assertIn("MissingRuleException", first.stdout + first.stderr)
+
+    def test_an_iteration_excluding_a_failing_isolate_does_not_depend_on_it(self) -> None:
+        reads_dir = self.root / "renamed"
+        reads_dir.mkdir()
+        for mate in ("R1", "R2"):
+            (reads_dir / f"renamed_{mate}.fastq").write_text(
+                "@SRR1234567.1 1 length=4\nACGT\n+\nIIII\n", encoding="utf-8")
+        config_path = write_run(
+            self.run_dir,
+            ["iso-a"],
+            extra_isolates=[{"id": "public-reads", "read_pairs": [
+                {"r1": str(reads_dir / "renamed_R1.fastq"), "r2": str(reads_dir / "renamed_R2.fastq"),
+                 "trimmed": False},
+            ]}],
+        )
+        failing = "results/isolates/public-reads/pairs/1/read-validation.json"
+        failed = run_snakemake(self.run_dir, config_path, *self.validation_targets(failing))
+        self.assertNotEqual(failed.returncode, 0)
+
+        target = write_decision(self.run_dir, 2, ["iso-a"], ["public-reads"])
+        result = run_snakemake(self.run_dir, config_path, "--dry-run", target)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("public-reads", result.stdout)
+        self.assertTrue((self.run_dir / "logs/isolates/public-reads/pairs/1/validate-read-pair.log").is_file())
 
     def test_refuses_to_schedule_a_run_whose_read_file_is_missing(self) -> None:
         reads_dir = self.root / "copied"

@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,11 +18,25 @@ import unittest
 from pathlib import Path
 
 from ._load import WORKFLOW_DIR
-from .fixtures import EXPECTED, write_run
+from .fixtures import EXPECTED, write_decision, write_run
 
 SNAKEMAKE_BIN = shutil.which("snakemake")
 CONDA_BIN = shutil.which("conda")
 RUN_CONDA_INTEGRATION = os.environ.get("RUN_SNAKEMAKE_CONDA_INTEGRATION") == "1"
+
+
+COHORT_RULES = {"aggregate_support", "generate_consensus", "record_iteration_provenance"}
+
+
+def planned_rules(dry_run: subprocess.CompletedProcess) -> set[str]:
+    return set(re.findall(r"^rule (\w+):", dry_run.stdout, re.MULTILINE))
+
+
+def checksums(directory: Path) -> dict[str, str]:
+    return {
+        path.relative_to(directory).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(directory.rglob("*")) if path.is_file()
+    }
 
 
 def run_snakemake(run_dir: Path, conda_prefix: Path, *extra_args: str) -> subprocess.CompletedProcess:
@@ -267,6 +282,65 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
         self.assertIn("rule aggregate_support:", backbone_vote.stdout)
         for rule in ("call_all_sites", "classify_callability", "filter_normalize_variants", "build_isolate_consensus"):
             self.assertNotIn(f"rule {rule}:", backbone_vote.stdout, rule)
+
+    def test_an_iteration_reruns_only_the_cohort_and_keeps_the_initial_result(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        initial = self.run_dir / "results" / "cohort" / "initial"
+        before = checksums(initial)
+        target = write_decision(self.run_dir, 2, ["iso-a", "iso-c"], ["iso-b"], {"voting_method": "plurality"})
+
+        dry_run = run_snakemake(self.run_dir, self.conda_prefix, "--dry-run", target)
+        self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
+        self.assertEqual(planned_rules(dry_run), COHORT_RULES)
+        result = run_snakemake(self.run_dir, self.conda_prefix, target)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        self.assertEqual(checksums(initial), before)
+        summary = json.loads((self.run_dir / "results/cohort/iteration-2/consensus-summary.json")
+                             .read_text(encoding="utf-8"))
+        self.assertEqual((summary["voters"], summary["voting_method"]), (["iso-a", "iso-c"], "plurality"))
+        provenance = json.loads((self.run_dir / target).read_text(encoding="utf-8"))
+        self.assertEqual(provenance["excluded_isolates"], {"iso-b": {"processing": "completed"}})
+        self.assertTrue(provenance["initial_cohort"]["aggregated"])
+        self.assertEqual([entry["path"] for entry in provenance["artifacts"] if entry.get("status") == "missing"], [])
+        tools = provenance["tool_versions"]
+        self.assertEqual(tools["observed"]["samtools"]["version"], tools["configured"]["samtools"])
+
+        # A later decision reuses every per-isolate artifact again and leaves iteration 2 alone.
+        iteration_two = checksums(self.run_dir / "results" / "cohort" / "iteration-2")
+        later = write_decision(self.run_dir, 3, ["iso-b", "iso-c"], ["iso-a"])
+        later_dry_run = run_snakemake(self.run_dir, self.conda_prefix, "--dry-run", later)
+        self.assertEqual(later_dry_run.returncode, 0, later_dry_run.stderr)
+        self.assertEqual(planned_rules(later_dry_run), COHORT_RULES)
+        self.assertEqual(checksums(self.run_dir / "results" / "cohort" / "iteration-2"), iteration_two)
+
+    def test_excluding_a_failed_isolate_completes_the_run_without_reprocessing_the_others(self) -> None:
+        reads_dir = self.root / "renamed"
+        reads_dir.mkdir(exist_ok=True)
+        for mate in ("R1", "R2"):
+            (reads_dir / f"renamed_{mate}.fastq").write_text(
+                "@SRR1234567.1 1 length=4\nACGT\n+\nIIII\n", encoding="utf-8")
+        run_dir = self.root / "runs" / "failed-isolate"
+        write_run(run_dir, ["iso-a", "iso-b"], effective_cpus=4, extra_isolates=[{"id": "public-reads", "read_pairs": [
+            {"r1": str(reads_dir / "renamed_R1.fastq"), "r2": str(reads_dir / "renamed_R2.fastq"), "trimmed": False},
+        ]}])
+        failed = run_snakemake(run_dir, self.conda_prefix, "--keep-going")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertTrue((run_dir / "results/isolates/iso-b/promotion-candidate.json").is_file())
+        self.assertFalse((run_dir / "results/cohort/initial").exists())
+
+        target = write_decision(run_dir, 2, ["iso-a", "iso-b"], ["public-reads"])
+        dry_run = run_snakemake(run_dir, self.conda_prefix, "--dry-run", target)
+        self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
+        self.assertEqual(planned_rules(dry_run), COHORT_RULES)
+        result = run_snakemake(run_dir, self.conda_prefix, target)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        provenance = json.loads((run_dir / target).read_text(encoding="utf-8"))
+        self.assertEqual(provenance["excluded_isolates"], {"public-reads": {"processing": "incomplete"}})
+        self.assertFalse(provenance["initial_cohort"]["aggregated"])
+        self.assertTrue((run_dir / "logs/isolates/public-reads/pairs/1/validate-read-pair.log").is_file())
+        self.assertFalse((run_dir / "provenance" / "run.json").exists())
 
     def test_temporary_trimmed_reads_and_pair_alignments_are_removed(self) -> None:
         self.assertEqual(self.result.returncode, 0, self.result.stderr)

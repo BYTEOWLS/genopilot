@@ -2,7 +2,7 @@
 
 Builds one consensus genome from the paired Illumina reads of many isolates. Every isolate's reads are called against one backbone assembly. The isolates' alleles, and optionally the backbone's, then vote at each position, and the winning allele by strict majority or plurality forms the cohort consensus.
 
-Status: the initial cohort consensus is implemented. Every isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA. The votes of the backbone and the callable isolates are counted at every backbone position, and the configured voting method picks the winning allele or leaves the position unresolved. Reviewing ties and excluding isolates in a later iteration is not implemented yet.
+Status: the initial cohort consensus is implemented. Every isolate gets its alignment, callable mask, normalized variants, and reference-guided FASTA. The votes of the backbone and the callable isolates are counted at every backbone position, and the configured voting method picks the winning allele or leaves the position unresolved. A saved cohort decision reruns only the cohort steps as a new iteration, for example to exclude an isolate (see *Iterations*); GenoPilot does not yet offer a screen to review ties and save such a decision.
 
 ## Inputs
 
@@ -234,6 +234,22 @@ A base where only the backbone voted keeps the backbone base when the minimum of
 
 The result is a cohort consensus: the backbone's structure with the cohort's most supported alleles. It can combine alleles that no single isolate carries together. It is not the genome of one individual and not an assembly.
 
+## Iterations
+
+After a run, the researcher may decide that an isolate should not vote, for example because its coverage turned out too low, or that another voting method fits better. Such a change touches only the cohort steps, so it is made in the same run directory as a new iteration instead of a new run, and no isolate is aligned or called again. The first cohort, in `results/cohort/initial/`, is iteration 1 and stays unchanged, as does every later iteration.
+
+A decision is saved as `decisions/iteration-<n>.yaml`, numbered from 2, and names:
+
+- the isolates that vote and the isolates excluded from voting, which together are the run's selected isolates; at least one isolate votes;
+- the four cohort settings: the voting method, the backbone vote, the minimum of callable isolates (at most the number of voting isolates), and the representation of unresolved SNPs;
+- the reason for the decision and when it was made.
+
+Excluding an isolate applies to the whole genome, never to single positions. Wild-type status and lineage can inform the decision but never make it. A change to the calling thresholds, the backbone, or the reads still needs a new run, because every isolate's results depend on them.
+
+The iteration runs by asking Snakemake for its provenance record, `provenance/cohort/iteration-<n>.json`. It aggregates the support of the voting isolates only, generates the consensus with the decision's settings, and records the result, all in `results/cohort/iteration-<n>/`, with the same files as the first cohort. Run it as a dry run first: it must plan only `aggregate_support`, `generate_consensus`, and `record_iteration_provenance`. If it plans more, the per-isolate results are out of date, for example after an update of the workflow, and the change needs a new run.
+
+**An isolate that failed**, for example because its reads are unusable, stops the first cohort, so the run cannot complete. When the failure cannot be fixed, a decision that excludes it creates the first cohort as iteration 2, from the other isolates' existing results. The failed isolate's logs and partial results stay in place, and the iteration's provenance records it as excluded and `incomplete`, and that the first cohort was never aggregated.
+
 ## Outputs
 
 Paths are inside the run directory. Positions in the support tables are 1-based and inclusive, like in a VCF.
@@ -262,8 +278,11 @@ Paths are inside the run directory. Positions in the support tables are 1-based 
 | `results/cohort/initial/consensus.fasta` | the cohort consensus, with the backbone's sequence names and order, and its index |
 | `results/cohort/initial/consensus-sites.tsv.gz` | one row per locus of the support table with its decision (`selected` or `unresolved`), reason (`tie`, `no_majority`, `no_votes`, `few_callable`), selected allele, the sequence written, its span in the backbone and in the consensus, votes, and flags; and one row per run of unresolved bases outside the loci (`kind` `region`), which are `N` throughout; indexed with tabix |
 | `results/cohort/initial/consensus-summary.json` | the voting method, the minimum, the SNP representation, voters, checksums of the inputs and the FASTA, sequence lengths, loci by decision and reason (also per support flag and by total votes), and bases written from the backbone alone, as IUPAC codes, and as `N` per reason |
+| `decisions/iteration-<n>.yaml` | a saved cohort decision (see *Iterations*) |
+| `results/cohort/iteration-<n>/` | the support tables, consensus, and summaries of iteration `n`, with the same files as `results/cohort/initial/` |
+| `provenance/cohort/iteration-<n>.json` | the decision's checksum, the voting isolates with the checksums of what they voted with, every excluded isolate as `completed` or `incomplete`, whether the first cohort was aggregated, the iteration's checksummed outputs, and its commands |
 | `artifacts.yaml` | every artifact of the run with its checksum and origin |
-| `provenance/run.json` | configuration, inputs, tool versions, and commands of the whole run |
+| `provenance/run.json` | configuration, inputs, tool versions, and commands of the whole run; with `artifacts.yaml`, the record of the first cohort |
 | `logs/` | the log and benchmark of every step |
 
 Trimmed reads and per-pair alignments are temporary: the isolate's alignment keeps every read, and the fastp reports record what trimming did.

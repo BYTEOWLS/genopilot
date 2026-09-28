@@ -58,6 +58,19 @@ directory, and every step writes its log to logs/):
 
 Every file a run produces is listed in scripts/artifacts.py.
 
+Iterations: steps 11 and 12 also run for a saved cohort decision,
+decisions/iteration-<n>.yaml (n from 2 on), which names the voting isolates
+and every cohort setting. Its outputs go to results/cohort/iteration-<n>/,
+beside the untouched initial ones, and
+
+ 14. record_iteration_provenance         rules/record_provenance.smk
+       The decision, the excluded isolates, checksums, and commands of the
+       iteration.
+       -> provenance/cohort/iteration-<n>.json
+
+An iteration depends only on its voting isolates, so an excluded isolate,
+also one that failed, does not stop it.
+
 The isolates and their read files come from isolates.yaml, a snapshot of the
 isolate catalog that GenoPilot saved next to config.yaml when the run was
 created, so later catalog edits never change an existing run.
@@ -72,12 +85,17 @@ into a new run directory. The same run can then be started directly with
 `--keep-going` lets the other isolates finish when one fails; the cohort
 steps then do not run. Their results are kept, so every failure shows up in
 one pass and the next attempt in the same run directory redoes only what is
-missing. Commands are
+missing. An iteration runs by asking for its provenance as the target:
+
+  snakemake ... provenance/cohort/iteration-<n>.json
+
+Dry-run it first: it must schedule only the three cohort steps. Commands are
 recorded in provenance/run.json only when the run also uses GenoPilot's run
 events logger (see the GenoPilot README).
 
-The workflow trusts config.yaml and isolates.yaml as GenoPilot saved them and
-does not check them again; do not edit them or the packaged workflow.
+The workflow trusts config.yaml, isolates.yaml, and the decisions as GenoPilot
+saved them and does not check them again; do not edit them or the packaged
+workflow.
 """
 
 import shlex
@@ -85,6 +103,7 @@ import sys
 from pathlib import Path
 
 import yaml
+from snakemake.exceptions import WorkflowError
 
 configfile: "config.yaml"
 
@@ -111,10 +130,12 @@ ISOLATES_BY_ID = {isolate["id"]: isolate for isolate in ISOLATES}
 # Every output a finished run must have, from the artifact list.
 DECLARED_ARTIFACTS = [entry["path"] for entry in run_artifacts(ISOLATES) if entry["declared"]]
 
-# Isolate IDs follow the catalog's ID format; read pairs are numbered from 1.
+# Isolate IDs follow the catalog's ID format; read pairs are numbered from 1; a cohort is the
+# initial one (iteration 1) or an iteration of a saved decision, numbered from 2.
 wildcard_constraints:
     isolate="[a-z][a-z0-9]*(?:-[a-z0-9]+)*",
     pair="[1-9][0-9]*",
+    cohort="initial|iteration-(?:[2-9]|[1-9][0-9]+)",
 
 
 def read_pair_of(wildcards):
@@ -125,6 +146,24 @@ def read_pair_of(wildcards):
 def pair_numbers(isolate_id):
     """The 1-based numbers of an isolate's read pairs, in snapshot order."""
     return range(1, len(ISOLATES_BY_ID[isolate_id]["read_pairs"]) + 1)
+
+
+def decision_path(cohort):
+    """The saved decision of an iteration; the initial cohort has none."""
+    return [] if cohort == "initial" else [f"decisions/{cohort}.yaml"]
+
+
+def cohort_settings(cohort):
+    """The voting isolates and consensus settings of a cohort: the configuration's for the initial
+    one, the saved decision's for an iteration."""
+    if cohort == "initial":
+        return config["inputs"]["selected_isolates"], config["consensus"]
+    path = Path(f"decisions/{cohort}.yaml")
+    if not path.is_file():
+        raise WorkflowError(f"{cohort} has no saved decision: {path} does not exist in the run directory")
+    with path.open(encoding="utf-8") as decision_file:
+        decision = yaml.safe_load(decision_file)
+    return decision["voting_isolates"], decision["consensus"]
 
 
 # The steps, in the order they run; see the list at the top of this file.
