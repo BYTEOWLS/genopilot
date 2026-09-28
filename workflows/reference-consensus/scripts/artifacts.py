@@ -91,6 +91,17 @@ ISOLATE_SUMMARY_ARTIFACTS = [
 ]
 
 
+_COHORT = "results/cohort/initial"
+COHORT_ARTIFACTS = [
+    _artifact("support-sites", f"{_COHORT}/support-sites.tsv.gz", "tsv", "aggregate-support"),
+    _artifact("support-sites-index", f"{_COHORT}/support-sites.tsv.gz.tbi", "index", "aggregate-support"),
+    _artifact("support-intervals", f"{_COHORT}/support-intervals.tsv.gz", "tsv", "aggregate-support"),
+    _artifact("support-intervals-index", f"{_COHORT}/support-intervals.tsv.gz.tbi", "index", "aggregate-support"),
+    _artifact("support-summary", f"{_COHORT}/support-summary.json", "json", "aggregate-support"),
+    *_log("aggregate-support", "logs/cohort/initial/aggregate-support", "aggregate-support"),
+]
+
+
 def _expand(entry: dict, **wildcards) -> dict:
     return {**entry, "path": entry["path"].format(**wildcards), **wildcards}
 
@@ -106,10 +117,12 @@ def isolate_artifacts(isolate: dict, include_summary: bool = True) -> list[dict]
 
 
 def run_artifacts(isolates: list[dict]) -> list[dict]:
-    """Every artifact of a run over the snapshot's isolates, in snapshot order."""
-    return [dict(entry) for entry in RUN_ARTIFACTS] + [
-        entry for isolate in isolates for entry in isolate_artifacts(isolate)
-    ]
+    """Every artifact of a run over the snapshot's isolates, in snapshot order, then the cohort's."""
+    return (
+        [dict(entry) for entry in RUN_ARTIFACTS]
+        + [entry for isolate in isolates for entry in isolate_artifacts(isolate)]
+        + [dict(entry) for entry in COHORT_ARTIFACTS]
+    )
 
 
 def sha256_file(path: Path) -> str:

@@ -20,7 +20,7 @@ Examples:
 | `A=4, C=3, G=3` | unresolved | `A` |
 | `A=4, C=4, G=2` | unresolved | unresolved |
 
-Both methods operate on votes already filtered by Task 4.2. There is no coverage weighting, and the backbone has weight one when `consensus.include_backbone_vote` is true and casts no vote otherwise. Define how a position without any vote is represented, which can happen only when the backbone does not vote.
+Both methods operate on votes already filtered by Task 4.2. There is no coverage weighting, and the backbone has weight one when `consensus.include_backbone_vote` is true and casts no vote otherwise. Define how a position without any vote is represented, which can happen only where the backbone does not vote: when its vote is off, or where its own base is not `A/C/G/T`. Task 4.2's votes at a locus are for whole alleles of the locus's span, so a winning allele replaces the whole span, and a tied locus is unresolved as a whole.
 
 ## Consensus and diagnostics
 

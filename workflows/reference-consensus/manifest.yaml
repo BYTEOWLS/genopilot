@@ -3,11 +3,10 @@ workflow_version: 1
 id: reference-consensus
 label: Build a reference-guided cohort consensus
 description: >
-  Call every selected isolate's paired reads against one backbone assembly, combine the callable
-  isolate alleles with an optional backbone vote, and build a cohort consensus by strict majority
-  or plurality. Per-isolate processing is implemented: every isolate gets its alignment, callable
-  mask, normalized variants, and reference-guided FASTA. Cohort aggregation and consensus
-  generation are not implemented yet.
+  Build one consensus genome for a cohort of isolates from their paired Illumina reads. Each
+  isolate is compared with a backbone assembly and gets its own genome; the isolates, and
+  optionally the backbone, then vote at every position for the cohort consensus. Uncertain and
+  tied positions are reported for review.
 entry_snakefile: Snakefile
 parameter-definitions: manifest.parameters.yaml
 stages:
@@ -52,6 +51,7 @@ stages:
   - id: aggregate-support
     label: Aggregate cohort support
     description: Combine the backbone and callable isolate votes into a per-position support table.
+    rules: [aggregate_support]
   - id: generate-consensus
     label: Generate consensus
     description: Select the cohort allele at each position with the configured voting method.
@@ -71,6 +71,26 @@ artifacts:
     path: results/input-validation.json
     type: json
     produced_by: validate-inputs
+  - id: support-sites
+    label: Support table (sites)
+    description: >
+      One row per variant locus: the backbone allele, every voted allele with its votes, flags, and
+      each isolate's allele or state.
+    path: results/cohort/initial/support-sites.tsv.gz
+    type: tsv
+    produced_by: aggregate-support
+  - id: support-intervals
+    label: Support table (intervals)
+    description: Every backbone base in runs of constant votes, with every isolate's callability state.
+    path: results/cohort/initial/support-intervals.tsv.gz
+    type: tsv
+    produced_by: aggregate-support
+  - id: support-summary
+    label: Support summary
+    description: Vote and callability histograms, site counts per flag, and per-isolate counts.
+    path: results/cohort/initial/support-summary.json
+    type: json
+    produced_by: aggregate-support
   - id: artifact-index
     label: Artifact index
     description: Checksummed records of the backbone, every isolate's results, logs, and benchmarks.

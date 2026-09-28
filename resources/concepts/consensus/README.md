@@ -31,7 +31,7 @@ These are already implemented by the annotation-transfer work and should be reus
 - [x] 2. [Manage accessions](2-manage-accessions.md)
 - [x] 3. [Workflow configuration and review](3-workflow-configuration-and-review.md)
 - [x] 4.1. [Per-isolate processing](4a-per-isolate-processing.md)
-- [ ] 4.2. [Cohort support aggregation](4b-cohort-support-aggregation.md)
+- [x] 4.2. [Cohort support aggregation](4b-cohort-support-aggregation.md)
 - [ ] 4.3. [Combined consensus generation](4c-combined-consensus-generation.md)
 - [ ] 5. [Results and post-processing](5-results-and-post-processing.md)
 

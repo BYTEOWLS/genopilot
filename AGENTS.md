@@ -76,6 +76,7 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Do not add speculative fields, abstractions, extension points, or execution behavior merely because they might become useful later.
 - Keep the active task small. Move ideas that are not needed for the current task to [`later.md`](later.md).
 - Prefer a deliberate later schema or interface revision over premature complexity, while preserving explicit versioning and migration boundaries where persisted data requires them.
+- Treat performance as a non-functional requirement: runs should fit a time, disk, and memory budget a researcher can plan for, also on slower machines. Measure before optimizing, and avoid work that grows with the square of the cohort or genome where a linear approach is as simple. A deep performance review is deferred ([`later.md`](later.md#performance-review)).
 
 ## Package and documentation
 
