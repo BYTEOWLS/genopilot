@@ -3,7 +3,11 @@ import {PassThrough, Writable} from 'node:stream';
 import test from 'node:test';
 import React from 'react';
 import {render} from 'ink';
-import {RunResultsScreen} from '../../src/ui/run-results-screen/screen.js';
+import {RunResultsScreen, type CohortRerun} from '../../src/ui/run-results-screen/screen.js';
+import {initialCohortDraft} from '../../src/ui/run-results-screen/cohort-review.js';
+import {CohortDecisionError, type CohortDecisionDraft} from '../../src/workflows/reference-consensus/cohort-decision.js';
+import type {CohortSites} from '../../src/workflows/reference-consensus/sites.js';
+import type {SnakemakeRun} from '../../src/workflows/execution.js';
 import {
   cohortColumns,
   cohortDetailSections,
@@ -176,7 +180,14 @@ function loaded(result = consensusResult()): CompatibleReferenceConsensusResult 
   };
 }
 
-function renderScreen(options: {rows?: number; columns?: number; onBack?: () => void} = {}) {
+function renderScreen(options: {
+  rows?: number;
+  columns?: number;
+  onBack?: () => void;
+  loaded?: CompatibleReferenceConsensusResult;
+  cohortRerun?: CohortRerun;
+  readSites?: (options: {consensusSitesPath: string; supportSitesPath: string; signal?: AbortSignal}) => Promise<CohortSites>;
+} = {}) {
   const input = new TestInput();
   const output = new TestOutput();
   output.rows = options.rows ?? output.rows;
@@ -185,10 +196,12 @@ function renderScreen(options: {rows?: number; columns?: number; onBack?: () => 
     <RunResultsScreen
       runDirectory="/runs/run-a"
       manifest={manifest}
-      loaded={loaded()}
+      loaded={options.loaded ?? loaded()}
       onBack={options.onBack}
       pathExists={() => true}
       formatDateTime={value => `formatted:${value}`}
+      cohortRerun={options.cohortRerun}
+      readSites={options.readSites ?? (async () => ({voters: [], sites: []}))}
     />,
     {
       exitOnCtrlC: false,
@@ -279,7 +292,7 @@ test('shows the run files on the last tab and returns to the overview', async ()
   const screen = renderScreen();
   try {
     await settle();
-    let frame = await screen.press(TAB, TAB, TAB);
+    let frame = await screen.press(TAB, TAB, TAB, TAB);
     assert.match(frame, /isolates\.yaml/);
     assert.match(frame, /provenance\/backbone\.fasta\.json/);
     frame = await screen.press(TAB);
@@ -349,4 +362,345 @@ test('compares counts as both values and their change', () => {
   assert.deepEqual(tie.slice(0, 3), ['3', '1', '-2']);
   const selected = rows[ids.indexOf('counts.loci_selected')]!;
   assert.deepEqual(selected.slice(0, 3), ['40', '40', '0']);
+});
+
+const SPACE = ' ';
+const ARROW_RIGHT = '\x1b[C';
+
+function site(start: number, change: Partial<CohortSites['sites'][number]> = {}): CohortSites['sites'][number] {
+  return {
+    chrom: 'chr1', start, end: start, status: 'unresolved', reason: 'tie', allele: '.', backboneAllele: 'G', backboneVotes: 1,
+    alleles: ['G', 'C'], votes: [2, 2], callableIsolates: 3, totalVotes: 4, flags: ['snp'], calls: '0\t1\t1',
+    ...change,
+  };
+}
+
+const reviewedSites: CohortSites = {
+  voters: ['iso-a', 'iso-c', 'iso-d'],
+  sites: [
+    site(1111),
+    site(2222, {reason: 'no_majority', alleles: ['GAT', 'G', 'GATT'], votes: [1, 1, 1], flags: ['indel', 'competing_indel'], calls: '0\t1\tuncallable'}),
+    site(3333, {status: 'selected', reason: '.', allele: 'A', flags: ['indel', 'competing_indel']}),
+  ],
+};
+
+test('lists the reviewable loci of the selected cohort, filters them, and shows every voter', async () => {
+  const requested: string[] = [];
+  const screen = renderScreen({
+    readSites: async ({consensusSitesPath}) => {
+      requested.push(consensusSitesPath);
+      return reviewedSites;
+    },
+  });
+  /**
+   * Presses keys, then waits until the selected line matches. The output is collected over all
+   * keys, since Ink draws nothing for a key that leaves the frame unchanged.
+   */
+  const select = async (pattern: RegExp, ...keys: string[]): Promise<string> => {
+    screen.output.clearOutput();
+    for (const key of keys) {
+      screen.input.write(key);
+      await settle();
+    }
+    await waitFor(() => pattern.test(selectedLine(screen.output.readOutput()) ?? ''), `the selection matches ${String(pattern)}`);
+    return screen.output.readOutput();
+  };
+  try {
+    await settle();
+    let frame = await select(/chr1:1,111/, TAB, TAB, TAB);
+    // The active iteration is read, once.
+    assert.deepEqual(requested, ['/runs/run-a/results/cohort/iteration-2/consensus-sites']);
+    assert.doesNotMatch(frame, /chr1:2,222/);
+
+    await select(/chr1:2,222/, 'f');
+    frame = await select(/chr1:3,333/, 'f', ARROW_DOWN, ARROW_DOWN);
+    // Every unresolved locus: the tie and the one without a majority.
+    await select(/chr1:2,222/, 'f', ARROW_DOWN);
+
+    await screen.press(ENTER);
+    // The detail names every voter with its snapshot metadata and its vote or state.
+    await waitFor(() => /uncallable/.test(screen.output.readOutput()), 'the locus detail is shown');
+    frame = screen.output.readOutput();
+    assert.match(frame, /Isolate 3/);
+    assert.match(frame, /GATT/);
+    await select(/chr1:2,222/, ESCAPE);
+    assert.equal(requested.length, 1);
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('reads the sites of the cohort selected on the Iterations tab, and none without tables', async () => {
+  const requested: string[] = [];
+  const screen = renderScreen({
+    readSites: async ({consensusSitesPath}) => {
+      requested.push(consensusSitesPath);
+      return reviewedSites;
+    },
+  });
+  try {
+    await settle();
+    await screen.press(TAB, TAB, ARROW_UP, TAB);
+    await waitFor(() => requested.length === 1, 'the sites are read');
+    assert.deepEqual(requested, ['/runs/run-a/results/cohort/initial/consensus-sites']);
+  } finally {
+    screen.unmount();
+  }
+
+  const withoutTables = consensusResult();
+  withoutTables.cohorts = withoutTables.cohorts.map(value => ({...value, paths: {}}));
+  const requestedAgain: string[] = [];
+  const second = renderScreen({
+    loaded: loaded(withoutTables),
+    readSites: async ({consensusSitesPath}) => {
+      requestedAgain.push(consensusSitesPath);
+      return reviewedSites;
+    },
+  });
+  try {
+    await settle();
+    await second.press(TAB, TAB, TAB);
+    await settle();
+    assert.deepEqual(requestedAgain, []);
+  } finally {
+    second.unmount();
+  }
+});
+
+type Recorded = {
+  drafts: CohortDecisionDraft[];
+  prepared: {iteration: number; mode: string; cores: number}[];
+  executed: string[];
+  reloads: number;
+};
+
+function rerun(recorded: Recorded, change: Partial<CohortRerun> = {}): CohortRerun {
+  return {
+    snakefilePath: '/package/workflows/reference-consensus/Snakefile',
+    saveDecision: async (_directory, draft) => {
+      recorded.drafts.push(draft);
+      return 4;
+    },
+    prepareRun: ({iteration, mode, cores}) => {
+      recorded.prepared.push({iteration, mode, cores});
+      return {
+        mode,
+        command: `/managed/snakemake ${mode === 'dry-run' ? '--dry-run ' : ''}provenance/cohort/iteration-${String(iteration)}.json`,
+        executable: '/managed/snakemake',
+        arguments: [],
+        runDirectory: '/runs/run-a',
+        stdoutLogPath: `/runs/run-a/logs/cohort/iteration-${String(iteration)}/${mode}.stdout.log`,
+        stderrLogPath: `/runs/run-a/logs/cohort/iteration-${String(iteration)}/${mode}.stderr.log`,
+      } satisfies SnakemakeRun;
+    },
+    executeRun: async run => {
+      recorded.executed.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+    checkDryRun: async () => ({allowed: true}),
+    loadResult: async () => {
+      recorded.reloads += 1;
+      const result = consensusResult();
+      result.cohorts.push(cohort('iteration-4', 4));
+      result.activeCohortId = 'iteration-4';
+      return loaded(result);
+    },
+    ...change,
+  };
+}
+
+function recorder(): Recorded {
+  return {drafts: [], prepared: [], executed: [], reloads: 0};
+}
+
+async function waitFor(condition: () => boolean, description: string): Promise<void> {
+  const timeoutAt = Date.now() + 2000;
+  while (Date.now() < timeoutAt) {
+    if (condition()) {
+      return;
+    }
+    await settle(10);
+  }
+  assert.fail(`Timed out waiting until ${description}`);
+}
+
+/** Moves from the first isolate row to a later form row: isolates, then the settings, the reason, and save. */
+function down(times: number): string[] {
+  return Array.from({length: times}, () => ARROW_DOWN);
+}
+
+test('saves a reasoned exclusion with changed settings, then dry-runs and executes only the iteration', async () => {
+  const recorded = recorder();
+  const screen = renderScreen({cohortRerun: rerun(recorded)});
+  try {
+    await settle();
+    await screen.press('r');
+    // The draft starts from the active iteration: iso-b (incomplete) is excluded.
+    await screen.press(SPACE); // iso-a stops voting
+    await screen.press(ARROW_DOWN, SPACE); // iso-b cannot vote: its processing is incomplete
+    await screen.press(...down(isolateIds.length - 1)); // backbone vote
+    await screen.press(SPACE, ARROW_DOWN, ARROW_RIGHT, ARROW_DOWN); // no backbone vote, plurality → strict majority
+    await screen.press('\x7f', '2', ARROW_DOWN, SPACE, ARROW_DOWN); // minimum 2, IUPAC
+    await screen.press(...'Coverage review.'.split(''), ARROW_DOWN, ENTER);
+    await waitFor(() => recorded.drafts.length === 1, 'the decision is saved');
+
+    const draft = recorded.drafts[0]!;
+    assert.deepEqual(draft.voting_isolates, isolateIds.filter(id => id !== 'iso-a' && id !== 'iso-b'));
+    assert.deepEqual(draft.excluded_from_voting, ['iso-a', 'iso-b']);
+    assert.deepEqual(draft.consensus, {include_backbone_vote: false, voting_method: 'strict-majority', min_callable_isolates: 2, unresolved_snp: 'iupac'});
+    assert.equal(draft.reason, 'Coverage review.');
+
+    // The rerun of the saved iteration uses the run's CPUs and starts with its dry run.
+    await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
+    assert.deepEqual(recorded.prepared.slice(0, 2).map(entry => entry.iteration), [4, 4]);
+    assert.equal(recorded.prepared[0]?.cores, 3);
+    let frame = await screen.press(ENTER);
+    await waitFor(() => recorded.executed.length === 1, 'the dry run ran');
+    frame = await screen.press(ESCAPE);
+    assert.match(frame, /\/managed\/snakemake provenance\/cohort\/iteration-4\.json/);
+    await screen.press(ENTER);
+    await waitFor(() => recorded.executed.length === 2, 'the execution ran');
+    assert.deepEqual(recorded.executed, ['dry-run', 'execute']);
+
+    // Back on the results, reloaded, with the new iteration selected.
+    await settle();
+    frame = await screen.press(ESCAPE);
+    await waitFor(() => recorded.reloads === 1, 'the result is reloaded');
+    frame = await screen.press(ARROW_UP, ARROW_DOWN);
+    assert.match(selectedLine(frame) ?? '', /^.*4.*active/);
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('shows the problems of a refused decision and stays in the form', async () => {
+  const recorded = recorder();
+  const screen = renderScreen({
+    cohortRerun: rerun(recorded, {
+      saveDecision: async () => {
+        throw new CohortDecisionError([
+          {path: '$.reason', message: 'must explain the decision'},
+          {path: '$', message: 'changes nothing: iteration 2 has the same voting isolates and settings'},
+        ]);
+      },
+    }),
+  });
+  try {
+    await settle();
+    await screen.press('r');
+    await screen.press(...down(isolateIds.length + 5), ENTER);
+    await waitFor(() => /must explain the decision/.test(screen.output.readOutput()), 'the problems are shown');
+    assert.match(screen.output.readOutput(), /changes nothing/);
+    assert.equal(recorded.prepared.length, 0);
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('starts a decision without an aggregated cohort from every completed isolate, so a failed one is excluded', () => {
+  const result = consensusResult();
+  result.cohorts = [cohort('initial', 1, {state: 'not-aggregated', voters: undefined, settings: undefined, counts: undefined})];
+  delete result.activeCohortId;
+  const draft = initialCohortDraft(result, configuration);
+  assert.deepEqual(draft.voting, isolateIds.filter(id => id !== 'iso-b'));
+  assert.deepEqual(draft.settings, configuration.consensus);
+});
+
+test('keeps the execution unavailable when the dry run would recompute an isolate', async () => {
+  const recorded = recorder();
+  const screen = renderScreen({
+    cohortRerun: rerun(recorded, {
+      checkDryRun: async () => ({allowed: false, reason: 'Snakemake would also run call_all_sites (1).'}),
+    }),
+  });
+  try {
+    await settle();
+    await screen.press('r');
+    await screen.press(...down(isolateIds.length + 5), ENTER);
+    await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
+    let frame = await screen.press(ENTER);
+    await waitFor(() => recorded.executed.length === 1, 'the dry run ran');
+    await settle();
+    frame = screen.output.readOutput();
+    assert.match(frame, /call_all_sites \(1\)/);
+    await screen.press(ESCAPE, ARROW_DOWN, ENTER);
+    await waitFor(() => recorded.executed.length === 2, 'another attempt started');
+    assert.deepEqual(recorded.executed, ['dry-run', 'dry-run']);
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('continues a pending iteration from the Iterations tab', async () => {
+  const recorded = recorder();
+  const screen = renderScreen({cohortRerun: rerun(recorded)});
+  try {
+    await settle();
+    // The completed active iteration cannot be continued.
+    await screen.press(TAB, TAB, 'c');
+    assert.equal(recorded.prepared.length, 0);
+    await screen.press(ARROW_DOWN, 'c');
+    await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
+    assert.deepEqual(recorded.prepared.map(entry => entry.iteration).slice(0, 2), [3, 3]);
+    assert.equal(recorded.drafts.length, 0);
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('cancels a running iteration when its screen goes away', async () => {
+  const recorded = recorder();
+  let signal: AbortSignal | undefined;
+  const screen = renderScreen({
+    cohortRerun: rerun(recorded, {
+      executeRun: async (run, _onOutput, abort) => {
+        signal = abort;
+        await new Promise<void>(resolve => abort.addEventListener('abort', () => resolve(), {once: true}));
+        throw new Error('Snakemake dry run cancelled.');
+      },
+    }),
+  });
+  await settle();
+  await screen.press(TAB, TAB, ARROW_DOWN, 'c');
+  await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
+  await screen.press(ENTER);
+  await waitFor(() => signal !== undefined, 'the dry run started');
+  screen.unmount();
+  assert.equal(signal?.aborted, true);
+});
+
+test('offers no review or continue action without a rerun capability', async () => {
+  const screen = renderScreen();
+  try {
+    await settle();
+    const before = screen.output.readOutput();
+    const frame = await screen.press('r');
+    assert.match(frame + before, /GCF_000000001\.1/);
+    assert.doesNotMatch(frame, /\[x\]/);
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('keeps the selected isolate of the review form in view in a short terminal and after a resize', async () => {
+  const recorded = recorder();
+  const screen = renderScreen({rows: 30, columns: 120, cohortRerun: rerun(recorded)});
+  try {
+    await settle();
+    await screen.press('r');
+    let frame = await screen.press(...down(isolateIds.length - 1));
+    assert.match(selectedLine(frame) ?? '', /iso-h/);
+    assert.doesNotMatch(frame, /iso-a/);
+
+    screen.output.columns = 60;
+    screen.output.rows = 40;
+    screen.output.clearOutput();
+    screen.output.emit('resize');
+    await settle();
+    frame = screen.output.readOutput();
+    assert.match(selectedLine(frame) ?? '', /iso-h/);
+    assert.match(frame, /iso-a/);
+  } finally {
+    screen.unmount();
+  }
 });

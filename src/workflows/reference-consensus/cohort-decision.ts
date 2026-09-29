@@ -254,3 +254,27 @@ export async function saveCohortDecision(runDirectory: string, value: CohortDeci
   }
   return path;
 }
+
+/** What a researcher decides; the schema version, iteration, and time are added when it is saved. */
+export type CohortDecisionDraft = Pick<CohortDecision, 'voting_isolates' | 'excluded_from_voting' | 'consensus' | 'reason'>;
+
+/**
+ * Saves a draft as the run's next free iteration and returns that iteration. A decision another
+ * window saved in the meantime makes this fail rather than take its number.
+ */
+export async function saveNextCohortDecision(
+  runDirectory: string,
+  draft: CohortDecisionDraft,
+  now: Date = new Date(),
+): Promise<number> {
+  const saved = await listCohortDecisions(runDirectory);
+  const iteration = Math.max(1, ...saved.map(earlier => earlier.iteration)) + 1;
+  await saveCohortDecision(runDirectory, {
+    schema_version: COHORT_DECISION_SCHEMA_VERSION,
+    iteration,
+    ...draft,
+    reason: draft.reason.trim(),
+    created_at: now.toISOString(),
+  });
+  return iteration;
+}

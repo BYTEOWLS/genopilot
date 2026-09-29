@@ -81,8 +81,7 @@ workflows/
 │   ├── Snakefile
 │   ├── manifest.yaml
 │   └── manifest.parameters.yaml
-├── comparison/              Comparison workflow scaffold
-├── reference-consensus/     Cohort consensus; per-isolate processing and support aggregation so far
+├── reference-consensus/     Reference-guided cohort consensus
 │   ├── Snakefile
 │   ├── manifest.yaml
 │   ├── manifest.parameters.yaml
@@ -190,7 +189,7 @@ CI skips these tests, so run them before merging any change to a `workflows/*/en
 
 Windows support through WSL2 is planned after the core Linux and macOS implementation is complete. Native Windows execution is out of scope.
 
-Tool version validation, actionable per-tool failure diagnostics, guided installation, stale-lock recovery, and manual rechecks are implemented. A repair path for broken installations is deferred in [`later.md`](later.md).
+Tool version validation, actionable per-tool failure diagnostics, guided installation, stale-lock recovery, and manual rechecks are implemented. A repair path for broken installations is deferred in [`resources/later.md`](resources/later.md).
 
 ## Isolate catalog
 

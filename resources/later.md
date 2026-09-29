@@ -1,14 +1,23 @@
 # Deferred and optional work
 
-Ideas that are intentionally outside the current task list in [`resources/tasks.md`](resources/tasks.md). Revisit them when a concrete requirement exists.
+Ideas that are intentionally outside the current task list in [`tasks.md`](tasks.md). Revisit them when a concrete requirement exists.
 
 ## Reruns of existing runs
 
-A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](resources/concepts/reruns.md). Its release basics are tracked in consensus Tasks 5.1 and 5.3 and the task list; the rest waits for a concrete use case.
+A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](concepts/reruns.md). Its release basics are tracked in consensus Tasks 5.1 and 5.3 and the task list; the rest waits for a concrete use case.
+
+## Cohort decision preview
+
+Consensus [Task 5.3](concepts/done/consensus/5c-review-and-rerun.md) saves and runs a cohort decision without previewing it. A preview would show, before saving, how many unresolved loci and `N` bases a proposed decision creates or resolves, computed from the support tables of an aggregated cohort whose voters include every proposed voter.
+
+- It needs the voting rule of `generate_consensus.py` a second time in TypeScript; share its test cases with the Python tests so the two cannot drift.
+- It cannot be exact at a locus where a removed voter's own variant joined overlapping records of others: without that voter, the locus may split. Count such loci as "computed by the rerun" instead of guessing.
+- Turning the backbone vote on cannot be previewed from a table built without it outside the loci, where the backbone bases are not recorded.
+- The intervals table grows with the cohort, so the preview streams it on request rather than on every change.
 
 ## Performance review
 
-Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](resources/concepts/systems-check.md).
+Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](concepts/systems-check.md).
 
 A later review should start from measurements, the job benchmarks every run already writes, on real cohorts and slower machines, and consider:
 
@@ -62,7 +71,7 @@ Revisit once the reference-consensus workflow is complete (consensus tasks 4a–
 
 ## Saved annotations in the isolate catalog
 
-Builds on the saved sequences of consensus [Task 5.4](concepts/consensus/5d-saved-isolate-sequences.md).
+Builds on the [saved isolate sequences](concepts/saved-isolate-sequences.md).
 
 - **Saved sequence as a target.** Annotation transfer gains a third target source next to a local FASTA and an NCBI accession: a sequence saved in the isolate catalog. The run records the sequence's ID and checksum and resolves it like any other imported input, so it stays runnable without the TUI.
 - **Saving the GFF3.** From an annotation-transfer result whose target was a saved sequence, the transferred GFF3 can be saved back to the catalog. It belongs to that exact sequence, because its coordinates are only valid on that FASTA, so it is stored under the sequence rather than beside it:
@@ -88,7 +97,7 @@ Supporting such reads needs its own design: where the read group comes from (for
 
 Reference-consensus writes only `A`, `C`, `G`, `T`, and `N` into `results/isolates/{isolate}/consensus.fasta` (consensus Task 4.1). An ambiguous position (enough reads, but no allele reaching `min_allele_fraction`) and an uncallable position (too few reads) both become `N`, so the FASTA alone loses that distinction and the competing alleles: a biallelic SNP with `A=55%, G=45%` could be written as `R`. The run keeps this evidence in `all-sites.bcf` (per-allele depth) and `callable-mask.bed` (the reason for every `N`), and cohort aggregation reads those rather than the FASTA, so nothing is lost for voting. The gap only affects someone who uses the isolate FASTA on its own.
 
-Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. The cohort consensus already lets the researcher choose `N` or IUPAC codes for unresolved SNPs ([Task 4.3](concepts/consensus/4c-combined-consensus-generation.md#kickoff-decisions)); an isolate FASTA option would follow the same rule.
+Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. The cohort consensus already lets the researcher choose `N` or IUPAC codes for unresolved SNPs ([Task 4.3](concepts/done/consensus/4c-combined-consensus-generation.md#kickoff-decisions)); an isolate FASTA option would follow the same rule.
 
 ## Consensus chain file
 
@@ -143,7 +152,7 @@ interrupted run directory should look like when it is opened again.
 
 ### Interactive-decision manifest contract
 
-The first decision boundary, the reference-consensus cohort iterations, needed no manifest fields: a saved decision file and an explicit Snakemake target per iteration are enough ([consensus Task 5.1](concepts/consensus/5a-cohort-iterations.md)). Workflow-manifest schema version 1 therefore still contains no interactive-decision fields. Revisit this when a second workflow needs decisions and the TUI would otherwise hard-code its targets. Snakemake must remain the execution authority; the TUI must not become a second scheduler.
+The first decision boundary, the reference-consensus cohort iterations, needed no manifest fields: a saved decision file and an explicit Snakemake target per iteration are enough ([consensus Task 5.1](concepts/done/consensus/5a-cohort-iterations.md)). Workflow-manifest schema version 1 therefore still contains no interactive-decision fields. Revisit this when a second workflow needs decisions and the TUI would otherwise hard-code its targets. Snakemake must remain the execution authority; the TUI must not become a second scheduler.
 
 Potential additions after the core run/resume/presentation interface works:
 

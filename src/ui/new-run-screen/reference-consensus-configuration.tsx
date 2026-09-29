@@ -418,6 +418,7 @@ export function ReferenceConsensusConfigurationScreen({
         executeSnakemakeRun(run, onOutput as (output: WorkflowOutput) => void, signal)
       }
       resultManifest={manifest}
+      resultCohortRerun={{snakefilePath}}
       executionIsolates={prepared => prepared.snapshot.isolates.map(isolate => ({
         id: isolate.id,
         label: isolate.name,

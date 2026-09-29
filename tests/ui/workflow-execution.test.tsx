@@ -790,3 +790,130 @@ test('after a failed run, isolates finished in an earlier attempt show as done, 
   assert.match(frame, /✖ Failing again[^\n]*failed/);
   assert.match(frame, /· Never reached[^\n]*pending/);
 });
+
+function renderGatedExecution(
+  eventsPath: string,
+  executeRun: (run: WorkflowRun) => Promise<WorkflowRunResult>,
+  dryRunGate: (run: WorkflowRun) => Promise<{allowed: true} | {allowed: false; reason: string}>,
+): {input: TestInput; output: TestOutput; instance: ReturnType<typeof render>} {
+  const input = new TestInput();
+  const output = new TestOutput();
+  const instance = render(
+    <WorkflowExecutionScreen
+      configurationPath="/run/config.yaml"
+      prepareRun={mode => ({
+        mode,
+        command: `/managed/snakemake${mode === 'dry-run' ? ' --dry-run' : ''} target.json`,
+        stdoutLogPath: `/run/logs/snakemake-${mode}.stdout.log`,
+        stderrLogPath: `/run/logs/snakemake-${mode}.stderr.log`,
+        ...(mode === 'execute' ? {eventsPath} : {}),
+      })}
+      executeRun={executeRun}
+      onBack={() => {}}
+      inputActive
+      stages={stages}
+      dryRunGate={dryRunGate}
+    />,
+    {
+      exitOnCtrlC: false,
+      interactive: true,
+      patchConsole: false,
+      stdin: input as unknown as NodeJS.ReadStream,
+      stdout: output as unknown as NodeJS.WriteStream,
+    },
+  );
+  return {input, output, instance};
+}
+
+test('offers the execution only after a dry run passed the gate', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const modes: string[] = [];
+  const gated: WorkflowRun[] = [];
+  const {input, output, instance} = renderGatedExecution(
+    join(root, 'events.jsonl'),
+    async run => {
+      modes.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+    async run => {
+      gated.push(run);
+      return {allowed: true};
+    },
+  );
+  context.after(() => instance.unmount());
+
+  // Before any dry run, the arrows cannot select the execution.
+  await waitForOutput(output, value => value.includes('/managed/snakemake --dry-run target.json'));
+  input.write(ARROW_DOWN);
+  input.write(ENTER);
+  await waitUntil(() => gated.length === 1, 'the dry run is checked');
+  assert.deepEqual(modes, ['dry-run']);
+  assert.equal(gated[0]?.mode, 'dry-run');
+
+  // The passed dry run preselects the execution.
+  await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
+  input.write(ESCAPE);
+  await waitForOutput(output, value => value.includes('/managed/snakemake target.json'));
+  input.write(ENTER);
+  await waitUntil(() => modes.length === 2, 'the execution starts');
+  assert.deepEqual(modes, ['dry-run', 'execute']);
+});
+
+test('keeps the execution unavailable when the gate refuses the dry run, and shows why', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const modes: string[] = [];
+  const {input, output, instance} = renderGatedExecution(
+    join(root, 'events.jsonl'),
+    async run => {
+      modes.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+    async () => ({allowed: false, reason: 'Snakemake would also run call_all_sites (1).'}),
+  );
+  context.after(() => instance.unmount());
+
+  await waitForOutput(output, value => value.includes('Choose how to start this run'));
+  input.write(ENTER);
+  await waitForOutput(output, value => value.includes('call_all_sites (1)'));
+  output.clearOutput();
+  input.write(ESCAPE);
+  await waitForOutput(output, value => value.includes('Choose how to start this run'));
+  input.write(ARROW_DOWN);
+  input.write(ENTER);
+  await waitUntil(() => modes.length === 2, 'the second attempt starts');
+  assert.deepEqual(modes, ['dry-run', 'dry-run']);
+});
+
+test('reads only the events an execution appends, not those of earlier attempts', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  const eventsPath = join(root, 'events.jsonl');
+  // An earlier attempt failed in validation; this one must not show that failure.
+  await appendFile(eventsPath, eventLine({type: 'job-started', job_id: 1, rule: 'validate_inputs'}) +
+    eventLine({type: 'job-failed', job_id: 1, rule: 'validate_inputs', message: 'earlier attempt failed', logs: []}));
+  const {input, output, instance} = renderGatedExecution(
+    eventsPath,
+    async run => {
+      if (run.mode === 'execute') {
+        await appendFile(eventsPath, eventLine({type: 'run-info', jobs: {resolve_reference: 1}, total: 1}) +
+          eventLine({type: 'job-started', job_id: 1, rule: 'resolve_reference'}) +
+          eventLine({type: 'job-finished', job_id: 1}));
+      }
+      return {...run, exitCode: 0};
+    },
+    async () => ({allowed: true}),
+  );
+  context.after(() => instance.unmount());
+
+  await waitForOutput(output, value => value.includes('Choose how to start this run'));
+  input.write(ENTER);
+  await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
+  input.write(ESCAPE);
+  await waitForOutput(output, value => value.includes('/managed/snakemake target.json'));
+  output.clearOutput();
+  input.write(ENTER);
+  const frame = await waitForOutput(output, value => value.includes('Workflow run succeeded'));
+  assert.doesNotMatch(frame, /earlier attempt failed/);
+});

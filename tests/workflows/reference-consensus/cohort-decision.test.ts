@@ -10,6 +10,7 @@ import {
   listCohortDecisions,
   parseCohortDecision,
   saveCohortDecision,
+  saveNextCohortDecision,
   validateCohortDecision,
   writeNewFile,
   type CohortDecision,
@@ -179,4 +180,23 @@ test('never replaces a decision file that appeared after the run was checked', a
   await writeNewFile(fresh, 'new\n');
   assert.equal(await readFile(fresh, 'utf8'), 'new\n');
   assert.deepEqual((await readdir(directory)).sort(), ['iteration-2.yaml', 'iteration-3.yaml']);
+});
+
+test('saves a draft as the next free iteration, trimming its reason', async context => {
+  const directory = await runDirectory(context);
+  const draft = {
+    voting_isolates: ['isolate-a', 'isolate-c'],
+    excluded_from_voting: ['isolate-b'],
+    consensus: configuration.consensus,
+    reason: '  Excluded isolate-b after coverage review.  ',
+  };
+  assert.equal(await saveNextCohortDecision(directory, draft, new Date('2026-01-01T13:00:00.000Z')), 2);
+  const next = await saveNextCohortDecision(directory, {...draft, consensus: {...configuration.consensus, voting_method: 'plurality'}});
+  assert.equal(next, 3);
+  const saved = await listCohortDecisions(directory);
+  assert.deepEqual(saved.map(entry => entry.iteration), [2, 3]);
+  assert.equal(saved[0]?.reason, 'Excluded isolate-b after coverage review.');
+  assert.equal(saved[0]?.created_at, '2026-01-01T13:00:00.000Z');
+  // The same voters and settings again change nothing.
+  await assert.rejects(saveNextCohortDecision(directory, draft), CohortDecisionError);
 });

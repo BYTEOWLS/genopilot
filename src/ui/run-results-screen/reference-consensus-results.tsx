@@ -15,18 +15,28 @@ import {
   referenceConsensusExplanations,
   referenceConsensusTerms,
 } from '../../workflows/reference-consensus/result-help.js';
+import {
+  matchesSiteFilter,
+  siteCalls,
+  siteFilters,
+  type CohortSite,
+  type CohortSites,
+  type SiteFilter,
+} from '../../workflows/reference-consensus/sites.js';
 import type {HelpSection} from '../components/help.js';
 import {ParameterList, parameterLabelWidth, type ParameterRow} from '../components/parameter-list.js';
 import type {TabDefinition} from '../components/tabs.js';
 import {Table} from '../components/table.js';
 import {sanitizeTerminalText} from '../sanitize.js';
+import {mutedColor} from '../theme.js';
 
-export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'files';
+export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files';
 
 export const consensusTabs: readonly TabDefinition<ConsensusTabId>[] = [
   {id: 'overview', label: 'Overview'},
   {id: 'isolates', label: 'Isolates'},
   {id: 'cohorts', label: 'Iterations'},
+  {id: 'sites', label: 'Sites'},
   {id: 'files', label: 'Files'},
 ];
 
@@ -37,11 +47,40 @@ export type ConsensusView = {
   cohortIndex: number;
   /** The selected isolate's detail replaces the isolate list while open. */
   isolateDetail: boolean;
+  /** Which loci of the cohort selected on the Iterations tab the Sites tab lists. */
+  siteFilter: SiteFilter;
+  siteIndex: number;
+  /** The selected locus's detail replaces the site list while open. */
+  siteDetail: boolean;
 };
 
 export function initialConsensusView(result: ReferenceConsensusResult): ConsensusView {
   const active = result.cohorts.findIndex(cohort => cohort.id === result.activeCohortId);
-  return {tab: 'overview', isolateIndex: 0, cohortIndex: active >= 0 ? active : result.cohorts.length - 1, isolateDetail: false};
+  return {
+    tab: 'overview',
+    isolateIndex: 0,
+    cohortIndex: active >= 0 ? active : result.cohorts.length - 1,
+    isolateDetail: false,
+    siteFilter: 'tie',
+    siteIndex: 0,
+    siteDetail: false,
+  };
+}
+
+/** The loci of one cohort as the Sites tab loads them, on demand. */
+export type SitesState =
+  | {cohortId: string; state: 'loading'}
+  | {cohortId: string; state: 'ready'; sites: CohortSites}
+  | {cohortId: string; state: 'failed'; message: string};
+
+/** The support and consensus-sites tables of a cohort, when both exist. */
+export function cohortSiteTables(cohort: CohortResult | undefined): {consensusSitesPath: string; supportSitesPath: string} | undefined {
+  const consensusSites = cohort?.paths['consensus-sites'];
+  const supportSites = cohort?.paths['support-sites'];
+  if (!consensusSites?.available || !supportSites?.available) {
+    return undefined;
+  }
+  return {consensusSitesPath: consensusSites.absolutePath, supportSitesPath: supportSites.absolutePath};
 }
 
 /** Lines above the first row of a selectable table: its header and the header's rule. */
@@ -327,6 +366,185 @@ export function consensusFileSections(result: ReferenceConsensusResult): RowSect
   }];
 }
 
+export const siteFilterLabels: Record<SiteFilter, string> = {
+  tie: 'ties',
+  no_majority: 'no majority',
+  competing_indel: 'competing indels',
+  unresolved: 'all unresolved loci',
+};
+
+export const siteColumns: readonly {id: string; label: string}[] = [
+  {id: 'sites.position', label: 'Position'},
+  {id: 'sites.backbone_allele', label: 'Backbone'},
+  {id: 'sites.alleles', label: 'Alleles: votes'},
+  {id: 'sites.outcome', label: 'Outcome'},
+  {id: 'sites.flags', label: 'Flags'},
+];
+
+/** Rows of the site list longer than this show their alleles shortened; the detail shows them whole. */
+const shownAlleleLength = 12;
+
+function shortAllele(allele: string): string {
+  return allele.length > shownAlleleLength ? `${allele.slice(0, shownAlleleLength - 1)}…` : allele;
+}
+
+function position(site: CohortSite): string {
+  return site.end > site.start
+    ? `${site.chrom}:${integer(site.start)}–${integer(site.end)}`
+    : `${site.chrom}:${integer(site.start)}`;
+}
+
+function outcome(site: CohortSite): string {
+  if (site.status === 'selected') {
+    return `selected ${site.allele === site.backboneAllele ? 'backbone allele' : shortAllele(site.allele)}`;
+  }
+  return site.reason.replace('_', ' ');
+}
+
+export function filteredSites(sites: CohortSites, filter: SiteFilter): CohortSite[] {
+  return sites.sites.filter(site => matchesSiteFilter(site, filter));
+}
+
+export function siteTableRows(sites: readonly CohortSite[]): string[][] {
+  return sites.map(site => [
+    position(site),
+    shortAllele(site.backboneAllele),
+    site.alleles.map((allele, index) => `${shortAllele(allele)}: ${String(site.votes[index] ?? 0)}`).join('  '),
+    outcome(site),
+    site.flags.join(', ') || '—',
+  ]);
+}
+
+export function siteDetailSections(site: CohortSite): RowSection[] {
+  return [{
+    id: 'site',
+    title: 'Locus',
+    rows: [
+      {id: 'sites.position', label: 'Position (backbone)', value: position(site)},
+      {id: 'sites.backbone_allele', label: 'Backbone allele', value: site.backboneAllele},
+      {id: 'site.backbone_vote', label: 'Backbone voted', value: yesNo(site.backboneVotes > 0)},
+      {id: 'sites.outcome', label: 'Outcome', value: outcome(site)},
+      {id: 'site.callable', label: 'Voting isolates', value: String(site.callableIsolates)},
+      {id: 'site.total_votes', label: 'Votes cast', value: String(site.totalVotes)},
+      {id: 'sites.flags', label: 'Flags', value: site.flags.join(', ') || '—'},
+    ],
+  }];
+}
+
+export const siteAlleleColumns: readonly {id: string; label: string}[] = [
+  {id: 'site.allele', label: 'Allele'},
+  {id: 'site.allele_votes', label: 'Votes'},
+];
+
+export const siteVoterColumns: readonly {id: string; label: string}[] = [
+  {id: 'isolates.id', label: 'Isolate'},
+  {id: 'isolate.name', label: 'Name'},
+  {id: 'isolates.wildtype', label: 'Wild type'},
+  {id: 'isolates.derived_from', label: 'Derived from'},
+  {id: 'site.call', label: 'Vote'},
+];
+
+/** Every voter with its snapshot metadata and what it voted for, or why it cast no vote. */
+export function siteVoterRows(site: CohortSite, voters: readonly string[], result: ReferenceConsensusResult): string[][] {
+  return siteCalls(site, voters).map(({voter, call}) => {
+    const isolate = result.isolates.find(candidate => candidate.id === voter);
+    const index = /^[0-9]+$/.test(call) ? Number(call) : undefined;
+    let vote = `no vote: ${call}`;
+    if (index !== undefined) {
+      const allele = site.alleles[index] ?? '?';
+      vote = index === 0 ? `${allele} (backbone allele)` : allele;
+    }
+    return [
+      voter,
+      isolate?.name ?? '—',
+      isolate ? wildtype(isolate.wildtype) : '—',
+      isolate?.derivedFrom ?? '—',
+      vote,
+    ];
+  });
+}
+
+/** Lines of the Sites tab above its table: the cohort and filter line with its margin. */
+const sitesHeaderLines = 2;
+
+function SitesTab({
+  result,
+  cohort,
+  sites,
+  view,
+  visibleRows,
+}: {
+  result: ReferenceConsensusResult;
+  cohort: CohortResult | undefined;
+  sites: SitesState | undefined;
+  view: ConsensusView;
+  visibleRows: number;
+}): React.JSX.Element {
+  if (!cohort || !cohortSiteTables(cohort)) {
+    return (
+      <Text color={mutedColor} wrap="wrap">
+        {cohort
+          ? `Iteration ${cohortName(cohort)} has no support and consensus-sites tables to review. Select a completed iteration on the Iterations tab.`
+          : 'No cohort to review yet.'}
+      </Text>
+    );
+  }
+  if (!sites || sites.cohortId !== cohort.id || sites.state === 'loading') {
+    return <Text>Reading the loci of iteration {cohortName(cohort)}…</Text>;
+  }
+  if (sites.state === 'failed') {
+    return <Text color="yellow" wrap="wrap">The loci of iteration {cohortName(cohort)} cannot be read: {sanitizeTerminalText(sites.message)}</Text>;
+  }
+  const shown = filteredSites(sites.sites, view.siteFilter);
+  const selected = shown[Math.min(view.siteIndex, shown.length - 1)];
+  if (view.siteDetail && selected) {
+    return (
+      <Box flexDirection="column">
+        <Sections sections={siteDetailSections(selected)} />
+        <Box marginTop={1} flexDirection="column" flexShrink={0}>
+          <Text bold>Alleles</Text>
+          <Table
+            header={siteAlleleColumns.map(column => column.label)}
+            rows={selected.alleles.map((allele, index) => [allele, String(selected.votes[index] ?? 0)])}
+          />
+        </Box>
+        <Box marginTop={1} flexDirection="column" flexShrink={0}>
+          <Text bold>Voters</Text>
+          <Table header={siteVoterColumns.map(column => column.label)} rows={siteVoterRows(selected, sites.sites.voters, result)} />
+        </Box>
+      </Box>
+    );
+  }
+  const counts = siteFilters.map(filter => `${siteFilterLabels[filter]} ${String(filteredSites(sites.sites, filter).length)}`);
+  const rowsShown = Math.max(1, visibleRows - sitesHeaderLines - selectableTableHeaderLines - 1);
+  const first = Math.max(0, Math.min(view.siteIndex - Math.floor(rowsShown / 2), shown.length - rowsShown));
+  const window = shown.slice(first, first + rowsShown);
+  return (
+    <Box flexDirection="column">
+      <Text wrap="truncate">
+        Iteration {cohortName(cohort)} · showing <Text bold>{siteFilterLabels[view.siteFilter]}</Text>
+        <Text color={mutedColor}> ({counts.join(' · ')})</Text>
+      </Text>
+      <Box marginTop={1} flexDirection="column">
+        {shown.length === 0 ? (
+          <Text color={mutedColor}>No locus of this iteration is one of the {siteFilterLabels[view.siteFilter]}.</Text>
+        ) : (
+          <>
+            <Table
+              header={siteColumns.map(column => column.label)}
+              rows={siteTableRows(window)}
+              selectedRow={Math.min(view.siteIndex, shown.length - 1) - first}
+            />
+            {shown.length > window.length ? (
+              <Text color={mutedColor}>{'  '}loci {String(first + 1)}–{String(first + window.length)} of {String(shown.length)}</Text>
+            ) : null}
+          </>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
 /** Every item ID the view can render, with its label, grouped like the tabs. */
 function helpItems(result: ReferenceConsensusResult): {id: string; title: string; items: {id: string; label: string}[]}[] {
   const sample = result.isolates[0];
@@ -375,6 +593,20 @@ function helpItems(result: ReferenceConsensusResult): {id: string; title: string
         ...cohortDetailSections(everyCohortRow, format).flatMap(section => section.rows),
         {id: 'comparison', label: 'Comparison with the first completed cohort'},
         {id: 'cohort.issues', label: 'Unreadable or contradicting records'},
+      ]),
+    },
+    {
+      id: 'sites',
+      title: 'Sites',
+      items: unique([
+        {id: 'sites.filter', label: 'Filter'},
+        ...siteColumns,
+        ...siteDetailSections({
+          chrom: '', start: 1, end: 1, status: 'unresolved', reason: 'tie', allele: '.', backboneAllele: '', backboneVotes: 0,
+          alleles: [], votes: [], callableIsolates: 0, totalVotes: 0, flags: [], calls: '',
+        }).flatMap(section => section.rows),
+        ...siteAlleleColumns,
+        ...siteVoterColumns,
       ]),
     },
     {id: 'consensus-files', title: 'Run Records', items: consensusFileSections(result).flatMap(section => section.rows)},
@@ -453,10 +685,16 @@ export function ReferenceConsensusResults({
   formatDateTime,
   overviewHeader,
   filesHeader,
+  sites,
+  visibleRows = 20,
 }: {
   result: ReferenceConsensusResult;
   view: ConsensusView;
   formatDateTime: DateFormatter;
+  /** The loci of the cohort selected on the Iterations tab, once the Sites tab asked for them. */
+  sites?: SitesState;
+  /** Rows the tab content may use; the Sites tab fits its list into them instead of scrolling. */
+  visibleRows?: number;
   /** Run metadata and status, shown above the overview. */
   overviewHeader: React.ReactNode;
   /** Run directory and run files, shown above the workflow's own records. */
@@ -518,6 +756,16 @@ export function ReferenceConsensusResults({
         </Box>
       );
     }
+    case 'sites':
+      return (
+        <SitesTab
+          result={result}
+          cohort={result.cohorts[view.cohortIndex]}
+          sites={sites}
+          view={view}
+          visibleRows={visibleRows}
+        />
+      );
     case 'files':
       return (
         <Box flexDirection="column">

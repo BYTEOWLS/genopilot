@@ -4,7 +4,7 @@
 
 Implement the first executable scientific target: independently validate and process every selected isolate against the resolved backbone, preserve auditable intermediate results, and make each validated isolate FASTA eligible for explicit promotion into its isolate catalog entry.
 
-The science behind reads, alignment, duplicates, callability, and variants is explained for researchers in the [workflow README](../../../workflows/reference-consensus/README.md); the tools considered instead are in the [science background](science-background.md).
+The science behind reads, alignment, duplicates, callability, and variants is explained for researchers in the [workflow README](../../../../workflows/reference-consensus/README.md); the tools considered instead are in the [science background](science-background.md).
 
 ## Kickoff decisions
 
@@ -23,7 +23,7 @@ The science behind reads, alignment, duplicates, callability, and variants is ex
 - **Isolate FASTA.** Only `A`, `C`, `G`, `T`, and `N` occur: confident alleles replace the backbone, and ambiguous or uncallable positions become `N`. The FASTA keeps the backbone's sequence IDs, and the mask says why a position is `N`. IUPAC codes are left to cohort voting ([Task 4.3](4c-combined-consensus-generation.md)).
 - **Normalized VCF.** Variant records only, left-aligned against the backbone, each with `PASS` or a named filter (`LowDepth`, `LowAlleleFraction`) so no evidence is dropped. The consensus applies only `PASS` records.
 - **Rely on the tools.** Custom code covers only what no pinned tool does: read groups from Illumina read names and mate record counts (bwa does not compare them), duplicate marking per library (samtools compares read groups, not libraries), and the three-state callable mask. Record format and mate names are checked by fastp and bwa, and the isolate FASTA by `samtools faidx`, a comparison of its index with the backbone's, and a single `A/C/G/T/N` check; what bcftools guarantees about applying variants and the mask is not tested again. Tests cover this workflow's results against the fixtures' truth, never tool internals.
-- **Promotion candidates** are written per isolate, after its FASTA passed those checks, so a failing isolate cannot block its siblings. Verifying a candidate before copying it belongs to Task 5.4's promotion primitive.
+- **Promotion candidates** are written per isolate, after its FASTA passed those checks, so a failing isolate cannot block its siblings. Verifying a candidate before copying it belongs to the promotion primitive of [saved isolate sequences](../../saved-isolate-sequences.md).
 - **Commands** in the run provenance come from the run events, which the logger records through Snakemake's public logger interface together with each job's wildcards and outputs; Snakemake's internal metadata files are not read.
 - **Progress.** The run-events logger adds each job's wildcards, and the execution screen shows one progress bar per isolate.
 - The configuration schema does not change.
@@ -85,7 +85,7 @@ One isolate failing validation or execution must be visible as a failed job and 
 
 The scientific workflow writes a versioned promotion manifest describing each successfully validated isolate FASTA, its isolate ID, checksum, backbone identity/checksum, producing run, workflow version, and creation time. This keeps direct Snakemake execution independent of user-local TUI state.
 
-Task 5.4 offers an explicit **Save to isolate catalog** action. On confirmation, the TUI uses its promotion primitive to copy the FASTA, index, and compact provenance into the catalog's `sequences/<sequence-id>/`, verify the copy, and append its authoritative record to `isolates.yaml`. Never offer or promote a partial, failed, missing, or checksum-invalid FASTA. Repeating promotion is idempotent for the same sequence identity and checksum; another run or backbone creates a separate record rather than replacing an older one.
+The [saved isolate sequences](../../saved-isolate-sequences.md) concept offers an explicit **Save to isolate catalog** action. On confirmation, the TUI uses its promotion primitive to copy the FASTA, index, and compact provenance into the catalog's `sequences/<sequence-id>/`, verify the copy, and append its authoritative record to `isolates.yaml`. Never offer or promote a partial, failed, missing, or checksum-invalid FASTA. Repeating promotion is idempotent for the same sequence identity and checksum; another run or backbone creates a separate record rather than replacing an older one.
 
 ## Work
 
@@ -96,7 +96,7 @@ Task 5.4 offers an explicit **Save to isolate catalog** action. On confirmation,
 - [x] Implement pinned per-rule environments, per-pair QC, trimming, and alignment, per-isolate merging and per-library duplicate marking, and per-isolate callability, calling, normalization, and FASTA generation.
 - [x] Validate every intermediate format before dependent rules run, with the tools' own checks.
 - [x] Emit per-isolate metrics, provenance, artifact records, and a versioned catalog-promotion manifest.
-- [x] Make every promotion candidate identify its isolate, its FASTA and index with checksums, the backbone, the producing run, and the workflow without catalog access; verifying a candidate before copying it is Task 5.4's.
+- [x] Make every promotion candidate identify its isolate, its FASTA and index with checksums, the backbone, the producing run, and the workflow without catalog access; verifying a candidate before copying it belongs to [saved isolate sequences](../../saved-isolate-sequences.md).
 - [x] Test any positive isolate and read-pair count, trimmed input, isolated failure, resume, parameter-only reruns, and direct Snakemake execution.
 - [x] Run isolates in parallel and show per-isolate progress in the TUI.
 

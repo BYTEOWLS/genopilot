@@ -4,7 +4,7 @@ This directory is the ordered plan for building a T2T-backed cohort consensus fr
 
 The first unticked item is the default next task unless its file states another dependency. Keep completed items and task files as the implementation record.
 
-The science behind these tasks, with the tools used and their references, is explained for researchers in the [workflow README](../../../workflows/reference-consensus/README.md). The [science background](science-background.md) keeps the tools considered instead and why they were not used.
+The science behind these tasks, with the tools used and their references, is explained for researchers in the [workflow README](../../../../workflows/reference-consensus/README.md). The [science background](science-background.md) keeps the tools considered instead and why they were not used.
 
 ## Agreed processing model
 
@@ -37,10 +37,11 @@ These are already implemented by the annotation-transfer work and should be reus
 - [x] 4.3. [Combined consensus generation](4c-combined-consensus-generation.md)
 - [x] 5.1. [Cohort iterations](5a-cohort-iterations.md)
 - [x] 5.2. [Results view](5b-results-view.md)
-- [ ] 5.3. [Review and rerun](5c-review-and-rerun.md)
-- [ ] 5.4. [Saved isolate sequences](5d-saved-isolate-sequences.md)
+- [x] 5.3. [Review and rerun](5c-review-and-rerun.md)
 
-Tasks 1 and 2 may be implemented independently. Task 1b builds on Task 1 and is optional for the later tasks. Task 3 depends on both catalogs. Execution tasks 4.1–4.3 are sequential Snakemake targets but remain separate vertical slices because each produces independently testable scientific artifacts. Tasks 5.1–5.3 depend on their persisted result contracts and build on each other; Task 5.4 needs only Task 4.1's promotion candidates.
+Saving isolate FASTAs to the isolate catalog, once planned as Task 5.4, is its own concept: [saved isolate sequences](../../saved-isolate-sequences.md).
+
+Tasks 1 and 2 may be implemented independently. Task 1b builds on Task 1 and is optional for the later tasks. Task 3 depends on both catalogs. Execution tasks 4.1–4.3 are sequential Snakemake targets but remain separate vertical slices because each produces independently testable scientific artifacts. Tasks 5.1–5.3 depend on their persisted result contracts and build on each other.
 
 ## Terminology
 
