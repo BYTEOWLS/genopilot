@@ -18,7 +18,7 @@ Depends on the iteration contract of [Task 5.1](5a-cohort-iterations.md).
   - **Iterations**: one row per iteration with its state, date, voters, and reason; the selected iteration's settings, paths (support tables, consensus FASTA, consensus sites, summaries, decision, provenance, logs), and its comparison.
   - **Files**: run-level records (`config.yaml`, `isolates.yaml`, `artifacts.yaml`, `provenance/run.json`, input validation, logs).
 - **Comparison.** The inspected iteration is compared with the first aggregated cohort, `initial` or the first completed iteration when the initial one never ran: the same counts as on the overview in two columns and their difference. Comparing arbitrary pairs of iterations is not needed yet.
-- **Promotion.** The isolate list shows *promotion candidate available* when the candidate parses and its FASTA and index exist. The files are not hashed when a run opens; checksum verification and the *already saved to the isolate catalog* state belong to [Task 5.4](5d-saved-isolate-sequences.md), which introduces saved sequences.
+- **Promotion.** The isolate list shows *promotion candidate available* when the candidate parses and its FASTA and index exist. The files are not hashed when a run opens; checksum verification and the *already saved to the isolate catalog* state belong to the [saved isolate sequences](../../saved-isolate-sequences.md) concept, which introduces saved sequences.
 - **Snapshot metadata.** Wild-type status and `derived_from` come from the run's `isolates.yaml`, never from the current catalog, so a later catalog edit changes nothing in the view.
 - **Help.** Longer explanations live in `src/workflows/reference-consensus/result-help.ts`, keyed by stable item IDs and bound to `reference-consensus` version 1, as for annotation transfer: callability states, locus and why overlapping variants form one ballot, every support flag, every unresolved reason, the voting methods, the backbone vote, `N` and IUPAC bases, iterations and the active one, and the isolate and iteration states. Every item ID the view renders has a help entry.
 - **Out of scope.** Rows of the support and consensus-site tables are not rendered; navigating them is [Task 5.3](5c-review-and-rerun.md). Large files are neither read nor hashed; only the small decision files are hashed.
@@ -30,7 +30,7 @@ Show:
 - backbone identity, source, checksum, and whether it cast a vote;
 - all analyzed isolates with wild-type/lineage metadata and QC/callability summaries;
 - direct paths to each isolate's BAM, VCF, callable mask, consensus FASTA, metrics, and logs;
-- whether each isolate FASTA has a promotion candidate; whether it is already saved in **Manage isolates**, and the action itself, are [Task 5.4](5d-saved-isolate-sequences.md);
+- whether each isolate FASTA has a promotion candidate; whether it is already saved in **Manage isolates**, and the action itself, belong to [saved isolate sequences](../../saved-isolate-sequences.md);
 - configured voting method and participating voters;
 - selected, unresolved, tied, multiallelic, no-call, and competing-indel counts;
 - paths to the support table, initial cohort FASTA, diagnostics, provenance, and complete logs.

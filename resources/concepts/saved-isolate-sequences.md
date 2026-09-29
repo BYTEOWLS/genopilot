@@ -1,18 +1,18 @@
-# Task 5.4 — Saved isolate sequences
+# Saved isolate sequences
 
 ## Goal
 
 Let a researcher explicitly save a validated isolate FASTA from a run into the isolate catalog of **Manage isolates**, so deleting the producing run does not remove the reusable sequence.
 
-Independent of the iteration work in Tasks 5.1–5.3; it reads Task 4.1's promotion candidates.
+Split out of the [reference-guided cohort consensus](done/consensus/README.md) concept, whose other tasks are implemented. It is independent of the cohort iterations and reads the promotion candidates of consensus [Task 4.1](done/consensus/4a-per-isolate-processing.md).
 
 ## Saved sequences
 
-The isolate catalog is independent of every workflow. It stores sequences of an isolate without assuming how they were made; each entry records its kind and origin instead. This task adds the first kind, the reference-guided consensus of Task 4.1: the backbone with the isolate's variants applied and `N` wherever the isolate is not callable. It is not an assembly: it has the backbone's structure and lacks sequence the backbone lacks. A later kind, such as an imported assembly, needs a new way to add entries but no new schema.
+The isolate catalog is independent of every workflow. It stores sequences of an isolate without assuming how they were made; each entry records its kind and origin instead. This concept adds the first kind, the reference-guided consensus of consensus Task 4.1: the backbone with the isolate's variants applied and `N` wherever the isolate is not callable. It is not an assembly: it has the backbone's structure and lacks sequence the backbone lacks. A later kind, such as an imported assembly, needs a new way to add entries but no new schema.
 
 One isolate can hold several sequences, for example from different runs or backbones. A result enters the catalog only when the researcher explicitly saves it. Saving copies the validated FASTA, its index, and compact provenance into the catalog's own storage, so deleting the producing run does not remove the saved sequence. Scientific outputs never depend on that user-local action.
 
-This section was moved from [Task 1](1-manage-isolates.md), which implemented only isolate metadata. Adding `sequences` to each isolate is a deliberate revision of the catalog schema.
+This section was moved from consensus [Task 1](done/consensus/1-manage-isolates.md), which implemented only isolate metadata. Adding `sequences` to each isolate is a deliberate revision of the catalog schema.
 
 ## An isolate is the sample
 
@@ -23,7 +23,7 @@ An isolate is the biological sample, not its reads. Its own fields (`name`, `des
 
 Today `read_pairs` sits next to the sample's metadata, so the schema reads as if an isolate were its reads. The revision renames it to `reads`, keeping the same entries (`r1`, `r2`, `trimmed`), and adds `sequences` beside it. An isolate still needs at least one read pair, because every current kind of sequence is generated from reads; a later import of sequences without reads revisits that rule. The **Manage isolates** screen shows the two groups as such.
 
-The revision is part of this task and is not implemented before it. It touches everything that reads `read_pairs`:
+The revision is part of this concept and is not implemented before it. It touches everything that reads `read_pairs`:
 
 - the catalog, its validation, the isolate manager, and the Illumina import (`src/isolates/`, `src/ui/isolates-screen/`);
 - the run's `isolates.yaml` snapshot, which copies the catalog's isolate entries, and the reference-consensus Snakefile and scripts that read it (`read_pairs` in `workflows/reference-consensus/`), together with their tests and fixtures.
@@ -80,9 +80,9 @@ isolates/
 
 A sequence's ID is unique across the whole catalog; the producing run's ID and the isolate's ID make it so for generated sequences. The entry's isolate is the one it is listed under, so the path does not repeat it. Paths are normalized relative paths of the form `sequences/<sequence-id>/<file>`; reject absolute paths, parent traversal, control characters, a directory that disagrees with the ID, and symlink escape.
 
-Saving first verifies the Task 4.1 promotion candidate against the run directory: its isolate ID is the selected isolate, its FASTA and index lie inside that isolate's result directory, and their checksums and the backbone's match. Tests cover valid and invalid candidates. It then copies the files into a private temporary directory, validates their formats and checksums, atomically renames the directory into place, and then atomically updates `isolates.yaml`. A crash may leave an unreferenced directory, but directory contents never become catalog entries implicitly. Saving the same sequence again, with the same ID and checksum, changes nothing; another run or backbone creates a separate entry rather than replacing an older one. Removal updates the index before deleting the files, making a leftover orphan safer than a live entry pointing to deliberately removed data. An explicit maintenance action may report or clean orphaned directories.
+Saving first verifies the consensus Task 4.1 promotion candidate against the run directory: its isolate ID is the selected isolate, its FASTA and index lie inside that isolate's result directory, and their checksums and the backbone's match. Tests cover valid and invalid candidates. It then copies the files into a private temporary directory, validates their formats and checksums, atomically renames the directory into place, and then atomically updates `isolates.yaml`. A crash may leave an unreferenced directory, but directory contents never become catalog entries implicitly. Saving the same sequence again, with the same ID and checksum, changes nothing; another run or backbone creates a separate entry rather than replacing an older one. Removal updates the index before deleting the files, making a leftover orphan safer than a live entry pointing to deliberately removed data. An explicit maintenance action may report or clean orphaned directories.
 
-An annotation transferred onto a saved sequence can later be saved under that sequence, in `sequences/<sequence-id>/annotations/`; that is a [later idea](../../later.md#saved-annotations-in-the-isolate-catalog) and not part of this task. The per-sequence directory leaves room for it.
+An annotation transferred onto a saved sequence can later be saved under that sequence, in `sequences/<sequence-id>/annotations/`; that is a [later idea](../later.md#saved-annotations-in-the-isolate-catalog) and not part of this concept. The per-sequence directory leaves room for it.
 
 The isolate manager then:
 
@@ -95,7 +95,7 @@ The isolate manager then:
 - [ ] Group an isolate's data: rename `read_pairs` to `reads` in the catalog, the run snapshot, the workflow, and their tests, and show reads and saved sequences as separate groups in the isolate manager.
 - [ ] Revise the isolate-catalog schema with validated sequence records (kind, origin, and kind-specific fields), contained paths, and symlink-escape checks.
 - [ ] Implement safe saving and removal primitives, orphan reporting, and integrity display in the isolate manager.
-- [ ] Offer **Save to isolate catalog** from the results view for eligible isolate FASTAs, and show there which ones are already saved; the view of [Task 5.2](5b-results-view.md) shows only whether a candidate is available.
+- [ ] Offer **Save to isolate catalog** from the results view for eligible isolate FASTAs, and show there which ones are already saved; the view of consensus [Task 5.2](done/consensus/5b-results-view.md) shows only whether a candidate is available.
 - [ ] Add tests for saving, invalid candidates, repeated saving, contained paths, symlink escape, and orphan recovery.
 
 ## Acceptance

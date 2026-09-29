@@ -4,7 +4,7 @@
 
 Combine the backbone and Task 4.1's per-isolate callable calls into a deterministic support table without yet choosing the final cohort base.
 
-The ballots are explained for researchers in the [workflow README](../../../workflows/reference-consensus/README.md#cohort-support).
+The ballots are explained for researchers in the [workflow README](../../../../workflows/reference-consensus/README.md#cohort-support).
 
 ## Kickoff decisions
 

@@ -1,6 +1,6 @@
 # Science background — reference-guided cohort consensus
 
-The science for researchers is in the packaged [workflow README](../../../workflows/reference-consensus/README.md), which ships with the workflow and will be shown in the application: reads, alignment, duplicates, callability, variants, cohort support, the cohort consensus, known limits, the tools used, and their references. This note keeps the design-time research the README does not need: the tools considered instead, and why none of them was used. Numbers in brackets, such as [1], refer to the references at the end.
+The science for researchers is in the packaged [workflow README](../../../../workflows/reference-consensus/README.md), which ships with the workflow and will be shown in the application: reads, alignment, duplicates, callability, variants, cohort support, the cohort consensus, known limits, the tools used, and their references. This note keeps the design-time research the README does not need: the tools considered instead, and why none of them was used. Numbers in brackets, such as [1], refer to the references at the end.
 
 ## Tools considered
 
@@ -21,7 +21,7 @@ No existing tool combines whole-locus ballots, authoritative callable masks, an 
 Which IUPAC codes a GenBank genome submission accepts is not confirmed yet:
 
 - NCBI's [SRA submission standards](https://www.ncbi.nlm.nih.gov/sra/docs/sra-data-submission-standards/) accept every IUPAC nucleotide code (`R Y S W K M B D H V N`), but only for raw reads, which is not where a consensus genome goes.
-- The [genome submission guide](https://www.ncbi.nlm.nih.gov/genbank/genomesubmit/) does not mention IUPAC codes. It only restricts `N`: no leading or trailing `N`, and a run of at least the declared minimum length (10 or less) becomes an assembly gap. Both points are handled in the [INSDC submission concept](../insdc-submission/README.md), which also covers ENA and DDBJ.
+- The [genome submission guide](https://www.ncbi.nlm.nih.gov/genbank/genomesubmit/) does not mention IUPAC codes. It only restricts `N`: no leading or trailing `N`, and a run of at least the declared minimum length (10 or less) becomes an assembly gap. Both points are handled in the [INSDC submission concept](../../insdc-submission/README.md), which also covers ENA and DDBJ.
 
 Until `table2asn` validation confirms it, the consensus writes an unresolved SNP as `N` by default, and IUPAC codes are the researcher's explicit choice ([Task 4.3](4c-combined-consensus-generation.md#kickoff-decisions)). Either way, a coding sequence over such a base needs the same feature review before submission.
 

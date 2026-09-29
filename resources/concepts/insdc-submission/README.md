@@ -135,7 +135,7 @@ Decide these at kickoff:
 - Which locus-tag numbering the node and the research group prefer.
 - How a transferred gene refers to its source gene in the reference annotation (for example a `note` or an `inference` qualifier), since the reference's locus tag belongs to another genome and must not be reused.
 - Whether an organellar or plasmid sequence is submitted with the main genome or separately.
-- Whether ambiguous positions should be submitted as `N` or IUPAC codes: NCBI's genome guide mentions only `N`, so confirm with the chosen validator that IUPAC codes validate (see the [consensus science background](../consensus/science-background.md#open-point)).
+- Whether ambiguous positions should be submitted as `N` or IUPAC codes: NCBI's genome guide mentions only `N`, so confirm with the chosen validator that IUPAC codes validate (see the [consensus science background](../done/consensus/science-background.md#open-point)).
 - For ENA: how the GFF3 becomes an EMBL flat file (a pinned converter or an own step), and whether Webin-CLI validation needs the Webin login.
 - For isolate reads: which metadata fields the chosen node requires, whether provider-trimmed reads are accepted, and whether the sample accession becomes an isolate catalog field.
 - How to pin the validator: a Bioconda package if one exists at the needed version, otherwise a checksum-verified download from the node, recorded like the other pinned tools.

@@ -4,7 +4,7 @@
 
 Interpret Task 4.2's support evidence with the configured voting method and produce the initial T2T-backed cohort consensus plus unresolved-site diagnostics.
 
-Voting, IUPAC codes, and the cohort consensus are explained for researchers in the [workflow README](../../../workflows/reference-consensus/README.md#cohort-consensus); the open IUPAC question for INSDC submission is in the [science background](science-background.md#open-point).
+Voting, IUPAC codes, and the cohort consensus are explained for researchers in the [workflow README](../../../../workflows/reference-consensus/README.md#cohort-consensus); the open IUPAC question for INSDC submission is in the [science background](science-background.md#open-point).
 
 ## Kickoff decisions
 
@@ -14,7 +14,7 @@ Voting, IUPAC codes, and the cohort consensus are explained for researchers in t
 - **Unresolved indels** are fixed, not configurable: `N` for every base of the backbone allele. IUPAC cannot express an indel, and retaining the backbone allele would write a sequence the evidence does not support. The span keeps backbone coordinates there, and the competing alleles stay in the sites table.
 - **Minimum callable isolates** is an integer parameter from 0 to the number of selected isolates, default 0, compared with the isolates that actually vote. Below it, a base or locus is `N`, also when the backbone voted. With 0, backbone-only bases keep the backbone base and are counted.
 - **No votes** are written as `N`. A selected allele's base that is not `A/C/G/T`, which comes only from the backbone itself, is also `N`, so an IUPAC code in the consensus always means unresolved votes.
-- **Coordinates.** Every sites row carries its backbone and consensus span; a chain file is deferred to [`later.md`](../../later.md#consensus-chain-file).
+- **Coordinates.** Every sites row carries its backbone and consensus span; a chain file is deferred to [`later.md`](../../../later.md#consensus-chain-file).
 - **Outputs** in `results/cohort/initial/`: `consensus.fasta(.fai)`, `consensus-sites.tsv.gz(.tbi)` (one row per support locus and per run of unresolved bases outside the loci), and `consensus-summary.json`.
 
 ## Voting methods
