@@ -1,6 +1,6 @@
 # Tasks
 
-Open work only, in execution order. Finished work is recorded in the concepts under [`concepts/done/`](concepts/done/) and in Git history; deferred ideas are in [`later.md`](../later.md). Work that has a concept is listed here by a link, and its concept holds the detailed checklist.
+Open work only, in execution order. Finished work is recorded in the concepts under [`concepts/done/`](concepts/done/) and in Git history; deferred ideas are in [`later.md`](later.md). Work that has a concept is listed here by a link, and its concept holds the detailed checklist.
 
 ## Definition of done
 
@@ -18,9 +18,9 @@ Every task includes proportionate unit tests in the same change. A task is not c
 - [ ] Replace the `Help` placeholder on the welcome screen with the in-app help page, and add non-interactive `--help` and `--version` output.
 - [ ] Add start and finish times, total and per-stage duration, and available resource metrics to the run results; status, creation time, effective CPUs, and validation counts are shown.
 - [ ] Show a systems check before a run: free disk against an estimate, CPUs, and memory, and duration estimates from the machine's completed runs ([concept](concepts/systems-check.md)).
-- [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](../later.md#workflow-cancellation).
+- [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](later.md#workflow-cancellation).
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
-- [ ] Separate workflow-specific UI and result code from the shared screens, so each workflow plugs in through one module ([notes](../later.md#workflow-code-layout)).
+- [ ] Separate workflow-specific UI and result code from the shared screens, so each workflow plugs in through one module ([notes](later.md#workflow-code-layout)).
 
 ## Integration and packaging
 

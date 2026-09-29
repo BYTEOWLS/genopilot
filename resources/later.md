@@ -1,10 +1,10 @@
 # Deferred and optional work
 
-Ideas that are intentionally outside the current task list in [`resources/tasks.md`](resources/tasks.md). Revisit them when a concrete requirement exists.
+Ideas that are intentionally outside the current task list in [`tasks.md`](tasks.md). Revisit them when a concrete requirement exists.
 
 ## Reruns of existing runs
 
-A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](resources/concepts/reruns.md). Its release basics are tracked in consensus Tasks 5.1 and 5.3 and the task list; the rest waits for a concrete use case.
+A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](concepts/reruns.md). Its release basics are tracked in consensus Tasks 5.1 and 5.3 and the task list; the rest waits for a concrete use case.
 
 ## Cohort decision preview
 
@@ -17,7 +17,7 @@ Consensus [Task 5.3](concepts/done/consensus/5c-review-and-rerun.md) saves and r
 
 ## Performance review
 
-Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](resources/concepts/systems-check.md).
+Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](concepts/systems-check.md).
 
 A later review should start from measurements, the job benchmarks every run already writes, on real cohorts and slower machines, and consider:
 

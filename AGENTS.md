@@ -13,7 +13,7 @@ Keep the package independent of private research data, machine-specific paths, a
 - `tests/` — TypeScript application tests plus Python tests for the shared rules, their scripts, and direct-Snakemake execution.
 - `tests/fixtures/` — small synthetic, redistributable FASTA/GFF3 fixtures with known expected results.
 - [`resources/tasks.md`](resources/tasks.md) — open work as checkboxes, in execution order.
-- [`later.md`](later.md) — deferred and optional ideas.
+- [`resources/later.md`](resources/later.md) — deferred and optional ideas.
 - `resources/concepts/` — design notes; `done/` holds implemented designs. A concept directory may hold a `science-background.md` with design-time research, such as the tools considered; the science researchers need, with tool references, belongs in the workflow README.
 
 ## Architecture boundaries
@@ -74,9 +74,9 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Treat the architecture as provisional. Build small, clear implementations that are easy to revise.
 - Generalize, abstract, or decouple only when a concrete second use or demonstrated problem requires it.
 - Do not add speculative fields, abstractions, extension points, or execution behavior merely because they might become useful later.
-- Keep the active task small. Move ideas that are not needed for the current task to [`later.md`](later.md).
+- Keep the active task small. Move ideas that are not needed for the current task to [`resources/later.md`](resources/later.md).
 - Prefer a deliberate later schema or interface revision over premature complexity, while preserving explicit versioning and migration boundaries where persisted data requires them.
-- Treat performance as a non-functional requirement: runs should fit a time, disk, and memory budget a researcher can plan for, also on slower machines. Measure before optimizing, and avoid work that grows with the square of the cohort or genome where a linear approach is as simple. A deep performance review is deferred ([`later.md`](later.md#performance-review)).
+- Treat performance as a non-functional requirement: runs should fit a time, disk, and memory budget a researcher can plan for, also on slower machines. Measure before optimizing, and avoid work that grows with the square of the cohort or genome where a linear approach is as simple. A deep performance review is deferred ([`resources/later.md`](resources/later.md#performance-review)).
 
 ## Package and documentation
 
