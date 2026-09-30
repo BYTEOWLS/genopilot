@@ -62,7 +62,7 @@ test('detects compatible executables in the managed tooling location', async con
     [paths.pixiExecutable, 'pixi 0.81.0'],
     [paths.condaExecutable, 'conda 26.7.3'],
     [paths.snakemakeExecutable, '9.27.0'],
-    [paths.pythonExecutable, 'Python 3.14.7'],
+    [paths.pythonExecutable, 'Python 3.13.15'],
   ]) {
     await mkdir(dirname(path), {recursive: true});
     await writeFile(path, `#!/bin/sh\nprintf '%s\\n' '${output}'\n`);

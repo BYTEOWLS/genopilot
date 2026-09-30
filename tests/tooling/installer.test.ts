@@ -101,7 +101,7 @@ test('installs verified Pixi and the pinned runtime bundle', async context => {
     'bioconda',
     'snakemake=9.27.0',
     'conda=26.7.3',
-    'python=3.14.7',
+    'python=3.13.15',
   ]);
   assert.equal(installation.environment.PIXI_HOME, paths.pixiHome);
   assert.equal(installation.environment.PIXI_NO_CONFIG, '1');

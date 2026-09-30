@@ -1,4 +1,7 @@
+import {readdirSync, readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
+import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {toolingPolicy} from '../../src/tooling/policy.js';
@@ -84,5 +87,18 @@ test('uses bounded compatibility ranges for all managed tools', () => {
   ]) {
     assert.match(tool.minimumVersion, /^\d+\.\d+\.\d+$/);
     assert.match(tool.maximumVersionExclusive, /^\d+\.\d+\.\d+$/);
+  }
+});
+
+test('pins the rule environments to the Python the managed runtime runs on', () => {
+  const workflowsDirectory = fileURLToPath(new URL('../../workflows/', import.meta.url));
+  const environmentFiles = readdirSync(workflowsDirectory, {recursive: true})
+    .map(String)
+    .filter(path => path.endsWith('environment.yaml'));
+  assert.ok(environmentFiles.length > 0);
+
+  for (const path of environmentFiles) {
+    const pin = readFileSync(join(workflowsDirectory, path), 'utf8').match(/^\s*-\s+python=(\S+)\s*$/m)?.[1];
+    assert.equal(pin, toolingPolicy.python.managedVersion, `${path} pins python=${pin}`);
   }
 });
