@@ -36,13 +36,14 @@ test('defines one verified Pixi download for every supported platform', () => {
   assert.deepEqual(actualPlatforms, expectedPlatforms);
 });
 
-test('pins Pixi, Snakemake, Conda, and managed installation locations', () => {
-  assert.equal(toolingPolicy.pixi.managedVersion, '0.79.0');
+test('pins Pixi, Snakemake, Conda, Python, and managed installation locations', () => {
+  assert.equal(toolingPolicy.pixi.managedVersion, '0.81.0');
   assert.equal(
     toolingPolicy.snakemake.package,
     `snakemake=${toolingPolicy.snakemake.managedVersion}`,
   );
   assert.equal(toolingPolicy.conda.package, `conda=${toolingPolicy.conda.managedVersion}`);
+  assert.equal(toolingPolicy.python.package, `python=${toolingPolicy.python.managedVersion}`);
   assert.equal(toolingPolicy.managedGlobalEnvironment.name, 'byteowls-genopilot');
   assert.deepEqual(toolingPolicy.managedGlobalEnvironment.channels, [
     'conda-forge',
@@ -51,6 +52,7 @@ test('pins Pixi, Snakemake, Conda, and managed installation locations', () => {
   assert.deepEqual(toolingPolicy.managedGlobalEnvironment.packages, [
     toolingPolicy.snakemake.package,
     toolingPolicy.conda.package,
+    toolingPolicy.python.package,
   ]);
   assert.match(toolingPolicy.pixi.relativeExecutablePath, /^runtimes\/pixi\//);
   assert.ok(
@@ -70,6 +72,7 @@ test('records versions tested with separately from supported ranges', () => {
   assert.deepEqual(toolingPolicy.pixi.versionsTestedWith, []);
   assert.deepEqual(toolingPolicy.conda.versionsTestedWith, []);
   assert.deepEqual(toolingPolicy.snakemake.versionsTestedWith, []);
+  assert.deepEqual(toolingPolicy.python.versionsTestedWith, []);
 });
 
 test('uses bounded compatibility ranges for all managed tools', () => {
@@ -77,6 +80,7 @@ test('uses bounded compatibility ranges for all managed tools', () => {
     toolingPolicy.pixi,
     toolingPolicy.conda,
     toolingPolicy.snakemake,
+    toolingPolicy.python,
   ]) {
     assert.match(tool.minimumVersion, /^\d+\.\d+\.\d+$/);
     assert.match(tool.maximumVersionExclusive, /^\d+\.\d+\.\d+$/);

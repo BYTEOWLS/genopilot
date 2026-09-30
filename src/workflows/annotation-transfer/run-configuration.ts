@@ -42,7 +42,6 @@ export type AnnotationTransferConfigurationDraft = {
   targetSource: InputSourceMode;
   targetFasta: string;
   targetAccession: string;
-  idPrefix: string;
   cpuMode: CpuMode;
   manualCpuLimit: string;
   outputRoot: string;
@@ -70,7 +69,6 @@ export function createAnnotationTransferDraft(
     targetSource: 'local',
     targetFasta: '',
     targetAccession: '',
-    idPrefix: 'AN_CS',
     cpuMode: 'automatic',
     manualCpuLimit: '',
     outputRoot: resolve(currentDirectory, 'runs'),
@@ -115,7 +113,6 @@ export function buildAnnotationTransferConfiguration(
             }
           : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.targetFasta)},
     },
-    annotation: {id_prefix: draft.idPrefix},
     lifton: {profile: 'same-species'},
     resources: {
       cpu_mode: draft.cpuMode,

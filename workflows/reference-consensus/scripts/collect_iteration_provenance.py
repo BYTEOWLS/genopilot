@@ -72,6 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--manifest-schema-version", type=int, required=True)
     parser.add_argument("--snakemake-version", required=True)
+    parser.add_argument("--snakemake-python-version", required=True)
     parser.add_argument("--provenance", type=Path, required=True)
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
@@ -138,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
             "observed": {
                 **observed,
                 "snakemake": {"version": args.snakemake_version, "source": "workflow-runtime"},
+                "snakemake-python": {"version": args.snakemake_python_version, "source": "workflow-runtime"},
             },
         },
         "commands": iteration_commands(args.cohort),

@@ -25,13 +25,12 @@ test('rejects missing or unparseable versions', () => {
 });
 
 test('reports unrecognized managed-tool version output as a failed check', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'failed-managed-tool-check-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'failed-managed-tool-check-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const paths = resolveToolingPaths({
     platform: 'linux',
     architecture: 'x64',
-    environment: {XDG_DATA_HOME: root},
-    homeDirectory: root,
+    homeDirectory: tempDir,
   });
   await mkdir(dirname(paths.pixiExecutable), {recursive: true});
   await writeFile(paths.pixiExecutable, "#!/bin/sh\nprintf '%s\\n' 'development build'\n");
@@ -51,19 +50,19 @@ test('reports unrecognized managed-tool version output as a failed check', async
 });
 
 test('detects compatible executables in the managed tooling location', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'managed-tool-check-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'managed-tool-check-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const paths = resolveToolingPaths({
     platform: 'linux',
     architecture: 'x64',
-    environment: {XDG_DATA_HOME: root},
-    homeDirectory: root,
+    homeDirectory: tempDir,
   });
 
   for (const [path, output] of [
-    [paths.pixiExecutable, 'pixi 0.79.0'],
-    [paths.condaExecutable, 'conda 25.11.1'],
-    [paths.snakemakeExecutable, '9.26.1'],
+    [paths.pixiExecutable, 'pixi 0.81.0'],
+    [paths.condaExecutable, 'conda 26.7.3'],
+    [paths.snakemakeExecutable, '9.27.0'],
+    [paths.pythonExecutable, 'Python 3.14.7'],
   ]) {
     await mkdir(dirname(path), {recursive: true});
     await writeFile(path, `#!/bin/sh\nprintf '%s\\n' '${output}'\n`);
@@ -79,4 +78,5 @@ test('detects compatible executables in the managed tooling location', async con
   assert.equal(status.pixi.state, 'available');
   assert.equal(status.conda.state, 'available');
   assert.equal(status.snakemake.state, 'available');
+  assert.equal(status.python.state, 'available');
 });

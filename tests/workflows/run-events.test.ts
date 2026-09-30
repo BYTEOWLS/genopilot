@@ -154,9 +154,9 @@ test('groups rules the manifest does not classify instead of hiding them', () =>
 });
 
 test('reads only what an event file has gained since the previous read', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'run-events-test-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const path = join(root, 'events.jsonl');
+  const tempDir = await mkdtemp(join(tmpdir(), 'run-events-test-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const path = join(tempDir, 'events.jsonl');
   const reader = new RunEventReader();
 
   // The file does not exist until Snakemake starts writing it.

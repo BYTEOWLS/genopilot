@@ -76,7 +76,6 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
         reference: {source: 'local', fasta: '/data/reference.fa', gff3: '/data/reference.gff3'},
         target: {source: 'local', fasta: '/data/target.fa'},
       },
-      annotation: {id_prefix: 'AN_'},
       lifton: {profile: 'same-species'},
       resources: {cpu_mode: 'automatic', effective_cpus: 7},
       run: {
@@ -112,7 +111,6 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
         dnaIdentityByTranscriptModel: {unit: 'transcript_model', count: 20, minimum: 0.91, mean: 0.96, maximum: 1},
         proteinIdentityByTranscriptModel: {unit: 'transcript_model', count: 0, minimum: null, mean: null, maximum: null, unavailableReason: 'No protein values.'},
       },
-      prefix: {applied: true, value: 'AN_', transformedDistinctIds: 200},
       validation: {status: 'passed', errors: 0, warnings: 1},
       definitions: {
         metrics: {mapped_features: 'Persisted definition sentinel for mapped features.'},
@@ -123,7 +121,6 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
         aggregated_metrics: path('metrics.json'),
         completion_summary: path('summary.json'),
         validation: path('validation.json', false),
-        final_gff3: path('annotation/final.gff3'),
       },
       evidence: {
         raw_gff3: {...path('annotation/lifton.raw.gff3'), recordedAvailable: true},

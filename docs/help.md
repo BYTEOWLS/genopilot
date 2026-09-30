@@ -19,7 +19,7 @@ Catalogs keep paths on this machine, so they stay private to your user and never
 
 ## Tooling
 
-GenoPilot checks its runtime after launch: Pixi, Conda, and Snakemake at the pinned versions. With your consent it installs them into its own data directory, without administrator rights. Snakemake then provisions a pinned environment for each workflow step the first time it is needed.
+GenoPilot checks its runtime after launch: Pixi, Conda, Snakemake, and the Python that Snakemake runs on, at the pinned versions. With your consent it installs them into its own data directory, without administrator rights. Snakemake then provisions a pinned environment for each workflow step the first time it is needed.
 
 ## Keys
 

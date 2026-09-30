@@ -40,8 +40,8 @@ function incompatible(kind: 'missing-summary' | 'invalid-summary' | 'missing-con
 }
 
 test('discovers run metadata and result states newest first', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'genopilot-run-discovery-'));
-  await addRun(root, 'older-directory', {
+  const tempDir = await mkdtemp(join(tmpdir(), 'genopilot-run-discovery-'));
+  await addRun(tempDir, 'older-directory', {
     workflow_id: 'annotation-transfer',
     workflow_version: 1,
     run: {
@@ -51,15 +51,15 @@ test('discovers run metadata and result states newest first', async () => {
       created_at: '2026-01-01T00:00:00.000Z',
     },
   });
-  await addRun(root, 'newer-directory', {
+  await addRun(tempDir, 'newer-directory', {
     workflow_id: 'annotation-transfer',
     workflow_version: 2,
     run: {id: 'newer-run', created_at: '2026-02-01T00:00:00.000Z'},
   });
-  await addRun(root, 'broken-directory');
-  await writeFile(join(root, 'annotation-transfer', 'not-a-run.txt'), 'ignored', 'utf8');
+  await addRun(tempDir, 'broken-directory');
+  await writeFile(join(tempDir, 'annotation-transfer', 'not-a-run.txt'), 'ignored', 'utf8');
 
-  const runs = await discoverWorkflowRuns(root, manifest, async directory => {
+  const runs = await discoverWorkflowRuns(tempDir, manifest, async directory => {
     if (directory.endsWith('older-directory')) {
       return incompatible('missing-summary');
     }
@@ -83,39 +83,39 @@ test('discovers run metadata and result states newest first', async () => {
 });
 
 test('deletes only a direct child of the selected workflow run directory', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'genopilot-run-deletion-'));
-  const selectedRun = await addRun(root, 'selected-run');
-  const outsideRun = join(root, 'outside-run');
+  const tempDir = await mkdtemp(join(tmpdir(), 'genopilot-run-deletion-'));
+  const selectedRun = await addRun(tempDir, 'selected-run');
+  const outsideRun = join(tempDir, 'outside-run');
   await mkdir(outsideRun);
 
   await assert.rejects(
-    deleteWorkflowRun(root, manifest.id, outsideRun),
+    deleteWorkflowRun(tempDir, manifest.id, outsideRun),
     /outside the selected workflow run directory/,
   );
   await access(outsideRun);
 
-  await deleteWorkflowRun(root, manifest.id, selectedRun);
+  await deleteWorkflowRun(tempDir, manifest.id, selectedRun);
   await assert.rejects(access(selectedRun), error =>
     typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT');
   await access(outsideRun);
 });
 
 test('refuses deletion through a workflow-directory symlink', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'genopilot-run-deletion-root-'));
+  const tempDir = await mkdtemp(join(tmpdir(), 'genopilot-run-deletion-outside-'));
   const externalRoot = await mkdtemp(join(tmpdir(), 'genopilot-run-deletion-external-'));
   const externalWorkflow = join(externalRoot, manifest.id);
   const externalRun = join(externalWorkflow, 'outside-run');
   await mkdir(externalRun, {recursive: true});
-  await symlink(externalWorkflow, join(root, manifest.id), 'dir');
+  await symlink(externalWorkflow, join(tempDir, manifest.id), 'dir');
 
   await assert.rejects(
-    deleteWorkflowRun(root, manifest.id, join(root, manifest.id, 'outside-run')),
+    deleteWorkflowRun(tempDir, manifest.id, join(tempDir, manifest.id, 'outside-run')),
     /outside the selected workflow run directory/,
   );
   await access(externalRun);
 });
 
 test('returns an empty list when a workflow has no run directory', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'genopilot-run-discovery-'));
-  assert.deepEqual(await discoverWorkflowRuns(root, manifest), []);
+  const tempDir = await mkdtemp(join(tmpdir(), 'genopilot-run-discovery-'));
+  assert.deepEqual(await discoverWorkflowRuns(tempDir, manifest), []);
 });

@@ -94,12 +94,12 @@ test('parses Illumina read headers and rejects other formats', () => {
 });
 
 test('groups raw and processed copies with identical names as variants of one read set', async context => {
-  const root = await delivery(context);
-  await pair(join(root, 'Sample-A_L001_ds.raw'), 'strain-a_S1_L001');
+  const tempDir = await delivery(context);
+  await pair(join(tempDir, 'Sample-A_L001_ds.raw'), 'strain-a_S1_L001');
   // The processed copy dropped the first read and shortened others.
-  await pair(join(root, 'Sample-A_L001_ds.processed'), 'strain-a_S1_L001', {first: 1, trimmed: true});
+  await pair(join(tempDir, 'Sample-A_L001_ds.processed'), 'strain-a_S1_L001', {first: 1, trimmed: true});
 
-  const scan = await scanIlluminaDelivery(root, emptyCatalog);
+  const scan = await scanIlluminaDelivery(tempDir, emptyCatalog);
 
   assert.deepEqual(scan.skippedFiles, []);
   assert.equal(scan.candidates.length, 1);
@@ -107,7 +107,7 @@ test('groups raw and processed copies with identical names as variants of one re
   assert.equal(candidate?.sample, 'strain-a');
   assert.equal(candidate?.readSets.length, 1);
   const variants = candidate?.readSets[0]?.variants ?? [];
-  assert.deepEqual(variants.map(variant => variant.r1.slice(root.length + 1)), [
+  assert.deepEqual(variants.map(variant => variant.r1.slice(tempDir.length + 1)), [
     'Sample-A_L001_ds.processed/strain-a_S1_L001_R1_001.fastq.gz',
     'Sample-A_L001_ds.raw/strain-a_S1_L001_R1_001.fastq.gz',
   ]);
@@ -117,13 +117,13 @@ test('groups raw and processed copies with identical names as variants of one re
 });
 
 test('keeps lanes and sequencing runs of one sample as separate read sets', async context => {
-  const root = await delivery(context);
-  await pair(join(root, 'run-7'), 'strain-b_S2_L001', {run: 7, flowcell: 'HFLOWAAXX', lane: 1});
-  await pair(join(root, 'run-7'), 'strain-b_S2_L002', {run: 7, flowcell: 'HFLOWAAXX', lane: 2});
+  const tempDir = await delivery(context);
+  await pair(join(tempDir, 'run-7'), 'strain-b_S2_L001', {run: 7, flowcell: 'HFLOWAAXX', lane: 1});
+  await pair(join(tempDir, 'run-7'), 'strain-b_S2_L002', {run: 7, flowcell: 'HFLOWAAXX', lane: 2});
   // A top-up run lists the same sample at another sample-sheet position.
-  await pair(join(root, 'run-9'), 'strain-b_S5_L001', {run: 9, flowcell: 'HFLOWBBXX', lane: 1});
+  await pair(join(tempDir, 'run-9'), 'strain-b_S5_L001', {run: 9, flowcell: 'HFLOWBBXX', lane: 1});
 
-  const scan = await scanIlluminaDelivery(root, emptyCatalog);
+  const scan = await scanIlluminaDelivery(tempDir, emptyCatalog);
 
   assert.equal(scan.candidates.length, 1);
   assert.deepEqual(
@@ -133,38 +133,38 @@ test('keeps lanes and sequencing runs of one sample as separate read sets', asyn
 });
 
 test('takes the lane only from the file name, so merged lanes stay one read set', async context => {
-  const root = await delivery(context);
+  const tempDir = await delivery(context);
   // A lane-merged raw file starts in lane 1; its filtered copy happens to start in lane 2.
-  await pair(join(root, 'raw'), 'strain-c_S3', {lane: 1});
-  await pair(join(root, 'processed'), 'strain-c_S3', {lane: 2, trimmed: true});
+  await pair(join(tempDir, 'raw'), 'strain-c_S3', {lane: 1});
+  await pair(join(tempDir, 'processed'), 'strain-c_S3', {lane: 2, trimmed: true});
 
-  const scan = await scanIlluminaDelivery(root, emptyCatalog);
+  const scan = await scanIlluminaDelivery(tempDir, emptyCatalog);
 
   assert.deepEqual(scan.candidates.map(candidate => candidate.readSets.map(readSet => [readSet.lane, readSet.variants.length])), [[[null, 2]]]);
 });
 
 test('reports every FASTQ it does not propose, with its reason', async context => {
-  const root = await delivery(context);
-  await pair(root, 'good_S1_L001');
-  await put(join(root, 'lonely_S2_L001_R1_001.fastq.gz'), fastq(1));
-  await put(join(root, 'good_S1_L001_I1_001.fastq.gz'), fastq(1));
-  await pair(root, 'Undetermined_S0_L001');
-  await pair(root, 'split_S3_L001');
-  await put(join(root, 'split_S3_L001_R1_002.fastq.gz'), fastq(1));
-  await put(join(root, 'split_S3_L001_R2_002.fastq.gz'), fastq(2));
-  await put(join(root, 'reads_1.fq.gz'), fastq(1));
-  await put(join(root, 'swapped_S4_L001_R1_001.fastq.gz'), fastq(1));
-  await put(join(root, 'swapped_S4_L001_R2_001.fastq.gz'), fastq(2, {first: 3}));
-  await put(join(root, 'broken_S5_L001_R1_001.fastq.gz'), 'not a FASTQ file\n');
-  await put(join(root, 'broken_S5_L001_R2_001.fastq.gz'), fastq(2));
-  await put(join(root, 'public_S6_L001_R1_001.fastq.gz'), gzipSync('@SRR000001.1\nACGT\n+\nFFFF\n'));
-  await put(join(root, 'public_S6_L001_R2_001.fastq.gz'), gzipSync('@SRR000001.1\nACGT\n+\nFFFF\n'));
-  await put(join(root, 'notes.txt'), 'not reported: not a FASTQ file');
+  const tempDir = await delivery(context);
+  await pair(tempDir, 'good_S1_L001');
+  await put(join(tempDir, 'lonely_S2_L001_R1_001.fastq.gz'), fastq(1));
+  await put(join(tempDir, 'good_S1_L001_I1_001.fastq.gz'), fastq(1));
+  await pair(tempDir, 'Undetermined_S0_L001');
+  await pair(tempDir, 'split_S3_L001');
+  await put(join(tempDir, 'split_S3_L001_R1_002.fastq.gz'), fastq(1));
+  await put(join(tempDir, 'split_S3_L001_R2_002.fastq.gz'), fastq(2));
+  await put(join(tempDir, 'reads_1.fq.gz'), fastq(1));
+  await put(join(tempDir, 'swapped_S4_L001_R1_001.fastq.gz'), fastq(1));
+  await put(join(tempDir, 'swapped_S4_L001_R2_001.fastq.gz'), fastq(2, {first: 3}));
+  await put(join(tempDir, 'broken_S5_L001_R1_001.fastq.gz'), 'not a FASTQ file\n');
+  await put(join(tempDir, 'broken_S5_L001_R2_001.fastq.gz'), fastq(2));
+  await put(join(tempDir, 'public_S6_L001_R1_001.fastq.gz'), gzipSync('@SRR000001.1\nACGT\n+\nFFFF\n'));
+  await put(join(tempDir, 'public_S6_L001_R2_001.fastq.gz'), gzipSync('@SRR000001.1\nACGT\n+\nFFFF\n'));
+  await put(join(tempDir, 'notes.txt'), 'not reported: not a FASTQ file');
 
-  const scan = await scanIlluminaDelivery(root, emptyCatalog);
+  const scan = await scanIlluminaDelivery(tempDir, emptyCatalog);
 
   assert.deepEqual(scan.candidates.map(candidate => candidate.sample), ['good']);
-  assert.deepEqual(reasons(scan, root), {
+  assert.deepEqual(reasons(scan, tempDir), {
     'broken_S5_L001_R1_001.fastq.gz': 'invalid-fastq',
     'broken_S5_L001_R2_001.fastq.gz': 'invalid-fastq',
     'good_S1_L001_I1_001.fastq.gz': 'index-read',
@@ -184,22 +184,22 @@ test('reports every FASTQ it does not propose, with its reason', async context =
 });
 
 test('does not follow directory symlinks or file links that leave the folder', async context => {
-  const root = await delivery(context);
+  const tempDir = await delivery(context);
   const outside = await delivery(context);
-  await pair(join(root, 'data'), 'strain-d_S1_L001');
+  await pair(join(tempDir, 'data'), 'strain-d_S1_L001');
   await pair(outside, 'foreign_S1_L001');
-  await symlink(root, join(root, 'data', 'loop'));
-  await symlink(join(outside, 'foreign_S1_L001_R1_001.fastq.gz'), join(root, 'foreign_S1_L001_R1_001.fastq.gz'));
+  await symlink(tempDir, join(tempDir, 'data', 'loop'));
+  await symlink(join(outside, 'foreign_S1_L001_R1_001.fastq.gz'), join(tempDir, 'foreign_S1_L001_R1_001.fastq.gz'));
   // The link sorts before the file it points to, but the file itself is kept.
-  await symlink(join(root, 'data', 'strain-d_S1_L001_R1_001.fastq.gz'), join(root, 'data', 'a-link_S1_L001_R1_001.fastq.gz'));
-  await symlink(join(root, 'data', 'absent.fastq.gz'), join(root, 'data', 'broken_S2_L001_R1_001.fastq.gz'));
+  await symlink(join(tempDir, 'data', 'strain-d_S1_L001_R1_001.fastq.gz'), join(tempDir, 'data', 'a-link_S1_L001_R1_001.fastq.gz'));
+  await symlink(join(tempDir, 'data', 'absent.fastq.gz'), join(tempDir, 'data', 'broken_S2_L001_R1_001.fastq.gz'));
 
-  const scan = await scanIlluminaDelivery(root, emptyCatalog);
+  const scan = await scanIlluminaDelivery(tempDir, emptyCatalog);
 
   assert.deepEqual(scan.candidates.map(candidate => candidate.sample), ['strain-d']);
-  assert.equal(scan.candidates[0]?.readSets[0]?.variants[0]?.r1, join(root, 'data', 'strain-d_S1_L001_R1_001.fastq.gz'));
-  assert.deepEqual(scan.skippedDirectories, [{path: join(root, 'data', 'loop'), reason: 'symlink'}]);
-  assert.deepEqual(reasons(scan, root), {
+  assert.equal(scan.candidates[0]?.readSets[0]?.variants[0]?.r1, join(tempDir, 'data', 'strain-d_S1_L001_R1_001.fastq.gz'));
+  assert.deepEqual(scan.skippedDirectories, [{path: join(tempDir, 'data', 'loop'), reason: 'symlink'}]);
+  assert.deepEqual(reasons(scan, tempDir), {
     'data/a-link_S1_L001_R1_001.fastq.gz': 'same-file',
     'data/broken_S2_L001_R1_001.fastq.gz': 'unreadable',
     'foreign_S1_L001_R1_001.fastq.gz': 'outside-folder',
@@ -207,12 +207,12 @@ test('does not follow directory symlinks or file links that leave the folder', a
 });
 
 test('marks read files the catalog already references, also through links', async context => {
-  const root = await delivery(context);
+  const tempDir = await delivery(context);
   const elsewhere = await delivery(context);
-  await pair(root, 'known_S1_L001');
-  await pair(root, 'linked_S2_L001');
-  await pair(root, 'new_S3_L001');
-  await symlink(join(root, 'linked_S2_L001_R1_001.fastq.gz'), join(elsewhere, 'linked_R1.fastq.gz'));
+  await pair(tempDir, 'known_S1_L001');
+  await pair(tempDir, 'linked_S2_L001');
+  await pair(tempDir, 'new_S3_L001');
+  await symlink(join(tempDir, 'linked_S2_L001_R1_001.fastq.gz'), join(elsewhere, 'linked_R1.fastq.gz'));
   const catalog: IsolateCatalog = {
     schema_version: 1,
     isolates: [
@@ -221,7 +221,7 @@ test('marks read files the catalog already references, also through links', asyn
         name: 'Known',
         wildtype: null,
         derived_from: null,
-        read_pairs: [{r1: join(root, 'known_S1_L001_R1_001.fastq.gz'), r2: join(root, 'known_S1_L001_R2_001.fastq.gz'), trimmed: false}],
+        read_pairs: [{r1: join(tempDir, 'known_S1_L001_R1_001.fastq.gz'), r2: join(tempDir, 'known_S1_L001_R2_001.fastq.gz'), trimmed: false}],
       },
       {
         id: 'linked',
@@ -233,11 +233,11 @@ test('marks read files the catalog already references, also through links', asyn
     ],
   };
 
-  const scan = await scanIlluminaDelivery(root, catalog);
+  const scan = await scanIlluminaDelivery(tempDir, catalog);
 
   assert.deepEqual(scan.candidates.map(candidate => candidate.sample), ['new']);
   assert.deepEqual(
-    scan.alreadyImported.map(file => [file.path.slice(root.length + 1), file.isolateId]).sort(),
+    scan.alreadyImported.map(file => [file.path.slice(tempDir.length + 1), file.isolateId]).sort(),
     [
       ['known_S1_L001_R1_001.fastq.gz', 'known'],
       ['known_S1_L001_R2_001.fastq.gz', 'known'],
@@ -248,11 +248,11 @@ test('marks read files the catalog already references, also through links', asyn
 });
 
 test('names the mate that could not be read', async context => {
-  const root = await delivery(context);
-  await put(join(root, 'strain-f_S1_L001_R1_001.fastq.gz'), fastq(1));
-  await put(join(root, 'strain-f_S1_L001_R2_001.fastq.gz'), Buffer.from([0x1f, 0x8b, 0x00, 0x01, 0x02]));
+  const tempDir = await delivery(context);
+  await put(join(tempDir, 'strain-f_S1_L001_R1_001.fastq.gz'), fastq(1));
+  await put(join(tempDir, 'strain-f_S1_L001_R2_001.fastq.gz'), Buffer.from([0x1f, 0x8b, 0x00, 0x01, 0x02]));
 
-  const scan = await scanIlluminaDelivery(root, emptyCatalog);
+  const scan = await scanIlluminaDelivery(tempDir, emptyCatalog);
 
   assert.deepEqual(scan.skippedFiles.map(file => [file.reason, file.detail?.slice(0, 3)]), [
     ['invalid-fastq', 'R2:'],
@@ -261,32 +261,32 @@ test('names the mate that could not be read', async context => {
 });
 
 test('reports an unreadable subfolder and keeps scanning', {skip: process.getuid?.() === 0}, async context => {
-  const root = await delivery(context);
-  await pair(join(root, 'open'), 'strain-g_S1_L001');
-  await pair(join(root, 'locked'), 'strain-h_S1_L001');
-  await chmod(join(root, 'locked'), 0o000);
+  const tempDir = await delivery(context);
+  await pair(join(tempDir, 'open'), 'strain-g_S1_L001');
+  await pair(join(tempDir, 'locked'), 'strain-h_S1_L001');
+  await chmod(join(tempDir, 'locked'), 0o000);
   let scan: DeliveryScan;
   try {
-    scan = await scanIlluminaDelivery(root, emptyCatalog);
+    scan = await scanIlluminaDelivery(tempDir, emptyCatalog);
   } finally {
     // Restore access before the workspace cleanup removes the folder.
-    await chmod(join(root, 'locked'), 0o700);
+    await chmod(join(tempDir, 'locked'), 0o700);
   }
 
   assert.deepEqual(scan.candidates.map(candidate => candidate.sample), ['strain-g']);
-  assert.deepEqual(scan.skippedDirectories, [{path: join(root, 'locked'), reason: 'unreadable'}]);
+  assert.deepEqual(scan.skippedDirectories, [{path: join(tempDir, 'locked'), reason: 'unreadable'}]);
 });
 
 test('stops scanning when cancelled', async context => {
-  const root = await delivery(context);
-  await pair(root, 'strain-e_S1_L001');
+  const tempDir = await delivery(context);
+  await pair(tempDir, 'strain-e_S1_L001');
   const controller = new AbortController();
   controller.abort();
 
-  await assert.rejects(scanIlluminaDelivery(root, emptyCatalog, controller.signal), {name: 'AbortError'});
+  await assert.rejects(scanIlluminaDelivery(tempDir, emptyCatalog, controller.signal), {name: 'AbortError'});
 });
 
 test('fails when the chosen folder cannot be read', async context => {
-  const root = await delivery(context);
-  await assert.rejects(scanIlluminaDelivery(join(root, 'missing'), emptyCatalog), {code: 'ENOENT'});
+  const tempDir = await delivery(context);
+  await assert.rejects(scanIlluminaDelivery(join(tempDir, 'missing'), emptyCatalog), {code: 'ENOENT'});
 });

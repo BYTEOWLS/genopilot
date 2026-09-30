@@ -30,7 +30,7 @@ rule validate_inputs:
     log:
         "logs/validate-inputs.log",
     shell:
-        "python3 {SCRIPTS_DIR_SH}/validate_inputs.py"
+        "{PYTHON_SH} {SCRIPTS_DIR_SH}/validate_inputs.py"
         " --reference-fasta resolved/reference.fasta"
         " --reference-gff3 resolved/reference.gff3"
         " --target-fasta resolved/target.fasta"

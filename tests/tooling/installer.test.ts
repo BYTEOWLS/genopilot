@@ -12,12 +12,11 @@ import {
 } from '../../src/tooling/installer.js';
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'genopilot-tooling-test-'));
+  const tempDir = await mkdtemp(join(tmpdir(), 'genopilot-tooling-test-'));
   const paths = resolveToolingPaths({
     platform: 'linux',
     architecture: 'x64',
-    environment: {XDG_DATA_HOME: root},
-    homeDirectory: root,
+    homeDirectory: tempDir,
   });
   const calls: Array<{command: string; arguments_: readonly string[]; environment: NodeJS.ProcessEnv}> = [];
 
@@ -50,16 +49,19 @@ async function fixture() {
       if (command === paths.condaExecutable) {
         return {code: 0, stdout: `conda ${toolingPolicy.conda.managedVersion}`, stderr: ''};
       }
+      if (command === paths.pythonExecutable) {
+        return {code: 0, stdout: `Python ${toolingPolicy.python.managedVersion}`, stderr: ''};
+      }
       return {code: 0, stdout: toolingPolicy.snakemake.managedVersion, stderr: ''};
     },
   };
 
-  return {root, paths, calls, dependencies};
+  return {tempDir, paths, calls, dependencies};
 }
 
 test('installs verified Pixi and the pinned runtime bundle', async context => {
-  const {root, paths, calls, dependencies} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, paths, calls, dependencies} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const phases: string[] = [];
   const liveLines: string[] = [];
   const originalRunProcess = dependencies.runProcess;
@@ -97,8 +99,9 @@ test('installs verified Pixi and the pinned runtime bundle', async context => {
     'conda-forge',
     '--channel',
     'bioconda',
-    'snakemake=9.26.1',
-    'conda=25.11.1',
+    'snakemake=9.27.0',
+    'conda=26.7.3',
+    'python=3.14.7',
   ]);
   assert.equal(installation.environment.PIXI_HOME, paths.pixiHome);
   assert.equal(installation.environment.PIXI_NO_CONFIG, '1');
@@ -117,8 +120,8 @@ test('installs verified Pixi and the pinned runtime bundle', async context => {
 });
 
 test('stops before extraction when the Pixi checksum does not match', async context => {
-  const {root, calls, dependencies} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, calls, dependencies} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   dependencies.downloadFile = async (_url, destination) => {
     await writeFile(destination, 'unverified archive');
     return {sha256: '0'.repeat(64), bytes: 18};
@@ -136,8 +139,8 @@ test('stops before extraction when the Pixi checksum does not match', async cont
 });
 
 test('rejects archives containing anything other than the Pixi executable', async context => {
-  const {root, dependencies} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, dependencies} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const originalRunProcess = dependencies.runProcess;
   dependencies.runProcess = async (command, arguments_, environment, onOutput, signal) => {
     if (command === '/usr/bin/tar' && arguments_[0] === '-tzf') {
@@ -153,8 +156,8 @@ test('rejects archives containing anything other than the Pixi executable', asyn
 });
 
 test('refuses concurrent setup and preserves the active installation lock', async context => {
-  const {root, paths, dependencies} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, paths, dependencies} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   await mkdir(paths.dataDirectory, {recursive: true});
   await writeFile(paths.installationLockPath, `${String(process.pid)}\n`);
 
@@ -166,8 +169,8 @@ test('refuses concurrent setup and preserves the active installation lock', asyn
 });
 
 test('preserves a recent incomplete installation lock', async context => {
-  const {root, paths, dependencies} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, paths, dependencies} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   await mkdir(paths.dataDirectory, {recursive: true});
   await writeFile(paths.installationLockPath, '');
 
@@ -179,8 +182,8 @@ test('preserves a recent incomplete installation lock', async context => {
 });
 
 test('recovers a stale installation lock owned by a stopped process', async context => {
-  const {root, paths, dependencies} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, paths, dependencies} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   await mkdir(paths.dataDirectory, {recursive: true});
   await writeFile(paths.installationLockPath, '99999999\n');
 
@@ -192,8 +195,8 @@ test('recovers a stale installation lock owned by a stopped process', async cont
 });
 
 test('cancels setup and removes its lock and temporary directory', async context => {
-  const {root, paths, dependencies} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, paths, dependencies} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const controller = new AbortController();
   dependencies.downloadFile = async (_url, _destination, _maximumBytes, signal) => {
     controller.abort();

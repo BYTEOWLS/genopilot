@@ -118,6 +118,9 @@ SCRIPTS_DIR_SH = shlex.quote(str(SCRIPTS_DIR))
 SHARED_DIR = WORKFLOW_DIR.parent / "shared"
 SHARED_ENVS_DIR = SHARED_DIR / "envs"
 SHARED_SCRIPTS_DIR_SH = shlex.quote(str(SHARED_DIR / "scripts"))
+# Rules without a Conda environment run their standard-library scripts with Snakemake's own
+# interpreter, so they never depend on whichever python3 the host has, or lacks, on PATH.
+PYTHON_SH = shlex.quote(sys.executable)
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 from artifacts import run_artifacts

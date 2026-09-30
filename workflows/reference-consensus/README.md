@@ -301,7 +301,7 @@ Every scientific step runs in one pinned environment; Snakemake schedules the st
 | bcftools | pileup, haploid calling, normalization, isolate FASTA | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [11, 13] |
 | htslib (bgzip, tabix) | compressed, indexed support and consensus tables | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [11, 18] |
 
-Callability, cohort support, and consensus generation are small scripts that read these tools' outputs.
+Callability, cohort support, and consensus generation are small scripts that read these tools' outputs. Scripts of steps without their own environment run on the Python pinned with Snakemake in the GenoPilot runtime, and each run records its version.
 
 Publications that use this workflow's results should cite the tools above, next to the GenoPilot version that produced them.
 

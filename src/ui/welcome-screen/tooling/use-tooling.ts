@@ -38,6 +38,7 @@ function progressStatus(
       pixi: available('pixi', toolingPolicy.pixi.managedVersion),
       conda: installing,
       snakemake: installing,
+      python: installing,
     };
   }
   if (progress.tools.includes('pixi')) {
@@ -49,6 +50,7 @@ function progressStatus(
     pixi: available('pixi', toolingPolicy.pixi.managedVersion),
     conda: progress.tools.includes('conda') ? verifying : current.conda,
     snakemake: progress.tools.includes('snakemake') ? verifying : current.snakemake,
+    python: progress.tools.includes('python') ? verifying : current.python,
   };
 }
 

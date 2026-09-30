@@ -1,6 +1,6 @@
 # Genome annotation transfer
 
-This workflow copies the gene annotation of a reference genome onto a target genome, such as a newly assembled or consensus genome of a related strain of the same species. It maps every reference gene model onto the target with LiftOn [1], keeps LiftOn's own output as evidence, optionally prefixes the transferred identifiers, checks the structure of the resulting GFF3, and reports how much of the annotation was transferred and how the transferred genes changed.
+This workflow copies the gene annotation of a reference genome onto a target genome, such as a newly assembled or consensus genome of a related strain of the same species. It maps every reference gene model onto the target with LiftOn [1], keeps LiftOn's own output as evidence, checks the structure of the resulting GFF3, and reports how much of the annotation was transferred and how the transferred genes changed.
 
 The result is a target annotation to review, not a curated one: genes the target lacks, gained copies, and changed proteins are reported rather than resolved. What every item of the result page means is explained in the workflow's [results page](results.md).
 
@@ -16,8 +16,6 @@ Both are copied into the run directory with a SHA-256 checksum before any step r
 | Parameter | Default | Meaning |
 |---|---|---|
 | LiftOn profile | same-species | Fixed: LiftOn's defaults for genomes of the same species. No tuning options are exposed. |
-| Annotation ID replacement | empty | A prefix added to every transferred `ID`, `Parent`, and `Derives_from` value, so target IDs are told apart from reference IDs. Letters, digits, `_`, and `-`, starting with a letter. Empty means no prefixing. |
-| Annotation ID find (regex) | empty | Placeholder: not used yet. A find-and-replace on identifiers is planned to replace the plain prefix. |
 
 The output directory, run name and description, and CPU allocation are recorded with the run but do not change its results.
 
@@ -25,7 +23,7 @@ The output directory, run name and description, and CPU allocation are recorded 
 
 A **gene model** is the set of GFF3 features that describe one gene: the gene, its transcripts, and their exons and coding sequences (CDS), linked by `Parent` attributes. Transferring an annotation means finding where each reference gene model lies on the target genome and writing it in the target's coordinates.
 
-LiftOn combines two aligners. Liftoff [3] aligns each gene's DNA sequence with minimap2 [4], which works well while the target's sequence stays close to the reference. miniprot [5] aligns the reference protein instead, which still finds a gene whose DNA changed but whose protein is conserved. LiftOn builds each transferred gene model from both alignments and keeps the one whose protein is closest to the reference, comparing proteins with parasail [6]. A gene can be placed more than once, for example after a duplication in the target; the extra placements are reported as additional copies.
+LiftOn combines two aligners. Liftoff [3] aligns each gene's DNA sequence with minimap2 [4], which works well while the target's sequence stays close to the reference. miniprot [5] aligns the reference protein instead, which still finds a gene whose DNA changed but whose protein is conserved. LiftOn builds each transferred gene model from both alignments and keeps the one whose protein is closest to the reference, comparing proteins with parasail [6]. A gene can be placed more than once, for example after a duplication in the target; the extra placements are reported as additional copies. When the DNA lift placed a gene once, LiftOn can still add one model at a second locus where miniprot finds the gene's protein and no other model lies, which recovers the second copy of a duplicated gene; such a model is marked `lifton_rescue_second_locus=true` in the raw GFF3. Between strains of one species this rarely adds anything, but in a paralogous gene family the second locus can belong to a related gene, so review these copies before relying on them.
 
 For every transferred transcript LiftOn compares the target's sequence and protein with the reference and records its identities and **mutation classes**, such as `synonymous`, `frameshift`, or `stop_codon_gain`. These say what changed in the protein, not whether the gene still works.
 
@@ -34,10 +32,9 @@ For every transferred transcript LiftOn compares the target's sequence and prote
 1. **Resolve inputs**: copy the local files or download the NCBI accessions, and record their checksums.
 2. **Validate inputs**: check the structure of the FASTA and GFF3 files and that the reference annotation's sequence names exist in the reference FASTA. LiftOn starts only when this check passed; otherwise the report stays in place with every problem it found.
 3. **Transfer annotation**: LiftOn maps the reference gene models onto the target. Its raw GFF3 and its complete output directory are kept unmodified.
-4. **Prefix identifiers**: only with an ID prefix, write a copy of LiftOn's GFF3 with prefixed `ID`, `Parent`, and `Derives_from` values. Names, descriptions, and database references stay byte-identical. Changing only the prefix reruns this step and the ones after it, not LiftOn.
-5. **Validate annotation**: check the structure of the final GFF3: the version header, coordinates, strand, CDS phase, identifiers, and parent relationships. A failed check is kept as a scientific result for review, not treated as a failed run.
-6. **Summarize results**: the per-feature transfer table, the metrics, and the completion summary with the run status.
-7. **Record provenance**: the run's artifact index and provenance record.
+4. **Validate annotation**: check the structure of LiftOn's GFF3: the version header, coordinates, strand, CDS phase, identifiers, and parent relationships. A failed check is kept as a scientific result for review, not treated as a failed run.
+5. **Summarize results**: the per-feature transfer table, the metrics, and the completion summary with the run status.
+6. **Record provenance**: the run's artifact index and provenance record.
 
 ## Outputs
 
@@ -49,16 +46,13 @@ Paths are inside the run directory.
 | `results/input-validation.json` | the structural check of the inputs |
 | `results/annotation/lifton.raw.gff3` | the transferred annotation exactly as LiftOn wrote it |
 | `results/annotation/lifton_output/` | LiftOn's statistics, intermediate files, and its Liftoff and miniprot outputs |
-| `results/annotation/lifton.prefixed.gff3` | the prefixed annotation, only with an ID prefix |
-| `results/validation.json` | the structural check of the final annotation |
+| `results/validation.json` | the structural check of the transferred annotation |
 | `results/feature-transfer.tsv` | one row per selected reference feature and per target copy |
 | `results/metrics.json` | the transfer metrics with their one-line definitions |
 | `results/summary.json` | the run status, the metrics, and links to every report |
 | `artifacts.yaml` | every file's checksum and whether it was generated or imported |
 | `provenance/run.json` | the effective configuration, commands, tool versions, resources, and input checksums |
 | `logs/` | the log and benchmark of every step |
-
-The final annotation is the prefixed GFF3 when a prefix is configured, and LiftOn's raw GFF3 otherwise.
 
 ## Tools
 
@@ -73,7 +67,7 @@ The versions are pinned only in the files linked below and recorded in every run
 | miniprot | protein-to-genome alignment | [`lifton`](../shared/envs/lifton/environment.yaml) | [5] |
 | parasail | protein and sequence comparison | [`lifton`](../shared/envs/lifton/environment.yaml) | [6] |
 
-LiftOn drives minimap2, miniprot, and parasail itself, so they are pinned together in one environment. Input checks, prefixing, validation, and the summaries are small scripts that read the tools' outputs.
+LiftOn drives minimap2, miniprot, and parasail itself, so they are pinned together in one environment. Input checks, validation, and the summaries are small scripts that read the tools' outputs. Scripts of steps without their own environment run on the Python pinned with Snakemake in the GenoPilot runtime, and each run records its version.
 
 Publications that use this workflow's results should cite the tools above, next to the GenoPilot version that produced them.
 

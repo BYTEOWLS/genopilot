@@ -28,21 +28,21 @@ class ValidateReadPairTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.root = Path(self._tmp.name)
+        self.temp_dir = Path(self._tmp.name)
 
     def write_pair(self, r1: str, r2: str, name: str = "Sample1_S1_L001", compress: bool = True) -> tuple[Path, Path]:
         suffix = ".fastq.gz" if compress else ".fastq"
         paths = []
         for mate, text in (("R1", r1), ("R2", r2)):
-            path = self.root / f"{name}_{mate}_001{suffix}"
+            path = self.temp_dir / f"{name}_{mate}_001{suffix}"
             data = text.encode("ascii")
             path.write_bytes(gzip.compress(data, mtime=0) if compress else data)
             paths.append(path)
         return paths[0], paths[1]
 
     def run_script(self, r1: Path, r2: Path, isolate: str = "isolate-a", trimmed: str = "untrimmed") -> tuple[int, dict, Path]:
-        report = self.root / "out" / "read-validation.json"
-        read_group = self.root / "out" / "read-group.txt"
+        report = self.temp_dir / "out" / "read-validation.json"
+        read_group = self.temp_dir / "out" / "read-group.txt"
         with contextlib.redirect_stdout(io.StringIO()):
             exit_code = validate_read_pair.main(
                 ["--isolate-id", isolate, "--pair", "1", "--r1", str(r1), "--r2", str(r2),

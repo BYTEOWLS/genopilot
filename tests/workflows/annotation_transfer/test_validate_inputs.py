@@ -149,16 +149,16 @@ class MainOnFixturesTests(unittest.TestCase):
 
     def test_a_failing_input_is_still_reported_and_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            reference_fasta = root / "reference.fasta"
-            reference_gff3 = root / "reference.gff3"
-            target_fasta = root / "target.fasta"
+            temp_dir = Path(tmp)
+            reference_fasta = temp_dir / "reference.fasta"
+            reference_gff3 = temp_dir / "reference.gff3"
+            target_fasta = temp_dir / "target.fasta"
             reference_fasta.write_text(">chr1\nACGT\n", encoding="utf-8")
             reference_gff3.write_text(
                 "##gff-version 3\nchr2\tf\tgene\t1\t10\t.\t+\t.\tID=g1\n", encoding="utf-8"
             )
             target_fasta.write_text(">t1\nACGT\n", encoding="utf-8")
-            output = root / "input-validation.json"
+            output = temp_dir / "input-validation.json"
 
             exit_code = validate_inputs.main(
                 [

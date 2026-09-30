@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Validate the final LiftOn annotation GFF3.
+"""Validate LiftOn's annotation GFF3.
 
-That is the prefixed GFF3 when an ID prefix is configured, and otherwise
-LiftOn's raw GFF3, because an unprefixed run skips the prefixing step.
 Reuses `validate_inputs.parse_gff3` (structural/hierarchy checks: IDs,
 Parent references, coordinates, strand, CDS phase) against the one file
-that matters at this point in the DAG, the final annotation. Emits the
+that matters at this point in the DAG, the transferred annotation. Emits the
 `annotation-validation` artifact (see manifest.yaml). Always exits 0 so a
 "failed" report is preserved as evidence rather than deleted by Snakemake;
 see validate_inputs.py for the same rationale.

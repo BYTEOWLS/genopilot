@@ -126,17 +126,3 @@ parameters:
     visible_when:
       parameter: cpu-allocation
       equals: manual
-  - id: annotation-id-regex
-    label: Annotation ID find (regex)
-    section: Post processing
-    kind: text
-    required: false
-    default: null
-    hidden: false
-  - id: annotation-id-prefix
-    label: Annotation ID replacement
-    section: Post processing
-    kind: text
-    required: false
-    default: null
-    hidden: false

@@ -82,6 +82,7 @@ export function ToolingList({
       <ToolAvailability result={status.pixi} name="Pixi" purpose="Provisioning" targetVersion={`v${toolingPolicy.pixi.managedVersion}`} />
       <ToolAvailability result={status.conda} name="Conda" purpose="Environments" targetVersion={`v${toolingPolicy.conda.managedVersion}`} />
       <ToolAvailability result={status.snakemake} name="Snakemake" purpose="Workflow" targetVersion={`v${toolingPolicy.snakemake.managedVersion}`} />
+      <ToolAvailability result={status.python} name="Python" purpose="Workflow scripts" targetVersion={`v${toolingPolicy.python.managedVersion}`} />
     </Box>
   );
 }

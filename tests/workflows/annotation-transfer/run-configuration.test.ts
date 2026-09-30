@@ -26,19 +26,19 @@ const now = new Date('2026-09-05T08:34:12.123Z');
 const runTimestampPrefix = '2026-09-05_083412123_';
 
 async function fixture(): Promise<{
-  root: string;
+  tempDir: string;
   draft: ReturnType<typeof createAnnotationTransferDraft>;
 }> {
-  const root = await mkdtemp(join(tmpdir(), 'annotation-transfer-form-'));
-  const runs = join(root, 'runs');
+  const tempDir = await mkdtemp(join(tmpdir(), 'annotation-transfer-form-'));
+  const runs = join(tempDir, 'runs');
   await mkdir(runs);
   for (const name of ['reference.fa', 'reference.gff3', 'target.fa']) {
-    await writeFile(join(root, name), 'fixture\n');
+    await writeFile(join(tempDir, name), 'fixture\n');
   }
   return {
-    root,
+    tempDir,
     draft: {
-      ...createAnnotationTransferDraft(root),
+      ...createAnnotationTransferDraft(tempDir),
       referenceFasta: 'reference.fa',
       referenceGff3: 'reference.gff3',
       targetFasta: 'target.fa',
@@ -48,22 +48,22 @@ async function fixture(): Promise<{
 }
 
 test('resolves draft paths and records requested and effective options', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   draft.cpuMode = 'manual';
   draft.manualCpuLimit = '8';
   draft.runDescription = '  Initial T2T annotation  ';
 
-  const prepared = buildAnnotationTransferConfiguration(draft, root, 4, now);
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, 4, now);
 
   assert.deepEqual(prepared.configuration.inputs.reference, {
     source: 'local',
-    fasta: join(root, 'reference.fa'),
-    gff3: join(root, 'reference.gff3'),
+    fasta: join(tempDir, 'reference.fa'),
+    gff3: join(tempDir, 'reference.gff3'),
   });
   assert.deepEqual(prepared.configuration.inputs.target, {
     source: 'local',
-    fasta: join(root, 'target.fa'),
+    fasta: join(tempDir, 'target.fa'),
   });
   assert.deepEqual(prepared.configuration.lifton, {profile: 'same-species'});
   assert.deepEqual(prepared.configuration.resources, {
@@ -77,19 +77,19 @@ test('resolves draft paths and records requested and effective options', async c
   assert.equal(prepared.configuration.run.created_at, now.toISOString());
   assert.equal(
     prepared.outputDirectory,
-    join(root, 'runs', 'annotation-transfer', `${runTimestampPrefix}Baseline-transfer`),
+    join(tempDir, 'runs', 'annotation-transfer', `${runTimestampPrefix}Baseline-transfer`),
   );
 });
 
 test('resolves an NCBI accession source independently for the reference and the target', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   draft.referenceSource = 'ncbi';
   // Pasted with surrounding whitespace and typed in lowercase.
   draft.referenceAccession = '  gcf_000149205.2  ';
   draft.targetSource = 'local';
 
-  const prepared = buildAnnotationTransferConfiguration(draft, root, 4);
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, 4);
 
   assert.deepEqual(prepared.configuration.inputs.reference, {
     source: 'ncbi',
@@ -98,19 +98,19 @@ test('resolves an NCBI accession source independently for the reference and the 
   });
   assert.deepEqual(prepared.configuration.inputs.target, {
     source: 'local',
-    fasta: join(root, 'target.fa'),
+    fasta: join(tempDir, 'target.fa'),
   });
 });
 
 test('finds existing accession caches and applies explicit cache modes', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   draft.referenceSource = 'ncbi';
   draft.referenceAccession = 'GCF_000149205.2';
   draft.targetSource = 'ncbi';
   draft.targetAccession = 'GCA_000149205.2';
-  const prepared = buildAnnotationTransferConfiguration(draft, root, 4, now);
-  await mkdir(join(root, 'runs', 'ncbi-accessions-cache', 'GCF_000149205.2'), {recursive: true});
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, 4, now);
+  await mkdir(join(tempDir, 'runs', 'ncbi-accessions-cache', 'GCF_000149205.2'), {recursive: true});
 
   assert.deepEqual(await findNcbiCacheEntries(prepared), [
     {input: 'reference', accession: 'GCF_000149205.2'},
@@ -132,11 +132,11 @@ test('finds existing accession caches and applies explicit cache modes', async c
 });
 
 test('rejects inaccessible or malformed accession cache entries', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   draft.referenceSource = 'ncbi';
   draft.referenceAccession = 'GCF_000149205.2';
-  const prepared = buildAnnotationTransferConfiguration(draft, root, 4, now);
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, 4, now);
 
   await assert.rejects(
     findNcbiCacheEntries(prepared, async () => {
@@ -221,10 +221,10 @@ test('calculates every CPU allocation mode with at least one effective CPU', () 
 });
 
 test('reports missing inputs and an existing run before saving', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   draft.targetFasta = 'missing.fa';
-  const prepared = buildAnnotationTransferConfiguration(draft, root, 4);
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, 4);
   await mkdir(prepared.outputDirectory, {recursive: true});
 
   await assert.rejects(
@@ -240,23 +240,23 @@ test('reports missing inputs and an existing run before saving', async context =
 });
 
 test('does not check the filesystem for an NCBI-sourced input', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   draft.referenceSource = 'ncbi';
   draft.referenceAccession = 'GCF_000149205.2';
-  const prepared = buildAnnotationTransferConfiguration(draft, root, 4);
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, 4);
 
   await validatePreparedRunPaths(prepared, undefined, async () => []);
 });
 
 test('refuses an NCBI accession whose cataloged copies conflict', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   draft.referenceSource = 'ncbi';
   draft.referenceAccession = 'GCF_000149205.2';
   draft.targetSource = 'ncbi';
   draft.targetAccession = 'GCA_000011425.1';
-  const prepared = buildAnnotationTransferConfiguration(draft, root, 4);
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, 4);
   const copy = (path: string, checksum: string) =>
     ({path, verified_at: '2026-01-01T00:00:00.000Z', fasta_sha256: checksum.repeat(64)});
   const catalog = async () => [
@@ -288,9 +288,9 @@ test('refuses an NCBI accession whose cataloged copies conflict', async context 
 });
 
 test('atomically saves a complete configuration without overwriting a run', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const prepared = buildAnnotationTransferConfiguration(draft, root, 4, now);
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, 4, now);
 
   const configurationPath = await savePreparedRun(prepared);
   const saved = parseAnnotationTransferConfiguration(await readFile(configurationPath, 'utf8'));
@@ -303,9 +303,9 @@ test('atomically saves a complete configuration without overwriting a run', asyn
 });
 
 test('saves strings that a YAML 1.1 loader such as Snakemake keeps as strings', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const prepared = buildAnnotationTransferConfiguration({...draft, runName: 'no'}, root, 4, now);
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const prepared = buildAnnotationTransferConfiguration({...draft, runName: 'no'}, tempDir, 4, now);
 
   const configurationPath = await savePreparedRun(prepared);
   const yaml11 = parse(await readFile(configurationPath, 'utf8'), {version: '1.1'});
@@ -316,32 +316,32 @@ test('saves strings that a YAML 1.1 loader such as Snakemake keeps as strings', 
 });
 
 test('returns no runs when the workflow has never been run', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'annotation-transfer-history-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'annotation-transfer-history-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
 
-  assert.deepEqual(await discoverAnnotationTransferRuns(join(root, 'runs')), []);
+  assert.deepEqual(await discoverAnnotationTransferRuns(join(tempDir, 'runs')), []);
 });
 
 test('discovers saved runs newest first and skips an unreadable one', async context => {
-  const {root, draft} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
 
   await savePreparedRun(
-    buildAnnotationTransferConfiguration(draft, root, 4, new Date('2026-09-01T08:00:00.000Z')),
+    buildAnnotationTransferConfiguration(draft, tempDir, 4, new Date('2026-09-01T08:00:00.000Z')),
   );
   await savePreparedRun(
     buildAnnotationTransferConfiguration(
       {...draft, runName: 'Second run'},
-      root,
+      tempDir,
       4,
       new Date('2026-09-02T08:00:00.000Z'),
     ),
   );
-  const corruptDirectory = join(root, 'runs', 'annotation-transfer', 'corrupt');
+  const corruptDirectory = join(tempDir, 'runs', 'annotation-transfer', 'corrupt');
   await mkdir(corruptDirectory, {recursive: true});
   await writeFile(join(corruptDirectory, 'config.yaml'), 'not: [valid');
 
-  const runs = await discoverAnnotationTransferRuns(join(root, 'runs'));
+  const runs = await discoverAnnotationTransferRuns(join(tempDir, 'runs'));
 
   assert.deepEqual(
     runs.map(run => run.configuration.run.id),

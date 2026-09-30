@@ -185,29 +185,30 @@ def relevant_configuration(config: dict, stage: str) -> dict:
         if stage == "transfer-annotation":
             value.update({"lifton": config["lifton"], "effective_cpus": config["resources"]["effective_cpus"]})
         return value
-    if stage in {"prefix-identifiers", "validate-annotation"}:
-        return {**common, "annotation": config["annotation"]}
+    if stage == "validate-annotation":
+        return common
     return config
 
 
-def producer_record(config: dict, stage: str) -> dict:
+def producer_record(config: dict, stage: str, snakemake_python_version: str) -> dict:
+    # Rules without their own Conda environment run on Snakemake's interpreter, which the
+    # managed tooling pins; the rule environments pin the `python` of the others.
     stage_tools = {
         "resolve-inputs": ["python", "ncbi-datasets-cli"],
-        "validate-inputs": ["python"],
+        "validate-inputs": ["snakemake-python"],
         "transfer-annotation": ["lifton", "miniprot", "minimap2", "parasail-python"],
-        "prefix-identifiers": ["python"],
-        "validate-annotation": ["python"],
-        "summarize-results": ["python"],
+        "validate-annotation": ["snakemake-python"],
+        "summarize-results": ["snakemake-python"],
         "record-provenance": ["python"],
     }
-    configured = configured_tool_versions()
+    versions = {**configured_tool_versions(), "snakemake-python": snakemake_python_version}
     return {
         "workflow": {"id": config["workflow_id"], "version": config["workflow_version"]},
-        "tools": {name: configured[name] for name in stage_tools[stage]},
+        "tools": {name: versions[name] for name in stage_tools[stage]},
     }
 
 
-def build_artifacts(config: dict, include_prefixed: bool) -> list[dict]:
+def build_artifacts(config: dict, snakemake_python_version: str) -> list[dict]:
     input_specs = [
         ("resolved-reference-fasta", Path("resolved/reference.fasta"), "fasta", "provenance/reference.fasta.json"),
         ("resolved-reference-gff3", Path("resolved/reference.gff3"), "gff3", "provenance/reference.gff3.json"),
@@ -244,13 +245,6 @@ def build_artifacts(config: dict, include_prefixed: bool) -> list[dict]:
         ("summarize-results-log", "logs/summarize-results.log", "log", "summarize-results"),
         ("record-provenance-log", "logs/record-provenance.log", "log", "record-provenance"),
     ]
-    if include_prefixed:
-        generated.extend(
-            [
-                ("prefixed-gff3", "results/annotation/lifton.prefixed.gff3", "gff3", "prefix-identifiers"),
-                ("prefix-annotation-log", "logs/prefix-annotation.log", "log", "prefix-identifiers"),
-            ]
-        )
     for artifact_id, path_text, artifact_type, stage in generated:
         artifacts.append(
             artifact_record(artifact_id, Path(path_text), artifact_type, stage, "generated")
@@ -260,7 +254,7 @@ def build_artifacts(config: dict, include_prefixed: bool) -> list[dict]:
         record["configuration_checksum"] = canonical_json_checksum(
             relevant_configuration(config, stage)
         )
-        record["producer"] = producer_record(config, stage)
+        record["producer"] = producer_record(config, stage, snakemake_python_version)
     return artifacts
 
 
@@ -301,13 +295,8 @@ def _resolve_command(config: dict, role: str) -> dict:
     return {"rule": f"resolve_{role}", "argv": argv}
 
 
-def build_commands(config: dict, include_prefixed: bool) -> list[dict]:
-    final_gff3 = (
-        "results/annotation/lifton.prefixed.gff3"
-        if include_prefixed
-        else "results/annotation/lifton.raw.gff3"
-    )
-    commands = [
+def build_commands(config: dict) -> list[dict]:
+    return [
         _resolve_command(config, "reference"),
         _resolve_command(config, "target"),
         {
@@ -345,7 +334,7 @@ def build_commands(config: dict, include_prefixed: bool) -> list[dict]:
                 "python3",
                 "validate_annotation.py",
                 "--gff3",
-                final_gff3,
+                "results/annotation/lifton.raw.gff3",
                 "--output",
                 "results/validation.json",
             ],
@@ -359,8 +348,6 @@ def build_commands(config: dict, include_prefixed: bool) -> list[dict]:
                 "resolved/reference.gff3",
                 "--raw-gff3",
                 "results/annotation/lifton.raw.gff3",
-                "--final-gff3",
-                final_gff3,
                 "--validation",
                 "results/validation.json",
                 "--diagnostics",
@@ -381,29 +368,9 @@ def build_commands(config: dict, include_prefixed: bool) -> list[dict]:
                 config["run"]["created_at"],
                 "--effective-cpus",
                 str(config["resources"]["effective_cpus"]),
-                "--id-prefix",
-                config["annotation"]["id_prefix"],
             ],
         },
     ]
-    if include_prefixed:
-        commands.insert(
-            4,
-            {
-                "rule": "prefix_annotation",
-                "argv": [
-                    "python3",
-                    "prefix_gff3.py",
-                    "--source",
-                    "results/annotation/lifton.raw.gff3",
-                    "--destination",
-                    "results/annotation/lifton.prefixed.gff3",
-                    "--prefix",
-                    config["annotation"]["id_prefix"],
-                ],
-            },
-        )
-    return commands
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -412,6 +379,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--manifest-schema-version", type=int, required=True)
     parser.add_argument("--snakemake-version", required=True)
+    parser.add_argument("--snakemake-python-version", required=True)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--provenance", type=Path, required=True)
     return parser.parse_args(argv)
@@ -421,8 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     config = json.loads(args.config_json)
     generated_at = utc_now_iso()
-    include_prefixed = bool(config["annotation"]["id_prefix"])
-    artifacts = build_artifacts(config, include_prefixed)
+    artifacts = build_artifacts(config, args.snakemake_python_version)
     manifest_checksum = {"algorithm": CHECKSUM_ALGORITHM, "value": sha256_file(args.manifest)}
     workflow = {
         "id": config["workflow_id"],
@@ -463,12 +430,13 @@ def main(argv: list[str] | None = None) -> int:
             "effective_cpus": config["resources"]["effective_cpus"],
             "benchmark": "logs/transfer-annotation.benchmark.tsv",
         },
-        "commands": build_commands(config, include_prefixed),
+        "commands": build_commands(config),
         "tool_versions": {
             "configured": configured_tool_versions(),
             "observed": {
                 **observed_tool_versions(),
                 "snakemake": {"version": args.snakemake_version, "source": "workflow-runtime"},
+                "snakemake-python": {"version": args.snakemake_python_version, "source": "workflow-runtime"},
             },
             "input_resolution": {
                 key: value.get("datasets_cli_version")

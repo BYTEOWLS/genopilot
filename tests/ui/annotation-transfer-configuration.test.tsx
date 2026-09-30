@@ -757,14 +757,14 @@ test('shows actionable validation errors before confirmation', async context => 
 });
 
 test('opens the file browser with Enter from a local path field and selects a file', async context => {
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'annotation-transfer-browser-'));
-  context.after(() => rm(temporaryRoot, {recursive: true, force: true}));
-  const root = join(temporaryRoot, 'runs');
+  const tempDir = await mkdtemp(join(tmpdir(), 'annotation-transfer-browser-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const root = join(tempDir, 'runs');
   const fasta = join(root, 'reference.fa');
   const folder = join(root, 'folder');
   await mkdir(folder, {recursive: true});
   await mkdir(join(root, 'ncbi-accessions-cache'));
-  await mkdir(join(temporaryRoot, 'ncbi-accessions-cache'));
+  await mkdir(join(tempDir, 'ncbi-accessions-cache'));
   await writeFile(join(folder, 'nested.fa'), '>nested\nACGT\n');
   await writeFile(fasta, '>chr1\nACGT\n');
   let validations = 0;
@@ -816,7 +816,6 @@ test('labels a previous run by its name and creation time, not its run ID', () =
       reference: {source: 'local', fasta: '/data/reference.fa', gff3: '/data/reference.gff3'},
       target: {source: 'local', fasta: '/data/target.fa'},
     },
-    annotation: {id_prefix: 'AN_CS'},
     lifton: {profile: 'same-species'},
     resources: {cpu_mode: 'automatic', effective_cpus: 8},
     run: {
@@ -855,7 +854,6 @@ test('steps through previous run history and prefills the form immediately', asy
         'reference-accession': 'GCF_000149205.2',
         'target-source': 'local',
         'target-fasta': '/data/target-a.fa',
-        'annotation-id-prefix': 'AN_A',
         'cpu-allocation': 'automatic',
         'output-root': '/out/a',
         'run-name': 'run-a',
@@ -870,7 +868,6 @@ test('steps through previous run history and prefills the form immediately', asy
         'reference-gff3': '/data/reference-b.gff3',
         'target-source': 'local',
         'target-fasta': '/data/target-b.fa',
-        'annotation-id-prefix': 'AN_B',
         'cpu-allocation': 'automatic',
         'output-root': '/out/b',
         'run-name': 'run-b',
@@ -899,7 +896,7 @@ test('steps through previous run history and prefills the form immediately', asy
     frame => fieldLine(frame, 'reference-accession')?.includes('GCF_000149205.2') ?? false,
   );
   assert.match(fieldLine(firstRunFrame, 'target-fasta') ?? '', /\/data\/target-a\.fa/);
-  assert.match(fieldLine(firstRunFrame, 'annotation-id-prefix') ?? '', /AN_A/);
+  assert.match(fieldLine(firstRunFrame, 'run-description') ?? '', /First transfer/);
 
   input.write(PAGE_DOWN);
   const secondRunFrame = await waitForFrame(
@@ -907,7 +904,7 @@ test('steps through previous run history and prefills the form immediately', asy
     frame => fieldLine(frame, 'reference-fasta')?.includes('/data/reference-b.fa') ?? false,
   );
   assert.match(fieldLine(secondRunFrame, 'reference-gff3') ?? '', /\/data\/reference-b\.gff3/);
-  assert.match(fieldLine(secondRunFrame, 'annotation-id-prefix') ?? '', /AN_B/);
+  assert.match(fieldLine(secondRunFrame, 'run-description') ?? '', /Second transfer/);
   assert.equal(fieldLine(secondRunFrame, 'reference-accession'), undefined);
 
   input.write(PAGE_UP);

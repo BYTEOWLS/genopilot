@@ -27,7 +27,7 @@ export type InstallationProgress =
   | {
       type: 'phase';
       phase: InstallationPhase;
-      tools: readonly ('pixi' | 'conda' | 'snakemake')[];
+      tools: readonly ('pixi' | 'conda' | 'snakemake' | 'python')[];
     }
   | {type: 'log'; text: string};
 
@@ -470,7 +470,7 @@ export async function installTooling(
       throw new Error(`Installed tool verification failed for ${paths.pixiExecutable}.`);
     }
 
-    onProgress({type: 'phase', phase: 'runtime', tools: ['conda', 'snakemake']});
+    onProgress({type: 'phase', phase: 'runtime', tools: ['conda', 'snakemake', 'python']});
     const installArguments = [
       'global',
       'install',
@@ -484,13 +484,14 @@ export async function installTooling(
     ];
     const installation = await runLogged(paths.pixiExecutable, installArguments, safeEnvironment);
     if (installation.code !== 0) {
-      throw new Error('Pixi could not install Snakemake and Conda.');
+      throw new Error('Pixi could not install Snakemake, Conda, and Python.');
     }
 
-    onProgress({type: 'phase', phase: 'verification', tools: ['conda', 'snakemake']});
+    onProgress({type: 'phase', phase: 'verification', tools: ['conda', 'snakemake', 'python']});
     for (const [command, expectedVersion] of [
       [paths.condaExecutable, toolingPolicy.conda.managedVersion],
       [paths.snakemakeExecutable, toolingPolicy.snakemake.managedVersion],
+      [paths.pythonExecutable, toolingPolicy.python.managedVersion],
     ] as const) {
       const verification = await runLogged(command, ['--version'], safeEnvironment);
       const output = `${verification.stdout}\n${verification.stderr}`;

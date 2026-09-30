@@ -14,9 +14,9 @@ class CollectRunProvenanceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.previous_directory = Path.cwd()
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
-        os.chdir(self.root)
-        self.manifest = self.root / "manifest.yaml"
+        self.temp_dir = Path(self.temporary.name)
+        os.chdir(self.temp_dir)
+        self.manifest = self.temp_dir / "manifest.yaml"
         self.manifest.write_text("schema_version: 1\nid: annotation-transfer\n", encoding="utf-8")
         self.config = {
             "schema_version": 1,
@@ -26,11 +26,10 @@ class CollectRunProvenanceTests(unittest.TestCase):
                 "reference": {"source": "local", "fasta": "/inputs/reference.fasta", "gff3": "/inputs/reference.gff3"},
                 "target": {"source": "local", "fasta": "/inputs/target.fasta"},
             },
-            "annotation": {"id_prefix": "AN_"},
             "lifton": {"profile": "same-species"},
             "resources": {"cpu_mode": "manual", "manual_limit": 3, "effective_cpus": 3},
             "run": {
-                "output_root": str(self.root.parent),
+                "output_root": str(self.temp_dir.parent),
                 "id": "test-run",
                 "created_at": "2026-09-05T20:00:00.000Z",
             },
@@ -42,7 +41,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def _write(self, relative: str, content: str = "test\n") -> None:
-        path = self.root / relative
+        path = self.temp_dir / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
@@ -64,7 +63,6 @@ class CollectRunProvenanceTests(unittest.TestCase):
         generated = [
             "results/input-validation.json",
             "results/annotation/lifton.raw.gff3",
-            "results/annotation/lifton.prefixed.gff3",
             "results/annotation/lifton_output/run_manifest.json",
             "results/validation.json",
             "results/feature-transfer.tsv",
@@ -75,7 +73,6 @@ class CollectRunProvenanceTests(unittest.TestCase):
             "logs/validate-inputs.log",
             "logs/transfer-annotation.log",
             "logs/transfer-annotation.benchmark.tsv",
-            "logs/prefix-annotation.log",
             "logs/validate-annotation.log",
             "logs/summarize-results.log",
             "logs/record-provenance.log",
@@ -99,6 +96,8 @@ class CollectRunProvenanceTests(unittest.TestCase):
                     "1",
                     "--snakemake-version",
                     "9.11.3",
+                    "--snakemake-python-version",
+                    "3.14.7",
                     "--artifacts",
                     "artifacts.yaml",
                     "--provenance",
@@ -122,6 +121,12 @@ class CollectRunProvenanceTests(unittest.TestCase):
         self.assertEqual(raw["producer"]["workflow"], {"id": "annotation-transfer", "version": 1})
         configured = collect.configured_tool_versions()
         self.assertEqual(raw["producer"]["tools"]["lifton"], configured["lifton"])
+        # Rules without a Conda environment ran on Snakemake's interpreter, not an environment's.
+        self.assertEqual(records["input-validation"]["producer"]["tools"], {"snakemake-python": "3.14.7"})
+        self.assertEqual(
+            provenance["tool_versions"]["observed"]["snakemake-python"],
+            {"version": "3.14.7", "source": "workflow-runtime"},
+        )
         self.assertEqual(
             raw["checksum"]["value"],
             hashlib.sha256(Path(raw["path"]).read_bytes()).hexdigest(),
@@ -131,7 +136,6 @@ class CollectRunProvenanceTests(unittest.TestCase):
             records["resolved-reference-fasta"]["source_provenance"],
             "provenance/reference.fasta.json",
         )
-        self.assertIn("prefixed-gff3", records)
         self.assertGreater(records["lifton-diagnostics"]["file_count"], 0)
         self.assertEqual(
             artifacts["workflow"]["manifest_checksum"]["value"],
@@ -151,29 +155,16 @@ class CollectRunProvenanceTests(unittest.TestCase):
             hashlib.sha256(Path("artifacts.yaml").read_bytes()).hexdigest(),
         )
 
-    def test_omits_prefix_outputs_when_no_prefix_is_configured(self) -> None:
-        self.config["annotation"]["id_prefix"] = ""
-        Path("results/annotation/lifton.prefixed.gff3").unlink()
-        Path("logs/prefix-annotation.log").unlink()
-
-        artifacts, provenance = self._run()
-        ids = {record["id"] for record in artifacts["artifacts"]}
-        rules = {command["rule"] for command in provenance["commands"]}
-
-        self.assertNotIn("prefixed-gff3", ids)
-        self.assertNotIn("prefix-annotation-log", ids)
-        self.assertNotIn("prefix_annotation", rules)
-
 
 class DirectoryChecksumTests(unittest.TestCase):
     def test_directory_checksum_includes_relative_names_and_contents(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "a").mkdir()
-            (root / "a" / "report.txt").write_text("one", encoding="utf-8")
-            first = collect.sha256_directory(root)
-            (root / "a" / "report.txt").write_text("two", encoding="utf-8")
-            second = collect.sha256_directory(root)
+            temp_dir = Path(tmp)
+            (temp_dir / "a").mkdir()
+            (temp_dir / "a" / "report.txt").write_text("one", encoding="utf-8")
+            first = collect.sha256_directory(temp_dir)
+            (temp_dir / "a" / "report.txt").write_text("two", encoding="utf-8")
+            second = collect.sha256_directory(temp_dir)
             self.assertNotEqual(first[0], second[0])
             self.assertEqual(second[1:], (1, 3))
 

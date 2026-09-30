@@ -33,12 +33,11 @@ chrC	LiftOn	sequence_feature	941	960	.	+	.	ID=note1
 
 
 class CollectTransferMetricsTests(unittest.TestCase):
-    def prepare(self, root: Path) -> argparse.Namespace:
-        reference = root / "resolved" / "reference.gff3"
-        raw = root / "results" / "annotation" / "lifton.raw.gff3"
-        final = root / "results" / "annotation" / "lifton.prefixed.gff3"
-        validation = root / "results" / "validation.json"
-        diagnostics = root / "results" / "annotation" / "lifton_output"
+    def prepare(self, temp_dir: Path) -> argparse.Namespace:
+        reference = temp_dir / "resolved" / "reference.gff3"
+        raw = temp_dir / "results" / "annotation" / "lifton.raw.gff3"
+        validation = temp_dir / "results" / "validation.json"
+        diagnostics = temp_dir / "results" / "annotation" / "lifton_output"
         stats = diagnostics / "stats"
         intermediate = diagnostics / "intermediate_files"
         reference.parent.mkdir(parents=True)
@@ -47,7 +46,6 @@ class CollectTransferMetricsTests(unittest.TestCase):
         intermediate.mkdir(parents=True)
         reference.write_text(REFERENCE_GFF3, encoding="utf-8")
         raw.write_text(TARGET_GFF3, encoding="utf-8")
-        final.write_text(TARGET_GFF3, encoding="utf-8")
         validation.write_text(
             json.dumps(
                 {
@@ -91,18 +89,16 @@ class CollectTransferMetricsTests(unittest.TestCase):
         return argparse.Namespace(
             reference_gff3=reference,
             raw_gff3=raw,
-            final_gff3=final,
             validation=validation,
             diagnostics=diagnostics,
-            details=root / "results" / "feature-transfer.tsv",
-            metrics=root / "results" / "metrics.json",
-            summary=root / "results" / "summary.json",
+            details=temp_dir / "results" / "feature-transfer.tsv",
+            metrics=temp_dir / "results" / "metrics.json",
+            summary=temp_dir / "results" / "summary.json",
             workflow_id="annotation-transfer",
             workflow_version=1,
             run_id="test-run",
             run_created_at="2026-09-05T20:00:00.000Z",
             effective_cpus=4,
-            id_prefix="AN_",
         )
 
     def test_collects_deterministic_per_feature_rows_and_metrics(self) -> None:
@@ -140,10 +136,9 @@ class CollectTransferMetricsTests(unittest.TestCase):
                 {"frameshift": 1, "nonsynonymous": 1, "stop_missing": 1, "synonymous": 1},
             )
             self.assertEqual(metrics["validation"]["warnings"], 1)
-            self.assertTrue(metrics["prefix"]["applied"])
             self.assertIn("miniprot", metrics["definitions"]["miniprot_rescues"])
             self.assertIn(
-                "Raw LiftOn target identifier",
+                "LiftOn",
                 metrics["detail_column_definitions"]["target_id"],
             )
             self.assertEqual(
@@ -319,8 +314,6 @@ class CollectTransferMetricsTests(unittest.TestCase):
                     str(args.reference_gff3),
                     "--raw-gff3",
                     str(args.raw_gff3),
-                    "--final-gff3",
-                    str(args.final_gff3),
                     "--validation",
                     str(args.validation),
                     "--diagnostics",
@@ -341,8 +334,6 @@ class CollectTransferMetricsTests(unittest.TestCase):
                     args.run_created_at,
                     "--effective-cpus",
                     str(args.effective_cpus),
-                    "--id-prefix",
-                    args.id_prefix,
                 ]
             )
 

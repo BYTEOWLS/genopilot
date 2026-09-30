@@ -9,7 +9,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 ## Workflows
 
 - [ ] Save isolate FASTAs from a run to the isolate catalog ([concept](concepts/saved-isolate-sequences.md)).
-- [ ] Post-LiftOn identifier rewriting ([concept](concepts/annotation-id-rewriting.md)); required before INSDC submission.
+- [ ] GFF3 ID find-and-replace ([concept](concepts/annotation-id-rewriting.md)); required before INSDC submission.
 - [ ] INSDC submission preparation (NCBI, ENA, or DDBJ): genome and isolate reads ([concept](concepts/insdc-submission/README.md)).
 
 ## Application

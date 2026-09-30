@@ -11,9 +11,9 @@ import {
 } from '../../src/tooling/ncbi-api-key.js';
 
 async function temporaryKeyPath(context: import('node:test').TestContext): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'ncbi-api-key-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  return join(root, 'secrets', 'ncbi-api-key');
+  const tempDir = await mkdtemp(join(tmpdir(), 'ncbi-api-key-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  return join(tempDir, 'secrets', 'ncbi-api-key');
 }
 
 test('reports no key configured until one is saved', async context => {

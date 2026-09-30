@@ -18,72 +18,72 @@ class GenerateConsensusTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.root = Path(self._tmp.name)
+        self.temp_dir = Path(self._tmp.name)
         self.write_backbone(BACKBONE)
         self.voters: list[str] = []
 
     def write_backbone(self, contigs: dict[str, str]) -> None:
         fasta = "".join(f">{name} description\n{sequence}\n" for name, sequence in contigs.items())
-        (self.root / "backbone.fasta").write_text(fasta, encoding="utf-8")
-        (self.root / "backbone.fasta.fai").write_text(
+        (self.temp_dir / "backbone.fasta").write_text(fasta, encoding="utf-8")
+        (self.temp_dir / "backbone.fasta.fai").write_text(
             "".join(f"{name}\t{len(sequence)}\t0\t0\t0\n" for name, sequence in contigs.items()), encoding="utf-8"
         )
 
     def isolate(self, isolate_id: str, records: str = "", mask: dict[str, list[tuple[int, int, str]]] | None = None) -> None:
         """Writes an isolate's VCF and mask; the mask defaults to callable everywhere."""
-        with gzip.open(self.root / f"{isolate_id}.vcf.gz", "wt", encoding="utf-8") as vcf:
+        with gzip.open(self.temp_dir / f"{isolate_id}.vcf.gz", "wt", encoding="utf-8") as vcf:
             vcf.write("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n")
             vcf.write(records)
         lines = []
         for name, sequence in BACKBONE.items():
             for start, end, state in (mask or {}).get(name, [(0, len(sequence), "callable")]):
                 lines.append(f"{name}\t{start}\t{end}\t{state}\n")
-        (self.root / f"{isolate_id}.bed").write_text("".join(lines), encoding="utf-8")
+        (self.temp_dir / f"{isolate_id}.bed").write_text("".join(lines), encoding="utf-8")
         self.voters.append(isolate_id)
 
     def aggregate(self, backbone_vote: str = "yes") -> None:
         args = [
-            "--fai", str(self.root / "backbone.fasta.fai"),
-            "--backbone", str(self.root / "backbone.fasta"),
+            "--fai", str(self.temp_dir / "backbone.fasta.fai"),
+            "--backbone", str(self.temp_dir / "backbone.fasta"),
             "--include-backbone-vote", backbone_vote,
-            "--sites", str(self.root / "support-sites.tsv"),
-            "--intervals", str(self.root / "support-intervals.tsv"),
-            "--summary", str(self.root / "support-summary.json"),
+            "--sites", str(self.temp_dir / "support-sites.tsv"),
+            "--intervals", str(self.temp_dir / "support-intervals.tsv"),
+            "--summary", str(self.temp_dir / "support-summary.json"),
         ]
         for voter in self.voters:
-            args += ["--voter", voter, str(self.root / f"{voter}.vcf.gz"), str(self.root / f"{voter}.bed")]
+            args += ["--voter", voter, str(self.temp_dir / f"{voter}.vcf.gz"), str(self.temp_dir / f"{voter}.bed")]
         self.assertEqual(aggregate_support.main(args), 0)
 
     def write_support(self, sites: list[str], intervals: list[str]) -> None:
         """Hand-written support tables, for vote counts that are tedious to simulate."""
-        (self.root / "support-sites.tsv").write_text(
+        (self.temp_dir / "support-sites.tsv").write_text(
             "## schema_version: 1\n" + SITE_HEADER + "".join(row + "\n" for row in sites), encoding="utf-8")
-        (self.root / "support-intervals.tsv").write_text(
+        (self.temp_dir / "support-intervals.tsv").write_text(
             "## schema_version: 1\n## isolates: \n" + INTERVAL_HEADER + "".join(row + "\n" for row in intervals),
             encoding="utf-8")
-        (self.root / "support-summary.json").write_text(
+        (self.temp_dir / "support-summary.json").write_text(
             json.dumps({"include_backbone_vote": True, "voters": []}), encoding="utf-8")
 
     def generate(self, method: str = "strict-majority", minimum: int = 0, snp: str = "n", out: str = "out") -> dict:
         self.assertEqual(generate_consensus.main([
-            "--fai", str(self.root / "backbone.fasta.fai"),
-            "--backbone", str(self.root / "backbone.fasta"),
-            "--sites", str(self.root / "support-sites.tsv"),
-            "--intervals", str(self.root / "support-intervals.tsv"),
-            "--support-summary", str(self.root / "support-summary.json"),
+            "--fai", str(self.temp_dir / "backbone.fasta.fai"),
+            "--backbone", str(self.temp_dir / "backbone.fasta"),
+            "--sites", str(self.temp_dir / "support-sites.tsv"),
+            "--intervals", str(self.temp_dir / "support-intervals.tsv"),
+            "--support-summary", str(self.temp_dir / "support-summary.json"),
             "--voting-method", method,
             "--min-callable-isolates", str(minimum),
             "--unresolved-snp", snp,
-            "--fasta", str(self.root / out / "consensus.fasta"),
-            "--consensus-sites", str(self.root / out / "consensus-sites.tsv"),
-            "--summary", str(self.root / out / "summary.json"),
+            "--fasta", str(self.temp_dir / out / "consensus.fasta"),
+            "--consensus-sites", str(self.temp_dir / out / "consensus-sites.tsv"),
+            "--summary", str(self.temp_dir / out / "summary.json"),
         ]), 0)
-        return json.loads((self.root / out / "summary.json").read_text(encoding="utf-8"))
+        return json.loads((self.temp_dir / out / "summary.json").read_text(encoding="utf-8"))
 
     def fasta(self, out: str = "out") -> dict[str, str]:
         records: dict[str, str] = {}
         name = ""
-        for line in (self.root / out / "consensus.fasta").read_text(encoding="utf-8").splitlines():
+        for line in (self.temp_dir / out / "consensus.fasta").read_text(encoding="utf-8").splitlines():
             if line.startswith(">"):
                 name = line[1:]
                 records[name] = ""
@@ -93,7 +93,7 @@ class GenerateConsensusTests(unittest.TestCase):
         return records
 
     def rows(self, out: str = "out") -> list[dict[str, str]]:
-        lines = (self.root / out / "consensus-sites.tsv").read_text(encoding="utf-8").splitlines()
+        lines = (self.temp_dir / out / "consensus-sites.tsv").read_text(encoding="utf-8").splitlines()
         self.assertEqual(lines[0], "## schema_version: 1")
         header = next(line for line in lines if not line.startswith("##")).lstrip("#").split("\t")
         return [dict(zip(header, line.split("\t"))) for line in lines if not line.startswith("#")]
@@ -244,26 +244,26 @@ class GenerateConsensusTests(unittest.TestCase):
         self.generate(out="second")
         for name in ("consensus.fasta", "consensus-sites.tsv", "summary.json"):
             with self.subTest(file=name):
-                first = (self.root / "first" / name).read_text(encoding="utf-8")
-                self.assertEqual((self.root / "second" / name).read_text(encoding="utf-8").replace("second", "first"), first)
+                first = (self.temp_dir / "first" / name).read_text(encoding="utf-8")
+                self.assertEqual((self.temp_dir / "second" / name).read_text(encoding="utf-8").replace("second", "first"), first)
 
     def test_reads_bgzip_compressed_support_tables(self) -> None:
         self.isolate("iso-a", pass_record(8, "A", "T"))
         self.aggregate(backbone_vote="no")
         for name in ("support-sites", "support-intervals"):
-            plain = self.root / f"{name}.tsv"
-            with gzip.open(self.root / f"{name}.tsv.gz", "wt", encoding="utf-8") as compressed:
+            plain = self.temp_dir / f"{name}.tsv"
+            with gzip.open(self.temp_dir / f"{name}.tsv.gz", "wt", encoding="utf-8") as compressed:
                 compressed.write(plain.read_text(encoding="utf-8"))
             plain.write_text("not the table\n", encoding="utf-8")
         self.assertEqual(generate_consensus.main([
-            "--fai", str(self.root / "backbone.fasta.fai"), "--backbone", str(self.root / "backbone.fasta"),
-            "--sites", str(self.root / "support-sites.tsv.gz"),
-            "--intervals", str(self.root / "support-intervals.tsv.gz"),
-            "--support-summary", str(self.root / "support-summary.json"),
+            "--fai", str(self.temp_dir / "backbone.fasta.fai"), "--backbone", str(self.temp_dir / "backbone.fasta"),
+            "--sites", str(self.temp_dir / "support-sites.tsv.gz"),
+            "--intervals", str(self.temp_dir / "support-intervals.tsv.gz"),
+            "--support-summary", str(self.temp_dir / "support-summary.json"),
             "--voting-method", "strict-majority", "--min-callable-isolates", "0", "--unresolved-snp", "n",
-            "--fasta", str(self.root / "out" / "consensus.fasta"),
-            "--consensus-sites", str(self.root / "out" / "consensus-sites.tsv"),
-            "--summary", str(self.root / "out" / "summary.json"),
+            "--fasta", str(self.temp_dir / "out" / "consensus.fasta"),
+            "--consensus-sites", str(self.temp_dir / "out" / "consensus-sites.tsv"),
+            "--summary", str(self.temp_dir / "out" / "summary.json"),
         ]), 0)
         self.assertEqual(self.fasta()["c1"][7], "T")
 

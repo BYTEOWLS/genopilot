@@ -39,9 +39,6 @@ export type AnnotationTransferConfiguration = {
     reference: ReferenceInput;
     target: TargetInput;
   };
-  annotation: {
-    id_prefix: string;
-  };
   lifton: {
     profile: 'same-species';
   };
@@ -132,32 +129,6 @@ function validateInputs(
   return {reference, target};
 }
 
-function validateAnnotation(
-  value: unknown,
-  issues: ConfigurationValidationIssue[],
-): AnnotationTransferConfiguration['annotation'] | undefined {
-  const annotation = requireObject(value, '$.annotation', issues);
-  if (!annotation) {
-    return undefined;
-  }
-  rejectUnknownFields(annotation, ['id_prefix'], '$.annotation', issues);
-  if (typeof annotation.id_prefix !== 'string') {
-    issues.push({path: '$.annotation.id_prefix', message: 'must be a string'});
-    return undefined;
-  }
-  if (
-    annotation.id_prefix.length > 0 &&
-    !/^[A-Za-z][A-Za-z0-9_-]*$/.test(annotation.id_prefix)
-  ) {
-    issues.push({
-      path: '$.annotation.id_prefix',
-      message: 'must start with a letter and contain only letters, numbers, underscores, or hyphens',
-    });
-    return undefined;
-  }
-  return annotation as AnnotationTransferConfiguration['annotation'];
-}
-
 function validateLifton(
   value: unknown,
   issues: ConfigurationValidationIssue[],
@@ -189,7 +160,6 @@ export function validateAnnotationTransferConfiguration(
       'workflow_id',
       'workflow_version',
       'inputs',
-      'annotation',
       'lifton',
       'resources',
       'run',
@@ -204,7 +174,6 @@ export function validateAnnotationTransferConfiguration(
   }, issues);
 
   const inputs = validateInputs(value.inputs, issues);
-  const annotation = validateAnnotation(value.annotation, issues);
   const lifton = validateLifton(value.lifton, issues);
   const resources = validateResources(value.resources, issues);
   const run = validateRun(value.run, issues);
@@ -218,7 +187,6 @@ export function validateAnnotationTransferConfiguration(
     workflow_id: ANNOTATION_TRANSFER_WORKFLOW_ID,
     workflow_version: ANNOTATION_TRANSFER_WORKFLOW_VERSION,
     inputs: inputs as AnnotationTransferConfiguration['inputs'],
-    annotation: annotation as AnnotationTransferConfiguration['annotation'],
     lifton: lifton as AnnotationTransferConfiguration['lifton'],
     resources: resources as AnnotationTransferConfiguration['resources'],
     run: run as AnnotationTransferConfiguration['run'],

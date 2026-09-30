@@ -21,17 +21,9 @@ stages:
     label: Transfer annotation
     description: Run LiftOn and preserve its raw annotation and diagnostics.
     rules: [transfer_annotation]
-  - id: prefix-identifiers
-    label: Prefix identifiers
-    description: >
-      Apply the configured prefix to GFF3 IDs and identifier references. Skipped
-      entirely when no annotation ID prefix is configured.
-    rules: [prefix_annotation]
   - id: validate-annotation
     label: Validate transferred annotation
-    description: >
-      Validate the structure and relationships of the prefixed GFF3, or of the raw
-      LiftOn GFF3 when no prefix is configured.
+    description: Validate the structure and relationships of LiftOn's GFF3.
     rules: [validate_annotation]
   - id: summarize-results
     label: Summarize results
@@ -61,14 +53,6 @@ artifacts:
     path: results/annotation/lifton_output
     type: directory
     produced_by: transfer-annotation
-  - id: prefixed-gff3
-    label: Prefixed LiftOn GFF3
-    description: >
-      Written only when an annotation ID prefix is configured; without one the raw
-      GFF3 above is the annotation downstream stages consume.
-    path: results/annotation/lifton.prefixed.gff3
-    type: gff3
-    produced_by: prefix-identifiers
   - id: annotation-validation
     label: Annotation validation report
     path: results/validation.json

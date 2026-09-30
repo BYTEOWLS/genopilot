@@ -27,13 +27,13 @@ const configuration = {
   run: {output_root: '/analysis/runs', id: 'run-a', created_at: '2026-01-01T12:00:00.000Z'},
 };
 
-async function runDirectory(context: TestContext): Promise<{root: string; directory: string}> {
-  const root = await mkdtemp(join(tmpdir(), 'iteration-run-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const directory = join(root, 'run');
+async function runDirectory(context: TestContext): Promise<{tempDir: string; directory: string}> {
+  const tempDir = await mkdtemp(join(tmpdir(), 'iteration-run-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const directory = join(tempDir, 'run');
   await mkdir(directory);
   await writeFile(join(directory, 'config.yaml'), stringifyRunFile(configuration));
-  return {root, directory};
+  return {tempDir, directory};
 }
 
 function event(type: string, fields: Record<string, unknown> = {}): string {
@@ -48,10 +48,10 @@ async function dryRunEvents(directory: string, lines: string[]): Promise<string>
 }
 
 test('runs only the iteration target, with its logs beside the iteration\'s', async context => {
-  const {root, directory} = await runDirectory(context);
-  const paths = resolveToolingPaths({platform: 'linux', architecture: 'x64', environment: {XDG_DATA_HOME: root}, homeDirectory: root});
+  const {tempDir, directory} = await runDirectory(context);
+  const paths = resolveToolingPaths({platform: 'linux', architecture: 'x64', homeDirectory: tempDir});
   const startedAt = new Date('2026-09-06T08:50:14.123Z');
-  const options = {runDirectory: directory, iteration: 2, snakefilePath: join(root, 'Snakefile'), cores: 5, paths, startedAt};
+  const options = {runDirectory: directory, iteration: 2, snakefilePath: join(tempDir, 'Snakefile'), cores: 5, paths, startedAt};
   const dryRun = prepareIterationRun({...options, mode: 'dry-run'});
   const execution = prepareIterationRun({...options, mode: 'execute'});
 

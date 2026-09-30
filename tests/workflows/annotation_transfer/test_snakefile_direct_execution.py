@@ -5,7 +5,6 @@ Requires a `snakemake` binary on PATH (the pinned version declared in
 locally installed bioinformatics tooling to collect at all.
 """
 
-import hashlib
 import json
 import os
 import re
@@ -27,7 +26,7 @@ RUN_CONDA_INTEGRATION = os.environ.get("RUN_SNAKEMAKE_CONDA_INTEGRATION") == "1"
 CONDA_BIN = shutil.which("conda")
 
 
-def write_local_config(run_dir: Path, id_prefix: str = "AN_CS_") -> Path:
+def write_local_config(run_dir: Path) -> Path:
     config_path = run_dir / "config.yaml"
     config_path.write_text(
         "\n".join(
@@ -43,8 +42,6 @@ def write_local_config(run_dir: Path, id_prefix: str = "AN_CS_") -> Path:
                 "  target:",
                 "    source: local",
                 f"    fasta: {FIXTURES_DIR / 'target.fasta'}",
-                "annotation:",
-                f'  id_prefix: "{id_prefix}"',
                 "lifton:",
                 "  profile: same-species",
                 "resources:",
@@ -284,32 +281,12 @@ class LocalSourceExecutionTests(unittest.TestCase):
             self.assertIn(("validate_inputs", "transfer_annotation"), edges)
             self.assertIn(("resolve_reference", "validate_inputs"), edges)
             self.assertIn(("resolve_target", "validate_inputs"), edges)
-            self.assertIn(("transfer_annotation", "prefix_annotation"), edges)
-            self.assertIn(("prefix_annotation", "validate_annotation"), edges)
-            self.assertIn(("validate_annotation", "summarize_annotation_transfer"), edges)
-            self.assertIn(
-                ("summarize_annotation_transfer", "record_annotation_transfer_provenance"),
-                edges,
-            )
-
-    def test_an_empty_prefix_drops_the_prefixing_rule_from_the_dag(self) -> None:
-        """Without a configured prefix there is nothing to rewrite, so the rule must not run
-        at all: a "prefixed" copy of an unprefixed annotation is misleading evidence.
-        Validation then gates the raw LiftOn GFF3, which is what downstream stages read."""
-        with tempfile.TemporaryDirectory() as tmp:
-            run_dir = Path(tmp) / "runs" / "test-run"
-            run_dir.mkdir(parents=True)
-            config_path = write_local_config(run_dir, id_prefix="")
-
-            edges = rule_dependencies(run_dir, config_path)
-
             self.assertIn(("transfer_annotation", "validate_annotation"), edges)
             self.assertIn(("validate_annotation", "summarize_annotation_transfer"), edges)
             self.assertIn(
                 ("summarize_annotation_transfer", "record_annotation_transfer_provenance"),
                 edges,
             )
-            self.assertNotIn("prefix_annotation", {rule for edge in edges for rule in edge})
 
     def test_records_run_events_through_the_packaged_logger_plugin(self) -> None:
         """The event file is written by Snakemake itself, so a direct run produces it too."""
@@ -381,8 +358,6 @@ class LocalSourceExecutionTests(unittest.TestCase):
                         "  target:",
                         "    source: local",
                         "    fasta: /nonexistent/target.fasta",
-                        "annotation:",
-                        "  id_prefix: AN_CS_",
                         "lifton:",
                         "  profile: same-species",
                         "resources:",
@@ -413,11 +388,11 @@ class DirectExecutionContractTests(unittest.TestCase):
     actual transfer result on the synthetic genomes.
     """
 
-    def prepare(self, root: Path, id_prefix: str = "AN_CS_") -> tuple[Path, Path, Path, dict]:
-        run_dir = root / "runs" / "test-run"
+    def prepare(self, temp_dir: Path) -> tuple[Path, Path, Path, dict]:
+        run_dir = temp_dir / "runs" / "test-run"
         run_dir.mkdir(parents=True)
-        config_path = write_local_config(run_dir, id_prefix=id_prefix)
-        bin_dir = root / "bin"
+        config_path = write_local_config(run_dir)
+        bin_dir = temp_dir / "bin"
         write_fake_lifton(bin_dir)
         return run_dir, config_path, bin_dir, fake_lifton_environment(bin_dir)
 
@@ -543,9 +518,9 @@ class DirectExecutionContractTests(unittest.TestCase):
 
     def test_interrupted_run_resumes_in_the_same_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_dir, config_path, bin_dir, _env = self.prepare(root)
-            started = root / "lifton-started"
+            temp_dir = Path(tmp)
+            run_dir, config_path, bin_dir, _env = self.prepare(temp_dir)
+            started = temp_dir / "lifton-started"
             env = fake_lifton_environment(
                 bin_dir, "interrupt", FAKE_LIFTON_STARTED=str(started)
             )
@@ -605,46 +580,6 @@ class DirectExecutionContractTests(unittest.TestCase):
             finally:
                 terminate_process_group(process)
 
-    def test_prefix_only_rerun_preserves_raw_evidence_and_checksum(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            run_dir, config_path, _bin_dir, env = self.prepare(Path(tmp))
-            first = run_snakemake(run_dir, config_path, env=env)
-            self.assertEqual(first.returncode, 0, first.stderr)
-            raw_path = run_dir / "results" / "annotation" / "lifton.raw.gff3"
-            raw_bytes = raw_path.read_bytes()
-            raw_mtime = raw_path.stat().st_mtime_ns
-            first_artifacts = json.loads(
-                (run_dir / "artifacts.yaml").read_text(encoding="utf-8")
-            )
-            first_raw_checksum = next(
-                record["checksum"]["value"]
-                for record in first_artifacts["artifacts"]
-                if record["id"] == "raw-gff3"
-            )
-
-            config_path.write_text(
-                config_path.read_text(encoding="utf-8").replace("AN_CS_", "AN_NEW_"),
-                encoding="utf-8",
-            )
-            second = run_snakemake(run_dir, config_path, "-p", env=env)
-
-            self.assertEqual(second.returncode, 0, second.stderr)
-            output = second.stdout + second.stderr
-            self.assertIn("prefix_annotation", output)
-            self.assertNotIn("localrule transfer_annotation:", output)
-            self.assertEqual(raw_path.read_bytes(), raw_bytes)
-            self.assertEqual(raw_path.stat().st_mtime_ns, raw_mtime)
-            artifacts = json.loads((run_dir / "artifacts.yaml").read_text(encoding="utf-8"))
-            records = {record["id"]: record for record in artifacts["artifacts"]}
-            self.assertEqual(records["raw-gff3"]["checksum"]["value"], first_raw_checksum)
-            self.assertEqual(first_raw_checksum, hashlib.sha256(raw_bytes).hexdigest())
-            self.assertIn(
-                "ID=AN_NEW_gene1",
-                (run_dir / "results" / "annotation" / "lifton.prefixed.gff3").read_text(
-                    encoding="utf-8"
-                ),
-            )
-
 
 @unittest.skipUnless(SNAKEMAKE_BIN and CONDA_BIN, "snakemake and conda must be installed on PATH")
 @unittest.skipUnless(
@@ -697,15 +632,11 @@ class FullPipelineExecutionTests(unittest.TestCase):
             self.assertTrue(diagnostics.is_dir())
             self.assertTrue((diagnostics / "liftoff" / "liftoff.gff3").is_file())
             self.assertTrue((diagnostics / "miniprot" / "miniprot.gff3").is_file())
-            self.assertTrue(
-                (run_dir / "results" / "annotation" / "lifton.prefixed.gff3").is_file()
-            )
-            prefixed = (run_dir / "results" / "annotation" / "lifton.prefixed.gff3").read_text(
+            raw = (run_dir / "results" / "annotation" / "lifton.raw.gff3").read_text(
                 encoding="utf-8"
             )
-            self.assertIn("chr1\tLiftOn\tgene\t1031\t1430", prefixed)
-            self.assertIn("chr2\tLiftOn\tgene\t831\t1130", prefixed)
-            self.assertIn("ID=AN_CS_", prefixed)
+            self.assertIn("chr1\tLiftOn\tgene\t1031\t1430", raw)
+            self.assertIn("chr2\tLiftOn\tgene\t831\t1130", raw)
 
             validation = json.loads(
                 (run_dir / "results" / "validation.json").read_text(encoding="utf-8")
@@ -732,66 +663,9 @@ class FullPipelineExecutionTests(unittest.TestCase):
             )
             records = {record["id"]: record for record in artifacts["artifacts"]}
             self.assertIn("raw-gff3", records)
-            self.assertIn("prefixed-gff3", records)
             self.assertEqual(records["resolved-reference-fasta"]["origin"], "imported")
             self.assertEqual(provenance["workflow"]["id"], "annotation-transfer")
             self.assertEqual(provenance["resources"]["effective_cpus"], 1)
-
-    def test_changing_only_the_prefix_reuses_the_lifton_output(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            run_dir = Path(tmp) / "runs" / "test-run"
-            run_dir.mkdir(parents=True)
-            config_path = write_local_config(run_dir)
-            first = run_snakemake(run_dir, config_path)
-            self.assertEqual(first.returncode, 0, first.stderr)
-            raw_path = run_dir / "results" / "annotation" / "lifton.raw.gff3"
-            raw_gff3_mtime = raw_path.stat().st_mtime
-            first_artifacts = json.loads((run_dir / "artifacts.yaml").read_text(encoding="utf-8"))
-            first_raw_checksum = next(
-                record["checksum"]["value"]
-                for record in first_artifacts["artifacts"]
-                if record["id"] == "raw-gff3"
-            )
-
-            config_path.write_text(
-                config_path.read_text(encoding="utf-8").replace("AN_CS_", "AN_CS2_"),
-                encoding="utf-8",
-            )
-            second = run_snakemake(run_dir, config_path, "-p")
-
-            self.assertEqual(second.returncode, 0, second.stderr)
-            self.assertEqual(
-                (run_dir / "results" / "annotation" / "lifton.raw.gff3").stat().st_mtime,
-                raw_gff3_mtime,
-                "the raw LiftOn output must be reused, not regenerated, on a prefix-only change",
-            )
-            prefixed = (run_dir / "results" / "annotation" / "lifton.prefixed.gff3").read_text(
-                encoding="utf-8"
-            )
-            self.assertIn("ID=AN_CS2_", prefixed)
-            second_artifacts = json.loads((run_dir / "artifacts.yaml").read_text(encoding="utf-8"))
-            second_records = {record["id"]: record for record in second_artifacts["artifacts"]}
-            self.assertEqual(second_records["raw-gff3"]["checksum"]["value"], first_raw_checksum)
-            self.assertEqual(
-                second_records["prefixed-gff3"]["checksum"]["value"],
-                hashlib.sha256(prefixed.encode("utf-8")).hexdigest(),
-            )
-
-    def test_an_empty_prefix_writes_no_prefixed_gff3(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            run_dir = Path(tmp) / "runs" / "test-run"
-            run_dir.mkdir(parents=True)
-            config_path = write_local_config(run_dir, id_prefix="")
-
-            result = run_snakemake(run_dir, config_path)
-
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue((run_dir / "results" / "annotation" / "lifton.raw.gff3").is_file())
-            self.assertFalse((run_dir / "results" / "annotation" / "lifton.prefixed.gff3").exists())
-            validation = json.loads(
-                (run_dir / "results" / "validation.json").read_text(encoding="utf-8")
-            )
-            self.assertEqual(validation["status"], "passed")
 
 
 if __name__ == "__main__":

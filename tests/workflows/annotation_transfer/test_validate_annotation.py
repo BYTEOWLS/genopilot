@@ -11,9 +11,9 @@ validate_annotation = load_script("validate_annotation")
 class MainTests(unittest.TestCase):
     def test_a_well_formed_gff3_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            gff3 = root / "prefixed.gff3"
-            output = root / "validation.json"
+            temp_dir = Path(tmp)
+            gff3 = temp_dir / "lifton.raw.gff3"
+            output = temp_dir / "validation.json"
             gff3.write_text(
                 "##gff-version 3\n"
                 "chr1\tLiftOn\tgene\t1\t10\t.\t+\t.\tID=AN_CS_gene1\n"
@@ -32,9 +32,9 @@ class MainTests(unittest.TestCase):
 
     def test_a_dangling_parent_is_reported_but_still_written(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            gff3 = root / "prefixed.gff3"
-            output = root / "validation.json"
+            temp_dir = Path(tmp)
+            gff3 = temp_dir / "lifton.raw.gff3"
+            output = temp_dir / "validation.json"
             gff3.write_text(
                 "##gff-version 3\nchr1\tLiftOn\tmRNA\t1\t10\t.\t+\t.\tID=m1;Parent=missing\n",
                 encoding="utf-8",

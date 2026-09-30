@@ -65,7 +65,7 @@ genopilot update
 
 The TUI checks for a newer release in the background and shows an update notice when one is available. The `genopilot update` command checks npm's `latest` release, skips installation when the current version is up to date, and otherwise installs the exact version it checked.
 
-The CLI checks Pixi, Conda, Snakemake, and the workflow runtime after launch. With explicit consent, guided setup downloads a checksum-verified Pixi release into the application data directory and uses it to install the pinned Conda and Snakemake versions. No `sudo` access is required. Native Windows execution is unsupported; WSL2 support is planned.
+The CLI checks Pixi, Conda, Snakemake, and the workflow runtime after launch. With explicit consent, guided setup downloads a checksum-verified Pixi release into the application data directory and uses it to install the pinned Conda, Snakemake, and Python versions. No `sudo` access is required. Native Windows execution is unsupported; WSL2 support is planned.
 
 ## Running a workflow directly
 
@@ -141,9 +141,17 @@ pnpm build
 pnpm start
 ```
 
+## Releasing
+
+`CHANGELOG.md` holds the highlights of each version and is the source of the GitHub release notes.
+
+1. On `main`, set the version in `package.json`, the version and `date-released` in `CITATION.cff`, and move the *Unreleased* entries into a `## [X.Y.Z] - YYYY-MM-DD` section.
+2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. The release workflow checks the tag against `package.json` and creates the GitHub release from the version's CHANGELOG section, followed by GitHub's generated list of merged pull requests.
+
 ## Tooling policy
 
-The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downloads Pixi from immutable release URLs verified by SHA-256 checksums, and Pixi installs Snakemake and Conda together; Snakemake then uses Conda to provision the environments declared by workflow rules. Managed paths live under the platform user-data directory rather than the current working directory.
+The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downloads Pixi from immutable release URLs verified by SHA-256 checksums, and Pixi installs Snakemake, Conda, and Python together; Snakemake then uses Conda to provision the environments declared by workflow rules, and runs the scripts of rules without their own environment on that pinned Python. Managed paths live under `~/.byteowlsGenopilot` rather than the current working directory.
 
 ### Runtime
 
@@ -184,12 +192,11 @@ Tool version validation, actionable per-tool failure diagnostics, guided install
 
 ## Isolate catalog
 
-Isolates reused across runs are stored in a user-local catalog, `isolates/isolates.yaml`, beside the managed tooling directory:
+Isolates reused across runs are stored in a user-local catalog, `isolates/isolates.yaml`, beside the managed tooling directory, on Linux and macOS alike:
 
-| Platform | Catalog file |
-|---|---|
-| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/byteowlsGenopilot/isolates/isolates.yaml` |
-| macOS | `$HOME/.byteowlsGenopilot/isolates/isolates.yaml` |
+```text
+$HOME/.byteowlsGenopilot/isolates/isolates.yaml
+```
 
 The catalog records local research paths, so it is owner-only and never belongs in a repository or run workspace. Each isolate has a stable ID, a name, an optional description, a `wildtype` value (`true`, `false`, or `null` when not recorded), an optional `derived_from` parent ID, and one or more R1/R2 FASTQ pairs (plain or gzip-compressed) given as absolute paths. Sequencing providers deliver one pair per lane or run, so a library sequenced twice has two pairs. Each pair records whether the provider already trimmed or filtered it; untrimmed reads are preferred, and one isolate may mix trimmed and untrimmed pairs:
 
@@ -215,10 +222,9 @@ The CLI validates the whole file on every load and save: duplicate or malformed 
 
 Versioned NCBI assembly accessions (`GCA_…`/`GCF_…` with a version suffix) are cataloged in `accessions/accessions.yaml`, beside the isolate catalog and with the same private, locked, atomic saves:
 
-| Platform | Catalog file |
-|---|---|
-| Linux | `${XDG_DATA_HOME:-$HOME/.local/share}/byteowlsGenopilot/accessions/accessions.yaml` |
-| macOS | `$HOME/.byteowlsGenopilot/accessions/accessions.yaml` |
+```text
+$HOME/.byteowlsGenopilot/accessions/accessions.yaml
+```
 
 Each entry keeps an optional local name and description apart from the facts NCBI reports (organism, taxon, assembly name, level, status, and type such as haploid, submitter, and the RefSeq category and strain only when NCBI provides them), which record when and from where they were retrieved: the NCBI Datasets v2 API, or the report cached with a download. Cataloging an accession never downloads its assembly; workflows download it on demand. Metadata lookups use the optional NCBI API key when one is configured and work without it at NCBI's lower rate limit.
 
@@ -247,15 +253,7 @@ accessions:
 
 ## Reset managed tooling for installation tests
 
-Stop the CLI before removing its managed tooling. These commands remove Pixi, Conda, Snakemake, and temporary setup files while preserving previous setup logs.
-
-Linux:
-
-```bash
-TOOLING_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/byteowlsGenopilot/tooling" && rm -rf "$TOOLING_DIR/runtimes" "$TOOLING_DIR/pixi" "$TOOLING_DIR/temporary" "$TOOLING_DIR/tooling-setup.lock"
-```
-
-macOS:
+Stop the CLI before removing its managed tooling. These commands remove Pixi, Conda, Snakemake, Python, and temporary setup files while preserving previous setup logs.
 
 ```bash
 TOOLING_DIR="$HOME/.byteowlsGenopilot/tooling" && rm -rf "$TOOLING_DIR/runtimes" "$TOOLING_DIR/pixi" "$TOOLING_DIR/temporary" "$TOOLING_DIR/tooling-setup.lock"
@@ -269,7 +267,7 @@ The pinned per-rule environments Snakemake provisions for workflows are kept sep
 rm -rf "$TOOLING_DIR/conda-envs"
 ```
 
-To also delete setup logs and completely reset the application-managed tooling directory, run the applicable command above to set `TOOLING_DIR`, followed by:
+To also delete setup logs and completely reset the application-managed tooling directory, set `TOOLING_DIR` as in the first command of this section, followed by:
 
 ```bash
 rm -rf "$TOOLING_DIR"

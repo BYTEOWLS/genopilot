@@ -21,6 +21,7 @@ type CompletedToolingCheck = {
   pixi: ToolCheckResult;
   conda: ToolCheckResult;
   snakemake: ToolCheckResult;
+  python: ToolCheckResult;
 };
 
 export type ToolingStatus =
@@ -213,7 +214,7 @@ async function findCompatibleTool(
  * External PATH tools are intentionally ignored during the limited MVP.
  */
 export async function checkTooling(paths: ToolingPaths = resolveToolingPaths()): Promise<ToolingStatus> {
-  const [pixi, conda, snakemake] = await Promise.all([
+  const [pixi, conda, snakemake, python] = await Promise.all([
     findCompatibleTool(
       [paths.pixiExecutable],
       toolingPolicy.pixi.minimumVersion,
@@ -229,6 +230,11 @@ export async function checkTooling(paths: ToolingPaths = resolveToolingPaths()):
       toolingPolicy.snakemake.minimumVersion,
       toolingPolicy.snakemake.maximumVersionExclusive,
     ),
+    findCompatibleTool(
+      [paths.pythonExecutable],
+      toolingPolicy.python.minimumVersion,
+      toolingPolicy.python.maximumVersionExclusive,
+    ),
   ]);
 
   // Node is already available because it is currently executing this CLI.
@@ -238,7 +244,7 @@ export async function checkTooling(paths: ToolingPaths = resolveToolingPaths()):
     toolingPolicy.node.maximumVersionExclusive,
   );
 
-  const completed = {node, pixi, conda, snakemake};
+  const completed = {node, pixi, conda, snakemake, python};
   const allAvailable = Object.values(completed).every(result => result.state === 'available');
 
   return allAvailable

@@ -58,4 +58,4 @@ rule validate_read_pair:
     params:
         args=_validate_read_pair_args,
     shell:
-        "python3 {SCRIPTS_DIR_SH}/validate_read_pair.py {params.args} > {log} 2>&1"
+        "{PYTHON_SH} {SCRIPTS_DIR_SH}/validate_read_pair.py {params.args} > {log} 2>&1"
