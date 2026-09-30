@@ -9,15 +9,8 @@ import {CohortDecisionError, type CohortDecisionDraft} from '../../src/workflows
 import type {CohortSites} from '../../src/workflows/reference-consensus/sites.js';
 import type {SnakemakeRun} from '../../src/workflows/execution.js';
 import {
-  cohortColumns,
-  cohortDetailSections,
   comparisonRows,
-  consensusFileSections,
   countRows,
-  isolateColumns,
-  isolateDetailSections,
-  overviewSections,
-  referenceConsensusHelpSections,
 } from '../../src/ui/run-results-screen/reference-consensus-results.js';
 import {validateReferenceConsensusConfiguration} from '../../src/workflows/reference-consensus/configuration.js';
 import {
@@ -202,6 +195,7 @@ function renderScreen(options: {
       formatDateTime={value => `formatted:${value}`}
       cohortRerun={options.cohortRerun}
       readSites={options.readSites ?? (async () => ({voters: [], sites: []}))}
+      loadHelp={async () => [{id: 'results', title: 'Results', blocks: []}]}
     />,
     {
       exitOnCtrlC: false,
@@ -331,27 +325,6 @@ test('opens and closes the help page from any tab', async () => {
     assert.match(selectedLine(frame) ?? '', /iso-a/);
   } finally {
     screen.unmount();
-  }
-});
-
-test('explains every item the reference-consensus view can render', () => {
-  const result = consensusResult();
-  const rendered = new Set([
-    ...overviewSections(result).flatMap(section => section.rows.map(row => row.id)),
-    ...countRows(counts(0)).map(row => row.id),
-    ...isolateColumns.map(column => column.id),
-    ...result.isolates.flatMap(value => isolateDetailSections(value, result).flatMap(section => section.rows.map(row => row.id))),
-    ...cohortColumns.map(column => column.id),
-    ...result.cohorts.flatMap(value => cohortDetailSections(value, text => text).flatMap(section => section.rows.map(row => row.id))),
-    ...consensusFileSections(result).flatMap(section => section.rows.map(row => row.id)),
-  ]);
-  const entries = referenceConsensusHelpSections(result).flatMap(section => section.entries);
-  const explained = new Set(entries.filter(entry => entry.explanation || entry.values).map(entry => entry.id));
-  for (const id of rendered) {
-    assert.ok(explained.has(id), `no help for ${id}`);
-  }
-  for (const entry of entries) {
-    assert.ok(entry.explanation ?? entry.values, `empty help entry ${entry.id}`);
   }
 });
 

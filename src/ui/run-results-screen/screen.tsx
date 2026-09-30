@@ -25,23 +25,22 @@ import {
 import {readCohortSites, siteFilters} from '../../workflows/reference-consensus/sites.js';
 import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import {AnnotationTransferResults, annotationTransferHelpSections} from './annotation-transfer-results.js';
+import {AnnotationTransferResults} from './annotation-transfer-results.js';
 import {
   cohortSiteTables,
   consensusTabs,
   filteredSites,
   initialConsensusView,
   ReferenceConsensusResults,
-  referenceConsensusHelpSections,
   selectableTableHeaderLines,
   type ConsensusView,
   type SitesState,
 } from './reference-consensus-results.js';
 import {CohortReviewScreen} from './cohort-review.js';
 import {Page} from '../components/page.js';
-import {HelpContent} from '../components/help.js';
+import {DocumentPage} from '../components/document-page.js';
 import {TabBar} from '../components/tabs.js';
-import {runHelpSections} from './run-help.js';
+import {readGeneralDocuments, readWorkflowDocumentsById, type DocumentsLoader} from '../../docs/documents.js';
 import {
   WorkflowExecutionScreen,
   type WorkflowExecutionOutcome,
@@ -93,6 +92,15 @@ export type CohortRerun = {
   loadResult?: typeof loadWorkflowResult;
 };
 
+/** The workflow's results page, then the run metadata and files every workflow shares. */
+async function loadResultHelp(workflowId: string): ReturnType<DocumentsLoader> {
+  const [workflowResults, general] = await Promise.all([
+    readWorkflowDocumentsById(workflowId, ['results.md']),
+    readGeneralDocuments(['run-results']),
+  ]);
+  return [...workflowResults, ...general];
+}
+
 type ScreenMode = {kind: 'results'} | {kind: 'review'} | {kind: 'rerun'; iteration: number};
 
 /** Generic run-result shell. Workflow-specific interpretation is delegated explicitly. */
@@ -108,6 +116,7 @@ export function RunResultsScreen({
   formatDateTime = formatLocalDateTime,
   cohortRerun,
   readSites = readCohortSites,
+  loadHelp = () => loadResultHelp(manifest.id),
 }: {
   runDirectory: string;
   manifest: WorkflowManifest;
@@ -120,12 +129,14 @@ export function RunResultsScreen({
   formatDateTime?: (value: string) => string;
   cohortRerun?: CohortRerun;
   readSites?: typeof readCohortSites;
+  /** The documents result help shows; the workflow's results page and the general run results. */
+  loadHelp?: DocumentsLoader;
 }): React.JSX.Element {
   const {columns, rows} = useWindowSize();
   const contentRef = useRef<DOMElement>(null);
   const [contentHeight, setContentHeight] = useState(0);
   const [view, setView] = useState<'results' | 'help'>('results');
-  const [scrollOffsets, setScrollOffsets] = useState({results: 0, help: 0});
+  const [scrollOffsets, setScrollOffsets] = useState({results: 0});
   // Reloaded from disk after a cohort iteration ran from this screen.
   const [loaded, setLoaded] = useState(initiallyLoaded);
   const [mode, setMode] = useState<ScreenMode>({kind: 'results'});
@@ -164,7 +175,7 @@ export function RunResultsScreen({
   // The tab bar takes two more rows above the scrolled content.
   const visibleRows = Math.max(5, rows - (consensus ? 17 : 15));
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
-  const effectiveScrollOffset = Math.min(scrollOffsets[view], maximumScrollOffset);
+  const effectiveScrollOffset = Math.min(scrollOffsets.results, maximumScrollOffset);
 
   useLayoutEffect(() => {
     if (contentRef.current) {
@@ -175,7 +186,7 @@ export function RunResultsScreen({
   const scrollBy = (delta: number): void => {
     setScrollOffsets(current => ({
       ...current,
-      [view]: Math.max(0, Math.min(maximumScrollOffset, Math.min(current[view], maximumScrollOffset) + delta)),
+      results: Math.max(0, Math.min(maximumScrollOffset, Math.min(current.results, maximumScrollOffset) + delta)),
     }));
   };
 
@@ -292,17 +303,15 @@ export function RunResultsScreen({
         siteDetail: false,
       }));
     }
-    setScrollOffsets({results: 0, help: 0});
+    setScrollOffsets({results: 0});
     setMode({kind: 'results'});
   };
 
   useInput((input, key) => {
-    if (!inputActive || mode.kind !== 'results') {
+    if (!inputActive || mode.kind !== 'results' || view === 'help') {
       return;
     }
-    if (view === 'help' && (key.escape || input === '?')) {
-      setView('results');
-    } else if (view === 'results' && consensusKey(input, key)) {
+    if (consensusKey(input, key)) {
       return;
     } else if (key.escape) {
       onBack?.();
@@ -379,18 +388,6 @@ export function RunResultsScreen({
     metadataItems.push({id: 'run.effective_cpus', label: 'Effective CPUs', value: String(shell.effectiveCpus)});
   }
 
-  let workflowSections: ReturnType<typeof annotationTransferHelpSections> = [];
-  if (annotationTransfer) {
-    workflowSections = annotationTransferHelpSections(annotationTransfer);
-  } else if (consensus) {
-    workflowSections = referenceConsensusHelpSections(consensus);
-  }
-  const helpSections = runHelpSections({
-    metadataItems,
-    fileItems: runFileItems,
-    status: annotationTransfer ? 'annotation-transfer' : consensus ? 'reference-consensus' : undefined,
-    workflowSections,
-  });
 
   const metadataSection = (
     <SectionList title={'Run Metadata'} items={metadataItems}>
@@ -489,31 +486,37 @@ export function RunResultsScreen({
     );
   }
 
+  if (view === 'help') {
+    return (
+      <DocumentPage
+        title="Result help"
+        detail={manifest.label}
+        load={loadHelp}
+        onClose={() => setView('results')}
+        back="Back to results"
+        inputActive={inputActive}
+      />
+    );
+  }
+
   const listTab = consensusView && (consensusView.tab === 'cohorts' ||
     (consensusView.tab === 'isolates' && !consensusView.isolateDetail) ||
     (consensusView.tab === 'sites' && !consensusView.siteDetail));
-  let shortcuts: string[];
-  if (view === 'help') {
-    shortcuts = ['? — Back to results'];
-  } else {
-    shortcuts = [
-      consensus ? 'Tab/←/→ — Switch tab' : '',
-      listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 ? '↑/↓ — Scroll' : '',
-      maximumScrollOffset > 0 ? 'PageUp/PageDown (or fn + ↑/↓) — Page' : '',
-      consensusView?.tab === 'isolates' && !consensusView.isolateDetail ? 'Enter — Isolate details' : '',
-      consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'f — Filter' : '',
-      consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'Enter — Locus details' : '',
-      cohortRerun && consensus ? 'r — Review' : '',
-      cohortRerun && consensusView?.tab === 'cohorts' && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending'
-        ? 'c — Continue iteration'
-        : '',
-      '? — Help',
-    ];
-  }
+  const shortcuts = [
+    consensus ? 'Tab/←/→ — Switch tab' : '',
+    listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 ? '↑/↓ — Scroll' : '',
+    maximumScrollOffset > 0 ? 'PageUp/PageDown (or fn + ↑/↓) — Page' : '',
+    consensusView?.tab === 'isolates' && !consensusView.isolateDetail ? 'Enter — Isolate details' : '',
+    consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'f — Filter' : '',
+    consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'Enter — Locus details' : '',
+    cohortRerun && consensus ? 'r — Review' : '',
+    cohortRerun && consensusView?.tab === 'cohorts' && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending'
+      ? 'c — Continue iteration'
+      : '',
+    '? — Help',
+  ];
   let back: string | false = onBack ? 'Back' : false;
-  if (view === 'help') {
-    back = 'Back to results';
-  } else if (consensusView?.isolateDetail) {
+  if (consensusView?.isolateDetail) {
     back = 'Back to isolates';
   } else if (consensusView?.tab === 'sites' && consensusView.siteDetail) {
     back = 'Back to sites';
@@ -521,9 +524,9 @@ export function RunResultsScreen({
 
   return (
     <Page
-      title={view === 'help' ? 'Result help' : 'Run results'}
-      detail={view === 'help' ? undefined : metadata?.name ?? manifest.label}
-      header={consensusView && view === 'results' ? (
+      title="Run results"
+      detail={metadata?.name ?? manifest.label}
+      header={consensusView ? (
         <TabBar
           tabs={consensusTabs}
           activeId={consensusView.tab}
@@ -534,9 +537,6 @@ export function RunResultsScreen({
           inputActive={inputActive}
         />
       ) : undefined}
-      description={view === 'help'
-        ? 'Each entry explains one item of the result page. Recorded definitions were saved with this run by the workflow.'
-        : undefined}
       shortcuts={shortcuts}
       back={back}
     >
@@ -546,9 +546,7 @@ export function RunResultsScreen({
         flexDirection="column"
       >
         <Box ref={contentRef} marginTop={-effectiveScrollOffset} flexDirection="column" flexShrink={0}>
-          {view === 'help' ? (
-            <HelpContent sections={helpSections} />
-          ) : consensus && consensusView ? (
+          {consensus && consensusView ? (
             <ReferenceConsensusResults
               result={consensus}
               view={consensusView}

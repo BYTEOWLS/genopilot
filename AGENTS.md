@@ -9,7 +9,8 @@ Keep the package independent of private research data, machine-specific paths, a
 ## Repository map
 
 - `src/` — TypeScript/Ink CLI.
-- `workflows/` — packaged Snakemake assets, one directory per workflow with its entry Snakefile, manifest, parameter definitions, and `README.md` documenting its science and outputs. `reference-consensus/` also holds its own `rules/*.smk`, `scripts/*.py`, and `envs/<name>/environment.yaml`; `shared/` holds annotation-transfer's rules, scripts, and environments together with what both workflows use, including `logging/` (the Snakemake logger plugin that records structured run events).
+- `docs/` — general documentation, shown on GitHub and in the application's Help; it never names a workflow.
+- `workflows/` — packaged Snakemake assets, one directory per workflow with its entry Snakefile, manifest, parameter definitions, `README.md` documenting its science and outputs, `results.md` explaining its result page, and optionally `development.md` with maintainer notes that are not packaged. `reference-consensus/` also holds its own `rules/*.smk`, `scripts/*.py`, and `envs/<name>/environment.yaml`; `shared/` holds annotation-transfer's rules, scripts, and environments together with what both workflows use, including `logging/` (the Snakemake logger plugin that records structured run events).
 - `tests/` — TypeScript application tests plus Python tests for the shared rules, their scripts, and direct-Snakemake execution.
 - `tests/fixtures/` — small synthetic, redistributable FASTA/GFF3 fixtures with known expected results.
 - [`resources/tasks.md`](resources/tasks.md) — open work as checkboxes, in execution order.
@@ -58,6 +59,7 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Keep unavailable commands visibly marked as placeholders; never imply incomplete behavior works.
 - Keep layouts responsive to terminal resizing and usable without color.
 - Use the alternate-screen buffer for the interactive application to avoid polluting terminal history during rerenders.
+- The mouse wheel acts like ↑/↓ everywhere, through the shared input translation in `src/ui/mouse-wheel.ts`; screens never handle mouse input themselves.
 - A user-requested interactive exit requires two `Ctrl+C` presses within two seconds. Do not bind `q`, Escape, or a menu command to exit.
 - Build every screen on the shared `Page` component (title, optional description, content, shortcut line ending in Esc and `h — Home`) and forms on `EditPage`, whose save button is a selectable row. In forms, Tab and the arrow keys move between fields; Enter only activates the selected button (or opens the file browser on a path field) and never moves on or submits from a text field. Validation runs when the save button is pressed and its problems are shown by `EditPage`.
 
@@ -81,10 +83,11 @@ Validate imported artifacts and record their checksums, versions, configuration 
 ## Package and documentation
 
 - Treat `package.json` as the source for the displayed command name, description, author, and version.
-- Keep user and developer documentation in [`README.md`](README.md) and package changes in [`CHANGELOG.md`](CHANGELOG.md).
-- Do not document TUI usage (screens, keys, navigation) in the README; the in-app help page covers it.
-- Document each workflow's inputs, parameters, steps, scientific decisions, and outputs in its `workflows/<id>/README.md`, using only the Markdown subset in [`resources/concepts/workflow-documentation.md`](resources/concepts/workflow-documentation.md), and update it in the same change as the workflow.
-- When changing a pinned tool version in `src/tooling/policy.ts` or a `workflows/*/envs/` directory, update the version tables under *Tooling policy* in the README in the same change.
+- Keep installation and developer documentation in [`README.md`](README.md), user documentation in `docs/`, and package changes in [`CHANGELOG.md`](CHANGELOG.md).
+- Keep all documentation a researcher reads in Markdown that GitHub and the application render alike, using only the subset in [`resources/concepts/done/workflow-documentation.md`](resources/concepts/done/workflow-documentation.md); do not write help texts in TypeScript.
+- Document TUI usage (screens, keys, navigation) in `docs/`, not in the README.
+- Workflows document themselves by convention: each workflow's inputs, parameters, steps, scientific decisions, outputs, and a `## Tools` table in its `workflows/<id>/README.md`, and its result page in `workflows/<id>/results.md`, updated in the same change as the workflow. The README only lists the supported workflows with a link; `docs/` and shared code never name a workflow, so a new workflow changes nothing shared.
+- Write version numbers only where they are pinned (`src/tooling/policy.ts`, `package.json`, and `workflows/*/envs/`); documentation names tools and links those files instead of repeating versions.
 - Track open work as concise checkboxes in [`resources/tasks.md`](resources/tasks.md), linking to a concept instead of repeating its checklist, and remove items once done. Keep rationale in design documentation rather than the task list.
 - Use pnpm to build and pack locally, and npm for global test installation.
 - Ensure packed artifacts contain the compiled CLI, packaged workflows, and package documentation, but not source data, private files, tests, or development-only configuration.

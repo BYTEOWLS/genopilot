@@ -513,10 +513,11 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         selectAdjacent(key.shift ? -1 : 1);
         return;
       }
-      if (selectedDefinition?.kind === 'choice' && (key.upArrow || key.downArrow || input === ' ')) {
+      // As in every form, ↑/↓ only move between fields, so the mouse wheel never changes a value.
+      if (selectedDefinition?.kind === 'choice' && (key.leftArrow || key.rightArrow || input === ' ')) {
         const options = selectedDefinition.options ?? [];
         const currentIndex = Math.max(0, options.findIndex(option => option.value === values[selectedDefinition.id]));
-        const offset = key.upArrow ? -1 : 1;
+        const offset = key.leftArrow ? -1 : 1;
         const option = options[(currentIndex + offset + options.length) % options.length];
         if (option) {
           updateValue(selectedDefinition.id, option.value);
@@ -692,7 +693,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       } : {})}
       shortcuts={[
         'Tab — Next field',
-        selectedDefinition?.kind === 'choice' ? 'Space/↑/↓ — Choose' : '↑/↓ — Field',
+        '↑/↓ — Field',
+        selectedDefinition?.kind === 'choice' && 'Space/←/→ — Change',
         '* — Required',
         previousRuns.length > 0 && 'PageUp/PageDown (or fn + ↑/↓) — Previous runs',
         continueSelected

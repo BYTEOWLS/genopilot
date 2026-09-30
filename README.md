@@ -16,6 +16,13 @@
 
 The terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI, using a run configuration GenoPilot saved; the workflows do not validate edited configurations and must not be modified. Linux and macOS are supported.
 
+## Workflows
+
+- [Reference Cohort Consensus](workflows/reference-consensus/README.md): builds a consensus genome of a cohort of isolates from their short reads, aligned to a reference assembly.
+- [Transfer genome annotation](workflows/annotation-transfer/README.md): copies the gene annotation of a reference genome onto a related target genome.
+
+How to use GenoPilot is documented in [`docs/`](docs/README.md), which the application also shows under Help.
+
 ## Running a workflow directly
 
 Each Snakefile's header lists its steps and the direct command for a run directory GenoPilot saved. GenoPilot adds `--keep-going`, so independent jobs, such as other isolates, finish when one fails, and its run-events logger, which records each job's progress and command in the run's `events.jsonl`. To record them in a direct run too, make the packaged plugin importable and name the logger:
@@ -25,7 +32,7 @@ PYTHONPATH=<package>/workflows/shared/logging snakemake ... \
   --logger genopilot-run-events --logger-genopilot-run-events-path <run-dir>/events.jsonl
 ```
 
-Without it, the reference-consensus provenance lists its commands as unavailable.
+Without it, a workflow's provenance lists its commands as unavailable.
 
 ## Installation
 
@@ -76,20 +83,20 @@ The CLI checks Pixi, Conda, Snakemake, and the workflow runtime after launch. Wi
 Packaged workflow resources are stored separately from the TypeScript source:
 
 ```text
+docs/                        General documentation, also shown in the application
 workflows/
-├── annotation-transfer/
-│   ├── Snakefile
-│   ├── manifest.yaml
-│   └── manifest.parameters.yaml
-├── reference-consensus/     Reference-guided cohort consensus
+├── <id>/                    One directory per workflow
 │   ├── Snakefile
 │   ├── manifest.yaml
 │   ├── manifest.parameters.yaml
-│   ├── rules/               This workflow's rules
+│   ├── README.md            Its science, inputs, parameters, steps, outputs, and tools
+│   ├── results.md           Its result page, explained
+│   ├── development.md       Optional maintainer notes, not packaged
+│   ├── rules/               Optional: its own rules
 │   ├── scripts/             Their standard-library scripts
 │   └── envs/                Their pinned Conda environments
-└── shared/                  Annotation-transfer's rules, scripts, and environments, and what both
-                             workflows use, including the run-events logger plugin
+└── shared/                  Rules, scripts, and environments several workflows use, including the
+                             run-events logger plugin
 ```
 
 Only selected, redistributable workflow resources in this directory are included in the npm package. TypeScript application tests and Python workflow tests share `tests/`; their runners distinguish them by filename.
@@ -138,28 +145,18 @@ The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downlo
 
 ### Runtime
 
-| Tool | Pinned version | Accepted range | Installed by | Pinned in |
-|---|---|---|---|---|
-| Node.js | 24 LTS (tested 24.19.0) | ≥ 24.0.0, < 26.0.0 | User | `src/tooling/policy.ts`, `package.json` `engines` |
-| Pixi | 0.79.0 | ≥ 0.79.0, < 0.79.1 | Guided setup | `src/tooling/policy.ts` |
-| Snakemake | 9.26.1 | ≥ 9.26.1, < 9.26.2 | Pixi | `src/tooling/policy.ts` |
-| Conda | 25.11.1 | ≥ 25.11.1, < 25.11.2 | Pixi | `src/tooling/policy.ts` |
+| Tool | Installed by | Pinned in |
+|---|---|---|
+| Node.js | User | `src/tooling/policy.ts`, `package.json` `engines` |
+| Pixi | Guided setup | `src/tooling/policy.ts` |
+| Snakemake | Pixi | `src/tooling/policy.ts` |
+| Conda | Pixi | `src/tooling/policy.ts` |
+
+GenoPilot's tooling check shows each tool's target version and the version it found.
 
 ### Workflow rule environments
 
-| Tool | Pinned version | Channel | Environment |
-|---|---|---|---|
-| LiftOn | 1.0.13 | PyPI | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
-| minimap2 | 2.31 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
-| miniprot | 0.18 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
-| parasail-python | 1.3.4 | bioconda | [`lifton`](workflows/shared/envs/lifton/environment.yaml) |
-| Python | 3.11.16 | conda-forge | [`lifton`](workflows/shared/envs/lifton/environment.yaml), [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml), [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
-| NCBI Datasets CLI | 18.37.0 | conda-forge | [`ncbi-datasets-cli`](workflows/shared/envs/ncbi-datasets-cli/environment.yaml) |
-| fastp | 1.3.7 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
-| BWA | 0.7.19 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
-| samtools | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
-| BCFtools | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
-| HTSlib | 1.24 | bioconda | [`short-read-calling`](workflows/reference-consensus/envs/short-read-calling/environment.yaml) |
+Each workflow step runs in a pinned Conda environment under `workflows/*/envs/`. Each workflow README's *Tools* table names its tools and links the environment that pins them; version numbers are written only in these files and in `src/tooling/policy.ts`, never repeated in documentation. Every run records the versions it used in its provenance.
 
 Dependabot proposes updates for the rule environments, npm, and GitHub Actions, but it changes only the environment file. Runtime pins in `src/tooling/policy.ts` are updated manually, including the Pixi download checksums.
 
@@ -168,17 +165,9 @@ Dependabot proposes updates for the rule environments, npm, and GitHub Actions, 
 Every rule-environment bump changes:
 
 1. `workflows/<shared or workflow>/envs/<environment>/environment.yaml`: the pin itself. Run provenance reads its configured tool versions from these files, so nothing else records the version.
-2. This README: the version table above.
-3. `CHANGELOG.md`: an entry under *Unreleased*.
+2. `CHANGELOG.md`: an entry under *Unreleased*.
 
-A LiftOn bump additionally requires re-verifying everything that depends on the exact files and values LiftOn writes. Check the release notes and the LiftOn source for the new version, then update the version references and any changed behavior in:
-
-| File | Depends on |
-|---|---|
-| `workflows/shared/rules/transfer_annotation.smk` | Output layout; the declared `lifton_output/` directory must contain every file LiftOn writes (1.0.10 and 1.0.11 wrote `liftoff/` and `miniprot/` beside it) |
-| `workflows/shared/scripts/collect_transfer_metrics.py` | Mutation classes that count as unchanged proteins |
-| `src/workflows/annotation-transfer/result-help.ts` | Gene `source`, transcript `status`, and mutation-class values explained on the result help page |
-| `resources/concepts/done/annotation-transfer-results.md` | The documented metric and value contract |
+A tool's own output may also need re-verification; a workflow's `development.md` lists what depends on the exact files and values its tools write.
 
 Then run the full verification, including the per-rule Conda integration tests, which run only locally:
 
@@ -193,7 +182,7 @@ Tool version validation, actionable per-tool failure diagnostics, guided install
 
 ## Isolate catalog
 
-Isolates reused across consensus runs are stored in a user-local catalog, `isolates/isolates.yaml`, beside the managed tooling directory:
+Isolates reused across runs are stored in a user-local catalog, `isolates/isolates.yaml`, beside the managed tooling directory:
 
 | Platform | Catalog file |
 |---|---|

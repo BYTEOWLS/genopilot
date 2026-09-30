@@ -1,7 +1,9 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Alert} from '@inkjs/ui';
 import {Box, Text, useInput} from 'ink';
+import {readWorkflowDocuments, type Document} from '../../docs/documents.js';
 import type {DiscoveredWorkflow} from '../../workflows/discovery.js';
+import {DocumentPage} from './document-page.js';
 import {Page} from './page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 
@@ -87,6 +89,7 @@ export function WorkflowSelector({
   onBack,
   selectHint,
   inputActive = true,
+  loadDocuments = workflow => readWorkflowDocuments(workflow),
 }: {
   title: string;
   selection: WorkflowSelection;
@@ -94,11 +97,17 @@ export function WorkflowSelector({
   onBack: () => void;
   selectHint?: string;
   inputActive?: boolean;
+  /** A workflow's documents, opened with `?`. */
+  loadDocuments?: (workflow: DiscoveredWorkflow) => Promise<Document[]>;
 }): React.JSX.Element {
   const {discovery, highlightedWorkflowId, setHighlightedWorkflowId} = selection;
+  const [documentedWorkflow, setDocumentedWorkflow] = useState<DiscoveredWorkflow>();
+  const highlightedWorkflow = discovery.state === 'ready'
+    ? discovery.workflows.find(candidate => candidate.manifest.id === highlightedWorkflowId)
+    : undefined;
 
   useInput(
-    (_input, key) => {
+    (input, key) => {
       if (key.escape) {
         onBack();
         return;
@@ -114,17 +123,27 @@ export function WorkflowSelector({
         setHighlightedWorkflowId(
           moveWorkflowSelection(discovery.workflows, highlightedWorkflowId, 1),
         );
-      } else if (key.return) {
-        const workflow = discovery.workflows.find(
-          candidate => candidate.manifest.id === highlightedWorkflowId,
-        );
-        if (workflow) {
-          onSelect(workflow);
-        }
+      } else if (key.return && highlightedWorkflow) {
+        onSelect(highlightedWorkflow);
+      } else if (input === '?' && highlightedWorkflow) {
+        setDocumentedWorkflow(highlightedWorkflow);
       }
     },
-    {isActive: inputActive},
+    {isActive: inputActive && documentedWorkflow === undefined},
   );
+
+  if (documentedWorkflow) {
+    return (
+      <DocumentPage
+        title="Workflow documentation"
+        detail={documentedWorkflow.manifest.label}
+        load={() => loadDocuments(documentedWorkflow)}
+        onClose={() => setDocumentedWorkflow(undefined)}
+        back="Back to workflows"
+        inputActive={inputActive}
+      />
+    );
+  }
 
   const selectable = discovery.state === 'ready' && discovery.workflows.length > 0;
 
@@ -132,7 +151,7 @@ export function WorkflowSelector({
     <Page
       title={title}
       description="Select a workflow."
-      shortcuts={selectable ? ['↑/↓ — Select', `Enter — ${selectHint ?? 'Continue'}`] : []}
+      shortcuts={selectable ? ['↑/↓ — Select', `Enter — ${selectHint ?? 'Continue'}`, '? — Documentation'] : []}
     >
       {discovery.state === 'loading' ? <Text>Discovering workflows…</Text> : null}
       {discovery.state === 'failed' ? (

@@ -31,6 +31,8 @@ import {loadIsolateCatalog, updateIsolateCatalog} from '../../isolates/store.js'
 import {checkReadPairs, type ReadPairsChecker} from '../../isolates/reads.js';
 import {OpenRunScreen, type RunDiscovery} from '../open-run-screen/screen.js';
 import {ToolingScreen} from '../tooling-screen/screen.js';
+import {DocumentationScreen} from '../documentation-screen/screen.js';
+import {discoverPackagedWorkflows} from '../../workflows/discovery.js';
 import type {WorkflowDiscovery} from '../components/workflow-selector.js';
 import {
   clearNcbiApiKey,
@@ -90,6 +92,7 @@ export function WelcomeScreen({
   fetchAccessionMetadata,
   scanAccessionCaches,
   updateCheck,
+  mouseReporting = false,
 }: {
   metadata: CliMetadata;
   currentDirectory: string;
@@ -117,6 +120,8 @@ export function WelcomeScreen({
   fetchAccessionMetadata?: AssemblyMetadataFetcher;
   scanAccessionCaches?: CacheScanner;
   updateCheck?: (signal?: AbortSignal) => Promise<UpdateAvailability>;
+  /** Whether the terminal reports the mouse, which makes plain dragging no longer select text. */
+  mouseReporting?: boolean;
 }): React.JSX.Element {
   const {exit} = useApp();
   const {columns} = useWindowSize();
@@ -187,6 +192,7 @@ export function WelcomeScreen({
     switch (id) {
       case 'new-run':
       case 'open-run':
+      case 'help':
       case 'manage-isolates':
       case 'manage-accessions':
         setCommandMessage(undefined);
@@ -232,6 +238,7 @@ export function WelcomeScreen({
     switch (activeScreenId) {
       case 'new-run':
       case 'open-run':
+      case 'help':
       case 'manage-isolates':
       case 'manage-accessions':
       case 'check-tooling':
@@ -295,6 +302,15 @@ export function WelcomeScreen({
             inputActive={columns >= minimumTerminalWidth}
             discoverWorkflows={workflowDiscovery}
             discoverRuns={runDiscovery}
+          />
+        );
+      case 'help':
+        return (
+          <DocumentationScreen
+            appLabel={metadata.label}
+            discoverWorkflows={workflowDiscovery ?? discoverPackagedWorkflows}
+            onBack={() => setActiveScreenId(undefined)}
+            inputActive={columns >= minimumTerminalWidth}
           />
         );
       case 'manage-isolates':
@@ -399,8 +415,12 @@ export function WelcomeScreen({
       </Box>
 
       <Box marginTop={1} flexDirection="column">
-        <Text color={showConfirmation ? 'yellow' : undefined}>
-          {showConfirmation ? 'Press Ctrl+C again to exit.' : 'Press Ctrl+C twice to exit.'}
+        {/* One line, so screens keep the rows they reserve for their content. */}
+        <Text wrap="truncate-end">
+          <Text color={showConfirmation ? 'yellow' : undefined}>
+            {showConfirmation ? 'Press Ctrl+C again to exit.' : 'Press Ctrl+C twice to exit.'}
+          </Text>
+          {mouseReporting ? <Text color={mutedColor}> · Select text: Option-drag (iTerm2) or Shift-drag</Text> : null}
         </Text>
       </Box>
     </Box>

@@ -13,13 +13,13 @@ import {
 import type {ReadPairsChecker} from '../../isolates/reads.js';
 import {IsolateCatalogChangedError, type LoadedIsolateCatalog} from '../../isolates/store.js';
 import {useHomeSuspension} from '../home-navigation.js';
-import {HelpPage} from '../components/help.js';
+import {DocumentPage} from '../components/document-page.js';
 import {EditPage, Page} from '../components/page.js';
 import {PathBrowser, type DirectoryReader} from '../components/path-browser.js';
 import {TextField} from '../components/text-field.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
-import {importHelpSections} from './import-help.js';
+import {readGeneralDocuments, type DocumentsLoader} from '../../docs/documents.js';
 import type {IsolateCatalogLoader, IsolateCatalogUpdater} from './screen.js';
 
 export type DeliveryScanner = (
@@ -137,6 +137,7 @@ export function IsolateImport({
   readDirectory,
   onDone,
   onCancel,
+  loadHelp = () => readGeneralDocuments(['import-review']),
 }: {
   loaded: LoadedIsolateCatalog;
   loadCatalog: IsolateCatalogLoader;
@@ -148,6 +149,8 @@ export function IsolateImport({
   readDirectory?: DirectoryReader;
   onDone: (loaded: LoadedIsolateCatalog, message: string) => void;
   onCancel: () => void;
+  /** The document the import review's help shows. */
+  loadHelp?: DocumentsLoader;
 }): React.JSX.Element {
   const {rows: terminalRows} = useWindowSize();
   const [loaded, setLoaded] = useState(initialCatalog);
@@ -501,11 +504,11 @@ export function IsolateImport({
 
   if (showHelp) {
     return (
-      <HelpPage
+      <DocumentPage
         title="Import review help"
-        intro="Each entry explains one row of the import review. Nothing is saved until you choose Save import."
-        sections={importHelpSections}
+        load={loadHelp}
         onClose={() => setShowHelp(false)}
+        back="Close help"
         inputActive={inputActive}
       />
     );

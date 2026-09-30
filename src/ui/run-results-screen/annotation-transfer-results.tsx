@@ -1,12 +1,7 @@
 import React from 'react';
 import {Box} from 'ink';
 import type {AnnotationTransferResult, ResultPath,} from '../../workflows/annotation-transfer/results.js';
-import {
-  annotationTransferExplanations,
-  annotationTransferValueExplanations,
-} from '../../workflows/annotation-transfer/result-help.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import type {HelpSection, HelpValue} from '../components/help.js';
 import {SectionList, type SectionListItem} from './section-list.js';
 
 export type ResultSection = {id: string; title: string; items: SectionListItem[]};
@@ -78,7 +73,7 @@ function pathItems(
 }
 
 /** Result items grouped into sections; item IDs are stable metric or path keys. */
-export function annotationTransferSections(result: AnnotationTransferResult): ResultSection[] {
+function annotationTransferSections(result: AnnotationTransferResult): ResultSection[] {
   const transfer = result.transfer;
   return [
     {
@@ -123,43 +118,6 @@ export function annotationTransferSections(result: AnnotationTransferResult): Re
     {id: 'reports', title: 'Generated Reports', items: pathItems('report', reportLabels, result.reports)},
     {id: 'evidence', title: 'Source Evidence', items: pathItems('evidence', evidenceLabels, result.evidence)},
   ];
-}
-
-function explainedValues(id: string, result: AnnotationTransferResult): HelpValue[] | undefined {
-  const known = annotationTransferValueExplanations[id];
-  if (!known) {
-    return undefined;
-  }
-  const observed = id === 'transfer_methods_by_target_copy'
-    ? result.transfer.transferMethodsByTargetCopy
-    : result.transfer.mutationClassificationsByTargetCopy;
-  const knownValues = new Set(known.map(entry => entry.value));
-  // Without a gene-level source, the collector joins transcript statuses with commas.
-  const observedOnly = Object.keys(observed)
-    .filter(value => !knownValues.has(value))
-    .sort((left, right) => left.localeCompare(right))
-    .map(value => {
-      const parts = value.split(',');
-      return parts.length > 1 && parts.every(part => knownValues.has(part))
-        ? {value, explanation: `Combination of ${parts.join(', ')}, each explained above.`}
-        : {value};
-    });
-  return [...known, ...observedOnly];
-}
-
-/** Help entries for every annotation-transfer result item, in result-page order. */
-export function annotationTransferHelpSections(result: AnnotationTransferResult): HelpSection[] {
-  return annotationTransferSections(result).map(section => ({
-    id: section.id,
-    title: section.title,
-    entries: section.items.map(item => ({
-      id: item.id,
-      label: item.label,
-      definition: result.definitions.metrics[item.id],
-      explanation: annotationTransferExplanations[item.id],
-      values: explainedValues(item.id, result),
-    })),
-  }));
 }
 
 /** Workflow-specific presentation only; all scientific parsing stays in the result reader. */
