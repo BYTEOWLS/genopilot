@@ -23,17 +23,6 @@ The terminal interface configures and runs packaged Snakemake workflows. Every w
 
 How to use GenoPilot is documented in [`docs/`](docs/README.md), which the application also shows under Help.
 
-## Running a workflow directly
-
-Each Snakefile's header lists its steps and the direct command for a run directory GenoPilot saved. GenoPilot adds `--keep-going`, so independent jobs, such as other isolates, finish when one fails, and its run-events logger, which records each job's progress and command in the run's `events.jsonl`. To record them in a direct run too, make the packaged plugin importable and name the logger:
-
-```bash
-PYTHONPATH=<package>/workflows/shared/logging snakemake ... \
-  --logger genopilot-run-events --logger-genopilot-run-events-path <run-dir>/events.jsonl
-```
-
-Without it, a workflow's provenance lists its commands as unavailable.
-
 ## Installation
 
 Node.js is the only manual prerequisite because the CLI itself requires Node.js to start.
@@ -77,6 +66,17 @@ genopilot update
 The TUI checks for a newer release in the background and shows an update notice when one is available. The `genopilot update` command checks npm's `latest` release, skips installation when the current version is up to date, and otherwise installs the exact version it checked.
 
 The CLI checks Pixi, Conda, Snakemake, and the workflow runtime after launch. With explicit consent, guided setup downloads a checksum-verified Pixi release into the application data directory and uses it to install the pinned Conda and Snakemake versions. No `sudo` access is required. Native Windows execution is unsupported; WSL2 support is planned.
+
+## Running a workflow directly
+
+Each Snakefile's header lists its steps and the direct command for a run directory GenoPilot saved. GenoPilot adds `--keep-going`, so independent jobs, such as other isolates, finish when one fails, and its run-events logger, which records each job's progress and command in the run's `events.jsonl`. To record them in a direct run too, make the packaged plugin importable and name the logger:
+
+```bash
+PYTHONPATH=<package>/workflows/shared/logging snakemake ... \
+  --logger genopilot-run-events --logger-genopilot-run-events-path <run-dir>/events.jsonl
+```
+
+Without it, a workflow's provenance lists its commands as unavailable.
 
 ## Development
 
