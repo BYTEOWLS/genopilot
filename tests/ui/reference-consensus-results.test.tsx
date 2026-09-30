@@ -45,6 +45,7 @@ class TestOutput extends Writable {
 }
 
 const TAB = '\t';
+const SHIFT_TAB = '\x1b[Z';
 const ARROW_UP = '\x1b[A';
 const ARROW_DOWN = '\x1b[B';
 const ENTER = '\r';
@@ -222,14 +223,18 @@ function selectedLine(frame: string): string | undefined {
   return frame.split('\n').reverse().find(line => line.includes('›'));
 }
 
-test('opens on the overview with the backbone and the active cohort', async () => {
+test('opens on the overview with the backbone and the active cohort, and keeps run details on their own tab', async () => {
   const screen = renderScreen();
   try {
     await settle();
     const frame = screen.output.readOutput();
-    for (const expected of ['GCF_000000001.1', 'c'.repeat(64), 'iso-a, iso-c', 'formatted:2026-01-02T10:00:00.000Z']) {
+    for (const expected of ['GCF_000000001.1', 'c'.repeat(64), 'iso-a, iso-c']) {
       assert.ok(frame.includes(expected), `missing ${expected}`);
     }
+    assert.doesNotMatch(frame, /formatted:2026-01-02T10:00:00\.000Z/, 'run metadata is not on the overview');
+    const details = await screen.press(SHIFT_TAB);
+    assert.match(details, /formatted:2026-01-02T10:00:00\.000Z/);
+    assert.doesNotMatch(details, /GCF_000000001\.1/);
   } finally {
     screen.unmount();
   }
@@ -289,7 +294,7 @@ test('shows the run files on the last tab and returns to the overview', async ()
     let frame = await screen.press(TAB, TAB, TAB, TAB);
     assert.match(frame, /isolates\.yaml/);
     assert.match(frame, /provenance\/backbone\.fasta\.json/);
-    frame = await screen.press(TAB);
+    frame = await screen.press(TAB, TAB);
     assert.match(frame, /GCF_000000001\.1/);
   } finally {
     screen.unmount();

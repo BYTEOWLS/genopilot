@@ -1,6 +1,6 @@
 # Reference-guided cohort consensus results
 
-This page explains every item of the cohort consensus result page, grouped by its tabs. The science behind it is explained in the workflow's [README](README.md); the terms at the end of this page summarize what the tables refer to. The run metadata and run files every workflow shows are explained in the general [run results](../../docs/run-results.md) page.
+This page explains every item of the cohort consensus result page, grouped by its tabs. The science behind it is explained in the workflow's [README](README.md); the terms at the end of this page summarize what the tables refer to. The Run Details tab and the run files every workflow shows are explained in the general [run results](../../docs/run-results.md) page.
 
 ## Run status
 

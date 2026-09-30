@@ -5,13 +5,14 @@ import type {TabDefinition} from '../components/tabs.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {SectionList, type SectionListItem} from './section-list.js';
 
-export type AnnotationTransferTabId = 'overview' | 'transfer' | 'evidence' | 'files';
+export type AnnotationTransferTabId = 'overview' | 'transfer' | 'evidence' | 'files' | 'run';
 
 export const annotationTransferTabs: readonly TabDefinition<AnnotationTransferTabId>[] = [
   {id: 'overview', label: 'Overview'},
   {id: 'transfer', label: 'Transfer'},
   {id: 'evidence', label: 'Model Evidence'},
   {id: 'files', label: 'Files'},
+  {id: 'run', label: 'Run Details'},
 ];
 
 export type ResultSection = {id: string; tab: AnnotationTransferTabId; title: string; items: SectionListItem[]};
@@ -143,15 +144,18 @@ export function AnnotationTransferResults({
   overviewHeader,
   filesHeader,
   filesFooter,
+  runDetails,
 }: {
   result: AnnotationTransferResult;
   tab: AnnotationTransferTabId;
-  /** Run metadata and status, shown above the validation. */
+  /** The execution outcome and run status, shown above the validation. */
   overviewHeader: React.ReactNode;
   /** The run directory, shown above the reports. */
   filesHeader: React.ReactNode;
   /** The run's own files, shown below the source evidence. */
   filesFooter: React.ReactNode;
+  /** The run's technical metadata, on a tab of its own. */
+  runDetails: React.ReactNode;
 }): React.JSX.Element {
   return (
     <Box flexDirection="column">
@@ -161,6 +165,7 @@ export function AnnotationTransferResults({
         <SectionList key={section.id} title={section.title} items={section.items} />
       ))}
       {tab === 'files' ? filesFooter : null}
+      {tab === 'run' ? runDetails : null}
     </Box>
   );
 }

@@ -25,7 +25,7 @@ import {Table} from '../components/table.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 
-export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files';
+export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files' | 'run';
 
 export const consensusTabs: readonly TabDefinition<ConsensusTabId>[] = [
   {id: 'overview', label: 'Overview'},
@@ -33,6 +33,7 @@ export const consensusTabs: readonly TabDefinition<ConsensusTabId>[] = [
   {id: 'cohorts', label: 'Iterations'},
   {id: 'sites', label: 'Sites'},
   {id: 'files', label: 'Files'},
+  {id: 'run', label: 'Run Details'},
 ];
 
 /** What the result page shows of a reference-consensus run; the shell owns it with its input. */
@@ -597,6 +598,7 @@ export function ReferenceConsensusResults({
   formatDateTime,
   overviewHeader,
   filesHeader,
+  runDetails,
   sites,
   visibleRows = 20,
 }: {
@@ -607,10 +609,12 @@ export function ReferenceConsensusResults({
   sites?: SitesState;
   /** Rows the tab content may use; the Sites tab fits its list into them instead of scrolling. */
   visibleRows?: number;
-  /** Run metadata and status, shown above the overview. */
+  /** The execution outcome and run status, shown above the overview. */
   overviewHeader: React.ReactNode;
   /** Run directory and run files, shown above the workflow's own records. */
   filesHeader: React.ReactNode;
+  /** The run's technical metadata, on a tab of its own. */
+  runDetails: React.ReactNode;
 }): React.JSX.Element {
   switch (view.tab) {
     case 'overview':
@@ -685,5 +689,7 @@ export function ReferenceConsensusResults({
           <Sections sections={consensusFileSections(result)} />
         </Box>
       );
+    case 'run':
+      return <Box flexDirection="column">{runDetails}</Box>;
   }
 }

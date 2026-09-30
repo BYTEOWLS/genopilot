@@ -360,7 +360,8 @@ export function RunResultsScreen({
     runFileItems.push({id: 'run.stdout', label: 'Current attempt stdout', value: sanitizeTerminalText(executionOutcome.stdoutLogPath)});
     runFileItems.push({id: 'run.stderr', label: 'Current attempt stderr', value: sanitizeTerminalText(executionOutcome.stderrLogPath)});
   }
-  for (const item of supportPaths) {
+  // The run directory has a section of its own above the files.
+  for (const item of supportPaths.filter(path => path.id !== 'run.directory')) {
     runFileItems.push({
       id: item.id,
       label: item.label,
@@ -566,8 +567,9 @@ export function RunResultsScreen({
               result={consensus}
               view={consensusView}
               formatDateTime={formatDateTime}
-              overviewHeader={<>{metadataSection}{outcomeSection}{statusSection}</>}
+              overviewHeader={<>{outcomeSection}{statusSection}</>}
               filesHeader={<>{runDirectorySection}{runFilesSection}</>}
+              runDetails={metadataSection}
               sites={sites}
               visibleRows={visibleRows}
             />
@@ -575,9 +577,10 @@ export function RunResultsScreen({
             <AnnotationTransferResults
               result={annotationTransfer}
               tab={annotationTab}
-              overviewHeader={<>{metadataSection}{outcomeSection}{statusSection}</>}
+              overviewHeader={<>{outcomeSection}{statusSection}</>}
               filesHeader={runDirectorySection}
               filesFooter={runFilesSection}
+              runDetails={metadataSection}
             />
           ) : <>
           {metadataSection}

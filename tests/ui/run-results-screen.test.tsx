@@ -194,7 +194,7 @@ function renderScreen(
 }
 
 /** The screen's frame on each tab, from the first; Tab moves to the next one. */
-async function tabFrames(screen: ReturnType<typeof renderScreen>, count = 4): Promise<string[]> {
+async function tabFrames(screen: ReturnType<typeof renderScreen>, count = 5): Promise<string[]> {
   await settle();
   const frames = [screen.frame()];
   for (let index = 1; index < count; index += 1) {
@@ -210,10 +210,13 @@ test('presents compatible run metadata, scientific metrics, and direct result pa
   const screen = renderScreen(compatibleResult(), {inputActive: true});
   try {
     const frames = await tabFrames(screen);
-    const [overview, transfer] = frames;
-    // Metadata and metrics are on different tabs.
-    assert.ok(overview!.includes('annotation-transfer@1') && !overview!.includes('131'));
+    const [overview, transfer, , files, details] = frames;
+    // The overview shows the outcome; metrics, files, and run metadata have tabs of their own.
+    assert.ok(!overview!.includes('annotation-transfer@1') && !overview!.includes('131'));
     assert.ok(transfer!.includes('131') && !transfer!.includes('annotation-transfer@1'));
+    assert.ok(details!.includes('annotation-transfer@1') && !details!.includes('131'));
+    // The run directory is listed once, in its own section, not again as a run file shown as ".".
+    assert.doesNotMatch(files!, /\s\.\s*$/m);
     const frame = frames.join('\n');
     for (const expected of [
       'result-42',
@@ -278,7 +281,7 @@ test('distinguishes current evidence availability from availability at summary t
   loaded.result.evidence.mapped_features!.recordedAvailable = false;
   const screen = renderScreen(loaded, {inputActive: true});
   try {
-    const frame = (await tabFrames(screen)).at(-1) ?? '';
+    const frame = (await tabFrames(screen, 4)).at(-1) ?? '';
     assert.match(frame, /lifton\.raw\.gff3 \(missing\) \(available when summarized\)/);
     assert.match(frame, /mapped\.txt \(unavailable when summarized; available now\)/);
   } finally {
@@ -296,7 +299,9 @@ test('scrolls result content in a short terminal', async () => {
     screen.output.clearOutput();
     screen.output.emit('resize');
     await new Promise<void>(resolve => setTimeout(resolve, 20));
-    // The run files are on the last tab.
+    // The run files are on the Files tab, the one before the last.
+    screen.input.write(SHIFT_TAB);
+    await new Promise<void>(resolve => setTimeout(resolve, 20));
     screen.input.write(SHIFT_TAB);
     await new Promise<void>(resolve => setTimeout(resolve, 20));
     screen.output.clearOutput();

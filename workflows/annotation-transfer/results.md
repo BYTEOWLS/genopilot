@@ -1,10 +1,10 @@
 # Annotation transfer results
 
-This page explains every item of the annotation transfer result page, grouped by its tabs. The counts and their values are those of the pinned LiftOn release (see *Tools* in the README); how the transfer works is explained in the workflow's [README](README.md). The run metadata and run files every workflow shows are explained in the general [run results](../../docs/run-results.md) page.
+This page explains every item of the annotation transfer result page, grouped by its tabs. The counts and their values are those of the pinned LiftOn release (see *Tools* in the README); how the transfer works is explained in the workflow's [README](README.md). The Run Details tab and the run files every workflow shows are explained in the general [run results](../../docs/run-results.md) page.
 
 ## Overview
 
-The run metadata and status every workflow shows are explained in the general run results page. This tab adds the workflow's own status and the check of the final annotation.
+The overview shows the execution outcome, the workflow's own status, and the check of the final annotation.
 
 ### Run status
 
