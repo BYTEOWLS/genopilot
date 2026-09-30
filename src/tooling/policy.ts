@@ -87,19 +87,21 @@ export const toolingPolicy = {
     managedVersion: '9.27.0',
     package: 'snakemake=9.27.0',
   },
+  // The rule environments pin the same Python, so every workflow script runs on one version.
+  // It stays on 3.13 until bioconda's parasail-python, which LiftOn needs, is built for 3.14.
   python: {
     command: 'python',
-    minimumVersion: '3.14.7',
-    maximumVersionExclusive: '3.14.8',
+    minimumVersion: '3.13.15',
+    maximumVersionExclusive: '3.13.16',
     versionsTestedWith: [],
-    managedVersion: '3.14.7',
-    package: 'python=3.14.7',
+    managedVersion: '3.13.15',
+    package: 'python=3.13.15',
   },
   managedGlobalEnvironment: {
     name: 'byteowls-genopilot',
     relativeHomePath: 'pixi',
     channels: ['conda-forge', 'bioconda'] as const,
-    packages: ['snakemake=9.27.0', 'conda=26.7.3', 'python=3.14.7'] as const,
+    packages: ['snakemake=9.27.0', 'conda=26.7.3', 'python=3.13.15'] as const,
     relativeSnakemakeExecutablePath: 'pixi/bin/snakemake',
     relativeCondaExecutablePath: 'pixi/bin/conda',
     // The environment's own interpreter, which Snakemake runs on. Pixi exposes `python` only

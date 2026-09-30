@@ -97,7 +97,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
                     "--snakemake-version",
                     "9.11.3",
                     "--snakemake-python-version",
-                    "3.14.7",
+                    "3.13.15",
                     "--artifacts",
                     "artifacts.yaml",
                     "--provenance",
@@ -122,10 +122,10 @@ class CollectRunProvenanceTests(unittest.TestCase):
         configured = collect.configured_tool_versions()
         self.assertEqual(raw["producer"]["tools"]["lifton"], configured["lifton"])
         # Rules without a Conda environment ran on Snakemake's interpreter, not an environment's.
-        self.assertEqual(records["input-validation"]["producer"]["tools"], {"snakemake-python": "3.14.7"})
+        self.assertEqual(records["input-validation"]["producer"]["tools"], {"snakemake-python": "3.13.15"})
         self.assertEqual(
             provenance["tool_versions"]["observed"]["snakemake-python"],
-            {"version": "3.14.7", "source": "workflow-runtime"},
+            {"version": "3.13.15", "source": "workflow-runtime"},
         )
         self.assertEqual(
             raw["checksum"]["value"],

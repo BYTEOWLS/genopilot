@@ -75,7 +75,7 @@ const detectedStatus: ToolingStatus = {
   },
   python: {
     state: 'available',
-    detected: {command: 'python', version: 'Python 3.14.7'},
+    detected: {command: 'python', version: 'Python 3.13.15'},
   },
 };
 
@@ -976,7 +976,7 @@ test('activates runtime indicators only after Pixi installation and verification
   assert.match(runtimeFrame, /Pixi — Provisioning — v0\.81\.0 — Available/);
   assert.match(runtimeFrame, /Conda — Environments — v26\.7\.3 — Installing…/);
   assert.match(runtimeFrame, /Snakemake — Workflow — v9\.27\.0 — Installing…/);
-  assert.match(runtimeFrame, /Python — Workflow scripts — v3\.14\.7 — Installing…/);
+  assert.match(runtimeFrame, /Python — Workflow scripts — v3\.13\.15 — Installing…/);
 });
 
 test('hides Pixi download details while the runtime bundle is being installed', async context => {
@@ -1019,7 +1019,7 @@ test('shows incompatible versions and keeps commands hidden', async context => {
     },
     python: {
       state: 'available',
-      detected: {command: 'python', version: 'Python 3.14.7'},
+      detected: {command: 'python', version: 'Python 3.13.15'},
     },
   });
   registerCleanup(context, instance);
