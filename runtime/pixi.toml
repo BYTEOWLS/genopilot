@@ -1,0 +1,15 @@
+# The managed runtime GenoPilot's setup installs. Snakemake uses Conda to provision the rule
+# environments, and rules without their own environment run their scripts on this Python.
+# pixi.lock fixes every package, including transitive ones, by URL and SHA-256; setup installs
+# it with `pixi install --locked`. After changing a pin, run `pnpm lock:runtime` and review the
+# lock diff. src/tooling/policy.ts repeats these versions to verify the installation.
+
+[workspace]
+name = "byteowls-genopilot-runtime"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64", "linux-aarch64", "osx-64", "osx-arm64"]
+
+[dependencies]
+snakemake = "==9.27.0"
+conda = "==26.7.3"
+python = "==3.13.15"

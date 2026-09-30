@@ -60,7 +60,7 @@ The versions are pinned only in the files linked below and recorded in every run
 
 | Tool | Role | Pinned in | Reference |
 |---|---|---|---|
-| Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`policy.ts`](../../src/tooling/policy.ts)) | [7] |
+| Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`pixi.toml`](../../runtime/pixi.toml)) | [7] |
 | NCBI Datasets CLI | downloading NCBI accessions | [`ncbi-datasets-cli`](../shared/envs/ncbi-datasets-cli/environment.yaml) | [8] |
 | LiftOn | annotation transfer | [`lifton`](../shared/envs/lifton/environment.yaml) | [1] |
 | minimap2 | DNA alignment inside Liftoff | [`lifton`](../shared/envs/lifton/environment.yaml) | [4] |

@@ -40,7 +40,7 @@ async function fixture() {
         await writeFile(join(destination, 'pixi'), 'fake pixi');
         return {code: 0, stdout: '', stderr: ''};
       }
-      if (command === paths.pixiExecutable && arguments_[0] === 'global') {
+      if (command === paths.pixiExecutable && arguments_[0] === 'install') {
         return {code: 0, stdout: 'installed', stderr: ''};
       }
       if (command === paths.pixiExecutable) {
@@ -66,7 +66,7 @@ test('installs verified Pixi and the pinned runtime bundle', async context => {
   const liveLines: string[] = [];
   const originalRunProcess = dependencies.runProcess;
   dependencies.runProcess = async (command, arguments_, environment, onOutput, signal) => {
-    if (arguments_[0] === 'global') {
+    if (arguments_[0] === 'install') {
       await onOutput?.('stdout', `${'x'.repeat(5000)}\nSolving environment\nInstalling`);
       await onOutput?.('stdout', ' packages\n');
     }
@@ -88,21 +88,20 @@ test('installs verified Pixi and the pinned runtime bundle', async context => {
     .flatMap(line => line.split('\n'))
     .find(line => line.endsWith('… [truncated]'));
   assert.equal(truncatedLine?.length, 4096);
-  const installation = calls.find(call => call.arguments_[0] === 'global');
+  const installation = calls.find(call => call.arguments_[0] === 'install');
   assert.ok(installation);
   assert.deepEqual(installation.arguments_, [
-    'global',
     'install',
-    '--environment',
-    'byteowls-genopilot',
-    '--channel',
-    'conda-forge',
-    '--channel',
-    'bioconda',
-    'snakemake=9.27.0',
-    'conda=26.7.3',
-    'python=3.13.15',
+    '--locked',
+    '--manifest-path',
+    join(paths.runtimeDirectory, 'pixi.toml'),
   ]);
+  for (const file of ['pixi.toml', 'pixi.lock']) {
+    assert.equal(
+      await readFile(join(paths.runtimeDirectory, file), 'utf8'),
+      await readFile(join(paths.packagedRuntimeDirectory, file), 'utf8'),
+    );
+  }
   assert.equal(installation.environment.PIXI_HOME, paths.pixiHome);
   assert.equal(installation.environment.PIXI_NO_CONFIG, '1');
   assert.equal(
@@ -153,6 +152,32 @@ test('rejects archives containing anything other than the Pixi executable', asyn
     installTooling(() => undefined, undefined, dependencies),
     /archive contains unexpected entries/,
   );
+});
+
+test('fails without verifying tools when Pixi refuses the packaged lock', async context => {
+  const {tempDir, paths, calls, dependencies} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const originalRunProcess = dependencies.runProcess;
+  dependencies.runProcess = async (command, arguments_, environment, onOutput, signal) => {
+    if (command === paths.pixiExecutable && arguments_[0] === 'install') {
+      calls.push({command, arguments_, environment});
+      return {code: 1, stdout: '', stderr: 'lock file not up-to-date with the workspace'};
+    }
+    return originalRunProcess(command, arguments_, environment, onOutput, signal);
+  };
+
+  let logPath: string | undefined;
+  await assert.rejects(
+    installTooling(() => undefined, undefined, dependencies),
+    (error: unknown) => {
+      assert.ok(error instanceof ToolingInstallationError);
+      logPath = error.logPath;
+      return true;
+    },
+  );
+  assert.ok(!calls.some(call => call.command === paths.snakemakeExecutable));
+  assert.ok(logPath);
+  assert.match(await readFile(logPath, 'utf8'), /lock file not up-to-date/);
 });
 
 test('refuses concurrent setup and preserves the active installation lock', async context => {

@@ -4,6 +4,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {parse} from 'yaml';
 import {toolingPolicy} from '../../src/tooling/policy.js';
 
 const require = createRequire(import.meta.url);
@@ -39,35 +40,36 @@ test('defines one verified Pixi download for every supported platform', () => {
   assert.deepEqual(actualPlatforms, expectedPlatforms);
 });
 
-test('pins Pixi, Snakemake, Conda, Python, and managed installation locations', () => {
+test('pins Pixi and keeps the managed runtime inside the data directory', () => {
   assert.equal(toolingPolicy.pixi.managedVersion, '0.81.0');
-  assert.equal(
-    toolingPolicy.snakemake.package,
-    `snakemake=${toolingPolicy.snakemake.managedVersion}`,
-  );
-  assert.equal(toolingPolicy.conda.package, `conda=${toolingPolicy.conda.managedVersion}`);
-  assert.equal(toolingPolicy.python.package, `python=${toolingPolicy.python.managedVersion}`);
-  assert.equal(toolingPolicy.managedGlobalEnvironment.name, 'byteowls-genopilot');
-  assert.deepEqual(toolingPolicy.managedGlobalEnvironment.channels, [
-    'conda-forge',
-    'bioconda',
-  ]);
-  assert.deepEqual(toolingPolicy.managedGlobalEnvironment.packages, [
-    toolingPolicy.snakemake.package,
-    toolingPolicy.conda.package,
-    toolingPolicy.python.package,
-  ]);
   assert.match(toolingPolicy.pixi.relativeExecutablePath, /^runtimes\/pixi\//);
-  assert.ok(
-    toolingPolicy.managedGlobalEnvironment.relativeSnakemakeExecutablePath.startsWith(
-      `${toolingPolicy.managedGlobalEnvironment.relativeHomePath}/bin/`,
-    ),
-  );
-  assert.ok(
-    toolingPolicy.managedGlobalEnvironment.relativeCondaExecutablePath.startsWith(
-      `${toolingPolicy.managedGlobalEnvironment.relativeHomePath}/bin/`,
-    ),
-  );
+  assert.equal(toolingPolicy.managedRuntime.relativeBinPath, '.pixi/envs/default/bin');
+});
+
+test('locks the packaged runtime to the versions setup verifies, on every supported platform', () => {
+  const runtimeDirectory = new URL('../../runtime/', import.meta.url);
+  const manifest = readFileSync(new URL('pixi.toml', runtimeDirectory), 'utf8');
+  const lock = parse(readFileSync(new URL('pixi.lock', runtimeDirectory), 'utf8')) as {
+    environments: {default: {packages: Record<string, Array<{conda?: string}>>}};
+  };
+  const packages = lock.environments.default.packages;
+  assert.deepEqual(Object.keys(packages).sort(), [
+    'linux-64',
+    'linux-aarch64',
+    'osx-64',
+    'osx-arm64',
+  ]);
+
+  for (const tool of ['snakemake', 'conda', 'python'] as const) {
+    const version = toolingPolicy[tool].managedVersion;
+    assert.match(manifest, new RegExp(`^${tool} = "==${version.replaceAll('.', '\\.')}"$`, 'm'));
+    for (const [platform, entries] of Object.entries(packages)) {
+      assert.ok(
+        entries.some(entry => entry.conda?.split('/').at(-1)?.startsWith(`${tool}-${version}-`)),
+        `${platform} does not lock ${tool} ${version}`,
+      );
+    }
+  }
 });
 
 test('records versions tested with separately from supported ranges', () => {

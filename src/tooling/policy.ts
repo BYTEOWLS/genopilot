@@ -14,11 +14,12 @@ const pixiReleaseTag = `v${pixiVersion}`;
 /**
  * Compatibility and installation policy shipped with this CLI release.
  *
- * Pixi installs Snakemake and Conda together in one global environment. Conda
- * must remain alongside Snakemake because Snakemake currently uses the `conda`
- * command to provision environments declared by workflow rules. Python is pinned
- * too: rules without their own environment run their scripts on Snakemake's
- * interpreter.
+ * Pixi installs Snakemake and Conda together from the packaged, locked workspace
+ * in `runtime/`, whose `pixi.toml` pins the versions repeated here for
+ * verification. Conda must remain alongside Snakemake because Snakemake
+ * currently uses the `conda` command to provision environments declared by
+ * workflow rules. Python is pinned too: rules without their own environment run
+ * their scripts on Snakemake's interpreter.
  *
  * Paths are relative to the user data directory so the package remains
  * independent of the directory from which the CLI is invoked. Every platform
@@ -77,7 +78,6 @@ export const toolingPolicy = {
     maximumVersionExclusive: '26.7.4',
     versionsTestedWith: [],
     managedVersion: '26.7.3',
-    package: 'conda=26.7.3',
   },
   snakemake: {
     command: 'snakemake',
@@ -85,7 +85,6 @@ export const toolingPolicy = {
     maximumVersionExclusive: '9.27.1',
     versionsTestedWith: [],
     managedVersion: '9.27.0',
-    package: 'snakemake=9.27.0',
   },
   // The rule environments pin the same Python, so every workflow script runs on one version.
   // It stays on 3.13 until bioconda's parasail-python, which LiftOn needs, is built for 3.14.
@@ -95,18 +94,15 @@ export const toolingPolicy = {
     maximumVersionExclusive: '3.13.16',
     versionsTestedWith: [],
     managedVersion: '3.13.15',
-    package: 'python=3.13.15',
   },
-  managedGlobalEnvironment: {
-    name: 'byteowls-genopilot',
-    relativeHomePath: 'pixi',
-    channels: ['conda-forge', 'bioconda'] as const,
-    packages: ['snakemake=9.27.0', 'conda=26.7.3', 'python=3.13.15'] as const,
-    relativeSnakemakeExecutablePath: 'pixi/bin/snakemake',
-    relativeCondaExecutablePath: 'pixi/bin/conda',
-    // The environment's own interpreter, which Snakemake runs on. Pixi exposes `python` only
-    // when it first creates the environment, so an upgraded installation has no pixi/bin/python.
-    relativePythonExecutablePath: 'pixi/envs/byteowls-genopilot/bin/python',
+  managedRuntime: {
+    // Pixi's own home, kept inside the data directory so the user's Pixi configuration and
+    // global environments stay untouched.
+    relativePixiHomePath: 'pixi',
+    // The locked workspace is copied into a directory named after the lock's checksum, so a
+    // release with a changed lock installs anew instead of reusing an older environment.
+    relativeDirectory: 'runtime',
+    relativeBinPath: '.pixi/envs/default/bin',
   },
   managedDataDirectory: {
     relativeToHome: '.byteowlsGenopilot/tooling',

@@ -4,6 +4,7 @@ import {lstat, stat} from 'node:fs/promises';
 import {
   appendFile,
   chmod,
+  copyFile,
   mkdir,
   mkdtemp,
   open,
@@ -471,20 +472,19 @@ export async function installTooling(
     }
 
     onProgress({type: 'phase', phase: 'runtime', tools: ['conda', 'snakemake', 'python']});
-    const installArguments = [
-      'global',
-      'install',
-      '--environment',
-      toolingPolicy.managedGlobalEnvironment.name,
-      ...toolingPolicy.managedGlobalEnvironment.channels.flatMap(channel => [
-        '--channel',
-        channel,
-      ]),
-      ...toolingPolicy.managedGlobalEnvironment.packages,
-    ];
-    const installation = await runLogged(paths.pixiExecutable, installArguments, safeEnvironment);
+    // Installs exactly the packaged lock; `--locked` refuses a lock that no longer matches
+    // its pixi.toml instead of solving the environment again.
+    await ensurePrivateDirectory(paths.runtimeDirectory);
+    for (const file of ['pixi.toml', 'pixi.lock']) {
+      await copyFile(join(paths.packagedRuntimeDirectory, file), join(paths.runtimeDirectory, file));
+    }
+    const installation = await runLogged(
+      paths.pixiExecutable,
+      ['install', '--locked', '--manifest-path', join(paths.runtimeDirectory, 'pixi.toml')],
+      safeEnvironment,
+    );
     if (installation.code !== 0) {
-      throw new Error('Pixi could not install Snakemake, Conda, and Python.');
+      throw new Error('Pixi could not install the locked Snakemake, Conda, and Python.');
     }
 
     onProgress({type: 'phase', phase: 'verification', tools: ['conda', 'snakemake', 'python']});

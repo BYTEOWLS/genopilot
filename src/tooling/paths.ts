@@ -1,5 +1,8 @@
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {
   toolingPolicy,
   type SupportedArchitecture,
@@ -12,6 +15,8 @@ export type ToolingPaths = {
   dataDirectory: string;
   pixiExecutable: string;
   pixiHome: string;
+  packagedRuntimeDirectory: string;
+  runtimeDirectory: string;
   managedBinDirectory: string;
   condaExecutable: string;
   snakemakeExecutable: string;
@@ -27,6 +32,19 @@ export type ToolingPaths = {
   accessionCatalogDirectory: string;
   accessionCatalogPath: string;
 };
+
+/** The packaged Pixi workspace (`pixi.toml` and `pixi.lock`) that setup installs. */
+const packagedRuntimeDirectory = fileURLToPath(new URL('../../runtime/', import.meta.url));
+
+let packagedLockChecksum: string | undefined;
+
+function runtimeLockChecksum(): string {
+  packagedLockChecksum ??= createHash('sha256')
+    .update(readFileSync(join(packagedRuntimeDirectory, 'pixi.lock')))
+    .digest('hex')
+    .slice(0, 16);
+  return packagedLockChecksum;
+}
 
 function supportedPlatform(value: NodeJS.Platform): SupportedPlatform {
   if (value === 'darwin' || value === 'linux') {
@@ -56,7 +74,10 @@ export function resolveToolingPaths({
   const resolvedArchitecture = supportedArchitecture(architecture);
   const dataDirectory = join(homeDirectory, toolingPolicy.managedDataDirectory.relativeToHome);
 
-  const pixiHome = join(dataDirectory, toolingPolicy.managedGlobalEnvironment.relativeHomePath);
+  const {relativePixiHomePath, relativeDirectory, relativeBinPath} = toolingPolicy.managedRuntime;
+  const pixiHome = join(dataDirectory, relativePixiHomePath);
+  const runtimeDirectory = join(dataDirectory, relativeDirectory, runtimeLockChecksum());
+  const managedBinDirectory = join(runtimeDirectory, relativeBinPath);
 
   return {
     platform: resolvedPlatform,
@@ -64,19 +85,12 @@ export function resolveToolingPaths({
     dataDirectory: resolve(dataDirectory),
     pixiExecutable: join(dataDirectory, toolingPolicy.pixi.relativeExecutablePath),
     pixiHome,
-    managedBinDirectory: join(pixiHome, 'bin'),
-    condaExecutable: join(
-      dataDirectory,
-      toolingPolicy.managedGlobalEnvironment.relativeCondaExecutablePath,
-    ),
-    snakemakeExecutable: join(
-      dataDirectory,
-      toolingPolicy.managedGlobalEnvironment.relativeSnakemakeExecutablePath,
-    ),
-    pythonExecutable: join(
-      dataDirectory,
-      toolingPolicy.managedGlobalEnvironment.relativePythonExecutablePath,
-    ),
+    packagedRuntimeDirectory,
+    runtimeDirectory,
+    managedBinDirectory,
+    condaExecutable: join(managedBinDirectory, 'conda'),
+    snakemakeExecutable: join(managedBinDirectory, 'snakemake'),
+    pythonExecutable: join(managedBinDirectory, 'python'),
     logsDirectory: join(dataDirectory, 'logs'),
     temporaryDirectory: join(dataDirectory, 'temporary'),
     // Shared by every run: Snakemake names each rule environment by a hash of its pinned
