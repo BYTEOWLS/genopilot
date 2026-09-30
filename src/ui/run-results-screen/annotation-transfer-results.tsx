@@ -1,15 +1,21 @@
 import React from 'react';
 import {Box} from 'ink';
 import type {AnnotationTransferResult, ResultPath,} from '../../workflows/annotation-transfer/results.js';
-import {
-  annotationTransferExplanations,
-  annotationTransferValueExplanations,
-} from '../../workflows/annotation-transfer/result-help.js';
+import type {TabDefinition} from '../components/tabs.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import type {HelpSection, HelpValue} from '../components/help.js';
 import {SectionList, type SectionListItem} from './section-list.js';
 
-export type ResultSection = {id: string; title: string; items: SectionListItem[]};
+export type AnnotationTransferTabId = 'overview' | 'transfer' | 'evidence' | 'files' | 'run';
+
+export const annotationTransferTabs: readonly TabDefinition<AnnotationTransferTabId>[] = [
+  {id: 'overview', label: 'Overview'},
+  {id: 'transfer', label: 'Transfer'},
+  {id: 'evidence', label: 'Model Evidence'},
+  {id: 'files', label: 'Files'},
+  {id: 'run', label: 'Run Details'},
+];
+
+export type ResultSection = {id: string; tab: AnnotationTransferTabId; title: string; items: SectionListItem[]};
 
 const reportLabels: Record<string, string> = {
   feature_transfer: 'Per-feature transfer table (TSV)',
@@ -78,11 +84,12 @@ function pathItems(
 }
 
 /** Result items grouped into sections; item IDs are stable metric or path keys. */
-export function annotationTransferSections(result: AnnotationTransferResult): ResultSection[] {
+function annotationTransferSections(result: AnnotationTransferResult): ResultSection[] {
   const transfer = result.transfer;
   return [
     {
       id: 'transfer',
+      tab: 'transfer',
       title: 'Transfer',
       items: [
         {id: 'reference_features', label: 'Reference features selected for transfer', value: transfer.referenceFeatures},
@@ -99,6 +106,7 @@ export function annotationTransferSections(result: AnnotationTransferResult): Re
     },
     {
       id: 'model-evidence',
+      tab: 'evidence',
       title: 'Model Evidence',
       items: [
         {
@@ -113,6 +121,7 @@ export function annotationTransferSections(result: AnnotationTransferResult): Re
     },
     {
       id: 'validation',
+      tab: 'overview',
       title: 'Final GFF3 Structural Validation',
       items: [
         {id: 'validation.status', label: 'Status', value: result.validation.status, row: true},
@@ -120,59 +129,43 @@ export function annotationTransferSections(result: AnnotationTransferResult): Re
         {id: 'validation.warnings', label: 'Warnings', value: result.validation.warnings, row: true, color: result.validation.warnings > 0 ? 'yellow' : undefined},
       ],
     },
-    {id: 'reports', title: 'Generated Reports', items: pathItems('report', reportLabels, result.reports)},
-    {id: 'evidence', title: 'Source Evidence', items: pathItems('evidence', evidenceLabels, result.evidence)},
+    {id: 'reports', tab: 'files', title: 'Generated Reports', items: pathItems('report', reportLabels, result.reports)},
+    {id: 'evidence', tab: 'files', title: 'Source Evidence', items: pathItems('evidence', evidenceLabels, result.evidence)},
   ];
 }
 
-function explainedValues(id: string, result: AnnotationTransferResult): HelpValue[] | undefined {
-  const known = annotationTransferValueExplanations[id];
-  if (!known) {
-    return undefined;
-  }
-  const observed = id === 'transfer_methods_by_target_copy'
-    ? result.transfer.transferMethodsByTargetCopy
-    : result.transfer.mutationClassificationsByTargetCopy;
-  const knownValues = new Set(known.map(entry => entry.value));
-  // Without a gene-level source, the collector joins transcript statuses with commas.
-  const observedOnly = Object.keys(observed)
-    .filter(value => !knownValues.has(value))
-    .sort((left, right) => left.localeCompare(right))
-    .map(value => {
-      const parts = value.split(',');
-      return parts.length > 1 && parts.every(part => knownValues.has(part))
-        ? {value, explanation: `Combination of ${parts.join(', ')}, each explained above.`}
-        : {value};
-    });
-  return [...known, ...observedOnly];
-}
-
-/** Help entries for every annotation-transfer result item, in result-page order. */
-export function annotationTransferHelpSections(result: AnnotationTransferResult): HelpSection[] {
-  return annotationTransferSections(result).map(section => ({
-    id: section.id,
-    title: section.title,
-    entries: section.items.map(item => ({
-      id: item.id,
-      label: item.label,
-      definition: result.definitions.metrics[item.id],
-      explanation: annotationTransferExplanations[item.id],
-      values: explainedValues(item.id, result),
-    })),
-  }));
-}
-
-/** Workflow-specific presentation only; all scientific parsing stays in the result reader. */
+/**
+ * The tab content of an annotation-transfer result; workflow-specific presentation only, all
+ * scientific parsing stays in the result reader.
+ */
 export function AnnotationTransferResults({
   result,
+  tab,
+  overviewHeader,
+  filesHeader,
+  filesFooter,
+  runDetails,
 }: {
   result: AnnotationTransferResult;
+  tab: AnnotationTransferTabId;
+  /** The execution outcome and run status, shown above the validation. */
+  overviewHeader: React.ReactNode;
+  /** The run directory, shown above the reports. */
+  filesHeader: React.ReactNode;
+  /** The run's own files, shown below the source evidence. */
+  filesFooter: React.ReactNode;
+  /** The run's technical metadata, on a tab of its own. */
+  runDetails: React.ReactNode;
 }): React.JSX.Element {
   return (
     <Box flexDirection="column">
-      {annotationTransferSections(result).map(section => (
+      {tab === 'overview' ? overviewHeader : null}
+      {tab === 'files' ? filesHeader : null}
+      {annotationTransferSections(result).filter(section => section.tab === tab).map(section => (
         <SectionList key={section.id} title={section.title} items={section.items} />
       ))}
+      {tab === 'files' ? filesFooter : null}
+      {tab === 'run' ? runDetails : null}
     </Box>
   );
 }

@@ -1,7 +1,7 @@
 schema_version: 1
 workflow_version: 1
 id: reference-consensus
-label: Build a reference-guided cohort consensus
+label: Reference Cohort Consensus
 description: >
   Build one consensus genome for a cohort of isolates from their paired Illumina reads. Each
   isolate is compared with a backbone assembly and gets its own genome; the isolates, and

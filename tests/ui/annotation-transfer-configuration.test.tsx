@@ -262,6 +262,17 @@ async function typeInto(input: TestInput, output: TestOutput, id: string, value:
 // The lines belonging to the selected field: its own header plus every option line directly
 // beneath it. Two choice fields can share an option label, so an option's state has to be read
 // from the selected field's own block, not the whole frame.
+/** The lines of a choice field, its header and its options, wherever the selection is. */
+function fieldBlock(frame: string, id: string): string {
+  const lines = frame.split('\n');
+  const headerIndex = lines.findIndex(line => lineFor(line, fieldLabel(id)) !== undefined);
+  const block: string[] = [];
+  for (let index = headerIndex + 1; headerIndex >= 0 && index < lines.length && /^\s+\(/.test(lines[index] ?? ''); index += 1) {
+    block.push(lines[index] ?? '');
+  }
+  return block.join('\n');
+}
+
 function selectedFieldBlock(frame: string): string {
   const lines = frame.split('\n');
   const headerIndex = lines.findIndex(line => line.startsWith('›'));
@@ -312,6 +323,26 @@ test('keeps pasted whitespace in a typable local-file-path field', async context
   // character stripping. That is @inkjs/ui's own behavior, not something this form adds back.
   input.write('  /data/reference.fa  ');
   await waitForFrame(output, frame => fieldLine(frame, 'reference-fasta')?.includes('  /data/reference.fa') ?? false);
+});
+
+test('↑/↓ leave a choice field without changing it, and ←/→ change it', async context => {
+  const {input, output, instance} = renderConfiguration('/research');
+  registerCleanup(context, instance);
+  await waitForForm(output);
+
+  await chooseOption(input, output, 'reference-source', 'ncbi');
+  const marked = (value: string) => (frame: string): boolean =>
+    fieldBlock(frame, 'reference-source').includes(`(●) ${optionLabel('reference-source', value)}`);
+  // The mouse wheel sends ↑/↓, so scrolling over a form must never change a value.
+  input.write(ARROW_DOWN);
+  await waitForFrame(output, frame => !isSelected(frame, fieldLabel('reference-source')));
+  assert.ok(marked('ncbi')(lastFrame(output)));
+
+  await focusField(input, output, 'reference-source');
+  input.write(ARROW_RIGHT);
+  await waitForFrame(output, marked('local'));
+  input.write(ARROW_LEFT);
+  await waitForFrame(output, marked('ncbi'));
 });
 
 test('edits all required fields and confirms effective options before saving', async context => {
@@ -617,8 +648,8 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
     frame => frame.includes('GCF_000149205.2') && fieldLine(frame, 'reference-source') === undefined,
   );
 
-  // As on a choice field of the form, ↓ on the cache entry chooses its next option.
-  input.write(ARROW_DOWN);
+  // As on a choice field of the form, → on the cache entry chooses its next option.
+  input.write(ARROW_RIGHT);
   await waitForFrame(output, frame => frame !== cacheFrame);
   // Enter acts only on the continue button, which follows the cache choices.
   await startReview(input, output);

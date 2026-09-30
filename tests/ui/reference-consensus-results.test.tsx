@@ -9,15 +9,8 @@ import {CohortDecisionError, type CohortDecisionDraft} from '../../src/workflows
 import type {CohortSites} from '../../src/workflows/reference-consensus/sites.js';
 import type {SnakemakeRun} from '../../src/workflows/execution.js';
 import {
-  cohortColumns,
-  cohortDetailSections,
   comparisonRows,
-  consensusFileSections,
   countRows,
-  isolateColumns,
-  isolateDetailSections,
-  overviewSections,
-  referenceConsensusHelpSections,
 } from '../../src/ui/run-results-screen/reference-consensus-results.js';
 import {validateReferenceConsensusConfiguration} from '../../src/workflows/reference-consensus/configuration.js';
 import {
@@ -52,6 +45,7 @@ class TestOutput extends Writable {
 }
 
 const TAB = '\t';
+const SHIFT_TAB = '\x1b[Z';
 const ARROW_UP = '\x1b[A';
 const ARROW_DOWN = '\x1b[B';
 const ENTER = '\r';
@@ -202,6 +196,7 @@ function renderScreen(options: {
       formatDateTime={value => `formatted:${value}`}
       cohortRerun={options.cohortRerun}
       readSites={options.readSites ?? (async () => ({voters: [], sites: []}))}
+      loadHelp={async () => [{id: 'results', title: 'Results', blocks: []}]}
     />,
     {
       exitOnCtrlC: false,
@@ -228,14 +223,18 @@ function selectedLine(frame: string): string | undefined {
   return frame.split('\n').reverse().find(line => line.includes('›'));
 }
 
-test('opens on the overview with the backbone and the active cohort', async () => {
+test('opens on the overview with the backbone and the active cohort, and keeps run details on their own tab', async () => {
   const screen = renderScreen();
   try {
     await settle();
     const frame = screen.output.readOutput();
-    for (const expected of ['GCF_000000001.1', 'c'.repeat(64), 'iso-a, iso-c', 'formatted:2026-01-02T10:00:00.000Z']) {
+    for (const expected of ['GCF_000000001.1', 'c'.repeat(64), 'iso-a, iso-c']) {
       assert.ok(frame.includes(expected), `missing ${expected}`);
     }
+    assert.doesNotMatch(frame, /formatted:2026-01-02T10:00:00\.000Z/, 'run metadata is not on the overview');
+    const details = await screen.press(SHIFT_TAB);
+    assert.match(details, /formatted:2026-01-02T10:00:00\.000Z/);
+    assert.doesNotMatch(details, /GCF_000000001\.1/);
   } finally {
     screen.unmount();
   }
@@ -295,7 +294,7 @@ test('shows the run files on the last tab and returns to the overview', async ()
     let frame = await screen.press(TAB, TAB, TAB, TAB);
     assert.match(frame, /isolates\.yaml/);
     assert.match(frame, /provenance\/backbone\.fasta\.json/);
-    frame = await screen.press(TAB);
+    frame = await screen.press(TAB, TAB);
     assert.match(frame, /GCF_000000001\.1/);
   } finally {
     screen.unmount();
@@ -331,27 +330,6 @@ test('opens and closes the help page from any tab', async () => {
     assert.match(selectedLine(frame) ?? '', /iso-a/);
   } finally {
     screen.unmount();
-  }
-});
-
-test('explains every item the reference-consensus view can render', () => {
-  const result = consensusResult();
-  const rendered = new Set([
-    ...overviewSections(result).flatMap(section => section.rows.map(row => row.id)),
-    ...countRows(counts(0)).map(row => row.id),
-    ...isolateColumns.map(column => column.id),
-    ...result.isolates.flatMap(value => isolateDetailSections(value, result).flatMap(section => section.rows.map(row => row.id))),
-    ...cohortColumns.map(column => column.id),
-    ...result.cohorts.flatMap(value => cohortDetailSections(value, text => text).flatMap(section => section.rows.map(row => row.id))),
-    ...consensusFileSections(result).flatMap(section => section.rows.map(row => row.id)),
-  ]);
-  const entries = referenceConsensusHelpSections(result).flatMap(section => section.entries);
-  const explained = new Set(entries.filter(entry => entry.explanation || entry.values).map(entry => entry.id));
-  for (const id of rendered) {
-    assert.ok(explained.has(id), `no help for ${id}`);
-  }
-  for (const entry of entries) {
-    assert.ok(entry.explanation ?? entry.values, `empty help entry ${entry.id}`);
   }
 });
 

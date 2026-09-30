@@ -27,6 +27,7 @@ const ESCAPE = '\x1b';
 const SPACE = ' ';
 const TAB = '\t';
 const ARROW_DOWN = '\x1b[B';
+const ARROW_RIGHT = '\x1b[C';
 const PAGE_DOWN = '\x1b[6~';
 
 const definitionsById = new Map(packagedParameterDefinitions.map(definition => [definition.id, definition]));
@@ -339,8 +340,8 @@ test('asks how to handle a cached backbone and saves the decision', async contex
     output,
     frame => frame.includes('GCF_000149205.2') && fieldLine(frame, 'isolates') === undefined,
   );
-  // As on a choice field of the form, ↓ on the cache entry chooses its next option.
-  await press(input, ARROW_DOWN);
+  // As on a choice field of the form, → on the cache entry chooses its next option.
+  await press(input, ARROW_RIGHT);
   await waitForFrame(output, frame => frame !== cacheFrame);
   await startReview(input, output);
   await waitForFrame(output, frame => frame.includes(reviewed[0]!.configuration.run.id));

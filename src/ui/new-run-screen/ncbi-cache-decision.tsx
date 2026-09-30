@@ -46,9 +46,10 @@ export function NcbiCacheDecisionPage({
         onBack();
       } else if (key.tab) {
         setSelectedIndex((selectedIndex + (key.shift ? -1 : 1) + rowCount) % rowCount);
-      } else if (selectedEntry && (key.upArrow || key.downArrow || input === ' ')) {
+      } else if (selectedEntry && (key.leftArrow || key.rightArrow || input === ' ')) {
+        // As in every form, ↑/↓ only move between entries, so the mouse wheel never changes a choice.
         const currentIndex = Math.max(0, options.findIndex(option => option.value === modes[selectedEntry.id]));
-        const option = options[(currentIndex + (key.upArrow ? -1 : 1) + options.length) % options.length];
+        const option = options[(currentIndex + (key.leftArrow ? -1 : 1) + options.length) % options.length];
         if (option) {
           setModes({...modes, [selectedEntry.id]: option.value});
         }
@@ -66,8 +67,8 @@ export function NcbiCacheDecisionPage({
       title="NCBI cache entries found"
       description="Choose whether to verify and reuse each cache entry or download it again."
       shortcuts={[
-        continueSelected ? 'Tab/↑/↓ — Entry' : 'Tab — Next entry',
-        continueSelected ? 'Enter — Continue to review' : 'Space/↑/↓ — Choose',
+        'Tab/↑/↓ — Entry',
+        continueSelected ? 'Enter — Continue to review' : 'Space/←/→ — Change',
       ]}
       saveLabel="Continue to review"
       saveSelected={continueSelected}

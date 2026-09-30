@@ -5,6 +5,7 @@ import React from 'react';
 import {render} from 'ink';
 import {selfUpdate} from './self-update.js';
 import {createTerminalTitleWriter} from './terminal-title.js';
+import {createMouseWheelInput} from './ui/mouse-wheel.js';
 import {TerminalTitleProvider} from './ui/terminal-title.js';
 import {WelcomeScreen, type CliMetadata} from './ui/welcome-screen.js';
 
@@ -65,16 +66,24 @@ async function main(): Promise<void> {
   // The exit event also fires after an uncaught exception, so the caller's title comes back on
   // every exit path that lets Node shut down.
   process.once('exit', terminalTitle.restore);
+  // The wheel scrolls like ↑/↓. Mouse reports follow Ink's key input; the exit event also covers
+  // a crash that ends the process before Ink stops reading.
+  const mouse = process.stdin.isTTY ? createMouseWheelInput(process.stdin, process.stdout) : undefined;
+  if (mouse) {
+    process.once('exit', mouse.dispose);
+  }
   const instance = render(
     <TerminalTitleProvider baseTitle={packageJson.label} onTitleChange={terminalTitle.set}>
-      <WelcomeScreen metadata={metadata} currentDirectory={process.cwd()} />
+      <WelcomeScreen metadata={metadata} currentDirectory={process.cwd()} mouseReporting={mouse !== undefined} />
     </TerminalTitleProvider>,
     {
       alternateScreen: true,
       exitOnCtrlC: false,
+      ...(mouse ? {stdin: mouse.stdin} : {}),
     },
   );
   await instance.waitUntilExit();
+  mouse?.dispose();
   terminalTitle.restore();
 }
 

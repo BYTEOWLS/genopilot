@@ -14,11 +14,8 @@ import {
   type CompatibleAnnotationTransferResult,
   type LoadedWorkflowResult,
 } from '../../src/workflows/results.js';
-import {
-  annotationTransferHelpSections,
-  annotationTransferSections,
-} from '../../src/ui/run-results-screen/annotation-transfer-results.js';
-import {runHelpSections} from '../../src/ui/run-results-screen/run-help.js';
+import type {DocumentsLoader} from '../../src/docs/documents.js';
+import {parseMarkdown} from '../../src/docs/markdown.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -44,6 +41,8 @@ const ARROW_DOWN = '\x1b[B';
 const PAGE_DOWN = '\x1b[6~';
 const ESCAPE = '\x1b';
 const HELP = '?';
+const TAB = '\t';
+const SHIFT_TAB = '\x1b[Z';
 
 async function settle(milliseconds = 80): Promise<void> {
   await new Promise<void>(resolve => setTimeout(resolve, milliseconds));
@@ -152,6 +151,12 @@ function refreshed(loaded: LoadedWorkflowResult): LoadedWorkflowResult {
   return {...annotation, shell: annotationTransferShell(annotation.result, annotation.configuration.resources.effective_cpus)};
 }
 
+/** Result help as a stand-in document; the packaged pages are tested on their own. */
+const helpDocuments: DocumentsLoader = async () => [
+  {id: 'results', title: 'Results', blocks: parseMarkdown('# Results\n\n' + 'Filler line.\n\n'.repeat(30) + 'Result help sentinel.')},
+  {id: 'run-results', title: 'Run results', blocks: parseMarkdown('# Run results\n\nRun help.')},
+];
+
 function renderScreen(
   loaded: LoadedWorkflowResult,
   options: {
@@ -160,6 +165,7 @@ function renderScreen(
     onBack?: () => void;
     pathExists?: (path: string) => boolean;
     formatDateTime?: (value: string) => string;
+    loadHelp?: DocumentsLoader;
   } = {},
 ): {input: TestInput; output: TestOutput; frame: () => string; unmount: () => void} {
   const input = new TestInput();
@@ -174,6 +180,7 @@ function renderScreen(
       onBack={options.onBack}
       pathExists={options.pathExists ?? (() => true)}
       formatDateTime={options.formatDateTime ?? (value => `formatted:${value}`)}
+      loadHelp={options.loadHelp ?? helpDocuments}
     />,
     {
       exitOnCtrlC: false,
@@ -186,10 +193,31 @@ function renderScreen(
   return {input, output, frame: () => output.readOutput(), unmount: () => instance.unmount()};
 }
 
-test('presents compatible run metadata, scientific metrics, and direct result paths', () => {
-  const screen = renderScreen(compatibleResult());
+/** The screen's frame on each tab, from the first; Tab moves to the next one. */
+async function tabFrames(screen: ReturnType<typeof renderScreen>, count = 5): Promise<string[]> {
+  await settle();
+  const frames = [screen.frame()];
+  for (let index = 1; index < count; index += 1) {
+    screen.output.clearOutput();
+    screen.input.write(TAB);
+    await settle();
+    frames.push(screen.frame());
+  }
+  return frames;
+}
+
+test('presents compatible run metadata, scientific metrics, and direct result paths in tabs', async () => {
+  const screen = renderScreen(compatibleResult(), {inputActive: true});
   try {
-    const frame = screen.frame();
+    const frames = await tabFrames(screen);
+    const [overview, transfer, , files, details] = frames;
+    // The overview shows the outcome; metrics, files, and run metadata have tabs of their own.
+    assert.ok(!overview!.includes('annotation-transfer@1') && !overview!.includes('131'));
+    assert.ok(transfer!.includes('131') && !transfer!.includes('annotation-transfer@1'));
+    assert.ok(details!.includes('annotation-transfer@1') && !details!.includes('131'));
+    // The run directory is listed once, in its own section, not again as a run file shown as ".".
+    assert.doesNotMatch(files!, /\s\.\s*$/m);
+    const frame = frames.join('\n');
     for (const expected of [
       'result-42',
       'Synthetic transfer',
@@ -247,13 +275,13 @@ test('checks support and canonical metrics paths independently from generated re
   );
 });
 
-test('distinguishes current evidence availability from availability at summary time', () => {
+test('distinguishes current evidence availability from availability at summary time', async () => {
   const loaded = compatibleResult();
   loaded.result.evidence.raw_gff3!.available = false;
   loaded.result.evidence.mapped_features!.recordedAvailable = false;
-  const screen = renderScreen(loaded);
+  const screen = renderScreen(loaded, {inputActive: true});
   try {
-    const frame = screen.frame();
+    const frame = (await tabFrames(screen, 4)).at(-1) ?? '';
     assert.match(frame, /lifton\.raw\.gff3 \(missing\) \(available when summarized\)/);
     assert.match(frame, /mapped\.txt \(unavailable when summarized; available now\)/);
   } finally {
@@ -267,6 +295,14 @@ test('scrolls result content in a short terminal', async () => {
     inputActive: true,
   });
   try {
+    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    screen.output.clearOutput();
+    screen.output.emit('resize');
+    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    // The run files are on the Files tab, the one before the last.
+    screen.input.write(SHIFT_TAB);
+    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    screen.input.write(SHIFT_TAB);
     await new Promise<void>(resolve => setTimeout(resolve, 20));
     screen.output.clearOutput();
     screen.output.emit('resize');
@@ -352,53 +388,6 @@ test('keeps run support paths visible when persisted results are incompatible', 
   }
 });
 
-test('explains every workflow result item and flags LiftOn values it does not know', () => {
-  const loaded = compatibleResult();
-  loaded.result.transfer.mutationClassificationsByTargetCopy = {frameshift: 4, invented_class: 1};
-  loaded.result.transfer.transferMethodsByTargetCopy = {
-    Liftoff: 3,
-    'LiftOn_chaining_algorithm,Liftoff': 1,
-    'Liftoff,invented_status': 1,
-  };
-  const itemIds = annotationTransferSections(loaded.result).flatMap(section => section.items.map(item => item.id));
-  const entries = annotationTransferHelpSections(loaded.result).flatMap(section => section.entries);
-
-  assert.deepEqual(entries.map(entry => entry.id), itemIds);
-  assert.equal(new Set(itemIds).size, itemIds.length);
-  for (const entry of entries) {
-    assert.ok(entry.explanation, `missing explanation for ${entry.id}`);
-  }
-  assert.equal(
-    entries.find(entry => entry.id === 'mapped_features')?.definition,
-    'Persisted definition sentinel for mapped features.',
-  );
-  const mutationValues = entries.find(entry => entry.id === 'mutation_classifications_by_target_copy')?.values ?? [];
-  assert.ok(mutationValues.some(value => value.value === 'frameshift' && value.explanation));
-  assert.ok(mutationValues.some(value => value.value === 'identical' && value.explanation));
-  assert.deepEqual(mutationValues.filter(value => !value.explanation).map(value => value.value), ['invented_class']);
-  const methodValues = entries.find(entry => entry.id === 'transfer_methods_by_target_copy')?.values ?? [];
-  assert.ok(methodValues.some(value => value.value === 'LiftOn_chaining_algorithm,Liftoff' && value.explanation));
-  assert.deepEqual(methodValues.filter(value => !value.explanation).map(value => value.value), ['Liftoff,invented_status']);
-});
-
-test('explains every run-level result item', () => {
-  const ids = [
-    'run.id', 'run.name', 'run.description', 'run.workflow', 'run.created', 'run.summary_generated', 'run.effective_cpus',
-  ];
-  const fileIds = ['run.stdout', 'run.stderr', ...runSupportPaths('/runs/result-42', () => true).map(item => item.id)];
-  const sections = runHelpSections({
-    metadataItems: ids.map(id => ({id, label: id})),
-    fileItems: fileIds.map(id => ({id, label: id})),
-    status: 'annotation-transfer',
-    workflowSections: [],
-  });
-  const entries = sections.flatMap(section => section.entries);
-  assert.deepEqual(entries.map(entry => entry.id).sort(), [...ids, ...fileIds, 'run.status'].sort());
-  for (const entry of entries) {
-    assert.ok(entry.explanation, `missing explanation for ${entry.id}`);
-  }
-});
-
 test('opens the help page and returns to the preserved result scroll position', async () => {
   let backedOut = false;
   const screen = renderScreen(compatibleResult(), {
@@ -416,25 +405,25 @@ test('opens the help page and returns to the preserved result scroll position', 
     screen.input.write(ARROW_DOWN);
     await settle();
     const scrolledResults = screen.frame();
-    assert.doesNotMatch(scrolledResults, /Persisted definition sentinel/);
+    assert.doesNotMatch(scrolledResults, /Result help sentinel/);
 
     screen.output.clearOutput();
     screen.input.write(HELP);
     await settle();
     let helpFrame = screen.frame();
-    for (let index = 0; index < 40 && !/Persisted definition sentinel/.test(helpFrame); index += 1) {
+    for (let index = 0; index < 40 && !/Result help sentinel/.test(helpFrame); index += 1) {
       screen.output.clearOutput();
       screen.input.write(PAGE_DOWN);
       await settle();
       helpFrame = screen.frame();
     }
-    assert.match(helpFrame, /Persisted definition sentinel for mapped features\./);
+    assert.match(helpFrame, /Result help sentinel\./);
 
     screen.output.clearOutput();
     screen.input.write(ESCAPE);
     await settle(150);
     assert.equal(backedOut, false);
-    assert.doesNotMatch(screen.frame(), /Persisted definition sentinel/);
+    assert.doesNotMatch(screen.frame(), /Result help sentinel/);
     const visibleText = (frame: string) => frame.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').trim();
     assert.equal(visibleText(screen.frame()), visibleText(scrolledResults));
 
@@ -446,35 +435,18 @@ test('opens the help page and returns to the preserved result scroll position', 
   }
 });
 
-test('renders help without a persisted definition or for incompatible results', async () => {
-  const loaded = compatibleResult();
-  loaded.result.definitions = {metrics: {}, detailColumns: {}};
-  loaded.result.transfer.transferMethodsByTargetCopy = {Liftoff: 1, 'unexpected-method': 1};
-  for (const candidate of [loaded, {
+test('opens the result help documents also for incompatible results', async () => {
+  const screen = renderScreen({
     kind: 'incompatible',
     error: {kind: 'missing-summary', message: 'No summary.'},
-  } as LoadedWorkflowResult]) {
-    const screen = renderScreen(candidate, {inputActive: true});
-    try {
-      await settle();
-      screen.output.clearOutput();
-      screen.input.write(HELP);
-      await settle();
-      const frame = screen.frame();
-      assert.doesNotMatch(frame, /Persisted definition sentinel/);
-      assert.doesNotMatch(frame, /\b137\b/);
-      if (candidate.kind === 'compatible') {
-        let helpFrame = frame;
-        for (let index = 0; index < 40 && !/unexpected-method/.test(helpFrame); index += 1) {
-          screen.output.clearOutput();
-          screen.input.write(PAGE_DOWN);
-          await settle();
-          helpFrame = screen.frame();
-        }
-        assert.match(helpFrame, /unexpected-method/);
-      }
-    } finally {
-      screen.unmount();
-    }
+  }, {inputActive: true});
+  try {
+    await settle();
+    screen.output.clearOutput();
+    screen.input.write(HELP);
+    await settle();
+    assert.match(screen.frame(), /Result help sentinel/);
+  } finally {
+    screen.unmount();
   }
 });

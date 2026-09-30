@@ -12,10 +12,6 @@ import {
   type ReferenceConsensusResult,
 } from '../../workflows/reference-consensus/results.js';
 import {
-  referenceConsensusExplanations,
-  referenceConsensusTerms,
-} from '../../workflows/reference-consensus/result-help.js';
-import {
   matchesSiteFilter,
   siteCalls,
   siteFilters,
@@ -23,14 +19,13 @@ import {
   type CohortSites,
   type SiteFilter,
 } from '../../workflows/reference-consensus/sites.js';
-import type {HelpSection} from '../components/help.js';
 import {ParameterList, parameterLabelWidth, type ParameterRow} from '../components/parameter-list.js';
 import type {TabDefinition} from '../components/tabs.js';
 import {Table} from '../components/table.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 
-export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files';
+export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files' | 'run';
 
 export const consensusTabs: readonly TabDefinition<ConsensusTabId>[] = [
   {id: 'overview', label: 'Overview'},
@@ -38,6 +33,7 @@ export const consensusTabs: readonly TabDefinition<ConsensusTabId>[] = [
   {id: 'cohorts', label: 'Iterations'},
   {id: 'sites', label: 'Sites'},
   {id: 'files', label: 'Files'},
+  {id: 'run', label: 'Run Details'},
 ];
 
 /** What the result page shows of a reference-consensus run; the shell owns it with its input. */
@@ -159,7 +155,7 @@ function activeCohort(result: ReferenceConsensusResult): CohortResult | undefine
   return result.cohorts.find(cohort => cohort.id === result.activeCohortId);
 }
 
-export function overviewSections(result: ReferenceConsensusResult): RowSection[] {
+function overviewSections(result: ReferenceConsensusResult): RowSection[] {
   const backbone = result.backbone;
   const active = activeCohort(result);
   let origin = backbone.origin ?? 'unknown';
@@ -189,7 +185,7 @@ export function overviewSections(result: ReferenceConsensusResult): RowSection[]
   return sections;
 }
 
-export const isolateColumns: readonly {id: string; label: string}[] = [
+const isolateColumns: readonly {id: string; label: string}[] = [
   {id: 'isolates.id', label: 'Isolate'},
   {id: 'isolates.wildtype', label: 'Wild type'},
   {id: 'isolates.derived_from', label: 'Derived from'},
@@ -241,7 +237,7 @@ const isolatePathLabels: Record<typeof isolatePathKeys[number], string> = {
   'logs': 'Logs',
 };
 
-export function isolateDetailSections(isolate: IsolateResult, result: ReferenceConsensusResult): RowSection[] {
+function isolateDetailSections(isolate: IsolateResult, result: ReferenceConsensusResult): RowSection[] {
   const metrics = isolate.metrics;
   const summary: ParameterRow[] = [
     {id: 'isolates.id', label: 'ID', value: isolate.id},
@@ -272,7 +268,7 @@ export function isolateDetailSections(isolate: IsolateResult, result: ReferenceC
   return sections;
 }
 
-export const cohortColumns: readonly {id: string; label: string}[] = [
+const cohortColumns: readonly {id: string; label: string}[] = [
   {id: 'cohorts.iteration', label: 'Iteration'},
   {id: 'cohorts.state', label: 'State'},
   {id: 'cohorts.date', label: 'Date'},
@@ -305,7 +301,7 @@ const cohortPathLabels: Record<typeof cohortPathKeys[number], string> = {
   'logs': 'Logs',
 };
 
-export function cohortDetailSections(cohort: CohortResult, formatDateTime: DateFormatter): RowSection[] {
+function cohortDetailSections(cohort: CohortResult, formatDateTime: DateFormatter): RowSection[] {
   const rows: ParameterRow[] = [{id: 'cohort.state', label: 'State', value: cohort.state}];
   if (cohort.decidedAt) {
     rows.push({id: 'cohort.decided_at', label: 'Decision saved', value: formatDateTime(cohort.decidedAt)});
@@ -352,7 +348,7 @@ export function comparisonRows(baseline: CohortCounts, inspected: CohortCounts):
   });
 }
 
-export function consensusFileSections(result: ReferenceConsensusResult): RowSection[] {
+function consensusFileSections(result: ReferenceConsensusResult): RowSection[] {
   return [{
     id: 'consensus-files',
     title: 'Run Records',
@@ -546,89 +542,6 @@ function SitesTab({
 }
 
 /** Every item ID the view can render, with its label, grouped like the tabs. */
-function helpItems(result: ReferenceConsensusResult): {id: string; title: string; items: {id: string; label: string}[]}[] {
-  const sample = result.isolates[0];
-  const sampleCohort = result.cohorts.at(-1)!;
-  const unique = (items: {id: string; label: string}[]): {id: string; label: string}[] =>
-    items.filter((item, index) => items.findIndex(other => other.id === item.id) === index);
-  const allCounts: CohortCounts = {
-    lociSelected: 0, lociChanged: 0, multiallelicLoci: 0, competingIndelLoci: 0, basesBackboneOnly: 0, basesIupac: 0,
-    lociUnresolved: {tie: 0, no_majority: 0, no_votes: 0, few_callable: 0},
-    basesN: {tie: 0, no_majority: 0, no_votes: 0, few_callable: 0, backbone_not_acgt: 0},
-  };
-  const everyCohortRow: CohortResult = {
-    ...sampleCohort,
-    // Every optional row present, so each gets a help entry.
-    decidedAt: '-', finishedAt: '-', reason: '-', initialAggregated: false,
-    excluded: [{id: '-', processing: 'incomplete'}],
-    voters: sampleCohort.voters ?? [],
-    settings: sampleCohort.settings ?? {include_backbone_vote: true, voting_method: 'plurality', min_callable_isolates: 0, unresolved_snp: 'n'},
-    paths: Object.fromEntries(cohortPathKeys.map(key => [key, {path: '', absolutePath: '', available: true}])),
-  };
-  const format = (value: string): string => value;
-  return [
-    {
-      id: 'overview',
-      title: 'Overview',
-      items: unique([
-        ...overviewSections(result).flatMap(section => section.rows),
-        ...settingsRows(everyCohortRow),
-        ...countRows(allCounts),
-      ]),
-    },
-    {
-      id: 'isolates',
-      title: 'Isolates',
-      items: unique([
-        ...isolateColumns,
-        ...(sample ? isolateDetailSections({...sample, metrics: sample.metrics ?? {meanDepth: 0, coveredFraction: 0, callableFraction: 0, snps: 0, indels: 0, trimmed: ''}}, result).flatMap(section => section.rows) : []),
-        {id: 'isolate.issues', label: 'Unreadable records'},
-      ]),
-    },
-    {
-      id: 'cohorts',
-      title: 'Iterations',
-      items: unique([
-        ...cohortColumns,
-        ...cohortDetailSections(everyCohortRow, format).flatMap(section => section.rows),
-        {id: 'comparison', label: 'Comparison with the first completed cohort'},
-        {id: 'cohort.issues', label: 'Unreadable or contradicting records'},
-      ]),
-    },
-    {
-      id: 'sites',
-      title: 'Sites',
-      items: unique([
-        {id: 'sites.filter', label: 'Filter'},
-        ...siteColumns,
-        ...siteDetailSections({
-          chrom: '', start: 1, end: 1, status: 'unresolved', reason: 'tie', allele: '.', backboneAllele: '', backboneVotes: 0,
-          alleles: [], votes: [], callableIsolates: 0, totalVotes: 0, flags: [], calls: '',
-        }).flatMap(section => section.rows),
-        ...siteAlleleColumns,
-        ...siteVoterColumns,
-      ]),
-    },
-    {id: 'consensus-files', title: 'Run Records', items: consensusFileSections(result).flatMap(section => section.rows)},
-  ];
-}
-
-/** Help entries for every item the reference-consensus view renders, then the scientific terms. */
-export function referenceConsensusHelpSections(result: ReferenceConsensusResult): HelpSection[] {
-  return [
-    ...helpItems(result).map(group => ({
-      id: group.id,
-      title: group.title,
-      entries: group.items.map(item => ({
-        id: item.id,
-        label: item.label,
-        explanation: referenceConsensusExplanations[item.id],
-      })),
-    })),
-    {id: 'terms', title: 'Terms', entries: referenceConsensusTerms},
-  ];
-}
-
 function Sections({sections}: {sections: readonly RowSection[]}): React.JSX.Element {
   const labelWidth = parameterLabelWidth(sections.flatMap(section => section.rows));
   return (
@@ -685,6 +598,7 @@ export function ReferenceConsensusResults({
   formatDateTime,
   overviewHeader,
   filesHeader,
+  runDetails,
   sites,
   visibleRows = 20,
 }: {
@@ -695,10 +609,12 @@ export function ReferenceConsensusResults({
   sites?: SitesState;
   /** Rows the tab content may use; the Sites tab fits its list into them instead of scrolling. */
   visibleRows?: number;
-  /** Run metadata and status, shown above the overview. */
+  /** The execution outcome and run status, shown above the overview. */
   overviewHeader: React.ReactNode;
   /** Run directory and run files, shown above the workflow's own records. */
   filesHeader: React.ReactNode;
+  /** The run's technical metadata, on a tab of its own. */
+  runDetails: React.ReactNode;
 }): React.JSX.Element {
   switch (view.tab) {
     case 'overview':
@@ -773,5 +689,7 @@ export function ReferenceConsensusResults({
           <Sections sections={consensusFileSections(result)} />
         </Box>
       );
+    case 'run':
+      return <Box flexDirection="column">{runDetails}</Box>;
   }
 }

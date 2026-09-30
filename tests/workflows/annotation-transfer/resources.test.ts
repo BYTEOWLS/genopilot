@@ -26,7 +26,6 @@ test('ships a valid annotation-transfer manifest with the planned workflow ident
   assert.equal(manifest.entry_snakefile, 'Snakefile');
   assert.equal(manifest['parameter-definitions'], 'manifest.parameters.yaml');
   assert.match(manifest.label, /annotation/i);
-  assert.match(manifest.description, /LiftOn/);
   assert.deepEqual(
     manifest.stages.map(stage => stage.id),
     [

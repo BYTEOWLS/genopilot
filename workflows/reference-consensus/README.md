@@ -289,16 +289,17 @@ Trimmed reads and per-pair alignments are temporary: the isolate's alignment kee
 
 ## Tools
 
-Every scientific step runs in one pinned environment; Snakemake schedules the steps.
+Every scientific step runs in one pinned environment; Snakemake schedules the steps. The versions are pinned only in the files linked below and recorded in every run's provenance.
 
-| Tool | Version | Role | Reference |
+| Tool | Role | Pinned in | Reference |
 |---|---|---|---|
-| Snakemake | 9.26.1 | scheduling, per-step environments, reruns | [17] |
-| fastp | 1.3.7 | read QC and light adapter trimming | [4] |
-| bwa mem | 0.7.19 | read alignment | [5, 6] |
-| samtools | 1.24 | sorting, duplicate marking, alignment statistics, FASTA indexes | [7, 11] |
-| bcftools | 1.24 | pileup, haploid calling, normalization, isolate FASTA | [11, 13] |
-| htslib (bgzip, tabix) | 1.24 | compressed, indexed support and consensus tables | [11, 18] |
+| Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`policy.ts`](../../src/tooling/policy.ts)) | [17] |
+| NCBI Datasets CLI | downloading an NCBI backbone | [`ncbi-datasets-cli`](../shared/envs/ncbi-datasets-cli/environment.yaml) | |
+| fastp | read QC and light adapter trimming | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [4] |
+| bwa mem | read alignment | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [5, 6] |
+| samtools | sorting, duplicate marking, alignment statistics, FASTA indexes | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [7, 11] |
+| bcftools | pileup, haploid calling, normalization, isolate FASTA | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [11, 13] |
+| htslib (bgzip, tabix) | compressed, indexed support and consensus tables | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [11, 18] |
 
 Callability, cohort support, and consensus generation are small scripts that read these tools' outputs.
 
@@ -315,21 +316,21 @@ Trimmed input runs through the same steps, which then change little. Untrimmed i
 
 ## References
 
-1. Bentley DR, et al. Accurate whole human genome sequencing using reversible terminator chemistry. Nature 456:53–59 (2008). doi:10.1038/nature07517
-2. Cock PJA, Fields CJ, Goto N, Heuer ML, Rice PM. The Sanger FASTQ file format for sequences with quality scores, and the Solexa/Illumina FASTQ variants. Nucleic Acids Res 38:1767–1771 (2010). doi:10.1093/nar/gkp1137
-3. Ewing B, Green P. Base-calling of automated sequencer traces using Phred. II. Error probabilities. Genome Res 8:186–194 (1998). doi:10.1101/gr.8.3.186
-4. Chen S, Zhou Y, Chen Y, Gu J. fastp: an ultra-fast all-in-one FASTQ preprocessor. Bioinformatics 34:i884–i890 (2018). doi:10.1093/bioinformatics/bty560
-5. Li H, Durbin R. Fast and accurate short read alignment with Burrows–Wheeler transform. Bioinformatics 25:1754–1760 (2009). doi:10.1093/bioinformatics/btp324
-6. Li H. Aligning sequence reads, clone sequences and assembly contigs with BWA-MEM. arXiv:1303.3997 (2013).
-7. Li H, et al. The Sequence Alignment/Map format and SAMtools. Bioinformatics 25:2078–2079 (2009). doi:10.1093/bioinformatics/btp352
-8. Nurk S, et al. The complete sequence of a human genome. Science 376:44–53 (2022). doi:10.1126/science.abj6987
-9. Danecek P, et al. The variant call format and VCFtools. Bioinformatics 27:2156–2158 (2011). doi:10.1093/bioinformatics/btr330
-10. Tan A, Abecasis GR, Kang HM. Unified representation of genetic variants. Bioinformatics 31:2202–2204 (2015). doi:10.1093/bioinformatics/btv112
-11. Danecek P, et al. Twelve years of SAMtools and BCFtools. GigaScience 10:giab008 (2021). doi:10.1093/gigascience/giab008
-12. Ebbert MTW, et al. Evaluating the necessity of PCR duplicate removal from next-generation sequencing data and a comparison of approaches. BMC Bioinformatics 17(Suppl 7):239 (2016). doi:10.1186/s12859-016-1097-3
-13. Li H. A statistical framework for SNP calling, mutation discovery, association mapping and population genetical parameter estimation from sequencing data. Bioinformatics 27:2987–2993 (2011). doi:10.1093/bioinformatics/btr509
-14. Günther T, Nettelblad C. The presence and impact of reference bias on population genomic studies of prehistoric human populations. PLoS Genet 15:e1008302 (2019). doi:10.1371/journal.pgen.1008302
-15. Eizenga JM, et al. Pangenome graphs. Annu Rev Genomics Hum Genet 21:139–162 (2020). doi:10.1146/annurev-genom-120219-080406
-16. Cornish-Bowden A. Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984. Nucleic Acids Res 13:3021–3030 (1985). doi:10.1093/nar/13.9.3021
-17. Mölder F, et al. Sustainable data analysis with Snakemake. F1000Research 10:33 (2021). doi:10.12688/f1000research.29032.2
-18. Li H. Tabix: fast retrieval of sequence features from generic TAB-delimited files. Bioinformatics 27:718–719 (2011). doi:10.1093/bioinformatics/btq671
+1. Bentley DR, et al. Accurate whole human genome sequencing using reversible terminator chemistry. Nature 456:53–59 (2008). https://doi.org/10.1038/nature07517
+2. Cock PJA, Fields CJ, Goto N, Heuer ML, Rice PM. The Sanger FASTQ file format for sequences with quality scores, and the Solexa/Illumina FASTQ variants. Nucleic Acids Res 38:1767–1771 (2010). https://doi.org/10.1093/nar/gkp1137
+3. Ewing B, Green P. Base-calling of automated sequencer traces using Phred. II. Error probabilities. Genome Res 8:186–194 (1998). https://doi.org/10.1101/gr.8.3.186
+4. Chen S, Zhou Y, Chen Y, Gu J. fastp: an ultra-fast all-in-one FASTQ preprocessor. Bioinformatics 34:i884–i890 (2018). https://doi.org/10.1093/bioinformatics/bty560
+5. Li H, Durbin R. Fast and accurate short read alignment with Burrows–Wheeler transform. Bioinformatics 25:1754–1760 (2009). https://doi.org/10.1093/bioinformatics/btp324
+6. Li H. Aligning sequence reads, clone sequences and assembly contigs with BWA-MEM. https://arxiv.org/abs/1303.3997 (2013).
+7. Li H, et al. The Sequence Alignment/Map format and SAMtools. Bioinformatics 25:2078–2079 (2009). https://doi.org/10.1093/bioinformatics/btp352
+8. Nurk S, et al. The complete sequence of a human genome. Science 376:44–53 (2022). https://doi.org/10.1126/science.abj6987
+9. Danecek P, et al. The variant call format and VCFtools. Bioinformatics 27:2156–2158 (2011). https://doi.org/10.1093/bioinformatics/btr330
+10. Tan A, Abecasis GR, Kang HM. Unified representation of genetic variants. Bioinformatics 31:2202–2204 (2015). https://doi.org/10.1093/bioinformatics/btv112
+11. Danecek P, et al. Twelve years of SAMtools and BCFtools. GigaScience 10:giab008 (2021). https://doi.org/10.1093/gigascience/giab008
+12. Ebbert MTW, et al. Evaluating the necessity of PCR duplicate removal from next-generation sequencing data and a comparison of approaches. BMC Bioinformatics 17(Suppl 7):239 (2016). https://doi.org/10.1186/s12859-016-1097-3
+13. Li H. A statistical framework for SNP calling, mutation discovery, association mapping and population genetical parameter estimation from sequencing data. Bioinformatics 27:2987–2993 (2011). https://doi.org/10.1093/bioinformatics/btr509
+14. Günther T, Nettelblad C. The presence and impact of reference bias on population genomic studies of prehistoric human populations. PLoS Genet 15:e1008302 (2019). https://doi.org/10.1371/journal.pgen.1008302
+15. Eizenga JM, et al. Pangenome graphs. Annu Rev Genomics Hum Genet 21:139–162 (2020). https://doi.org/10.1146/annurev-genom-120219-080406
+16. Cornish-Bowden A. Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984. Nucleic Acids Res 13:3021–3030 (1985). https://doi.org/10.1093/nar/13.9.3021
+17. Mölder F, et al. Sustainable data analysis with Snakemake. F1000Research 10:33 (2021). https://doi.org/10.12688/f1000research.29032.2
+18. Li H. Tabix: fast retrieval of sequence features from generic TAB-delimited files. Bioinformatics 27:718–719 (2011). https://doi.org/10.1093/bioinformatics/btq671

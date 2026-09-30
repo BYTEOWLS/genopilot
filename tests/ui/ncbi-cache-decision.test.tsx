@@ -12,6 +12,8 @@ const TAB = '\t';
 const SHIFT_TAB = '\x1b[Z';
 const ARROW_UP = '\x1b[A';
 const ARROW_DOWN = '\x1b[B';
+const ARROW_LEFT = '\x1b[D';
+const ARROW_RIGHT = '\x1b[C';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -77,23 +79,29 @@ test('starts every entry at reuse and continues only from the button', async con
   assert.deepEqual(continued, [{reference: 'reuse', target: 'reuse'}]);
 });
 
-test('arrow keys on an entry choose its option, like a choice field on the form', async context => {
+test('left and right arrows on an entry choose its option, like a choice field on the form', async context => {
   const {input, continued} = renderPage(context);
-  await press(input, ARROW_DOWN);
-  await press(input, TAB, ARROW_UP);
+  await press(input, ARROW_RIGHT);
+  await press(input, TAB, ARROW_LEFT);
   await press(input, TAB, ENTER);
   assert.deepEqual(continued, [{reference: 'refresh', target: 'refresh'}]);
 });
 
+test('up and down arrows move between entries without changing a choice', async context => {
+  const {input, continued} = renderPage(context);
+  await press(input, ARROW_DOWN, ARROW_DOWN, ENTER);
+  assert.deepEqual(continued, [{reference: 'reuse', target: 'reuse'}]);
+});
+
 test('space toggles and a second arrow press returns to reuse', async context => {
   const {input, continued} = renderPage(context);
-  await press(input, SPACE, TAB, ARROW_DOWN, ARROW_DOWN, TAB, ENTER);
+  await press(input, SPACE, TAB, ARROW_RIGHT, ARROW_RIGHT, TAB, ENTER);
   assert.deepEqual(continued, [{reference: 'refresh', target: 'reuse'}]);
 });
 
 test('arrow keys on the continue button move back to the entries', async context => {
   const {input, continued} = renderPage(context);
-  await press(input, SHIFT_TAB, ARROW_UP, ARROW_DOWN, TAB, ENTER);
+  await press(input, SHIFT_TAB, ARROW_UP, ARROW_RIGHT, TAB, ENTER);
   assert.deepEqual(continued, [{reference: 'reuse', target: 'refresh'}]);
 });
 

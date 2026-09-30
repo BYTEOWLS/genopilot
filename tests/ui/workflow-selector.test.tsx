@@ -8,6 +8,7 @@ import {
   WorkflowSelector,
   type WorkflowDiscovery,
 } from '../../src/ui/components/workflow-selector.js';
+import type {Document} from '../../src/docs/documents.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 
 class TestInput extends PassThrough {
@@ -57,7 +58,9 @@ function Harness({
   onSelect,
   onBack,
   inputActive,
+  loadDocuments,
 }: {
+  loadDocuments?: (workflow: DiscoveredWorkflow) => Promise<Document[]>;
   discoverWorkflows: WorkflowDiscovery;
   preferredWorkflowId?: string;
   onSelect: (workflow: DiscoveredWorkflow) => void;
@@ -73,6 +76,7 @@ function Harness({
       onSelect={onSelect}
       onBack={onBack}
       inputActive={inputActive}
+      {...(loadDocuments ? {loadDocuments} : {})}
     />
   );
 }
@@ -85,6 +89,7 @@ function renderSelector(context: TestContext, options: {
   discoverWorkflows?: WorkflowDiscovery;
   preferredWorkflowId?: string;
   inputActive?: boolean;
+  loadDocuments?: (workflow: DiscoveredWorkflow) => Promise<Document[]>;
 } = {}) {
   const input = new TestInput();
   const selected: string[] = [];
@@ -96,6 +101,7 @@ function renderSelector(context: TestContext, options: {
       onSelect={value => selected.push(value.manifest.id)}
       onBack={() => { backCount += 1; }}
       inputActive={options.inputActive ?? true}
+      {...(options.loadDocuments ? {loadDocuments: options.loadDocuments} : {})}
     />,
     {
       exitOnCtrlC: false,
@@ -190,4 +196,25 @@ test('ignores input while inactive', async context => {
   await selector.press(ESCAPE);
   assert.deepEqual(selector.selected, []);
   assert.equal(selector.backCount(), 0);
+});
+
+test('opens the highlighted workflow\'s documentation and returns to the list', async context => {
+  const documented: string[] = [];
+  const selector = renderSelector(context, {
+    loadDocuments: async value => {
+      documented.push(value.manifest.id);
+      return [];
+    },
+  });
+  await settle();
+  await selector.press(ARROW_DOWN);
+  await selector.press('?');
+  assert.deepEqual(documented, ['second']);
+  await selector.press(ENTER);
+  assert.deepEqual(selector.selected, [], 'the documentation owns the keys while open');
+  await selector.press(ESCAPE);
+  await new Promise<void>(resolve => setTimeout(resolve, 100));
+  assert.equal(selector.backCount(), 0, 'Esc closes the documentation, not the selector');
+  await selector.press(ENTER);
+  assert.deepEqual(selector.selected, ['second']);
 });

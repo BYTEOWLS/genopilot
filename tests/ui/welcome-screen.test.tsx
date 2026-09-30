@@ -169,6 +169,7 @@ function renderWelcome(
     scanAccessionCaches?: CacheScanner;
     fetchAccessionMetadata?: AssemblyMetadataFetcher;
     updateCheck?: () => Promise<UpdateAvailability>;
+    mouseReporting?: boolean;
   } = {},
 ): {
   input: TestInput;
@@ -201,6 +202,7 @@ function renderWelcome(
       scanAccessionCaches={options.scanAccessionCaches}
       fetchAccessionMetadata={options.fetchAccessionMetadata}
       updateCheck={options.updateCheck ?? (async () => ({state: 'current'}))}
+      mouseReporting={options.mouseReporting}
     />,
     {
       exitOnCtrlC: false,
@@ -1086,4 +1088,19 @@ test('does not exit in response to q, h, or Escape', async context => {
 
   input.write('\x03');
   await instance.waitUntilExit();
+});
+
+test('adds a text-selection hint to the one-line footer while the terminal reports the mouse', async context => {
+  const footers: string[] = [];
+  for (const mouseReporting of [false, true]) {
+    const {instance, output} = renderWelcome(detectedStatus, {columns: 200, mouseReporting});
+    registerCleanup(context, instance);
+    await waitForOutput(output, value => value.includes('↑/↓ — Select'));
+    const lines = output.readOutput().split('\n').filter(line => line.trim().length > 0);
+    footers.push(lines.at(-1) ?? '');
+    instance.unmount();
+  }
+  const [plain, withHint] = footers;
+  assert.ok(withHint!.startsWith(plain!.trimEnd()), 'the exit hint stays first');
+  assert.ok(withHint!.trimEnd().length > plain!.trimEnd().length, 'the selection hint is added to the same line');
 });

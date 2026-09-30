@@ -3,9 +3,7 @@ workflow_version: 1
 id: annotation-transfer
 label: Transfer genome annotation
 description: >
-  Transfer a GFF3 annotation from a reference genome to a target genome with
-  LiftOn, apply an identifier prefix when one is configured, validate the
-  resulting GFF3, and report transfer and execution metrics.
+  Transfer a GFF3 annotation from a reference genome to a target genome.
 entry_snakefile: Snakefile
 parameter-definitions: manifest.parameters.yaml
 stages:

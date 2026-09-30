@@ -27,8 +27,10 @@
   },
   "files": [
     "dist/",
+    "docs/",
     "workflows/",
     "!workflows/**/__pycache__",
+    "!workflows/*/development.md",
     "CHANGELOG.md",
     "README.md"
   ],
