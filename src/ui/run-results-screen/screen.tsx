@@ -25,7 +25,11 @@ import {
 import {readCohortSites, siteFilters} from '../../workflows/reference-consensus/sites.js';
 import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
 import {sanitizeTerminalText} from '../sanitize.js';
-import {AnnotationTransferResults} from './annotation-transfer-results.js';
+import {
+  AnnotationTransferResults,
+  annotationTransferTabs,
+  type AnnotationTransferTabId,
+} from './annotation-transfer-results.js';
 import {
   cohortSiteTables,
   consensusTabs,
@@ -141,9 +145,11 @@ export function RunResultsScreen({
   const [loaded, setLoaded] = useState(initiallyLoaded);
   const [mode, setMode] = useState<ScreenMode>({kind: 'results'});
   const consensus = isReferenceConsensusResult(loaded) ? loaded.result : undefined;
+  const annotationTransfer = isAnnotationTransferResult(loaded) ? loaded.result : undefined;
   const [consensusView, setConsensusView] = useState<ConsensusView | undefined>(
     () => consensus ? initialConsensusView(consensus) : undefined,
   );
+  const [annotationTab, setAnnotationTab] = useState<AnnotationTransferTabId>('overview');
   const [sites, setSites] = useState<SitesState>();
   const sitesCohort = consensus && consensusView?.tab === 'sites' ? consensus.cohorts[consensusView.cohortIndex] : undefined;
   const sitesTables = cohortSiteTables(sitesCohort);
@@ -173,7 +179,7 @@ export function RunResultsScreen({
     // The tables are derived from the cohort, so its ID is enough to decide when to read again.
   }, [sitesCohortId]);
   // The tab bar takes two more rows above the scrolled content.
-  const visibleRows = Math.max(5, rows - (consensus ? 17 : 15));
+  const visibleRows = Math.max(5, rows - (consensus || annotationTransfer ? 17 : 15));
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
   const effectiveScrollOffset = Math.min(scrollOffsets.results, maximumScrollOffset);
 
@@ -181,7 +187,7 @@ export function RunResultsScreen({
     if (contentRef.current) {
       setContentHeight(measureElement(contentRef.current).height);
     }
-  }, [columns, rows, loaded, view, consensusView, sites]);
+  }, [columns, rows, loaded, view, consensusView, annotationTab, sites]);
 
   const scrollBy = (delta: number): void => {
     setScrollOffsets(current => ({
@@ -331,7 +337,6 @@ export function RunResultsScreen({
   const compatible = loaded.kind === 'compatible' ? loaded : undefined;
   const incompatible = loaded.kind === 'incompatible' ? loaded : undefined;
   const shell = compatible?.shell;
-  const annotationTransfer = isAnnotationTransferResult(loaded) ? loaded.result : undefined;
   const configuration = compatible?.configuration;
   const metadata = configuration ? {
     id: configuration.run.id,
@@ -503,7 +508,7 @@ export function RunResultsScreen({
     (consensusView.tab === 'isolates' && !consensusView.isolateDetail) ||
     (consensusView.tab === 'sites' && !consensusView.siteDetail));
   const shortcuts = [
-    consensus ? 'Tab/←/→ — Switch tab' : '',
+    consensus || annotationTransfer ? 'Tab/←/→ — Switch tab' : '',
     listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 ? '↑/↓ — Scroll' : '',
     maximumScrollOffset > 0 ? 'PageUp/PageDown (or fn + ↑/↓) — Page' : '',
     consensusView?.tab === 'isolates' && !consensusView.isolateDetail ? 'Enter — Isolate details' : '',
@@ -536,6 +541,16 @@ export function RunResultsScreen({
           }}
           inputActive={inputActive}
         />
+      ) : annotationTransfer ? (
+        <TabBar
+          tabs={annotationTransferTabs}
+          activeId={annotationTab}
+          onChange={tab => {
+            setAnnotationTab(tab);
+            setScrollOffsets(current => ({...current, results: 0}));
+          }}
+          inputActive={inputActive}
+        />
       ) : undefined}
       shortcuts={shortcuts}
       back={back}
@@ -556,12 +571,19 @@ export function RunResultsScreen({
               sites={sites}
               visibleRows={visibleRows}
             />
+          ) : annotationTransfer ? (
+            <AnnotationTransferResults
+              result={annotationTransfer}
+              tab={annotationTab}
+              overviewHeader={<>{metadataSection}{outcomeSection}{statusSection}</>}
+              filesHeader={runDirectorySection}
+              filesFooter={runFilesSection}
+            />
           ) : <>
           {metadataSection}
           {runDirectorySection}
           {outcomeSection}
           {statusSection}
-          {annotationTransfer ? <AnnotationTransferResults result={annotationTransfer} /> : null}
           {runFilesSection}
           </>}
         </Box>

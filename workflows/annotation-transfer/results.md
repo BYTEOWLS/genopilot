@@ -1,8 +1,12 @@
 # Annotation transfer results
 
-This page explains every item of the annotation transfer result page, in the order the page shows them. The counts and their values are those of the pinned LiftOn release (see *Tools* in the README); how the transfer works is explained in the workflow's [README](README.md). The run metadata and run files every workflow shows are explained in the general [run results](../../docs/run-results.md) page.
+This page explains every item of the annotation transfer result page, grouped by its tabs. The counts and their values are those of the pinned LiftOn release (see *Tools* in the README); how the transfer works is explained in the workflow's [README](README.md). The run metadata and run files every workflow shows are explained in the general [run results](../../docs/run-results.md) page.
 
-## Run status
+## Overview
+
+The run metadata and status every workflow shows are explained in the general run results page. This tab adds the workflow's own status and the check of the final annotation.
+
+### Run status
 
 The scientific status saved by the workflow. A Snakemake process that exits successfully can still produce a failed validation, so this status, not the process exit, tells whether the result is usable. Paths marked missing do not exist now; paths marked with their availability when summarized existed or were absent when the summary was written.
 
@@ -11,6 +15,14 @@ The scientific status saved by the workflow. A Snakemake process that exits succ
 | `completed` | Transfer finished and the final GFF3 passed validation without warnings. |
 | `completed-with-warnings` | Transfer finished and the final GFF3 passed validation, but warnings need review. |
 | `validation-failed` | Transfer finished, but the final GFF3 has structural errors. All evidence is kept for review; do not use the annotation downstream without fixing the errors. |
+
+### Final GFF3 structural validation
+
+| Item | Meaning |
+|---|---|
+| Status | Result of the structural check of the final GFF3: passed or failed. It checks the GFF3 version header, coordinates, strand, CDS phase, identifiers, and parent relationships, not biological correctness. A failed check is a scientific result that is kept for review, not a failed workflow execution. |
+| Errors | Structural problems in the final GFF3 that make it unsafe for downstream use. Any error sets the run status to `validation-failed`. The validation report lists each error. |
+| Warnings | Structural findings in the final GFF3 that should be reviewed but do not block downstream use. Warnings without errors set the run status to `completed-with-warnings`. |
 
 ## Transfer
 
@@ -63,15 +75,11 @@ The scientific status saved by the workflow. A Snakemake process that exits succ
 | `full_transcript_loss` | The transcript sequence could not be aligned to the reference at all. |
 | `no_protein` | The transcript aligned, but no protein could be aligned to the reference protein. |
 
-## Final GFF3 structural validation
+## Files
 
-| Item | Meaning |
-|---|---|
-| Status | Result of the structural check of the final GFF3: passed or failed. It checks the GFF3 version header, coordinates, strand, CDS phase, identifiers, and parent relationships, not biological correctness. A failed check is a scientific result that is kept for review, not a failed workflow execution. |
-| Errors | Structural problems in the final GFF3 that make it unsafe for downstream use. Any error sets the run status to `validation-failed`. The validation report lists each error. |
-| Warnings | Structural findings in the final GFF3 that should be reviewed but do not block downstream use. Warnings without errors set the run status to `completed-with-warnings`. |
+The run directory and the run's own files are explained in the general run results page.
 
-## Generated reports
+### Generated reports
 
 | Item | Meaning |
 |---|---|
@@ -81,7 +89,7 @@ The scientific status saved by the workflow. A Snakemake process that exits succ
 | Validation report (JSON) | Every structural validation error and warning found in the final GFF3. |
 | Final GFF3 | The annotation passed to downstream stages: the raw LiftOn GFF3 after optional identifier prefixing. |
 
-## Source evidence
+### Source evidence
 
 | Item | Meaning |
 |---|---|

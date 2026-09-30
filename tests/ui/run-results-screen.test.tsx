@@ -41,6 +41,8 @@ const ARROW_DOWN = '\x1b[B';
 const PAGE_DOWN = '\x1b[6~';
 const ESCAPE = '\x1b';
 const HELP = '?';
+const TAB = '\t';
+const SHIFT_TAB = '\x1b[Z';
 
 async function settle(milliseconds = 80): Promise<void> {
   await new Promise<void>(resolve => setTimeout(resolve, milliseconds));
@@ -191,10 +193,28 @@ function renderScreen(
   return {input, output, frame: () => output.readOutput(), unmount: () => instance.unmount()};
 }
 
-test('presents compatible run metadata, scientific metrics, and direct result paths', () => {
-  const screen = renderScreen(compatibleResult());
+/** The screen's frame on each tab, from the first; Tab moves to the next one. */
+async function tabFrames(screen: ReturnType<typeof renderScreen>, count = 4): Promise<string[]> {
+  await settle();
+  const frames = [screen.frame()];
+  for (let index = 1; index < count; index += 1) {
+    screen.output.clearOutput();
+    screen.input.write(TAB);
+    await settle();
+    frames.push(screen.frame());
+  }
+  return frames;
+}
+
+test('presents compatible run metadata, scientific metrics, and direct result paths in tabs', async () => {
+  const screen = renderScreen(compatibleResult(), {inputActive: true});
   try {
-    const frame = screen.frame();
+    const frames = await tabFrames(screen);
+    const [overview, transfer] = frames;
+    // Metadata and metrics are on different tabs.
+    assert.ok(overview!.includes('annotation-transfer@1') && !overview!.includes('131'));
+    assert.ok(transfer!.includes('131') && !transfer!.includes('annotation-transfer@1'));
+    const frame = frames.join('\n');
     for (const expected of [
       'result-42',
       'Synthetic transfer',
@@ -252,13 +272,13 @@ test('checks support and canonical metrics paths independently from generated re
   );
 });
 
-test('distinguishes current evidence availability from availability at summary time', () => {
+test('distinguishes current evidence availability from availability at summary time', async () => {
   const loaded = compatibleResult();
   loaded.result.evidence.raw_gff3!.available = false;
   loaded.result.evidence.mapped_features!.recordedAvailable = false;
-  const screen = renderScreen(loaded);
+  const screen = renderScreen(loaded, {inputActive: true});
   try {
-    const frame = screen.frame();
+    const frame = (await tabFrames(screen)).at(-1) ?? '';
     assert.match(frame, /lifton\.raw\.gff3 \(missing\) \(available when summarized\)/);
     assert.match(frame, /mapped\.txt \(unavailable when summarized; available now\)/);
   } finally {
@@ -272,6 +292,12 @@ test('scrolls result content in a short terminal', async () => {
     inputActive: true,
   });
   try {
+    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    screen.output.clearOutput();
+    screen.output.emit('resize');
+    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    // The run files are on the last tab.
+    screen.input.write(SHIFT_TAB);
     await new Promise<void>(resolve => setTimeout(resolve, 20));
     screen.output.clearOutput();
     screen.output.emit('resize');
