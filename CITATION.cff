@@ -9,7 +9,8 @@ abstract: >-
 authors:
   - family-names: Oberwasserlechner
     given-names: Michael
-version: 0.1.0
+version: 0.0.1
+date-released: 2026-09-30
 license: MIT
 repository-code: https://github.com/BYTEOWLS/genopilot
 url: https://www.npmjs.com/package/@byteowls/genopilot

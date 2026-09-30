@@ -141,6 +141,14 @@ pnpm build
 pnpm start
 ```
 
+## Releasing
+
+`CHANGELOG.md` holds the highlights of each version and is the source of the GitHub release notes.
+
+1. On `main`, set the version in `package.json`, the version and `date-released` in `CITATION.cff`, and move the *Unreleased* entries into a `## [X.Y.Z] - YYYY-MM-DD` section.
+2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. The release workflow checks the tag against `package.json` and creates the GitHub release from the version's CHANGELOG section, followed by GitHub's generated list of merged pull requests.
+
 ## Tooling policy
 
 The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downloads Pixi from immutable release URLs verified by SHA-256 checksums, and Pixi installs Snakemake and Conda together; Snakemake then uses Conda to provision the environments declared by workflow rules. Managed paths live under the platform user-data directory rather than the current working directory.
