@@ -10,7 +10,10 @@ test('resolves Linux tooling and its Pixi download', () => {
   });
 
   assert.match(paths.pixiExecutable, /runtimes\/pixi\/0\.81\.0\/bin\/pixi$/);
-  assert.equal(paths.managedBinDirectory, `${paths.pixiHome}/bin`);
+  assert.match(paths.runtimeDirectory, /^\/home\/researcher\/\.byteowlsGenopilot\/tooling\/runtime\/[a-f0-9]{16}$/);
+  assert.equal(paths.managedBinDirectory, `${paths.runtimeDirectory}/.pixi/envs/default/bin`);
+  assert.equal(paths.snakemakeExecutable, `${paths.managedBinDirectory}/snakemake`);
+  assert.equal(paths.pixiHome, `${paths.dataDirectory}/pixi`);
   assert.equal(selectPixiDownload(paths).platform, 'linux');
   assert.match(selectPixiDownload(paths).url, /x86_64-unknown-linux-musl/);
 });

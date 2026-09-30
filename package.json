@@ -31,6 +31,8 @@
     "workflows/",
     "!workflows/**/__pycache__",
     "!workflows/*/development.md",
+    "runtime/pixi.toml",
+    "runtime/pixi.lock",
     "CHANGELOG.md",
     "README.md"
   ],
@@ -44,6 +46,7 @@
     "test:python": "python3 -m unittest discover -s tests -p 'test_*.py'",
     "test:all": "pnpm test && pnpm test:python",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lock:runtime": "pixi lock --manifest-path runtime/pixi.toml",
     "pack:local": "pnpm build && pnpm pack --out byteowls-genopilot-local.tgz",
     "install:global": "pnpm run pack:local && npm install --global ./byteowls-genopilot-local.tgz",
     "reinstall:global": "pnpm run install:global"

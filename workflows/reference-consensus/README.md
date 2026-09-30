@@ -293,7 +293,7 @@ Every scientific step runs in one pinned environment; Snakemake schedules the st
 
 | Tool | Role | Pinned in | Reference |
 |---|---|---|---|
-| Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`policy.ts`](../../src/tooling/policy.ts)) | [17] |
+| Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`pixi.toml`](../../runtime/pixi.toml)) | [17] |
 | NCBI Datasets CLI | downloading an NCBI backbone | [`ncbi-datasets-cli`](../shared/envs/ncbi-datasets-cli/environment.yaml) | |
 | fastp | read QC and light adapter trimming | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [4] |
 | bwa mem | read alignment | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [5, 6] |

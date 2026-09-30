@@ -29,7 +29,9 @@ Every task includes proportionate unit tests in the same change. A task is not c
 ## Tooling
 
 - [ ] Save complete tooling-check logs outside the Ink render output; setup logs are already preserved.
-- [ ] Replace solver-time `pixi global install` resolution with a reviewed lockfile before scientific production or public release.
+- [ ] Before 0.1.0: pin LiftOn's pip dependencies with `==` in its rule environment; they are declared only as lower bounds upstream and installed from PyPI when the environment is created.
+- [ ] Before 0.1.0: record each rule environment's explicit conda package list and `pip freeze` in run provenance.
+- [ ] Before 0.1.0: lock the rule environments' conda dependencies with Snakemake's per-platform pin files (`<environment>.<platform>.pin.txt`).
 - [ ] Run real installation smoke tests on each supported platform/architecture and record the tested versions.
 
 ## Windows support (last)

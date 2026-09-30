@@ -148,10 +148,11 @@ pnpm start
 1. On `main`, set the version in `package.json`, the version and `date-released` in `CITATION.cff`, and move the *Unreleased* entries into a `## [X.Y.Z] - YYYY-MM-DD` section.
 2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. The release workflow checks the tag against `package.json` and creates the GitHub release from the version's CHANGELOG section, followed by GitHub's generated list of merged pull requests.
+4. Publish to npm from the tagged commit, after the release workflow succeeded: `pnpm build && pnpm publish`. Published versions are immutable.
 
 ## Tooling policy
 
-The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downloads Pixi from immutable release URLs verified by SHA-256 checksums, and Pixi installs Snakemake, Conda, and Python together; Snakemake then uses Conda to provision the environments declared by workflow rules, and runs the scripts of rules without their own environment on that pinned Python. Managed paths live under `~/.byteowlsGenopilot` rather than the current working directory.
+The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downloads Pixi from immutable release URLs verified by SHA-256 checksums, and Pixi installs Snakemake, Conda, and Python together from the packaged `runtime/pixi.lock`. The lock fixes every package, including transitive dependencies, by URL and SHA-256, and setup installs it with `pixi install --locked`, so every installation of a release gets the same runtime. Snakemake then uses Conda to provision the environments declared by workflow rules, and runs the scripts of rules without their own environment on that pinned Python. Managed paths live under `~/.byteowlsGenopilot` rather than the current working directory.
 
 ### Runtime
 
@@ -159,16 +160,19 @@ The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downlo
 |---|---|---|
 | Node.js | User | `src/tooling/policy.ts`, `package.json` `engines` |
 | Pixi | Guided setup | `src/tooling/policy.ts` |
-| Snakemake | Pixi | `src/tooling/policy.ts` |
-| Conda | Pixi | `src/tooling/policy.ts` |
+| Snakemake | Pixi | `runtime/pixi.toml`, locked in `runtime/pixi.lock` |
+| Conda | Pixi | `runtime/pixi.toml`, locked in `runtime/pixi.lock` |
+| Python | Pixi | `runtime/pixi.toml`, locked in `runtime/pixi.lock` |
 
-GenoPilot's tooling check shows each tool's target version and the version it found.
+`src/tooling/policy.ts` repeats the Snakemake, Conda, and Python versions to verify an installation, and a test keeps them equal to the lock. GenoPilot's tooling check shows each tool's target version and the version it found.
+
+To change a runtime pin, edit `runtime/pixi.toml` and `src/tooling/policy.ts`, run `pnpm lock:runtime` with the pinned Pixi version on `PATH`, and review the lock diff. A release with a changed lock installs its runtime into a new directory, so existing users are asked to run setup again.
 
 ### Workflow rule environments
 
-Each workflow step runs in a pinned Conda environment under `workflows/*/envs/`. Each workflow README's *Tools* table names its tools and links the environment that pins them; version numbers are written only in these files and in `src/tooling/policy.ts`, never repeated in documentation. Every run records the versions it used in its provenance.
+Each workflow step runs in a pinned Conda environment under `workflows/*/envs/`. Each workflow README's *Tools* table names its tools and links the environment that pins them; version numbers are written only in these files, `runtime/pixi.toml`, and `src/tooling/policy.ts`, never repeated in documentation. Every run records the versions it used in its provenance. These files pin each tool but not its dependencies, which Conda resolves when Snakemake first creates an environment.
 
-Dependabot proposes updates for the rule environments, npm, and GitHub Actions, but it changes only the environment file. Runtime pins in `src/tooling/policy.ts` are updated manually, including the Pixi download checksums.
+Dependabot proposes updates for the rule environments, npm, and GitHub Actions, but it changes only the environment file. Runtime pins in `runtime/pixi.toml` and `src/tooling/policy.ts` are updated manually, including the Pixi download checksums.
 
 ### Updating a pinned version
 

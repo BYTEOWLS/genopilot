@@ -7,6 +7,9 @@ node_modules/
 dist/
 *.tgz
 
+# Pixi environments of a locally installed runtime workspace
+.pixi/
+
 # Snakemake run workspaces and state
 runs/
 .snakemake/

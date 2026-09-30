@@ -173,7 +173,7 @@ Interactive decisions remain outside Snakemake rules. The TUI saves decisions, a
 
 ### Managed tooling version updates
 
-- [ ] Detect newer releases of the Snakemake, Conda, and Pixi versions pinned in `src/tooling/policy.ts`. Dependabot covers npm, GitHub Actions, and the conda environments under `workflows/shared/envs/`, but cannot read these TypeScript constants; a scheduled check or a custom update manager could propose bumps that still require validation.
+- [ ] Detect newer releases of the Snakemake, Conda, and Pixi versions pinned in `src/tooling/policy.ts` and `runtime/pixi.toml`. Dependabot covers npm, GitHub Actions, and the conda environments under `workflows/shared/envs/`, but cannot read these pins; a scheduled check or a custom update manager could propose bumps that still require validation.
 
 ### Isolate catalog
 
