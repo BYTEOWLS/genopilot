@@ -5,7 +5,7 @@ import React from 'react';
 import {render} from 'ink';
 import type {Document, DocumentsLoader} from '../../src/docs/documents.js';
 import {parseMarkdown} from '../../src/docs/markdown.js';
-import {DocumentPage} from '../../src/ui/components/document-page.js';
+import {MarkdownDocumentPage} from '../../src/ui/components/markdown-document-page.js';
 import {DocumentationScreen} from '../../src/ui/documentation-screen/screen.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 import type {WorkflowManifest} from '../../src/workflows/manifest.js';
@@ -76,7 +76,7 @@ function mount(element: React.JSX.Element) {
 
 test('shows several documents as tabs, each keeping its own scroll position', async () => {
   const load: DocumentsLoader = async () => [longDocument('first'), longDocument('second')];
-  const page = mount(<DocumentPage title="Docs" load={load} onClose={() => {}} inputActive />);
+  const page = mount(<MarkdownDocumentPage title="Docs" load={load} onClose={() => {}} inputActive />);
   try {
     await settle();
     let frame = await page.press(...Array.from({length: 10}, () => PAGE_DOWN));
@@ -93,7 +93,7 @@ test('shows several documents as tabs, each keeping its own scroll position', as
 test('shows a missing document as unavailable and closes with Esc', async () => {
   let closed = false;
   const load: DocumentsLoader = async () => [{id: 'README', title: 'README.md'}];
-  const page = mount(<DocumentPage title="Docs" load={load} onClose={() => { closed = true; }} inputActive />);
+  const page = mount(<MarkdownDocumentPage title="Docs" load={load} onClose={() => { closed = true; }} inputActive />);
   try {
     await settle();
     assert.match(page.output.output, /No documentation is available/);
@@ -109,7 +109,7 @@ test('reports documentation that cannot be read', async () => {
   const load: DocumentsLoader = async () => {
     throw new Error('Permission denied sentinel');
   };
-  const page = mount(<DocumentPage title="Docs" load={load} onClose={() => {}} inputActive />);
+  const page = mount(<MarkdownDocumentPage title="Docs" load={load} onClose={() => {}} inputActive />);
   try {
     await settle();
     assert.match(page.output.output, /Permission denied sentinel/);

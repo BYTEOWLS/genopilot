@@ -8,7 +8,7 @@ import {
   type DocumentsLoader,
 } from '../../docs/documents.js';
 import type {DiscoveredWorkflow} from '../../workflows/discovery.js';
-import {DocumentPage} from '../components/document-page.js';
+import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 import {Page} from '../components/page.js';
 import {useWorkflowSelection, type WorkflowDiscovery} from '../components/workflow-selector.js';
 import {sanitizeTerminalText} from '../sanitize.js';
@@ -67,7 +67,7 @@ export function DocumentationScreen({
 
   if (open) {
     return (
-      <DocumentPage
+      <MarkdownDocumentPage
         title="Documentation"
         detail={open.label}
         load={open.load}

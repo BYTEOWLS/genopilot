@@ -13,7 +13,7 @@ import {
 import type {ReadPairsChecker} from '../../isolates/reads.js';
 import {IsolateCatalogChangedError, type LoadedIsolateCatalog} from '../../isolates/store.js';
 import {useHomeSuspension} from '../home-navigation.js';
-import {DocumentPage} from '../components/document-page.js';
+import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 import {EditPage, Page} from '../components/page.js';
 import {PathBrowser, type DirectoryReader} from '../components/path-browser.js';
 import {TextField} from '../components/text-field.js';
@@ -504,7 +504,7 @@ export function IsolateImport({
 
   if (showHelp) {
     return (
-      <DocumentPage
+      <MarkdownDocumentPage
         title="Import review help"
         load={loadHelp}
         onClose={() => setShowHelp(false)}

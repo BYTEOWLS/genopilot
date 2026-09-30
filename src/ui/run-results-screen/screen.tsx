@@ -42,7 +42,7 @@ import {
 } from './reference-consensus-results.js';
 import {CohortReviewScreen} from './cohort-review.js';
 import {Page} from '../components/page.js';
-import {DocumentPage} from '../components/document-page.js';
+import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 import {TabBar} from '../components/tabs.js';
 import {readGeneralDocuments, readWorkflowDocumentsById, type DocumentsLoader} from '../../docs/documents.js';
 import {
@@ -494,7 +494,7 @@ export function RunResultsScreen({
 
   if (view === 'help') {
     return (
-      <DocumentPage
+      <MarkdownDocumentPage
         title="Result help"
         detail={manifest.label}
         load={loadHelp}

@@ -17,7 +17,7 @@ type LoadState =
  * A full-screen, scrollable page of one or more Markdown documents, shown as tabs named by their
  * titles. Each tab keeps its own scroll position. Esc or `?` closes it.
  */
-export function DocumentPage({
+export function MarkdownDocumentPage({
   title,
   detail,
   load,

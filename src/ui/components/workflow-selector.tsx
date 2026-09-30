@@ -3,7 +3,7 @@ import {Alert} from '@inkjs/ui';
 import {Box, Text, useInput} from 'ink';
 import {readWorkflowDocuments, type Document} from '../../docs/documents.js';
 import type {DiscoveredWorkflow} from '../../workflows/discovery.js';
-import {DocumentPage} from './document-page.js';
+import {MarkdownDocumentPage} from './markdown-document-page.js';
 import {Page} from './page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 
@@ -134,7 +134,7 @@ export function WorkflowSelector({
 
   if (documentedWorkflow) {
     return (
-      <DocumentPage
+      <MarkdownDocumentPage
         title="Workflow documentation"
         detail={documentedWorkflow.manifest.label}
         load={() => loadDocuments(documentedWorkflow)}
