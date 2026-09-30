@@ -2,16 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {resolveToolingPaths, selectPixiDownload} from '../../src/tooling/paths.js';
 
-test('resolves Linux tooling under XDG_DATA_HOME', () => {
+test('resolves Linux tooling and its Pixi download', () => {
   const paths = resolveToolingPaths({
     platform: 'linux',
     architecture: 'x64',
-    environment: {XDG_DATA_HOME: '/researcher/data'},
     homeDirectory: '/home/researcher',
   });
 
-  assert.equal(paths.dataDirectory, '/researcher/data/byteowlsGenopilot/tooling');
-  assert.match(paths.pixiExecutable, /runtimes\/pixi\/0\.79\.0\/bin\/pixi$/);
+  assert.match(paths.pixiExecutable, /runtimes\/pixi\/0\.81\.0\/bin\/pixi$/);
   assert.equal(paths.managedBinDirectory, `${paths.pixiHome}/bin`);
   assert.equal(selectPixiDownload(paths).platform, 'linux');
   assert.match(selectPixiDownload(paths).url, /x86_64-unknown-linux-musl/);
@@ -21,7 +19,6 @@ test('resolves the NCBI API key path under a private secrets directory', () => {
   const paths = resolveToolingPaths({
     platform: 'linux',
     architecture: 'x64',
-    environment: {XDG_DATA_HOME: '/researcher/data'},
     homeDirectory: '/home/researcher',
   });
 
@@ -33,7 +30,6 @@ test('keeps the isolate and accession catalogs outside the managed tooling direc
   const paths = resolveToolingPaths({
     platform: 'darwin',
     architecture: 'arm64',
-    environment: {},
     homeDirectory: '/Users/researcher',
   });
 
@@ -45,23 +41,21 @@ test('keeps the isolate and accession catalogs outside the managed tooling direc
   assert.ok(!paths.accessionCatalogPath.startsWith(`${paths.dataDirectory}/`));
 });
 
-test('uses platform user-data defaults without depending on the working directory', () => {
+test('uses the same data directory on every platform without depending on the working directory', () => {
   const linux = resolveToolingPaths({
     platform: 'linux',
     architecture: 'arm64',
-    environment: {},
     homeDirectory: '/home/researcher',
   });
   const mac = resolveToolingPaths({
     platform: 'darwin',
     architecture: 'arm64',
-    environment: {},
     homeDirectory: '/Users/researcher',
   });
 
   assert.equal(
     linux.dataDirectory,
-    '/home/researcher/.local/share/byteowlsGenopilot/tooling',
+    '/home/researcher/.byteowlsGenopilot/tooling',
   );
   assert.equal(
     mac.dataDirectory,

@@ -63,15 +63,15 @@ async function writeCopy(
 }
 
 test('verifies copies and explains damaged ones without trusting them', async context => {
-  const root = await temporaryDirectory(context);
-  const verified = await writeCopy(root, {gff3: '##gff-version 3\n'});
-  await writeCopy(root, {name: 'GCF_000000001.1', fasta: '>changed\n', checksums: {fasta: sha256('>original\n')}});
-  await writeCopy(root, {name: 'GCF_000000002.1', fasta: null});
-  await writeCopy(root, {name: 'GCF_000000003.1', checksums: 'not json'});
-  await writeCopy(root, {name: 'GCF_000000004.1', checksums: {fasta: sha256('>chr1\nACGT\n'), gff3: sha256('x')}});
-  await mkdir(join(root, 'ncbi-accessions-cache', 'not-an-accession'));
+  const tempDir = await temporaryDirectory(context);
+  const verified = await writeCopy(tempDir, {gff3: '##gff-version 3\n'});
+  await writeCopy(tempDir, {name: 'GCF_000000001.1', fasta: '>changed\n', checksums: {fasta: sha256('>original\n')}});
+  await writeCopy(tempDir, {name: 'GCF_000000002.1', fasta: null});
+  await writeCopy(tempDir, {name: 'GCF_000000003.1', checksums: 'not json'});
+  await writeCopy(tempDir, {name: 'GCF_000000004.1', checksums: {fasta: sha256('>chr1\nACGT\n'), gff3: sha256('x')}});
+  await mkdir(join(tempDir, 'ncbi-accessions-cache', 'not-an-accession'));
 
-  const scan = await scanAccessionCaches([root], now);
+  const scan = await scanAccessionCaches([tempDir], now);
   const byAccession = new Map(scan.copies.map(copy => [copy.accession, copy]));
 
   assert.equal(byAccession.get(accession)?.state, 'verified');
@@ -82,17 +82,17 @@ test('verifies copies and explains damaged ones without trusting them', async co
   assert.equal(byAccession.get('GCF_000000003.1')?.state, 'incomplete');
   assert.equal(byAccession.get('GCF_000000004.1')?.state, 'incomplete');
   assert.ok(scan.copies.filter(copy => copy.state !== 'verified').every(copy => copy.problem));
-  assert.deepEqual(scan.ignored.map(entry => entry.path), [join(root, 'ncbi-accessions-cache', 'not-an-accession')]);
+  assert.deepEqual(scan.ignored.map(entry => entry.path), [join(tempDir, 'ncbi-accessions-cache', 'not-an-accession')]);
   assert.ok(scan.ignored.every(entry => entry.reason.length > 0));
 });
 
 test('accepts a FASTA-only copy and reads its cached NCBI report', async context => {
-  const root = await temporaryDirectory(context);
-  await writeCopy(root, {
+  const tempDir = await temporaryDirectory(context);
+  await writeCopy(tempDir, {
     report: {accession, organism: {organismName: 'Example organism'}, assemblyInfo: {assemblyName: 'Example'}},
   });
 
-  const [copy] = (await scanAccessionCaches([root], now)).copies;
+  const [copy] = (await scanAccessionCaches([tempDir], now)).copies;
 
   assert.equal(copy?.state, 'verified');
   assert.equal(copy?.gff3_sha256, undefined);
@@ -101,25 +101,25 @@ test('accepts a FASTA-only copy and reads its cached NCBI report', async context
 });
 
 test('reads a cached report that spans several lines', async context => {
-  const root = await temporaryDirectory(context);
-  const directory = await writeCopy(root);
+  const tempDir = await temporaryDirectory(context);
+  const directory = await writeCopy(tempDir);
   await mkdir(join(directory, 'ncbi_dataset', 'data'), {recursive: true});
   const report = {accession, organism: {organismName: 'Example organism'}, assemblyInfo: {assemblyType: 'haploid'}};
   await writeFile(join(directory, 'ncbi_dataset', 'data', 'assembly_data_report.jsonl'), JSON.stringify(report, null, 2));
 
-  const [copy] = (await scanAccessionCaches([root], now)).copies;
+  const [copy] = (await scanAccessionCaches([tempDir], now)).copies;
 
   assert.equal(copy?.report?.organism, 'Example organism');
   assert.equal(copy?.report?.assembly_type, 'haploid');
 });
 
 test('skips missing roots and lists one directory reached through two roots once', async context => {
-  const root = await temporaryDirectory(context);
-  await writeCopy(root);
+  const tempDir = await temporaryDirectory(context);
+  await writeCopy(tempDir);
   const alias = join(await temporaryDirectory(context), 'alias');
-  await symlink(root, alias);
+  await symlink(tempDir, alias);
 
-  const scan = await scanAccessionCaches([root, alias, join(root, 'missing')], now);
+  const scan = await scanAccessionCaches([tempDir, alias, join(tempDir, 'missing')], now);
 
   assert.equal(scan.copies.length, 1);
   assert.deepEqual(scan.rootProblems, []);
@@ -155,16 +155,16 @@ test('records verified copies in the catalog, keeps REST metadata, and flags con
 });
 
 test('keeps the first verification time of unchanged copies and drops damaged ones', async context => {
-  const root = await temporaryDirectory(context);
-  const directory = await writeCopy(root);
-  const firstScan = await scanAccessionCaches([root], now);
+  const tempDir = await temporaryDirectory(context);
+  const directory = await writeCopy(tempDir);
+  const firstScan = await scanAccessionCaches([tempDir], now);
   const recorded = applyCacheScan(emptyAccessionCatalog(), firstScan);
 
-  const laterScan = await scanAccessionCaches([root], () => new Date('2026-02-01T00:00:00.000Z'));
+  const laterScan = await scanAccessionCaches([tempDir], () => new Date('2026-02-01T00:00:00.000Z'));
   assert.deepEqual(applyCacheScan(recorded, laterScan), recorded);
 
   await writeFile(join(directory, 'genomic.fna'), '>tampered\n');
-  const damagedScan: CacheScan = await scanAccessionCaches([root], now);
+  const damagedScan: CacheScan = await scanAccessionCaches([tempDir], now);
   const updated = applyCacheScan(recorded, damagedScan);
   assert.deepEqual(updated.accessions[0]?.cached_copies, []);
 });
@@ -185,25 +185,25 @@ test('deletes every cache directory of an accession, damaged or not', async cont
 });
 
 test('refuses to delete through a symbolic link or for an invalid accession', async context => {
-  const root = await temporaryDirectory(context);
+  const tempDir = await temporaryDirectory(context);
   const elsewhere = await temporaryDirectory(context);
   await writeFile(join(elsewhere, 'keep.txt'), 'keep');
-  await mkdir(join(root, 'ncbi-accessions-cache'), {recursive: true});
-  await symlink(elsewhere, join(root, 'ncbi-accessions-cache', accession));
+  await mkdir(join(tempDir, 'ncbi-accessions-cache'), {recursive: true});
+  await symlink(elsewhere, join(tempDir, 'ncbi-accessions-cache', accession));
 
-  await assert.rejects(deleteAccessionCaches([root], accession), /not a directory/);
-  await assert.rejects(deleteAccessionCaches([root], '../escape'), /invalid accession/);
+  await assert.rejects(deleteAccessionCaches([tempDir], accession), /not a directory/);
+  await assert.rejects(deleteAccessionCaches([tempDir], '../escape'), /invalid accession/);
   assert.deepEqual(await readdir(elsewhere), ['keep.txt']);
 });
 
 test('lists a symbolically linked accession directory as skipped instead of following it', async context => {
-  const root = await temporaryDirectory(context);
+  const tempDir = await temporaryDirectory(context);
   const elsewhere = await writeCopy(await temporaryDirectory(context));
-  await mkdir(join(root, 'ncbi-accessions-cache'), {recursive: true});
-  const link = join(root, 'ncbi-accessions-cache', 'GCF_000000005.1');
+  await mkdir(join(tempDir, 'ncbi-accessions-cache'), {recursive: true});
+  const link = join(tempDir, 'ncbi-accessions-cache', 'GCF_000000005.1');
   await symlink(elsewhere, link);
 
-  const scan = await scanAccessionCaches([root], now);
+  const scan = await scanAccessionCaches([tempDir], now);
 
   assert.deepEqual(scan.copies, []);
   assert.deepEqual(scan.ignored.map(entry => entry.path), [link]);

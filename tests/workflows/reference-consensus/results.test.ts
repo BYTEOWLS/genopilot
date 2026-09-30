@@ -157,14 +157,14 @@ async function writeIteration(
   });
 }
 
-/** A run directory under `<root>/reference-consensus/run-a`, with the given isolates processed. */
+/** A run directory under `<tempDir>/reference-consensus/run-a`, with the given isolates processed. */
 async function runDirectory(
   context: TestContext,
   {completed = isolateIds, initial = true}: {completed?: readonly string[]; initial?: boolean} = {},
-): Promise<{root: string; directory: string}> {
-  const root = await mkdtemp(join(tmpdir(), 'consensus-results-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const directory = join(root, 'reference-consensus', 'run-a');
+): Promise<{tempDir: string; directory: string}> {
+  const tempDir = await mkdtemp(join(tmpdir(), 'consensus-results-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const directory = join(tempDir, 'reference-consensus', 'run-a');
   await mkdir(join(directory, 'logs'), {recursive: true});
   await writeFile(join(directory, 'config.yaml'), stringifyRunFile(configuration));
   await writeFile(join(directory, 'isolates.yaml'), stringifyRunFile(snapshot));
@@ -186,7 +186,7 @@ async function runDirectory(
     await writeCohort(directory, 'initial', 3);
     await writeJson(directory, 'provenance/run.json', {schema_version: 1, generated_at: '2026-01-01T15:00:00.000Z'});
   }
-  return {root, directory};
+  return {tempDir, directory};
 }
 
 function consensusResult(loaded: LoadedWorkflowResult): CompatibleReferenceConsensusResult {
@@ -316,7 +316,7 @@ test('refuses an iteration whose decision changed after it ran', async context =
 });
 
 test('reports a run without any cohort as incomplete and names the unfinished isolates', async context => {
-  const {root, directory} = await runDirectory(context, {completed: ['isolate-a'], initial: false});
+  const {tempDir, directory} = await runDirectory(context, {completed: ['isolate-a'], initial: false});
 
   const loaded = consensusResult(await loadWorkflowResult(directory, manifest));
 
@@ -324,16 +324,16 @@ test('reports a run without any cohort as incomplete and names the unfinished is
   assert.equal(loaded.shell.runStatus, 'incomplete');
   assert.equal(loaded.shell.status.variant, 'warning');
   assert.match(loaded.shell.status.explanation, /isolate-b, isolate-c/);
-  const [discovered] = await discoverWorkflowRuns(root, manifest);
+  const [discovered] = await discoverWorkflowRuns(tempDir, manifest);
   assert.equal(discovered?.status, 'incomplete');
   assert.equal(discovered?.missingLinkedPaths, 0);
 });
 
 test('counts the missing linked paths of a discovered run', async context => {
-  const {root, directory} = await runDirectory(context);
+  const {tempDir, directory} = await runDirectory(context);
   await rm(join(directory, 'results/cohort/initial/consensus.fasta'));
 
-  const [discovered] = await discoverWorkflowRuns(root, manifest);
+  const [discovered] = await discoverWorkflowRuns(tempDir, manifest);
 
   assert.equal(discovered?.status, 'completed');
   assert.equal(discovered?.missingLinkedPaths, 1);

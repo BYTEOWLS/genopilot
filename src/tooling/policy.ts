@@ -8,7 +8,7 @@ export type RuntimeDownload = {
   sha256: string;
 };
 
-const pixiVersion = '0.79.0';
+const pixiVersion = '0.81.0';
 const pixiReleaseTag = `v${pixiVersion}`;
 
 /**
@@ -16,13 +16,15 @@ const pixiReleaseTag = `v${pixiVersion}`;
  *
  * Pixi installs Snakemake and Conda together in one global environment. Conda
  * must remain alongside Snakemake because Snakemake currently uses the `conda`
- * command to provision environments declared by workflow rules.
+ * command to provision environments declared by workflow rules. Python is pinned
+ * too: rules without their own environment run their scripts on Snakemake's
+ * interpreter.
  *
  * Paths are relative to the user data directory so the package remains
- * independent of the directory from which the CLI is invoked. The resolver
- * uses XDG_DATA_HOME (or ~/.local/share) on Linux. On macOS it deliberately
- * uses a whitespace-free hidden directory under the user's home because
- * Snakemake 9.26.1 does not quote Conda's activation-script path when
+ * independent of the directory from which the CLI is invoked. Every platform
+ * uses the same hidden directory under the user's home: one location to
+ * document and back up, and one without whitespace, which matters because
+ * Snakemake (checked with 9.26.1) does not quote Conda's activation-script path when
  * constructing rule commands.
  */
 export const toolingPolicy = {
@@ -35,7 +37,7 @@ export const toolingPolicy = {
   pixi: {
     command: 'pixi',
     minimumVersion: pixiVersion,
-    maximumVersionExclusive: '0.79.1',
+    maximumVersionExclusive: '0.81.1',
     versionsTestedWith: [],
     managedVersion: pixiVersion,
     releaseTag: pixiReleaseTag,
@@ -47,60 +49,64 @@ export const toolingPolicy = {
         platform: 'linux',
         architecture: 'x64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-x86_64-unknown-linux-musl.tar.gz`,
-        sha256: 'b9b6dd2bdf4e0043c2c0cd6d15334a26c6851121bf5ae16c39b69add598bafdc',
+        sha256: '7aa3ec39aecceff9062fa2ed4d42cbaa0bdc25ddea727d048e061cf188d434f6',
       },
       {
         platform: 'linux',
         architecture: 'arm64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-aarch64-unknown-linux-musl.tar.gz`,
-        sha256: 'a402a2a3e2c785b7855c482db46d65a915c0ac04fdf041410f218980a5247290',
+        sha256: '9f8d2113fe9dc01788a65f5c2acec34fa56b1193461a5c3e9a775d6d2d621bcb',
       },
       {
         platform: 'darwin',
         architecture: 'x64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-x86_64-apple-darwin.tar.gz`,
-        sha256: '972679722ee4ce97538c731ab67d516c3c155f2184ec16f777f5bd79623bb531',
+        sha256: '9859588ba57f390b5c77d56b2654fab37bc00e10952da25e3efd6e3434557e5a',
       },
       {
         platform: 'darwin',
         architecture: 'arm64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-aarch64-apple-darwin.tar.gz`,
-        sha256: '652d1d8380fa40feaa75b4ccee3a1f0b32e20a6fa2fdd84bb8e3c52962b8dc34',
+        sha256: 'f4e32ea91970d4e11739488817979a5f2c6ebbb9cedb0d6dea74b2b790b272dc',
       },
     ] satisfies RuntimeDownload[],
   },
   conda: {
     command: 'conda',
-    minimumVersion: '25.11.1',
-    maximumVersionExclusive: '25.11.2',
+    minimumVersion: '26.7.3',
+    maximumVersionExclusive: '26.7.4',
     versionsTestedWith: [],
-    managedVersion: '25.11.1',
-    package: 'conda=25.11.1',
+    managedVersion: '26.7.3',
+    package: 'conda=26.7.3',
   },
   snakemake: {
     command: 'snakemake',
-    minimumVersion: '9.26.1',
-    maximumVersionExclusive: '9.26.2',
+    minimumVersion: '9.27.0',
+    maximumVersionExclusive: '9.27.1',
     versionsTestedWith: [],
-    managedVersion: '9.26.1',
-    package: 'snakemake=9.26.1',
+    managedVersion: '9.27.0',
+    package: 'snakemake=9.27.0',
+  },
+  python: {
+    command: 'python',
+    minimumVersion: '3.14.7',
+    maximumVersionExclusive: '3.14.8',
+    versionsTestedWith: [],
+    managedVersion: '3.14.7',
+    package: 'python=3.14.7',
   },
   managedGlobalEnvironment: {
     name: 'byteowls-genopilot',
     relativeHomePath: 'pixi',
     channels: ['conda-forge', 'bioconda'] as const,
-    packages: ['snakemake=9.26.1', 'conda=25.11.1'] as const,
+    packages: ['snakemake=9.27.0', 'conda=26.7.3', 'python=3.14.7'] as const,
     relativeSnakemakeExecutablePath: 'pixi/bin/snakemake',
     relativeCondaExecutablePath: 'pixi/bin/conda',
+    // The environment's own interpreter, which Snakemake runs on. Pixi exposes `python` only
+    // when it first creates the environment, so an upgraded installation has no pixi/bin/python.
+    relativePythonExecutablePath: 'pixi/envs/byteowls-genopilot/bin/python',
   },
-  managedDataDirectories: {
-    linux: {
-      environmentVariable: 'XDG_DATA_HOME',
-      fallbackRelativeToHome: '.local/share/byteowlsGenopilot/tooling',
-      directoryNameWhenEnvironmentSet: 'byteowlsGenopilot/tooling',
-    },
-    darwin: {
-      fallbackRelativeToHome: '.byteowlsGenopilot/tooling',
-    },
+  managedDataDirectory: {
+    relativeToHome: '.byteowlsGenopilot/tooling',
   },
 } as const;

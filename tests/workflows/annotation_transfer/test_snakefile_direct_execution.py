@@ -388,11 +388,11 @@ class DirectExecutionContractTests(unittest.TestCase):
     actual transfer result on the synthetic genomes.
     """
 
-    def prepare(self, root: Path) -> tuple[Path, Path, Path, dict]:
-        run_dir = root / "runs" / "test-run"
+    def prepare(self, temp_dir: Path) -> tuple[Path, Path, Path, dict]:
+        run_dir = temp_dir / "runs" / "test-run"
         run_dir.mkdir(parents=True)
         config_path = write_local_config(run_dir)
-        bin_dir = root / "bin"
+        bin_dir = temp_dir / "bin"
         write_fake_lifton(bin_dir)
         return run_dir, config_path, bin_dir, fake_lifton_environment(bin_dir)
 
@@ -518,9 +518,9 @@ class DirectExecutionContractTests(unittest.TestCase):
 
     def test_interrupted_run_resumes_in_the_same_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            run_dir, config_path, bin_dir, _env = self.prepare(root)
-            started = root / "lifton-started"
+            temp_dir = Path(tmp)
+            run_dir, config_path, bin_dir, _env = self.prepare(temp_dir)
+            started = temp_dir / "lifton-started"
             env = fake_lifton_environment(
                 bin_dir, "interrupt", FAKE_LIFTON_STARTED=str(started)
             )

@@ -33,11 +33,11 @@ chrC	LiftOn	sequence_feature	941	960	.	+	.	ID=note1
 
 
 class CollectTransferMetricsTests(unittest.TestCase):
-    def prepare(self, root: Path) -> argparse.Namespace:
-        reference = root / "resolved" / "reference.gff3"
-        raw = root / "results" / "annotation" / "lifton.raw.gff3"
-        validation = root / "results" / "validation.json"
-        diagnostics = root / "results" / "annotation" / "lifton_output"
+    def prepare(self, temp_dir: Path) -> argparse.Namespace:
+        reference = temp_dir / "resolved" / "reference.gff3"
+        raw = temp_dir / "results" / "annotation" / "lifton.raw.gff3"
+        validation = temp_dir / "results" / "validation.json"
+        diagnostics = temp_dir / "results" / "annotation" / "lifton_output"
         stats = diagnostics / "stats"
         intermediate = diagnostics / "intermediate_files"
         reference.parent.mkdir(parents=True)
@@ -91,9 +91,9 @@ class CollectTransferMetricsTests(unittest.TestCase):
             raw_gff3=raw,
             validation=validation,
             diagnostics=diagnostics,
-            details=root / "results" / "feature-transfer.tsv",
-            metrics=root / "results" / "metrics.json",
-            summary=root / "results" / "summary.json",
+            details=temp_dir / "results" / "feature-transfer.tsv",
+            metrics=temp_dir / "results" / "metrics.json",
+            summary=temp_dir / "results" / "summary.json",
             workflow_id="annotation-transfer",
             workflow_version=1,
             run_id="test-run",

@@ -22,7 +22,7 @@ rule validate_annotation:
     log:
         "logs/validate-annotation.log",
     shell:
-        "python3 {SCRIPTS_DIR_SH}/validate_annotation.py"
+        "{PYTHON_SH} {SCRIPTS_DIR_SH}/validate_annotation.py"
         " --gff3 {input.gff3}"
         " --output results/validation.json"
         " > {log} 2>&1"

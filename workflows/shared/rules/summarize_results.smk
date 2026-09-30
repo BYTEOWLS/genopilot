@@ -67,4 +67,4 @@ rule summarize_annotation_transfer:
     params:
         args=_summarize_results_args,
     shell:
-        "python3 {SCRIPTS_DIR_SH}/collect_transfer_metrics.py {params.args} > {log} 2>&1"
+        "{PYTHON_SH} {SCRIPTS_DIR_SH}/collect_transfer_metrics.py {params.args} > {log} 2>&1"

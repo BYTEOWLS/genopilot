@@ -63,15 +63,19 @@ const detectedStatus: ToolingStatus = {
   node: {state: 'available', detected: {command: 'node', version: 'v24.19.0'}},
   pixi: {
     state: 'available',
-    detected: {command: 'pixi', version: 'pixi 0.79.0'},
+    detected: {command: 'pixi', version: 'pixi 0.81.0'},
   },
   conda: {
     state: 'available',
-    detected: {command: 'conda', version: 'conda 25.11.1'},
+    detected: {command: 'conda', version: 'conda 26.7.3'},
   },
   snakemake: {
     state: 'available',
-    detected: {command: 'snakemake', version: '9.26.1'},
+    detected: {command: 'snakemake', version: '9.27.0'},
+  },
+  python: {
+    state: 'available',
+    detected: {command: 'python', version: 'Python 3.14.7'},
   },
 };
 
@@ -558,12 +562,12 @@ test('opens the tooling screen and runs a fresh check there', async context => {
   input.write('\r');
 
   // The tooling screen lists each detected version from the injected status.
-  const toolingFrame = await waitForOutput(output, value => value.includes('v9.26.1'));
+  const toolingFrame = await waitForOutput(output, value => value.includes('v9.27.0'));
   assert.equal(checks, 1);
   assert.match(toolingFrame, /✓ Node — Runtime — v24\.19\.0 — Available/);
-  assert.match(toolingFrame, /✓ Pixi — Provisioning — v0\.79\.0 — Available/);
-  assert.match(toolingFrame, /✓ Conda — Environments — v25\.11\.1 — Available/);
-  assert.match(toolingFrame, /✓ Snakemake — Workflow — v9\.26\.1 — Available/);
+  assert.match(toolingFrame, /✓ Pixi — Provisioning — v0\.81\.0 — Available/);
+  assert.match(toolingFrame, /✓ Conda — Environments — v26\.7\.3 — Available/);
+  assert.match(toolingFrame, /✓ Snakemake — Workflow — v9\.27\.0 — Available/);
   assert.doesNotMatch(toolingFrame, /Commands/);
 
   input.write('\r');
@@ -598,7 +602,7 @@ test('runs a command by ID when its display label changes', async context => {
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   input.write('\r');
-  await waitForOutput(output, value => value.includes('v9.26.1'));
+  await waitForOutput(output, value => value.includes('v9.27.0'));
   input.write('\r');
 
   const checkedFrame = await waitForOutput(output, value =>
@@ -616,7 +620,7 @@ test('clears a completed tooling-check message when returning to the command men
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   input.write('\r');
-  await waitForOutput(output, value => value.includes('v9.26.1'));
+  await waitForOutput(output, value => value.includes('v9.27.0'));
   input.write('\r');
   await waitForOutput(output, value =>
     value.includes('Tooling check complete. All required tools are available.'),
@@ -754,13 +758,14 @@ test('offers setup choices instead of commands when tooling is missing', async c
     node: {state: 'available', detected: {command: 'node', version: 'v24.19.0'}},
     pixi: {
       state: 'available',
-      detected: {command: 'pixi', version: 'pixi 0.79.0'},
+      detected: {command: 'pixi', version: 'pixi 0.81.0'},
     },
     conda: {
       state: 'available',
-      detected: {command: 'conda', version: 'conda 25.11.1'},
+      detected: {command: 'conda', version: 'conda 26.7.3'},
     },
     snakemake: {state: 'missing'},
+    python: {state: 'missing'},
   });
   registerCleanup(context, instance);
 
@@ -771,9 +776,9 @@ test('offers setup choices instead of commands when tooling is missing', async c
   assert.match(frame, /Required tooling: Setup required/);
   assert.doesNotMatch(frame, /Tooling: Setup required/);
   assert.match(frame, /✓ Node — Runtime — v24\.19\.0 — Available/);
-  assert.match(frame, /✓ Pixi — Provisioning — v0\.79\.0 — Available/);
-  assert.match(frame, /✓ Conda — Environments — v25\.11\.1 — Available/);
-  assert.match(frame, /○ Snakemake — Workflow — v9\.26\.1 — Not detected/);
+  assert.match(frame, /✓ Pixi — Provisioning — v0\.81\.0 — Available/);
+  assert.match(frame, /✓ Conda — Environments — v26\.7\.3 — Available/);
+  assert.match(frame, /○ Snakemake — Workflow — v9\.27\.0 — Not detected/);
   assert.doesNotMatch(frame, />=9\.26\.1|<10\.0\.0/);
   assert.match(frame, /Install missing tooling now\? \[Y\/n\]/);
   assert.match(frame, /Yes \(Y\) is the default\./);
@@ -789,6 +794,7 @@ test('starts installation only after affirmative consent and shows progress', as
     pixi: {state: 'missing'},
     conda: {state: 'missing'},
     snakemake: {state: 'missing'},
+    python: {state: 'missing'},
   };
   let installationCalls = 0;
   let finishInstallation: ((result: InstallationResult) => void) | undefined;
@@ -808,7 +814,7 @@ test('starts installation only after affirmative consent and shows progress', as
   input.write('y');
   const installingFrame = await waitForOutput(output, value => value.includes('Installing…'));
   assert.equal(installationCalls, 1);
-  assert.match(installingFrame, /Pixi — Provisioning — v0\.79\.0 — Installing…/);
+  assert.match(installingFrame, /Pixi — Provisioning — v0\.81\.0 — Installing…/);
   assert.match(installingFrame, /Installation log/);
   assert.match(installingFrame, /Downloading Pixi…\n\s+Checking archive…/);
   assert.match(installingFrame, /─/);
@@ -831,6 +837,7 @@ test('returns to setup after an installation failure and shows the log', async c
     pixi: {state: 'missing'},
     conda: {state: 'missing'},
     snakemake: {state: 'missing'},
+    python: {state: 'missing'},
   };
   const toolingInstaller = async () => {
     throw new ToolingInstallationError('Checksum verification failed', '/logs/failed.log');
@@ -875,6 +882,7 @@ test('cancels an active installation before exiting', async context => {
     pixi: {state: 'missing'},
     conda: {state: 'missing'},
     snakemake: {state: 'missing'},
+    python: {state: 'missing'},
   };
   let cancelled = false;
   const toolingInstaller = (
@@ -913,13 +921,14 @@ test('shows an in-progress indicator beside the tool being installed', async con
     pixi: {state: 'installing'},
     conda: {state: 'missing'},
     snakemake: {state: 'missing'},
+    python: {state: 'missing'},
   });
   registerCleanup(context, instance);
 
   const frame = await waitForOutput(output, value => value.includes('Installing…'));
 
   assert.match(frame, /Required tooling: Installing/);
-  assert.match(frame, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Pixi — Provisioning — v0\.79\.0 — Installing…/);
+  assert.match(frame, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Pixi — Provisioning — v0\.81\.0 — Installing…/);
   assert.match(frame, /Installation log/);
   assert.match(frame, /─/);
   assert.doesNotMatch(frame, /Source:|SHA-256:|Destination:/);
@@ -934,6 +943,7 @@ test('activates runtime indicators only after Pixi installation and verification
     pixi: {state: 'missing'},
     conda: {state: 'missing'},
     snakemake: {state: 'missing'},
+    python: {state: 'missing'},
   };
   let reportProgress: ((progress: InstallationProgress) => void) | undefined;
   const toolingInstaller = (onProgress: (progress: InstallationProgress) => void) => {
@@ -947,41 +957,43 @@ test('activates runtime indicators only after Pixi installation and verification
 
   input.write('y');
   const pixiFrame = await waitForOutput(output, value =>
-    value.includes('Pixi — Provisioning — v0.79.0 — Installing…'),
+    value.includes('Pixi — Provisioning — v0.81.0 — Installing…'),
   );
-  assert.match(pixiFrame, /Pixi — Provisioning — v0\.79\.0 — Installing…/);
-  assert.doesNotMatch(pixiFrame, /Conda — Environments — v25\.11\.1 — Installing…/);
+  assert.match(pixiFrame, /Pixi — Provisioning — v0\.81\.0 — Installing…/);
+  assert.doesNotMatch(pixiFrame, /Conda — Environments — v26\.7\.3 — Installing…/);
 
   output.clearOutput();
   reportProgress?.({type: 'phase', phase: 'verification', tools: ['pixi']});
   const verificationFrame = await waitForOutput(output, value => value.includes('Verifying…'));
-  assert.match(verificationFrame, /Pixi — Provisioning — v0\.79\.0 — Verifying…/);
-  assert.doesNotMatch(verificationFrame, /Conda — Environments — v25\.11\.1 — Installing…/);
+  assert.match(verificationFrame, /Pixi — Provisioning — v0\.81\.0 — Verifying…/);
+  assert.doesNotMatch(verificationFrame, /Conda — Environments — v26\.7\.3 — Installing…/);
 
   output.clearOutput();
-  reportProgress?.({type: 'phase', phase: 'runtime', tools: ['conda', 'snakemake']});
+  reportProgress?.({type: 'phase', phase: 'runtime', tools: ['conda', 'snakemake', 'python']});
   const runtimeFrame = await waitForOutput(output, value =>
-    value.includes('Conda — Environments — v25.11.1 — Installing…'),
+    value.includes('Conda — Environments — v26.7.3 — Installing…'),
   );
-  assert.match(runtimeFrame, /Pixi — Provisioning — v0\.79\.0 — Available/);
-  assert.match(runtimeFrame, /Conda — Environments — v25\.11\.1 — Installing…/);
-  assert.match(runtimeFrame, /Snakemake — Workflow — v9\.26\.1 — Installing…/);
+  assert.match(runtimeFrame, /Pixi — Provisioning — v0\.81\.0 — Available/);
+  assert.match(runtimeFrame, /Conda — Environments — v26\.7\.3 — Installing…/);
+  assert.match(runtimeFrame, /Snakemake — Workflow — v9\.27\.0 — Installing…/);
+  assert.match(runtimeFrame, /Python — Workflow scripts — v3\.14\.7 — Installing…/);
 });
 
 test('hides Pixi download details while the runtime bundle is being installed', async context => {
   const {instance, output} = renderWelcome({
     state: 'installing',
     node: {state: 'available', detected: {command: 'node', version: 'v24.19.0'}},
-    pixi: {state: 'available', detected: {command: 'pixi', version: '0.79.0'}},
+    pixi: {state: 'available', detected: {command: 'pixi', version: '0.81.0'}},
     conda: {state: 'installing'},
     snakemake: {state: 'installing'},
+    python: {state: 'installing'},
   });
   registerCleanup(context, instance);
 
   const frame = await waitForOutput(output, value => value.includes('Conda — Environments'));
 
-  assert.match(frame, /Conda — Environments — v25\.11\.1 — Installing…/);
-  assert.match(frame, /Snakemake — Workflow — v9\.26\.1 — Installing…/);
+  assert.match(frame, /Conda — Environments — v26\.7\.3 — Installing…/);
+  assert.match(frame, /Snakemake — Workflow — v9\.27\.0 — Installing…/);
   assert.doesNotMatch(frame, /Source:|SHA-256:|Destination:/);
 });
 
@@ -995,15 +1007,19 @@ test('shows incompatible versions and keeps commands hidden', async context => {
     },
     pixi: {
       state: 'available',
-      detected: {command: 'pixi', version: 'pixi 0.79.0'},
+      detected: {command: 'pixi', version: 'pixi 0.81.0'},
     },
     conda: {
       state: 'available',
-      detected: {command: 'conda', version: 'conda 25.11.1'},
+      detected: {command: 'conda', version: 'conda 26.7.3'},
     },
     snakemake: {
       state: 'available',
-      detected: {command: 'snakemake', version: '9.26.1'},
+      detected: {command: 'snakemake', version: '9.27.0'},
+    },
+    python: {
+      state: 'available',
+      detected: {command: 'python', version: 'Python 3.14.7'},
     },
   });
   registerCleanup(context, instance);

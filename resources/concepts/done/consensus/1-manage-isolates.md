@@ -43,7 +43,7 @@ isolates:
 
 Schema version 1 was revised from a single read set to `read_pairs` before its first release, so no stored catalog needs migrating.
 
-The catalog lives at `isolates/isolates.yaml` beside, not inside, the managed tooling directory (`~/.byteowlsGenopilot/` on macOS, `${XDG_DATA_HOME:-~/.local/share}/byteowlsGenopilot/` on Linux), so resetting tooling never removes it. The directory is owner-only and the file is written with `0600` permissions.
+The catalog lives at `isolates/isolates.yaml` beside, not inside, the managed tooling directory (`~/.byteowlsGenopilot/` on every platform), so resetting tooling never removes it. The directory is owner-only and the file is written with `0600` permissions.
 
 `wildtype` and `derived_from` are researcher-supplied metadata; new isolates default to `wildtype: null`. They may be shown during cohort review but never cause automatic inclusion or exclusion. Do not infer wild-type status from the absence of `derived_from`.
 

@@ -65,9 +65,9 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls._tmp = tempfile.TemporaryDirectory()
-        cls.root = Path(cls._tmp.name)
-        cls.conda_prefix = cls.root / "conda-envs"
-        cls.run_dir = cls.root / "runs" / "complete-run"
+        cls.temp_dir = Path(cls._tmp.name)
+        cls.conda_prefix = cls.temp_dir / "conda-envs"
+        cls.run_dir = cls.temp_dir / "runs" / "complete-run"
         write_run(cls.run_dir, ["iso-a", "iso-b", "iso-c"], effective_cpus=4)
         cls.result = run_snakemake(cls.run_dir, cls.conda_prefix)
 
@@ -315,12 +315,12 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
         self.assertEqual(checksums(self.run_dir / "results" / "cohort" / "iteration-2"), iteration_two)
 
     def test_excluding_a_failed_isolate_completes_the_run_without_reprocessing_the_others(self) -> None:
-        reads_dir = self.root / "renamed"
+        reads_dir = self.temp_dir / "renamed"
         reads_dir.mkdir(exist_ok=True)
         for mate in ("R1", "R2"):
             (reads_dir / f"renamed_{mate}.fastq").write_text(
                 "@SRR1234567.1 1 length=4\nACGT\n+\nIIII\n", encoding="utf-8")
-        run_dir = self.root / "runs" / "failed-isolate"
+        run_dir = self.temp_dir / "runs" / "failed-isolate"
         write_run(run_dir, ["iso-a", "iso-b"], effective_cpus=4, extra_isolates=[{"id": "public-reads", "read_pairs": [
             {"r1": str(reads_dir / "renamed_R1.fastq"), "r2": str(reads_dir / "renamed_R2.fastq"), "trimmed": False},
         ]}])

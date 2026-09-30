@@ -58,7 +58,7 @@ rule validate_run_inputs:
     params:
         read_pairs=_read_pair_args,
     shell:
-        "python3 {SCRIPTS_DIR_SH}/validate_run_inputs.py"
+        "{PYTHON_SH} {SCRIPTS_DIR_SH}/validate_run_inputs.py"
         " --backbone-fasta resolved/backbone.fasta"
         " {params.read_pairs}"
         " --output results/input-validation.json"

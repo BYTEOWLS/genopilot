@@ -14,9 +14,9 @@ class CollectRunProvenanceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.previous_directory = Path.cwd()
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
-        os.chdir(self.root)
-        self.manifest = self.root / "manifest.yaml"
+        self.temp_dir = Path(self.temporary.name)
+        os.chdir(self.temp_dir)
+        self.manifest = self.temp_dir / "manifest.yaml"
         self.manifest.write_text("schema_version: 1\nid: annotation-transfer\n", encoding="utf-8")
         self.config = {
             "schema_version": 1,
@@ -29,7 +29,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
             "lifton": {"profile": "same-species"},
             "resources": {"cpu_mode": "manual", "manual_limit": 3, "effective_cpus": 3},
             "run": {
-                "output_root": str(self.root.parent),
+                "output_root": str(self.temp_dir.parent),
                 "id": "test-run",
                 "created_at": "2026-09-05T20:00:00.000Z",
             },
@@ -41,7 +41,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def _write(self, relative: str, content: str = "test\n") -> None:
-        path = self.root / relative
+        path = self.temp_dir / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
@@ -96,6 +96,8 @@ class CollectRunProvenanceTests(unittest.TestCase):
                     "1",
                     "--snakemake-version",
                     "9.11.3",
+                    "--snakemake-python-version",
+                    "3.14.7",
                     "--artifacts",
                     "artifacts.yaml",
                     "--provenance",
@@ -119,6 +121,12 @@ class CollectRunProvenanceTests(unittest.TestCase):
         self.assertEqual(raw["producer"]["workflow"], {"id": "annotation-transfer", "version": 1})
         configured = collect.configured_tool_versions()
         self.assertEqual(raw["producer"]["tools"]["lifton"], configured["lifton"])
+        # Rules without a Conda environment ran on Snakemake's interpreter, not an environment's.
+        self.assertEqual(records["input-validation"]["producer"]["tools"], {"snakemake-python": "3.14.7"})
+        self.assertEqual(
+            provenance["tool_versions"]["observed"]["snakemake-python"],
+            {"version": "3.14.7", "source": "workflow-runtime"},
+        )
         self.assertEqual(
             raw["checksum"]["value"],
             hashlib.sha256(Path(raw["path"]).read_bytes()).hexdigest(),
@@ -151,12 +159,12 @@ class CollectRunProvenanceTests(unittest.TestCase):
 class DirectoryChecksumTests(unittest.TestCase):
     def test_directory_checksum_includes_relative_names_and_contents(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "a").mkdir()
-            (root / "a" / "report.txt").write_text("one", encoding="utf-8")
-            first = collect.sha256_directory(root)
-            (root / "a" / "report.txt").write_text("two", encoding="utf-8")
-            second = collect.sha256_directory(root)
+            temp_dir = Path(tmp)
+            (temp_dir / "a").mkdir()
+            (temp_dir / "a" / "report.txt").write_text("one", encoding="utf-8")
+            first = collect.sha256_directory(temp_dir)
+            (temp_dir / "a" / "report.txt").write_text("two", encoding="utf-8")
+            second = collect.sha256_directory(temp_dir)
             self.assertNotEqual(first[0], second[0])
             self.assertEqual(second[1:], (1, 3))
 

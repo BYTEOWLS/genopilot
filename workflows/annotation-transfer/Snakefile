@@ -38,6 +38,7 @@ never relative to the working directory.
 """
 
 import shlex
+import sys
 from pathlib import Path
 
 configfile: "config.yaml"
@@ -48,6 +49,9 @@ SHARED_DIR = WORKFLOW_DIR.parent / "shared"
 SCRIPTS_DIR = SHARED_DIR / "scripts"
 ENVS_DIR = SHARED_DIR / "envs"
 SCRIPTS_DIR_SH = shlex.quote(str(SCRIPTS_DIR))
+# Rules without a Conda environment run their standard-library scripts with Snakemake's own
+# interpreter, so they never depend on whichever python3 the host has, or lacks, on PATH.
+PYTHON_SH = shlex.quote(sys.executable)
 
 # The steps, in the order they run; see the list at the top of this file.
 include: str(SHARED_DIR / "rules" / "resolve_inputs.smk")

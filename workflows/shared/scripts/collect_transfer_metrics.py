@@ -39,7 +39,7 @@ DETAIL_COLUMNS = (
     "mutations",
 )
 
-# LiftOn 1.0.13 mutation classes that describe no protein-level change.
+# LiftOn mutation classes that describe no protein-level change.
 UNCHANGED_PROTEIN_CLASSES = frozenset({"identical", "synonymous", "non_coding"})
 
 METRIC_EXPLANATIONS = {
@@ -50,7 +50,7 @@ METRIC_EXPLANATIONS = {
     "target_feature_copies": "Count of target copies emitted by LiftOn: one primary copy per mapped reference feature plus all additional copies.",
     "features_with_extra_copies": "Count of reference features for which LiftOn emitted at least one additional target copy.",
     "extra_copies": "Count of additional target copies beyond the primary copy, summed over all reference features.",
-    "miniprot_rescues": "Count of genes added by LiftOn's separate miniprot rescue pass after the Liftoff and regular miniprot steps.",
+    "miniprot_rescues": "Count of genes added by LiftOn's separate miniprot rescue pass after the Liftoff and regular miniprot steps; a gene it places at a second locus is an additional copy and is not counted here.",
     "transfer_methods_by_target_copy": "Count of target copies per LiftOn transfer method.",
     "changed_primary_protein_coding_features": "Count of mapped protein-coding reference features whose primary target copy carries a mutation class other than identical or synonymous.",
     "mutation_classifications_by_target_copy": "Count of target copies carrying each LiftOn mutation class; one copy can carry several classes.",

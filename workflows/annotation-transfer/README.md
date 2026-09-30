@@ -23,7 +23,7 @@ The output directory, run name and description, and CPU allocation are recorded 
 
 A **gene model** is the set of GFF3 features that describe one gene: the gene, its transcripts, and their exons and coding sequences (CDS), linked by `Parent` attributes. Transferring an annotation means finding where each reference gene model lies on the target genome and writing it in the target's coordinates.
 
-LiftOn combines two aligners. Liftoff [3] aligns each gene's DNA sequence with minimap2 [4], which works well while the target's sequence stays close to the reference. miniprot [5] aligns the reference protein instead, which still finds a gene whose DNA changed but whose protein is conserved. LiftOn builds each transferred gene model from both alignments and keeps the one whose protein is closest to the reference, comparing proteins with parasail [6]. A gene can be placed more than once, for example after a duplication in the target; the extra placements are reported as additional copies.
+LiftOn combines two aligners. Liftoff [3] aligns each gene's DNA sequence with minimap2 [4], which works well while the target's sequence stays close to the reference. miniprot [5] aligns the reference protein instead, which still finds a gene whose DNA changed but whose protein is conserved. LiftOn builds each transferred gene model from both alignments and keeps the one whose protein is closest to the reference, comparing proteins with parasail [6]. A gene can be placed more than once, for example after a duplication in the target; the extra placements are reported as additional copies. When the DNA lift placed a gene once, LiftOn can still add one model at a second locus where miniprot finds the gene's protein and no other model lies, which recovers the second copy of a duplicated gene; such a model is marked `lifton_rescue_second_locus=true` in the raw GFF3. Between strains of one species this rarely adds anything, but in a paralogous gene family the second locus can belong to a related gene, so review these copies before relying on them.
 
 For every transferred transcript LiftOn compares the target's sequence and protein with the reference and records its identities and **mutation classes**, such as `synonymous`, `frameshift`, or `stop_codon_gain`. These say what changed in the protein, not whether the gene still works.
 
@@ -67,7 +67,7 @@ The versions are pinned only in the files linked below and recorded in every run
 | miniprot | protein-to-genome alignment | [`lifton`](../shared/envs/lifton/environment.yaml) | [5] |
 | parasail | protein and sequence comparison | [`lifton`](../shared/envs/lifton/environment.yaml) | [6] |
 
-LiftOn drives minimap2, miniprot, and parasail itself, so they are pinned together in one environment. Input checks, validation, and the summaries are small scripts that read the tools' outputs.
+LiftOn drives minimap2, miniprot, and parasail itself, so they are pinned together in one environment. Input checks, validation, and the summaries are small scripts that read the tools' outputs. Scripts of steps without their own environment run on the Python pinned with Snakemake in the GenoPilot runtime, and each run records its version.
 
 Publications that use this workflow's results should cite the tools above, next to the GenoPilot version that produced them.
 

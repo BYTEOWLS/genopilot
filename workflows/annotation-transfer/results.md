@@ -36,7 +36,7 @@ The scientific status saved by the workflow. A Snakemake process that exits succ
 | Target copies (primary and additional) | Every feature copy LiftOn wrote to the target annotation: one primary copy for each mapped reference feature plus all additional copies. This is the unit of the transfer method and mutation class breakdowns. |
 | Reference features with additional copies | Reference features that LiftOn placed more than once on the target assembly, for example after a duplication. Each such reference feature is counted once, however many additional copies it has. |
 | Additional target copies | The number of target copies beyond the primary copy, summed over all reference features. In the per-feature TSV these rows have status `extra-copy` and a positive copy number. |
-| Genes added by the miniprot rescue pass | Genes added by LiftOn's separate miniprot rescue pass: coding genes that the Liftoff DNA lift missed entirely and that the regular miniprot step also did not emit. The unit is genes as reported by LiftOn. Genes from the regular miniprot step are not included here; they appear under the transfer method `miniprot`. |
+| Genes added by the miniprot rescue pass | Genes added by LiftOn's separate miniprot rescue pass: coding genes that the Liftoff DNA lift missed entirely and that the regular miniprot step also did not emit. The unit is genes as reported by LiftOn. Genes from the regular miniprot step are not included here; they appear under the transfer method `miniprot`. A gene the pass places at a second locus is counted as an additional target copy instead. |
 | Target copies by transfer method | Target copies grouped by how LiftOn placed the gene; see *Transfer methods* below. The value comes from the gene-level `source` attribute; when that attribute is absent, the transcript-level `status` values are listed instead, joined by commas when a gene has several. |
 
 ### Transfer methods
@@ -44,7 +44,7 @@ The scientific status saved by the workflow. A Snakemake process that exits succ
 | Value | Meaning |
 |---|---|
 | `Liftoff` | Placed by Liftoff, which aligns the reference gene sequence to the target assembly. As a transcript status it means LiftOn kept the Liftoff model rather than a chained or miniprot model. |
-| `miniprot` | Placed from a miniprot alignment of the reference protein at a locus where Liftoff placed no gene, either by the regular miniprot step or by the rescue pass. |
+| `miniprot` | Placed from a miniprot alignment of the reference protein at a locus where Liftoff placed no gene, either by the regular miniprot step or by the rescue pass. An additional copy with this method may be a second-locus model, which the raw GFF3 marks with `lifton_rescue_second_locus=true`: a gene already placed once, added again where its protein aligns, as for the second copy of a duplicated gene. In a paralogous gene family that locus can belong to a related gene. |
 | `LiftOn_chaining_algorithm` | Transcript status: LiftOn combined parts of the Liftoff and miniprot alignments to obtain a protein closer to the reference. |
 | `LiftOn_miniprot` | Transcript status: LiftOn replaced the Liftoff model with the miniprot model because it gave a strictly higher protein identity. |
 | `no_ref_protein` | Transcript status: no reference protein was available, so no protein-based refinement was possible. |

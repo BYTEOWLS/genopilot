@@ -15,6 +15,7 @@ export type ToolingPaths = {
   managedBinDirectory: string;
   condaExecutable: string;
   snakemakeExecutable: string;
+  pythonExecutable: string;
   logsDirectory: string;
   temporaryDirectory: string;
   condaEnvironmentsDirectory: string;
@@ -45,27 +46,15 @@ function supportedArchitecture(value: string): SupportedArchitecture {
 export function resolveToolingPaths({
   platform = process.platform,
   architecture = process.arch,
-  environment = process.env,
   homeDirectory = homedir(),
 }: {
   platform?: NodeJS.Platform;
   architecture?: string;
-  environment?: NodeJS.ProcessEnv;
   homeDirectory?: string;
 } = {}): ToolingPaths {
   const resolvedPlatform = supportedPlatform(platform);
   const resolvedArchitecture = supportedArchitecture(architecture);
-  let dataDirectory: string;
-  if (resolvedPlatform === 'linux') {
-    const directoryPolicy = toolingPolicy.managedDataDirectories.linux;
-    const configuredBase = environment[directoryPolicy.environmentVariable];
-    dataDirectory = configuredBase
-      ? join(configuredBase, directoryPolicy.directoryNameWhenEnvironmentSet)
-      : join(homeDirectory, directoryPolicy.fallbackRelativeToHome);
-  } else {
-    const directoryPolicy = toolingPolicy.managedDataDirectories.darwin;
-    dataDirectory = join(homeDirectory, directoryPolicy.fallbackRelativeToHome);
-  }
+  const dataDirectory = join(homeDirectory, toolingPolicy.managedDataDirectory.relativeToHome);
 
   const pixiHome = join(dataDirectory, toolingPolicy.managedGlobalEnvironment.relativeHomePath);
 
@@ -83,6 +72,10 @@ export function resolveToolingPaths({
     snakemakeExecutable: join(
       dataDirectory,
       toolingPolicy.managedGlobalEnvironment.relativeSnakemakeExecutablePath,
+    ),
+    pythonExecutable: join(
+      dataDirectory,
+      toolingPolicy.managedGlobalEnvironment.relativePythonExecutablePath,
     ),
     logsDirectory: join(dataDirectory, 'logs'),
     temporaryDirectory: join(dataDirectory, 'temporary'),

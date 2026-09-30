@@ -71,12 +71,12 @@ test('discovers packaged workflows independently of the current directory', asyn
 });
 
 test('discovers manifests in deterministic directory order and ignores other directories', async context => {
-  const root = await temporaryWorkflowDirectory(context);
-  await addManifest(root, 'z-workflow', manifestSource('z-workflow', 'Z workflow'));
-  await addManifest(root, 'a-workflow', manifestSource('a-workflow', 'A workflow'));
-  await mkdir(join(root, 'shared'));
+  const tempDir = await temporaryWorkflowDirectory(context);
+  await addManifest(tempDir, 'z-workflow', manifestSource('z-workflow', 'Z workflow'));
+  await addManifest(tempDir, 'a-workflow', manifestSource('a-workflow', 'A workflow'));
+  await mkdir(join(tempDir, 'shared'));
 
-  const workflows = await discoverPackagedWorkflows(directoryUrl(root));
+  const workflows = await discoverPackagedWorkflows(directoryUrl(tempDir));
 
   assert.deepEqual(
     workflows.map(workflow => workflow.manifest.id),
@@ -85,12 +85,12 @@ test('discovers manifests in deterministic directory order and ignores other dir
 });
 
 test('rejects duplicate workflow IDs', async context => {
-  const root = await temporaryWorkflowDirectory(context);
-  await addManifest(root, 'first', manifestSource('same-workflow', 'First'));
-  await addManifest(root, 'second', manifestSource('same-workflow', 'Second'));
+  const tempDir = await temporaryWorkflowDirectory(context);
+  await addManifest(tempDir, 'first', manifestSource('same-workflow', 'First'));
+  await addManifest(tempDir, 'second', manifestSource('same-workflow', 'Second'));
 
   await assert.rejects(
-    discoverPackagedWorkflows(directoryUrl(root)),
+    discoverPackagedWorkflows(directoryUrl(tempDir)),
     (error: unknown) => {
       assert.ok(error instanceof WorkflowDiscoveryError);
       assert.match(error.message, /Duplicate workflow ID 'same-workflow'/);
@@ -102,12 +102,12 @@ test('rejects duplicate workflow IDs', async context => {
 });
 
 test('rejects invalid external parameter definitions', async context => {
-  const root = await temporaryWorkflowDirectory(context);
-  await addManifest(root, 'invalid', manifestSource('invalid', 'Invalid'));
-  await writeFile(join(root, 'invalid', 'manifest.parameters.yaml'), 'schema_version: [1\n');
+  const tempDir = await temporaryWorkflowDirectory(context);
+  await addManifest(tempDir, 'invalid', manifestSource('invalid', 'Invalid'));
+  await writeFile(join(tempDir, 'invalid', 'manifest.parameters.yaml'), 'schema_version: [1\n');
 
   await assert.rejects(
-    discoverPackagedWorkflows(directoryUrl(root)),
+    discoverPackagedWorkflows(directoryUrl(tempDir)),
     (error: unknown) => {
       assert.ok(error instanceof WorkflowDiscoveryError);
       assert.match(error.message, /invalid\/manifest\.parameters\.yaml/);
@@ -117,11 +117,11 @@ test('rejects invalid external parameter definitions', async context => {
 });
 
 test('accepts a manifest whose Snakefile is still a placeholder', async context => {
-  const root = await temporaryWorkflowDirectory(context);
-  await addManifest(root, 'placeholder', manifestSource('placeholder', 'Placeholder'));
-  await writeFile(join(root, 'placeholder', 'Snakefile'), '# Not executable yet.\n');
+  const tempDir = await temporaryWorkflowDirectory(context);
+  await addManifest(tempDir, 'placeholder', manifestSource('placeholder', 'Placeholder'));
+  await writeFile(join(tempDir, 'placeholder', 'Snakefile'), '# Not executable yet.\n');
 
-  const workflows = await discoverPackagedWorkflows(directoryUrl(root));
+  const workflows = await discoverPackagedWorkflows(directoryUrl(tempDir));
 
   assert.equal(workflows[0]?.manifest.id, 'placeholder');
 });

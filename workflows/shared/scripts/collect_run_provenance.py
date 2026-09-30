@@ -190,23 +190,25 @@ def relevant_configuration(config: dict, stage: str) -> dict:
     return config
 
 
-def producer_record(config: dict, stage: str) -> dict:
+def producer_record(config: dict, stage: str, snakemake_python_version: str) -> dict:
+    # Rules without their own Conda environment run on Snakemake's interpreter, which the
+    # managed tooling pins; the rule environments pin the `python` of the others.
     stage_tools = {
         "resolve-inputs": ["python", "ncbi-datasets-cli"],
-        "validate-inputs": ["python"],
+        "validate-inputs": ["snakemake-python"],
         "transfer-annotation": ["lifton", "miniprot", "minimap2", "parasail-python"],
-        "validate-annotation": ["python"],
-        "summarize-results": ["python"],
+        "validate-annotation": ["snakemake-python"],
+        "summarize-results": ["snakemake-python"],
         "record-provenance": ["python"],
     }
-    configured = configured_tool_versions()
+    versions = {**configured_tool_versions(), "snakemake-python": snakemake_python_version}
     return {
         "workflow": {"id": config["workflow_id"], "version": config["workflow_version"]},
-        "tools": {name: configured[name] for name in stage_tools[stage]},
+        "tools": {name: versions[name] for name in stage_tools[stage]},
     }
 
 
-def build_artifacts(config: dict) -> list[dict]:
+def build_artifacts(config: dict, snakemake_python_version: str) -> list[dict]:
     input_specs = [
         ("resolved-reference-fasta", Path("resolved/reference.fasta"), "fasta", "provenance/reference.fasta.json"),
         ("resolved-reference-gff3", Path("resolved/reference.gff3"), "gff3", "provenance/reference.gff3.json"),
@@ -252,7 +254,7 @@ def build_artifacts(config: dict) -> list[dict]:
         record["configuration_checksum"] = canonical_json_checksum(
             relevant_configuration(config, stage)
         )
-        record["producer"] = producer_record(config, stage)
+        record["producer"] = producer_record(config, stage, snakemake_python_version)
     return artifacts
 
 
@@ -377,6 +379,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--manifest-schema-version", type=int, required=True)
     parser.add_argument("--snakemake-version", required=True)
+    parser.add_argument("--snakemake-python-version", required=True)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--provenance", type=Path, required=True)
     return parser.parse_args(argv)
@@ -386,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     config = json.loads(args.config_json)
     generated_at = utc_now_iso()
-    artifacts = build_artifacts(config)
+    artifacts = build_artifacts(config, args.snakemake_python_version)
     manifest_checksum = {"algorithm": CHECKSUM_ALGORITHM, "value": sha256_file(args.manifest)}
     workflow = {
         "id": config["workflow_id"],
@@ -433,6 +436,7 @@ def main(argv: list[str] | None = None) -> int:
             "observed": {
                 **observed_tool_versions(),
                 "snakemake": {"version": args.snakemake_version, "source": "workflow-runtime"},
+                "snakemake-python": {"version": args.snakemake_python_version, "source": "workflow-runtime"},
             },
             "input_resolution": {
                 key: value.get("datasets_cli_version")

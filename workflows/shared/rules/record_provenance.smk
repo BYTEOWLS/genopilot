@@ -22,6 +22,7 @@ Maintainer notes
 
 import importlib.metadata
 import json
+import platform
 import shlex
 
 
@@ -35,6 +36,8 @@ def _record_provenance_args(wildcards):
         1,
         "--snakemake-version",
         importlib.metadata.version("snakemake"),
+        "--snakemake-python-version",
+        platform.python_version(),
         "--artifacts",
         "artifacts.yaml",
         "--provenance",

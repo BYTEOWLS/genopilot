@@ -757,14 +757,14 @@ test('shows actionable validation errors before confirmation', async context => 
 });
 
 test('opens the file browser with Enter from a local path field and selects a file', async context => {
-  const temporaryRoot = await mkdtemp(join(tmpdir(), 'annotation-transfer-browser-'));
-  context.after(() => rm(temporaryRoot, {recursive: true, force: true}));
-  const root = join(temporaryRoot, 'runs');
+  const tempDir = await mkdtemp(join(tmpdir(), 'annotation-transfer-browser-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const root = join(tempDir, 'runs');
   const fasta = join(root, 'reference.fa');
   const folder = join(root, 'folder');
   await mkdir(folder, {recursive: true});
   await mkdir(join(root, 'ncbi-accessions-cache'));
-  await mkdir(join(temporaryRoot, 'ncbi-accessions-cache'));
+  await mkdir(join(tempDir, 'ncbi-accessions-cache'));
   await writeFile(join(folder, 'nested.fa'), '>nested\nACGT\n');
   await writeFile(fasta, '>chr1\nACGT\n');
   let validations = 0;

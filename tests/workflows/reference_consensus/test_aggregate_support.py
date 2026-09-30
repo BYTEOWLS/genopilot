@@ -20,17 +20,17 @@ class AggregateSupportTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.root = Path(self._tmp.name)
+        self.temp_dir = Path(self._tmp.name)
         fasta = "".join(f">{name} description\n{sequence}\n" for name, sequence in BACKBONE.items())
-        (self.root / "backbone.fasta").write_text(fasta, encoding="utf-8")
-        (self.root / "backbone.fasta.fai").write_text(
+        (self.temp_dir / "backbone.fasta").write_text(fasta, encoding="utf-8")
+        (self.temp_dir / "backbone.fasta.fai").write_text(
             "".join(f"{name}\t{len(sequence)}\t0\t0\t0\n" for name, sequence in BACKBONE.items()), encoding="utf-8"
         )
         self.voters: list[str] = []
 
     def isolate(self, isolate_id: str, records: str = "", mask: dict[str, list[tuple[int, int, str]]] | None = None) -> None:
         """Writes an isolate's VCF and mask; the mask defaults to callable everywhere."""
-        with gzip.open(self.root / f"{isolate_id}.vcf.gz", "wt", encoding="utf-8") as vcf:
+        with gzip.open(self.temp_dir / f"{isolate_id}.vcf.gz", "wt", encoding="utf-8") as vcf:
             vcf.write("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tsample\n")
             vcf.write(records)
         mask = mask or {}
@@ -38,25 +38,25 @@ class AggregateSupportTests(unittest.TestCase):
         for name, sequence in BACKBONE.items():
             for start, end, state in mask.get(name, [(0, len(sequence), "callable")]):
                 lines.append(f"{name}\t{start}\t{end}\t{state}\n")
-        (self.root / f"{isolate_id}.bed").write_text("".join(lines), encoding="utf-8")
+        (self.temp_dir / f"{isolate_id}.bed").write_text("".join(lines), encoding="utf-8")
         self.voters.append(isolate_id)
 
     def run_script(self, backbone_vote: str = "yes", voters: list[str] | None = None, out: str = "out") -> dict:
         args = [
-            "--fai", str(self.root / "backbone.fasta.fai"),
-            "--backbone", str(self.root / "backbone.fasta"),
+            "--fai", str(self.temp_dir / "backbone.fasta.fai"),
+            "--backbone", str(self.temp_dir / "backbone.fasta"),
             "--include-backbone-vote", backbone_vote,
-            "--sites", str(self.root / out / "sites.tsv"),
-            "--intervals", str(self.root / out / "intervals.tsv"),
-            "--summary", str(self.root / out / "summary.json"),
+            "--sites", str(self.temp_dir / out / "sites.tsv"),
+            "--intervals", str(self.temp_dir / out / "intervals.tsv"),
+            "--summary", str(self.temp_dir / out / "summary.json"),
         ]
         for voter in voters or self.voters:
-            args += ["--voter", voter, str(self.root / f"{voter}.vcf.gz"), str(self.root / f"{voter}.bed")]
+            args += ["--voter", voter, str(self.temp_dir / f"{voter}.vcf.gz"), str(self.temp_dir / f"{voter}.bed")]
         self.assertEqual(aggregate_support.main(args), 0)
-        return json.loads((self.root / out / "summary.json").read_text(encoding="utf-8"))
+        return json.loads((self.temp_dir / out / "summary.json").read_text(encoding="utf-8"))
 
     def table(self, name: str, out: str = "out") -> list[dict[str, str]]:
-        lines = (self.root / out / f"{name}.tsv").read_text(encoding="utf-8").splitlines()
+        lines = (self.temp_dir / out / f"{name}.tsv").read_text(encoding="utf-8").splitlines()
         self.assertEqual(lines[0], "## schema_version: 1")
         header_line = next(line for line in lines if not line.startswith("##"))
         header = header_line.lstrip("#").split("\t")
@@ -88,7 +88,7 @@ class AggregateSupportTests(unittest.TestCase):
               row["uncallable_isolates"], row["states"]) for row in c1],
             [("1", "5", "2", "0", "0", "cc"), ("6", "7", "1", "1", "0", "ca"), ("8", "12", "1", "0", "1", "cu")],
         )
-        self.assertIn("## isolates: iso-a,iso-b", (self.root / "out" / "intervals.tsv").read_text(encoding="utf-8"))
+        self.assertIn("## isolates: iso-a,iso-b", (self.temp_dir / "out" / "intervals.tsv").read_text(encoding="utf-8"))
         self.assertEqual(summary["isolates"]["iso-b"]["ambiguous_bases"], 2)
         self.assertEqual(summary["isolates"]["iso-b"]["loci_without_vote"], 1)
 
@@ -273,10 +273,10 @@ class AggregateSupportTests(unittest.TestCase):
         self.run_script(voters=["iso-c", "iso-a", "iso-b"], out="second")
         self.run_script(voters=["iso-b", "iso-c", "iso-a"], out="third")
         for name in ("sites.tsv", "intervals.tsv", "summary.json"):
-            first = (self.root / "first" / name).read_text(encoding="utf-8")
+            first = (self.temp_dir / "first" / name).read_text(encoding="utf-8")
             for out in ("second", "third"):
                 with self.subTest(file=name, run=out):
-                    self.assertEqual((self.root / out / name).read_text(encoding="utf-8").replace(out, "first"), first)
+                    self.assertEqual((self.temp_dir / out / name).read_text(encoding="utf-8").replace(out, "first"), first)
 
 
 if __name__ == "__main__":

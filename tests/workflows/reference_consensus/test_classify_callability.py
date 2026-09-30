@@ -19,17 +19,17 @@ class ClassifyCallabilityTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.root = Path(self._tmp.name)
-        (self.root / "backbone.fasta.fai").write_text("c1\t10\t4\t10\t11\nc2\t3\t20\t3\t4\n", encoding="utf-8")
+        self.temp_dir = Path(self._tmp.name)
+        (self.temp_dir / "backbone.fasta.fai").write_text("c1\t10\t4\t10\t11\nc2\t3\t20\t3\t4\n", encoding="utf-8")
 
     def run_script(self, records: str) -> tuple[list[list[str]], list[list[str]], dict]:
-        paths = {name: self.root / name for name in ("mask.bed", "consensus-mask.bed", "callability.json")}
+        paths = {name: self.temp_dir / name for name in ("mask.bed", "consensus-mask.bed", "callability.json")}
         stdin = sys.stdin
         sys.stdin = io.StringIO(records)
         try:
             with contextlib.redirect_stdout(io.StringIO()):
                 exit_code = classify_callability.main([
-                    "--fai", str(self.root / "backbone.fasta.fai"),
+                    "--fai", str(self.temp_dir / "backbone.fasta.fai"),
                     "--min-depth", "10", "--min-allele-fraction", "0.8",
                     "--mask", str(paths["mask.bed"]),
                     "--consensus-mask", str(paths["consensus-mask.bed"]),

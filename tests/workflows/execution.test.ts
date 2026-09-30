@@ -11,24 +11,23 @@ import {
 } from '../../src/workflows/execution.js';
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-test-'));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-test-'));
   const paths = resolveToolingPaths({
     platform: 'linux',
     architecture: 'x64',
-    environment: {XDG_DATA_HOME: root},
-    homeDirectory: root,
+    homeDirectory: tempDir,
   });
-  return {root, paths};
+  return {tempDir, paths};
 }
 
 test('builds exact managed Snakemake commands that differ only by mode', async context => {
-  const {root, paths} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const startedAt = new Date('2026-09-06T08:50:14.123Z');
   const options = {
-    runDirectory: join(root, 'run with spaces'),
-    configurationPath: join(root, 'run with spaces', 'config.yaml'),
-    snakefilePath: join(root, 'packaged workflow', 'Snakefile'),
+    runDirectory: join(tempDir, 'run with spaces'),
+    configurationPath: join(tempDir, 'run with spaces', 'config.yaml'),
+    snakefilePath: join(tempDir, 'packaged workflow', 'Snakefile'),
     cores: 3,
     paths,
     startedAt,
@@ -55,7 +54,7 @@ test('builds exact managed Snakemake commands that differ only by mode', async c
   // must not be mixed into the run's record of what actually happened.
   assert.equal(dryRun.eventsPath, undefined);
   assert.ok(!dryRun.arguments.includes('--logger'));
-  assert.equal(execution.eventsPath, join(root, 'run with spaces', 'events.jsonl'));
+  assert.equal(execution.eventsPath, join(tempDir, 'run with spaces', 'events.jsonl'));
   assert.deepEqual(execution.arguments.slice(-4), [
     '--logger',
     'genopilot-run-events',
@@ -85,10 +84,10 @@ test('builds exact managed Snakemake commands that differ only by mode', async c
 });
 
 test('streams output, exports the API key only in the child environment, and retains complete logs', async context => {
-  const {root, paths} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const runDirectory = join(root, 'run');
-  const scriptPath = join(root, 'fake-snakemake.mjs');
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const runDirectory = join(tempDir, 'run');
+  const scriptPath = join(tempDir, 'fake-snakemake.mjs');
   await writeFile(
     scriptPath,
     "process.stdout.write(`out:${process.env.NCBI_API_KEY ?? 'missing'}\\n`); process.stderr.write('warning\\n');",
@@ -98,7 +97,7 @@ test('streams output, exports the API key only in the child environment, and ret
     mode: 'execute',
     runDirectory,
     configurationPath: join(runDirectory, 'config.yaml'),
-    snakefilePath: join(root, 'Snakefile'),
+    snakefilePath: join(tempDir, 'Snakefile'),
     cores: 2,
     paths,
   });
@@ -122,14 +121,14 @@ test('streams output, exports the API key only in the child environment, and ret
 });
 
 test('returns a non-zero exit code and preserves failure output', async context => {
-  const {root, paths} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const runDirectory = join(root, 'run');
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const runDirectory = join(tempDir, 'run');
   const prepared = prepareSnakemakeRun({
     mode: 'execute',
     runDirectory,
     configurationPath: join(runDirectory, 'config.yaml'),
-    snakefilePath: join(root, 'Snakefile'),
+    snakefilePath: join(tempDir, 'Snakefile'),
     cores: 1,
     paths,
   });
@@ -145,18 +144,18 @@ test('returns a non-zero exit code and preserves failure output', async context 
 });
 
 test('reports a process start failure while retaining empty logs', async context => {
-  const {root, paths} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const runDirectory = join(root, 'run');
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const runDirectory = join(tempDir, 'run');
   const prepared = prepareSnakemakeRun({
     mode: 'execute',
     runDirectory,
     configurationPath: join(runDirectory, 'config.yaml'),
-    snakefilePath: join(root, 'Snakefile'),
+    snakefilePath: join(tempDir, 'Snakefile'),
     cores: 1,
     paths,
   });
-  prepared.executable = join(root, 'missing-snakemake');
+  prepared.executable = join(tempDir, 'missing-snakemake');
 
   await assert.rejects(
     executeSnakemakeRun(prepared, undefined, undefined, {
@@ -170,14 +169,14 @@ test('reports a process start failure while retaining empty logs', async context
 });
 
 test('cancels the detached process and still closes its log files', async context => {
-  const {root, paths} = await fixture();
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const runDirectory = join(root, 'run');
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const runDirectory = join(tempDir, 'run');
   const prepared = prepareSnakemakeRun({
     mode: 'execute',
     runDirectory,
     configurationPath: join(runDirectory, 'config.yaml'),
-    snakefilePath: join(root, 'Snakefile'),
+    snakefilePath: join(tempDir, 'Snakefile'),
     cores: 1,
     paths,
   });

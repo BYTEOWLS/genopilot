@@ -35,6 +35,7 @@ Maintainer notes
 
 import importlib.metadata
 import json
+import platform
 import shlex
 
 
@@ -52,6 +53,7 @@ def _record_consensus_provenance_args(wildcards):
         "--manifest", str(WORKFLOW_DIR / "manifest.yaml"),
         "--manifest-schema-version", 1,
         "--snakemake-version", importlib.metadata.version("snakemake"),
+        "--snakemake-python-version", platform.python_version(),
         "--artifacts", "artifacts.yaml",
         "--provenance", "provenance/run.json",
     ]
@@ -70,7 +72,7 @@ rule record_consensus_provenance:
     params:
         args=_record_consensus_provenance_args,
     shell:
-        "python3 {SCRIPTS_DIR_SH}/collect_consensus_provenance.py {params.args} > {log} 2>&1"
+        "{PYTHON_SH} {SCRIPTS_DIR_SH}/collect_consensus_provenance.py {params.args} > {log} 2>&1"
 
 
 def _record_iteration_provenance_args(wildcards):
@@ -81,6 +83,7 @@ def _record_iteration_provenance_args(wildcards):
         "--manifest", str(WORKFLOW_DIR / "manifest.yaml"),
         "--manifest-schema-version", 1,
         "--snakemake-version", importlib.metadata.version("snakemake"),
+        "--snakemake-python-version", platform.python_version(),
         "--provenance", f"provenance/cohort/{wildcards.cohort}.json",
     ]
     return " ".join(shlex.quote(str(arg)) for arg in args)
@@ -104,4 +107,4 @@ rule record_iteration_provenance:
     params:
         args=_record_iteration_provenance_args,
     shell:
-        "python3 {SCRIPTS_DIR_SH}/collect_iteration_provenance.py {params.args} > {log} 2>&1"
+        "{PYTHON_SH} {SCRIPTS_DIR_SH}/collect_iteration_provenance.py {params.args} > {log} 2>&1"

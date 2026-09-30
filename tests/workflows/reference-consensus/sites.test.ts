@@ -38,10 +38,10 @@ function bgzipLike(lines: string[]): Buffer {
 }
 
 async function tables(context: TestContext, consensus: string[], support: string[]) {
-  const root = await mkdtemp(join(tmpdir(), 'cohort-sites-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const consensusSitesPath = join(root, 'consensus-sites.tsv.gz');
-  const supportSitesPath = join(root, 'support-sites.tsv.gz');
+  const tempDir = await mkdtemp(join(tmpdir(), 'cohort-sites-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const consensusSitesPath = join(tempDir, 'consensus-sites.tsv.gz');
+  const supportSitesPath = join(tempDir, 'support-sites.tsv.gz');
   await writeFile(consensusSitesPath, bgzipLike(consensus));
   await writeFile(supportSitesPath, bgzipLike(support));
   return {consensusSitesPath, supportSitesPath};

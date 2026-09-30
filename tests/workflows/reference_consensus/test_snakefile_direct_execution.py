@@ -54,8 +54,8 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.root = Path(self._tmp.name)
-        self.run_dir = self.root / "runs" / "test-run"
+        self.temp_dir = Path(self._tmp.name)
+        self.run_dir = self.temp_dir / "runs" / "test-run"
 
     def validation_targets(self, *reports: str) -> list[str]:
         return ["resolved/backbone.fasta", "results/input-validation.json", *reports]
@@ -87,7 +87,7 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.assertEqual(first_library, second_library)
 
     def test_a_failing_pair_fails_its_job_while_other_isolates_continue(self) -> None:
-        reads_dir = self.root / "renamed"
+        reads_dir = self.temp_dir / "renamed"
         reads_dir.mkdir()
         for mate in ("R1", "R2"):
             (reads_dir / f"renamed_{mate}.fastq").write_text(
@@ -201,7 +201,7 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.assertIn("MissingRuleException", first.stdout + first.stderr)
 
     def test_an_iteration_excluding_a_failing_isolate_does_not_depend_on_it(self) -> None:
-        reads_dir = self.root / "renamed"
+        reads_dir = self.temp_dir / "renamed"
         reads_dir.mkdir()
         for mate in ("R1", "R2"):
             (reads_dir / f"renamed_{mate}.fastq").write_text(
@@ -225,7 +225,7 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.assertTrue((self.run_dir / "logs/isolates/public-reads/pairs/1/validate-read-pair.log").is_file())
 
     def test_refuses_to_schedule_a_run_whose_read_file_is_missing(self) -> None:
-        reads_dir = self.root / "copied"
+        reads_dir = self.temp_dir / "copied"
         shutil.copytree(FIXTURES_DIR / "reads" / "iso-c", reads_dir)
         config_path = write_run(self.run_dir, [], extra_isolates=[{"id": "iso-copy", "read_pairs": [
             {"r1": str(reads_dir / "IsoC_S3_L001_R1_001.fastq.gz"),

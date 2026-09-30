@@ -153,9 +153,9 @@ function renderExecution(
 }
 
 test('reports stage progress from structured events, never from console text', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const eventsPath = join(root, 'events.jsonl');
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const eventsPath = join(tempDir, 'events.jsonl');
   let releaseRun = (): void => {};
   const finished = new Promise<void>(resolve => {
     releaseRun = resolve;
@@ -206,9 +206,9 @@ test('reports stage progress from structured events, never from console text', a
 });
 
 test('marks the failing stage and keeps the reported reason', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const eventsPath = join(root, 'events.jsonl');
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const eventsPath = join(tempDir, 'events.jsonl');
 
   const {input, output, instance} = renderExecution(eventsPath, async run => {
     // Snakemake writes its last events before exiting, so they can arrive after the final
@@ -240,10 +240,10 @@ test('marks the failing stage and keeps the reported reason', async context => {
 });
 
 test('shows no stage progress for a dry run, which schedules nothing', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
 
-  const {input, output, instance} = renderExecution(join(root, 'events.jsonl'), async run => {
+  const {input, output, instance} = renderExecution(join(tempDir, 'events.jsonl'), async run => {
     assert.equal(run.eventsPath, undefined);
     return {...run, exitCode: 0};
   });
@@ -258,8 +258,8 @@ test('shows no stage progress for a dry run, which schedules nothing', async con
 });
 
 test('scrolls back through retained output while the run keeps producing more', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   let emit: ((text: string) => void) | undefined;
   let release = (): void => {};
   const finished = new Promise<void>(resolve => {
@@ -267,7 +267,7 @@ test('scrolls back through retained output while the run keeps producing more', 
   });
 
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async (run, onOutput) => {
       emit = text => onOutput({stream: 'stdout', text});
       await finished;
@@ -325,11 +325,11 @@ test('scrolls back through retained output while the run keeps producing more', 
 });
 
 test('reloads persisted results after execution instead of keeping transient metrics', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   let loads = 0;
   const resultHandoff: WorkflowResultHandoff = {
-    runDirectory: root,
+    runDirectory: tempDir,
     manifest: {
       schema_version: 1,
       workflow_version: 1,
@@ -343,19 +343,19 @@ test('reloads persisted results after execution instead of keeping transient met
     },
     loadResult: async runDirectory => {
       loads += 1;
-      assert.equal(runDirectory, root);
+      assert.equal(runDirectory, tempDir);
       return {
         kind: 'incompatible',
         error: {
           kind: 'missing-summary',
           message: 'Unable to read completion summary: file not found',
-          path: join(root, 'results/summary.json'),
+          path: join(tempDir, 'results/summary.json'),
         },
       };
     },
   };
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async (run, onOutput) => {
       onOutput({stream: 'stdout', text: 'Finished all jobs.\n'});
       return {...run, exitCode: 0};
@@ -386,11 +386,11 @@ test('reloads persisted results after execution instead of keeping transient met
 });
 
 test('shows process failure together with persisted-result availability', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   let loads = 0;
   const resultHandoff: WorkflowResultHandoff = {
-    runDirectory: root,
+    runDirectory: tempDir,
     manifest: {
       schema_version: 1,
       workflow_version: 1,
@@ -411,7 +411,7 @@ test('shows process failure together with persisted-result availability', async 
     },
   };
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async run => ({...run, exitCode: 2}),
     undefined,
     resultHandoff,
@@ -427,12 +427,12 @@ test('shows process failure together with persisted-result availability', async 
   output.clearOutput();
   input.write(ENTER);
   const frame = await waitForOutput(output, value => value.includes('Completion summary is corrupt'));
-  assert.match(frame, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(frame, new RegExp(tempDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
 test('sizes the log window to the terminal instead of a fixed height', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   let emit: ((text: string) => void) | undefined;
   let release = (): void => {};
   const finished = new Promise<void>(resolve => {
@@ -441,7 +441,7 @@ test('sizes the log window to the terminal instead of a fixed height', async con
 
   // A short terminal falls back to the minimum window rather than overflowing the screen.
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async (run, onOutput) => {
       emit = text => onOutput({stream: 'stdout', text});
       await finished;
@@ -468,15 +468,15 @@ test('sizes the log window to the terminal instead of a fixed height', async con
 });
 
 test('suspends the home shortcut while the workflow runs', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   let releaseRun = (): void => {};
   const finished = new Promise<void>(resolve => {
     releaseRun = resolve;
   });
   const suspensions: (HomeSuspension | undefined)[] = [];
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async run => {
       await finished;
       return {...run, exitCode: 0};
@@ -511,12 +511,12 @@ async function startMode(input: TestInput, output: TestOutput, mode: 'dry-run' |
 }
 
 test('runs the success follow-up only after a successful execution', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const modes: string[] = [];
   let followUps = 0;
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async run => {
       modes.push(run.mode);
       return {...run, exitCode: 0};
@@ -548,11 +548,11 @@ test('runs the success follow-up only after a successful execution', async conte
 });
 
 test('shows the finished run while its follow-up is still running', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   let finishFollowUp = (_note: string): void => {};
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async run => ({...run, exitCode: 0}),
     undefined,
     undefined,
@@ -575,10 +575,10 @@ test('shows the finished run while its follow-up is still running', async contex
 });
 
 test('shows a failed follow-up without changing the run', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async run => ({...run, exitCode: 0}),
     undefined,
     undefined,
@@ -592,12 +592,12 @@ test('shows a failed follow-up without changing the run', async context => {
 });
 
 test('skips the success follow-up when the execution fails', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   let executed = false;
   let followUps = 0;
   const {input, output, instance} = renderExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async run => {
       executed = true;
       return {...run, exitCode: 1};
@@ -666,9 +666,9 @@ function renderIsolateExecution(
 }
 
 test('follows every isolate through its own jobs and marks only the failing one', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const eventsPath = join(root, 'events.jsonl');
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const eventsPath = join(tempDir, 'events.jsonl');
   let releaseRun = (): void => {};
   const finished = new Promise<void>(resolve => {
     releaseRun = resolve;
@@ -714,9 +714,9 @@ test('follows every isolate through its own jobs and marks only the failing one'
 });
 
 test('keeps failing and running isolates visible when the terminal is short', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const eventsPath = join(root, 'events.jsonl');
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const eventsPath = join(tempDir, 'events.jsonl');
   const isolates = Array.from({length: 8}, (_, index) => ({
     id: `iso-${String(index + 1)}`,
     label: `Isolate number ${String(index + 1)}`,
@@ -744,9 +744,9 @@ test('keeps failing and running isolates visible when the terminal is short', as
 });
 
 test('completes every isolate once the run succeeds, including reused steps', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const eventsPath = join(root, 'events.jsonl');
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const eventsPath = join(tempDir, 'events.jsonl');
   const {input, output, instance} = renderIsolateExecution(
     eventsPath,
     [{id: 'iso-a', label: 'Resumed isolate', readPairs: 1}],
@@ -760,9 +760,9 @@ test('completes every isolate once the run succeeds, including reused steps', as
 });
 
 test('after a failed run, isolates finished in an earlier attempt show as done, not pending', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const eventsPath = join(root, 'events.jsonl');
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const eventsPath = join(tempDir, 'events.jsonl');
   const {input, output, instance} = renderIsolateExecution(
     eventsPath,
     [
@@ -826,12 +826,12 @@ function renderGatedExecution(
 }
 
 test('offers the execution only after a dry run passed the gate', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const modes: string[] = [];
   const gated: WorkflowRun[] = [];
   const {input, output, instance} = renderGatedExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async run => {
       modes.push(run.mode);
       return {...run, exitCode: 0};
@@ -861,11 +861,11 @@ test('offers the execution only after a dry run passed the gate', async context 
 });
 
 test('keeps the execution unavailable when the gate refuses the dry run, and shows why', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
   const modes: string[] = [];
   const {input, output, instance} = renderGatedExecution(
-    join(root, 'events.jsonl'),
+    join(tempDir, 'events.jsonl'),
     async run => {
       modes.push(run.mode);
       return {...run, exitCode: 0};
@@ -887,9 +887,9 @@ test('keeps the execution unavailable when the gate refuses the dry run, and sho
 });
 
 test('reads only the events an execution appends, not those of earlier attempts', async context => {
-  const root = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
-  context.after(() => rm(root, {recursive: true, force: true}));
-  const eventsPath = join(root, 'events.jsonl');
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const eventsPath = join(tempDir, 'events.jsonl');
   // An earlier attempt failed in validation; this one must not show that failure.
   await appendFile(eventsPath, eventLine({type: 'job-started', job_id: 1, rule: 'validate_inputs'}) +
     eventLine({type: 'job-failed', job_id: 1, rule: 'validate_inputs', message: 'earlier attempt failed', logs: []}));
