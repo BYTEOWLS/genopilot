@@ -53,7 +53,6 @@ export type AnnotationTransferResult = {
     dnaIdentityByTranscriptModel: IdentitySummary;
     proteinIdentityByTranscriptModel: IdentitySummary;
   };
-  prefix: {applied: boolean; value: string | null; transformedDistinctIds: number};
   validation: {status: 'passed' | 'failed'; errors: number; warnings: number};
   /** Persisted one-line explanations keyed by metric and detail-column name. */
   definitions: {metrics: Record<string, string>; detailColumns: Record<string, string>};
@@ -377,7 +376,6 @@ export async function readAnnotationTransferResult(
 
   const metrics = record(summary.metrics, '$.metrics', issues);
   let transfer: AnnotationTransferResult['transfer'] | undefined;
-  let prefix: AnnotationTransferResult['prefix'] | undefined;
   let validation: AnnotationTransferResult['validation'] | undefined;
   let metricsPath: ResultPath | undefined;
   let definitions: AnnotationTransferResult['definitions'] | undefined;
@@ -389,7 +387,7 @@ export async function readAnnotationTransferResult(
     metricsPath = safeRelativePath(metrics.path, '$.metrics.path', runDirectory, issues);
     const payload = record(metrics.payload, '$.metrics.payload', issues);
     if (payload) {
-      fields(payload, ['schema_version', 'generated_at', 'workflow', 'definitions', 'detail_column_definitions', 'transfer', 'prefix', 'validation'], '$.metrics.payload', issues);
+      fields(payload, ['schema_version', 'generated_at', 'workflow', 'definitions', 'detail_column_definitions', 'transfer', 'validation'], '$.metrics.payload', issues);
       if (payload.schema_version !== ANNOTATION_TRANSFER_METRICS_SCHEMA_VERSION) {
         issues.push({path: '$.metrics.payload.schema_version', message: `must equal supported version ${ANNOTATION_TRANSFER_METRICS_SCHEMA_VERSION}`});
       }
@@ -401,28 +399,6 @@ export async function readAnnotationTransferResult(
         definitions = {metrics: metricDefinitions, detailColumns: detailColumnDefinitions};
       }
       transfer = parseTransfer(payload.transfer, issues);
-      const prefixSource = record(payload.prefix, '$.metrics.payload.prefix', issues);
-      if (prefixSource) {
-        fields(prefixSource, ['applied', 'value', 'transformed_distinct_ids', 'explanation'], '$.metrics.payload.prefix', issues);
-        if (typeof prefixSource.applied !== 'boolean') {
-          issues.push({path: '$.metrics.payload.prefix.applied', message: 'must be a boolean'});
-        }
-        if (prefixSource.value !== null && typeof prefixSource.value !== 'string') {
-          issues.push({path: '$.metrics.payload.prefix.value', message: 'must be a string or null'});
-        }
-        const transformed = count(prefixSource.transformed_distinct_ids, '$.metrics.payload.prefix.transformed_distinct_ids', issues);
-        stringValue(prefixSource.explanation, '$.metrics.payload.prefix.explanation', issues);
-        if (typeof prefixSource.applied === 'boolean' && transformed !== undefined &&
-          (prefixSource.value === null || typeof prefixSource.value === 'string')) {
-          if (prefixSource.applied && (prefixSource.value === null || prefixSource.value.length === 0)) {
-            issues.push({path: '$.metrics.payload.prefix.value', message: 'must be non-empty when prefixing was applied'});
-          }
-          if (!prefixSource.applied && (prefixSource.value !== null || transformed !== 0)) {
-            issues.push({path: '$.metrics.payload.prefix', message: 'must have a null value and zero transformations when prefixing was not applied'});
-          }
-          prefix = {applied: prefixSource.applied, value: prefixSource.value, transformedDistinctIds: transformed};
-        }
-      }
       const validationSource = record(payload.validation, '$.metrics.payload.validation', issues);
       if (validationSource) {
         fields(validationSource, ['status', 'errors', 'warnings', 'source', 'explanation'], '$.metrics.payload.validation', issues);
@@ -443,7 +419,7 @@ export async function readAnnotationTransferResult(
   const reportsSource = record(summary.generated_reports, '$.generated_reports', issues);
   const reports: Record<string, ResultPath> = {};
   if (reportsSource) {
-    const expected = ['feature_transfer', 'aggregated_metrics', 'completion_summary', 'validation', 'final_gff3'];
+    const expected = ['feature_transfer', 'aggregated_metrics', 'completion_summary', 'validation'];
     fields(reportsSource, expected, '$.generated_reports', issues);
     for (const key of expected) {
       const parsed = safeRelativePath(reportsSource[key], `$.generated_reports.${key}`, runDirectory, issues);
@@ -491,7 +467,7 @@ export async function readAnnotationTransferResult(
     }
   }
 
-  if (issues.length > 0 || !generatedAt || !runModel || !statusExplanation || !transfer || !prefix || !validation || !metricsPath || !definitions) {
+  if (issues.length > 0 || !generatedAt || !runModel || !statusExplanation || !transfer || !validation || !metricsPath || !definitions) {
     throw new AnnotationTransferResultError(issues);
   }
 
@@ -502,7 +478,7 @@ export async function readAnnotationTransferResult(
   })));
   return {
     generatedAt, run: runModel, status: summary.status as AnnotationTransferStatus,
-    statusExplanation, transfer, prefix, validation, definitions,
+    statusExplanation, transfer, validation, definitions,
     reports: checkedReports, evidence: checkedEvidence,
     metricsPath: await checkPath(metricsPath),
   };

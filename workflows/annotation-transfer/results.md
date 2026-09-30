@@ -4,7 +4,7 @@ This page explains every item of the annotation transfer result page, grouped by
 
 ## Overview
 
-The overview shows the execution outcome, the workflow's own status, and the check of the final annotation.
+The overview shows the execution outcome, the workflow's own status, and the check of the transferred annotation.
 
 ### Run status
 
@@ -12,17 +12,17 @@ The scientific status saved by the workflow. A Snakemake process that exits succ
 
 | Status | Meaning |
 |---|---|
-| `completed` | Transfer finished and the final GFF3 passed validation without warnings. |
-| `completed-with-warnings` | Transfer finished and the final GFF3 passed validation, but warnings need review. |
-| `validation-failed` | Transfer finished, but the final GFF3 has structural errors. All evidence is kept for review; do not use the annotation downstream without fixing the errors. |
+| `completed` | Transfer finished and the transferred GFF3 passed validation without warnings. |
+| `completed-with-warnings` | Transfer finished and the transferred GFF3 passed validation, but warnings need review. |
+| `validation-failed` | Transfer finished, but the transferred GFF3 has structural errors. All evidence is kept for review; do not use the annotation downstream without fixing the errors. |
 
-### Final GFF3 structural validation
+### Transferred GFF3 structural validation
 
 | Item | Meaning |
 |---|---|
-| Status | Result of the structural check of the final GFF3: passed or failed. It checks the GFF3 version header, coordinates, strand, CDS phase, identifiers, and parent relationships, not biological correctness. A failed check is a scientific result that is kept for review, not a failed workflow execution. |
-| Errors | Structural problems in the final GFF3 that make it unsafe for downstream use. Any error sets the run status to `validation-failed`. The validation report lists each error. |
-| Warnings | Structural findings in the final GFF3 that should be reviewed but do not block downstream use. Warnings without errors set the run status to `completed-with-warnings`. |
+| Status | Result of the structural check of the transferred GFF3: passed or failed. It checks the GFF3 version header, coordinates, strand, CDS phase, identifiers, and parent relationships, not biological correctness. A failed check is a scientific result that is kept for review, not a failed workflow execution. |
+| Errors | Structural problems in the transferred GFF3 that make it unsafe for downstream use. Any error sets the run status to `validation-failed`. The validation report lists each error. |
+| Warnings | Structural findings in the transferred GFF3 that should be reviewed but do not block downstream use. Warnings without errors set the run status to `completed-with-warnings`. |
 
 ## Transfer
 
@@ -83,11 +83,10 @@ The run directory and the run's own files are explained in the general run resul
 
 | Item | Meaning |
 |---|---|
-| Per-feature transfer table (TSV) | One row per selected reference feature and per target copy, with raw LiftOn target identifiers, coordinates, transfer method, lowest identities, and mutation classes. Target identifiers are the raw LiftOn IDs; later identifier rewriting may change them in the final GFF3. |
+| Per-feature transfer table (TSV) | One row per selected reference feature and per target copy, with LiftOn's target identifiers, coordinates, transfer method, lowest identities, and mutation classes. |
 | Metrics (JSON) | All metrics shown on this page with their persisted one-line definitions, in machine-readable form. |
 | Completion summary (JSON) | The entry point read by this application: run status, the metrics, and links to all reports and evidence. |
-| Validation report (JSON) | Every structural validation error and warning found in the final GFF3. |
-| Final GFF3 | The annotation passed to downstream stages: the raw LiftOn GFF3 after optional identifier prefixing. |
+| Validation report (JSON) | Every structural validation error and warning found in the transferred GFF3. |
 
 ### Source evidence
 

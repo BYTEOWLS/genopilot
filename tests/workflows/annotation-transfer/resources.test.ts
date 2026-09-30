@@ -32,7 +32,6 @@ test('ships a valid annotation-transfer manifest with the planned workflow ident
       'resolve-inputs',
       'validate-inputs',
       'transfer-annotation',
-      'prefix-identifiers',
       'validate-annotation',
       'summarize-results',
       'record-provenance',
@@ -47,7 +46,6 @@ test('ships a valid annotation-transfer manifest with the planned workflow ident
       'resolve_target',
       'validate_inputs',
       'transfer_annotation',
-      'prefix_annotation',
       'validate_annotation',
       'summarize_annotation_transfer',
       'record_annotation_transfer_provenance',
@@ -127,10 +125,6 @@ test('declares the principal annotation-transfer result artifacts', async () => 
     artifactsById.get('raw-gff3')?.path,
     'results/annotation/lifton.raw.gff3',
   );
-  assert.equal(
-    artifactsById.get('prefixed-gff3')?.path,
-    'results/annotation/lifton.prefixed.gff3',
-  );
   assert.equal(artifactsById.get('lifton-diagnostics')?.path, 'results/annotation/lifton_output');
   assert.equal(artifactsById.get('annotation-validation')?.path, 'results/validation.json');
   assert.equal(artifactsById.get('feature-transfer')?.path, 'results/feature-transfer.tsv');
@@ -164,7 +158,6 @@ test('ships complete parameter definitions with explicit required fields', async
     parameter: 'target-source',
     equals: 'ncbi',
   });
-  assert.equal(byId.get('annotation-id-prefix')?.required, false);
   assert.deepEqual(byId.get('manual-cpu-limit')?.visible_when, {
     parameter: 'cpu-allocation',
     equals: 'manual',

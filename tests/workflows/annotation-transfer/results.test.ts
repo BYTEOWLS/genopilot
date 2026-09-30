@@ -26,7 +26,6 @@ const reports = {
   aggregated_metrics: 'results/metrics.json',
   completion_summary: 'results/summary.json',
   validation: 'results/validation.json',
-  final_gff3: 'results/annotation/lifton.prefixed.gff3',
 };
 
 const evidencePaths = {
@@ -70,7 +69,6 @@ function validSummary(): Record<string, unknown> {
       authoritative_sources: ['results/annotation/lifton_output/run_manifest.json'],
       detail_enrichment_source: 'results/annotation/lifton.raw.gff3',
     },
-    prefix: {applied: true, value: 'AN_', transformed_distinct_ids: 8, explanation: 'Prefix rewrite.'},
     validation: {status: 'passed', errors: 0, warnings: 1, source: 'results/validation.json', explanation: 'GFF3 validation.'},
   };
   return {
@@ -95,7 +93,6 @@ function validConfiguration(directory: string): Record<string, unknown> {
       reference: {source: 'local', fasta: '/data/reference.fasta', gff3: '/data/reference.gff3'},
       target: {source: 'local', fasta: '/data/target.fasta'},
     },
-    annotation: {id_prefix: 'AN_'},
     lifton: {profile: 'same-species'},
     resources: {cpu_mode: 'automatic', effective_cpus: 4},
     run: {

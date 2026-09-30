@@ -64,7 +64,7 @@ DETAIL_EXPLANATIONS = {
     "lifton_category": "LiftOn category of the reference feature: coding, non-coding, or other.",
     "status": "mapped for the primary target copy, extra-copy for an additional target copy, or unmapped.",
     "copy_number": "Zero for the primary target copy; positive values identify additional LiftOn copies.",
-    "target_id": "Raw LiftOn target identifier. Later identifier rewriting may change it in the final GFF3.",
+    "target_id": "Target identifier assigned by LiftOn.",
     "target_seqid": "Target assembly sequence carrying this copy.",
     "target_start": "One-based start coordinate of this copy on the target sequence.",
     "target_end": "One-based inclusive end coordinate of this copy on the target sequence.",
@@ -743,16 +743,6 @@ def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object
             ],
             "detail_enrichment_source": str(args.raw_gff3),
         },
-        "prefix": {
-            "applied": bool(args.id_prefix),
-            "value": args.id_prefix or None,
-            "transformed_distinct_ids": len(
-                {feature.feature_id for feature in target_all if feature.feature_id}
-            )
-            if args.id_prefix
-            else 0,
-            "explanation": "Provisional prefix-only rewriting; regex-based post-LiftOn rewriting is deferred.",
-        },
         "validation": {
             "status": validation_status,
             "errors": len(validation_errors),
@@ -808,7 +798,6 @@ def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object
             "aggregated_metrics": str(args.metrics),
             "completion_summary": str(args.summary),
             "validation": str(args.validation),
-            "final_gff3": str(args.final_gff3),
         },
         "source_evidence": {
             name: evidence_entry(path) for name, path in evidence_paths.items()
@@ -821,7 +810,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-gff3", type=Path, required=True)
     parser.add_argument("--raw-gff3", type=Path, required=True)
-    parser.add_argument("--final-gff3", type=Path, required=True)
     parser.add_argument("--validation", type=Path, required=True)
     parser.add_argument("--diagnostics", type=Path, required=True)
     parser.add_argument("--details", type=Path, required=True)
@@ -832,7 +820,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--run-created-at", required=True)
     parser.add_argument("--effective-cpus", type=int, required=True)
-    parser.add_argument("--id-prefix", default="")
     return parser.parse_args(argv)
 
 

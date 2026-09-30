@@ -22,7 +22,6 @@ const reportLabels: Record<string, string> = {
   aggregated_metrics: 'Metrics (JSON)',
   completion_summary: 'Completion summary (JSON)',
   validation: 'Validation report (JSON)',
-  final_gff3: 'Final GFF3',
 };
 
 const evidenceLabels: Record<string, string> = {
@@ -122,7 +121,7 @@ function annotationTransferSections(result: AnnotationTransferResult): ResultSec
     {
       id: 'validation',
       tab: 'overview',
-      title: 'Final GFF3 Structural Validation',
+      title: 'Transferred GFF3 Structural Validation',
       items: [
         {id: 'validation.status', label: 'Status', value: result.validation.status, row: true},
         {id: 'validation.errors', label: 'Errors', value: result.validation.errors, row: true, color: result.validation.errors > 0 ? 'red' : undefined},

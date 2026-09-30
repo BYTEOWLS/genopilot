@@ -1,39 +1,33 @@
-# Post-LiftOn identifier rewriting
+# GFF3 ID find-and-replace
 
 ## Goal
 
-Replace annotation transfer's provisional prefix-only identifier transformation with a deterministic, researcher-reviewed regular-expression find-and-replace step. A fixed prefix is not enough for every source identifier scheme, and result tables cannot reliably expose final identifiers until this contract exists.
+A simple find-and-replace on the feature IDs of any GFF3 file, run by the application and not bound to Snakemake or to any workflow. Typical inputs are the LiftOn GFF3 of an annotation-transfer run, whose IDs are still the reference's, or any other GFF3 a researcher needs to rename before publication or submission.
 
-This is a prerequisite of [INSDC submission preparation](insdc-submission/README.md), which reuses the same step unchanged. Implement it first, in annotation transfer.
+It is not a workflow step: no manifest parameter, no rule, and no part of any DAG. A workflow that needs rewritten IDs reads the rewritten file as an imported input.
+
+This is a prerequisite of [INSDC submission preparation](insdc-submission/README.md), which uses it unchanged. Implement it first.
 
 ## Contract
 
-- The researcher gives a regular expression and a replacement (Python `re` syntax), both saved verbatim in `config.yaml`. An empty expression means no rewriting: as today, the step is not part of the DAG and later stages read the raw LiftOn GFF3.
-- A prefix is the special case `^` → `PREFIX`. Existing configurations with `annotation.id_prefix` migrate to that form through an explicit configuration-schema version, and produce byte-identical output.
+- The researcher chooses a GFF3 file, a regular expression, and a replacement. A prefix is the special case `^` → `PREFIX`.
 - Only `ID`, `Parent`, and `Derives_from` are rewritten, including every value of a comma-separated list. Every other column and attribute (`Name`, descriptions, `Dbxref`, `product`, `protein_id`, …) stays byte-identical. A feature without an `ID` keeps having none.
-- The raw LiftOn GFF3 is never modified; the step writes a separate file and an `id-mapping.tsv` (old ID, new ID, feature type, sequence ID, start).
-- Validation in the application rejects a pattern that does not compile. After rewriting, the step fails on an invalid resulting GFF3 ID, two distinct IDs that collapse into one, and a `Parent` or `Derives_from` that no longer resolves.
-- Changing only the expression or replacement reruns rewriting, validation, summaries, and dependent stages, not LiftOn.
+- The source file is never modified. The result is a new GFF3, an `id-mapping.tsv` (old ID, new ID, feature type, sequence ID, start), and a small YAML record of the source path and checksum, the expression, the replacement, the application version, and the checksums of both written files.
+- A pattern that does not compile is rejected before anything runs. After rewriting, nothing is written when a resulting ID is not a valid GFF3 ID, two distinct IDs collapse into one, or a `Parent` or `Derives_from` no longer resolves.
+- Feature IDs only: sequence IDs (column 1) stay unchanged, because they must keep matching the FASTA headers; renaming both together is a separate idea in [`later.md`](../later.md).
 - It stays separate from INSDC locus-tag requirements; locus tags belong to the submission workflow.
 
 ## Review
 
-Before execution, the configuration screen previews the rewrite on the resolved reference GFF3's IDs, which LiftOn carries over to the target: a sample of old → new IDs and the number of changed, unchanged, and unmatched IDs. The preview uses the same Python semantics as the rule. Either the preview runs the shared script, or the pattern is restricted to syntax that JavaScript and Python interpret identically; decide at kickoff.
-
-Result views and the per-feature transfer TSV distinguish raw LiftOn IDs from final IDs, and provenance records the expression, replacement, and mapping checksum.
+Before writing, a screen built on `EditPage` previews the rewrite on the chosen file: a sample of old → new IDs and the number of changed, unchanged, and unmatched IDs. The preview and the rewrite share one TypeScript implementation, so the preview shows exactly what will be written, with JavaScript's regular-expression syntax.
 
 ## Code
 
-One script in `workflows/shared/scripts/` replaces `prefix_gff3.py`, keeping its attribute allowlist and its tests for multi-valued parents, discontinuous features, and missing IDs. It is placed in shared code because INSDC submission is a concrete second use.
-
-The manifest parameter `annotation-id-regex` ("Annotation ID find (regex)") already exists, but nothing reads it yet. Until this task lands it must be hidden or marked as a placeholder, and `annotation-id-prefix` becomes the replacement field.
+Parsing and rewriting live in `src/`, independent of any workflow and of Snakemake. It is pure text processing and never runs a bioinformatics tool. The removed `prefix_gff3.py` (in Git history) covered multi-valued parents, discontinuous features, and missing IDs; the new tests cover the same cases.
 
 ## Work
 
-- [ ] Kickoff: choose the preview mechanism and confirm the pattern syntax against representative identifier schemes.
-- [ ] Hide or mark the unused `annotation-id-regex` parameter until the step exists.
-- [ ] Replace `prefix_gff3.py` with the shared rewrite script and its `id-mapping.tsv`.
-- [ ] Add the configuration fields, schema version, and migration from `annotation.id_prefix`.
-- [ ] Add the preview and pattern validation to the configuration screen.
-- [ ] Show raw and final IDs in the result views and transfer TSV; record the rewrite in provenance.
-- [ ] Test the migration's byte-identical output, capture groups, collisions, dangling parents, invalid IDs, unmatched IDs, and a rewrite-only rerun that reuses LiftOn's output.
+- [ ] Kickoff: decide where the command lives (for example a home-screen command or an action on a run's result page), where output is written by default, and confirm the pattern syntax against representative identifier schemes.
+- [ ] Add the GFF3 ID rewrite with its `id-mapping.tsv` and provenance record.
+- [ ] Add the configuration screen with pattern validation and the preview.
+- [ ] Test capture groups, multi-valued parents, discontinuous features, missing IDs, collisions, dangling parents, invalid IDs, unmatched IDs, and that the source stays byte-identical.

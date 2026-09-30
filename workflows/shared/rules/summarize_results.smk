@@ -7,7 +7,7 @@ What it does
   read from LiftOn's structured reports and the GFF3 files; console output
   of LiftOn or Snakemake is never parsed.
 
-  Reads:  resolved/reference.gff3, results/annotation/lifton.raw.gff3, ANNOTATION_GFF3,
+  Reads:  resolved/reference.gff3, results/annotation/lifton.raw.gff3,
           results/validation.json, results/annotation/lifton_output/
   Writes: results/feature-transfer.tsv - one row per reference feature and target copy
           results/metrics.json         - aggregated counts and fractions, each with its definition
@@ -15,9 +15,8 @@ What it does
                                          GenoPilot's results screen
 
 Maintainer notes
-  Requires `SCRIPTS_DIR_SH` and `ANNOTATION_GFF3` from the including
-  Snakefile. The params function takes only `wildcards`; see
-  resolve_inputs.smk for why.
+  Requires `SCRIPTS_DIR_SH` from the including Snakefile. The params
+  function takes only `wildcards`; see resolve_inputs.smk for why.
 """
 
 import shlex
@@ -29,8 +28,6 @@ def _summarize_results_args(wildcards):
         "resolved/reference.gff3",
         "--raw-gff3",
         "results/annotation/lifton.raw.gff3",
-        "--final-gff3",
-        ANNOTATION_GFF3,
         "--validation",
         "results/validation.json",
         "--diagnostics",
@@ -51,8 +48,6 @@ def _summarize_results_args(wildcards):
         config["run"]["created_at"],
         "--effective-cpus",
         config["resources"]["effective_cpus"],
-        "--id-prefix",
-        config["annotation"]["id_prefix"],
     ]
     return " ".join(shlex.quote(str(arg)) for arg in args)
 
@@ -61,7 +56,6 @@ rule summarize_annotation_transfer:
     input:
         reference_gff3="resolved/reference.gff3",
         raw_gff3="results/annotation/lifton.raw.gff3",
-        final_gff3=ANNOTATION_GFF3,
         validation="results/validation.json",
         diagnostics="results/annotation/lifton_output",
     output:

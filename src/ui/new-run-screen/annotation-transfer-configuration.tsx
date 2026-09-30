@@ -86,7 +86,6 @@ function previousRunFormValues(configuration: AnnotationTransferConfiguration): 
     'target-source': target.source,
     'target-fasta': target.source === 'local' ? target.fasta : '',
     'target-accession': target.source === 'ncbi' ? target.accession : '',
-    'annotation-id-prefix': configuration.annotation.id_prefix,
     'cpu-allocation': configuration.resources.cpu_mode,
     'manual-cpu-limit': String(configuration.resources.manual_limit ?? ''),
     'output-root': configuration.run.output_root,
@@ -131,7 +130,6 @@ function annotationTransferDraft(
     targetSource: values['target-source'] === 'ncbi' ? 'ncbi' : 'local',
     targetFasta: values['target-fasta'] ?? '',
     targetAccession: values['target-accession'] ?? '',
-    idPrefix: values['annotation-id-prefix'] ?? '',
     cpuMode:
       values['cpu-allocation'] === 'leave-one-free' ||
       values['cpu-allocation'] === 'manual'
@@ -158,7 +156,6 @@ function resolvedValues(
     'reference-accession': reference.source === 'ncbi' ? reference.accession : '',
     'target-fasta': target.source === 'local' ? target.fasta : '',
     'target-accession': target.source === 'ncbi' ? target.accession : '',
-    'annotation-id-prefix': configuration.annotation.id_prefix,
     'lifton-profile': configuration.lifton.profile,
     'cpu-allocation': configuration.resources.cpu_mode,
     'manual-cpu-limit': String(configuration.resources.manual_limit ?? ''),

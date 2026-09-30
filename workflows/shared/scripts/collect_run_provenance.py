@@ -185,8 +185,8 @@ def relevant_configuration(config: dict, stage: str) -> dict:
         if stage == "transfer-annotation":
             value.update({"lifton": config["lifton"], "effective_cpus": config["resources"]["effective_cpus"]})
         return value
-    if stage in {"prefix-identifiers", "validate-annotation"}:
-        return {**common, "annotation": config["annotation"]}
+    if stage == "validate-annotation":
+        return common
     return config
 
 
@@ -195,7 +195,6 @@ def producer_record(config: dict, stage: str) -> dict:
         "resolve-inputs": ["python", "ncbi-datasets-cli"],
         "validate-inputs": ["python"],
         "transfer-annotation": ["lifton", "miniprot", "minimap2", "parasail-python"],
-        "prefix-identifiers": ["python"],
         "validate-annotation": ["python"],
         "summarize-results": ["python"],
         "record-provenance": ["python"],
@@ -207,7 +206,7 @@ def producer_record(config: dict, stage: str) -> dict:
     }
 
 
-def build_artifacts(config: dict, include_prefixed: bool) -> list[dict]:
+def build_artifacts(config: dict) -> list[dict]:
     input_specs = [
         ("resolved-reference-fasta", Path("resolved/reference.fasta"), "fasta", "provenance/reference.fasta.json"),
         ("resolved-reference-gff3", Path("resolved/reference.gff3"), "gff3", "provenance/reference.gff3.json"),
@@ -244,13 +243,6 @@ def build_artifacts(config: dict, include_prefixed: bool) -> list[dict]:
         ("summarize-results-log", "logs/summarize-results.log", "log", "summarize-results"),
         ("record-provenance-log", "logs/record-provenance.log", "log", "record-provenance"),
     ]
-    if include_prefixed:
-        generated.extend(
-            [
-                ("prefixed-gff3", "results/annotation/lifton.prefixed.gff3", "gff3", "prefix-identifiers"),
-                ("prefix-annotation-log", "logs/prefix-annotation.log", "log", "prefix-identifiers"),
-            ]
-        )
     for artifact_id, path_text, artifact_type, stage in generated:
         artifacts.append(
             artifact_record(artifact_id, Path(path_text), artifact_type, stage, "generated")
@@ -301,13 +293,8 @@ def _resolve_command(config: dict, role: str) -> dict:
     return {"rule": f"resolve_{role}", "argv": argv}
 
 
-def build_commands(config: dict, include_prefixed: bool) -> list[dict]:
-    final_gff3 = (
-        "results/annotation/lifton.prefixed.gff3"
-        if include_prefixed
-        else "results/annotation/lifton.raw.gff3"
-    )
-    commands = [
+def build_commands(config: dict) -> list[dict]:
+    return [
         _resolve_command(config, "reference"),
         _resolve_command(config, "target"),
         {
@@ -345,7 +332,7 @@ def build_commands(config: dict, include_prefixed: bool) -> list[dict]:
                 "python3",
                 "validate_annotation.py",
                 "--gff3",
-                final_gff3,
+                "results/annotation/lifton.raw.gff3",
                 "--output",
                 "results/validation.json",
             ],
@@ -359,8 +346,6 @@ def build_commands(config: dict, include_prefixed: bool) -> list[dict]:
                 "resolved/reference.gff3",
                 "--raw-gff3",
                 "results/annotation/lifton.raw.gff3",
-                "--final-gff3",
-                final_gff3,
                 "--validation",
                 "results/validation.json",
                 "--diagnostics",
@@ -381,29 +366,9 @@ def build_commands(config: dict, include_prefixed: bool) -> list[dict]:
                 config["run"]["created_at"],
                 "--effective-cpus",
                 str(config["resources"]["effective_cpus"]),
-                "--id-prefix",
-                config["annotation"]["id_prefix"],
             ],
         },
     ]
-    if include_prefixed:
-        commands.insert(
-            4,
-            {
-                "rule": "prefix_annotation",
-                "argv": [
-                    "python3",
-                    "prefix_gff3.py",
-                    "--source",
-                    "results/annotation/lifton.raw.gff3",
-                    "--destination",
-                    "results/annotation/lifton.prefixed.gff3",
-                    "--prefix",
-                    config["annotation"]["id_prefix"],
-                ],
-            },
-        )
-    return commands
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -421,8 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     config = json.loads(args.config_json)
     generated_at = utc_now_iso()
-    include_prefixed = bool(config["annotation"]["id_prefix"])
-    artifacts = build_artifacts(config, include_prefixed)
+    artifacts = build_artifacts(config)
     manifest_checksum = {"algorithm": CHECKSUM_ALGORITHM, "value": sha256_file(args.manifest)}
     workflow = {
         "id": config["workflow_id"],
@@ -463,7 +427,7 @@ def main(argv: list[str] | None = None) -> int:
             "effective_cpus": config["resources"]["effective_cpus"],
             "benchmark": "logs/transfer-annotation.benchmark.tsv",
         },
-        "commands": build_commands(config, include_prefixed),
+        "commands": build_commands(config),
         "tool_versions": {
             "configured": configured_tool_versions(),
             "observed": {

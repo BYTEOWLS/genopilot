@@ -26,7 +26,6 @@ class CollectRunProvenanceTests(unittest.TestCase):
                 "reference": {"source": "local", "fasta": "/inputs/reference.fasta", "gff3": "/inputs/reference.gff3"},
                 "target": {"source": "local", "fasta": "/inputs/target.fasta"},
             },
-            "annotation": {"id_prefix": "AN_"},
             "lifton": {"profile": "same-species"},
             "resources": {"cpu_mode": "manual", "manual_limit": 3, "effective_cpus": 3},
             "run": {
@@ -64,7 +63,6 @@ class CollectRunProvenanceTests(unittest.TestCase):
         generated = [
             "results/input-validation.json",
             "results/annotation/lifton.raw.gff3",
-            "results/annotation/lifton.prefixed.gff3",
             "results/annotation/lifton_output/run_manifest.json",
             "results/validation.json",
             "results/feature-transfer.tsv",
@@ -75,7 +73,6 @@ class CollectRunProvenanceTests(unittest.TestCase):
             "logs/validate-inputs.log",
             "logs/transfer-annotation.log",
             "logs/transfer-annotation.benchmark.tsv",
-            "logs/prefix-annotation.log",
             "logs/validate-annotation.log",
             "logs/summarize-results.log",
             "logs/record-provenance.log",
@@ -131,7 +128,6 @@ class CollectRunProvenanceTests(unittest.TestCase):
             records["resolved-reference-fasta"]["source_provenance"],
             "provenance/reference.fasta.json",
         )
-        self.assertIn("prefixed-gff3", records)
         self.assertGreater(records["lifton-diagnostics"]["file_count"], 0)
         self.assertEqual(
             artifacts["workflow"]["manifest_checksum"]["value"],
@@ -150,19 +146,6 @@ class CollectRunProvenanceTests(unittest.TestCase):
             provenance["artifact_index"]["checksum"]["value"],
             hashlib.sha256(Path("artifacts.yaml").read_bytes()).hexdigest(),
         )
-
-    def test_omits_prefix_outputs_when_no_prefix_is_configured(self) -> None:
-        self.config["annotation"]["id_prefix"] = ""
-        Path("results/annotation/lifton.prefixed.gff3").unlink()
-        Path("logs/prefix-annotation.log").unlink()
-
-        artifacts, provenance = self._run()
-        ids = {record["id"] for record in artifacts["artifacts"]}
-        rules = {command["rule"] for command in provenance["commands"]}
-
-        self.assertNotIn("prefixed-gff3", ids)
-        self.assertNotIn("prefix-annotation-log", ids)
-        self.assertNotIn("prefix_annotation", rules)
 
 
 class DirectoryChecksumTests(unittest.TestCase):

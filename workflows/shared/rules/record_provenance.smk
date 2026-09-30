@@ -15,9 +15,9 @@ What it does
   LiftOn packages that were actually installed.
 
 Maintainer notes
-  Requires `SCRIPTS_DIR_SH`, `ENVS_DIR`, `WORKFLOW_DIR`, and
-  `ANNOTATION_GFF3` from the including Snakefile. Depending on every file it
-  records keeps this rule last in the DAG.
+  Requires `SCRIPTS_DIR_SH`, `ENVS_DIR`, and `WORKFLOW_DIR` from the
+  including Snakefile. Depending on every file it records keeps this rule
+  last in the DAG.
 """
 
 import importlib.metadata
@@ -43,8 +43,8 @@ def _record_provenance_args(wildcards):
     return " ".join(shlex.quote(str(arg)) for arg in args)
 
 
-def _provenance_inputs(wildcards):
-    paths = [
+rule record_annotation_transfer_provenance:
+    input:
         str(WORKFLOW_DIR / "manifest.yaml"),
         "resolved/reference.fasta",
         "resolved/reference.gff3",
@@ -55,7 +55,6 @@ def _provenance_inputs(wildcards):
         "results/input-validation.json",
         "results/annotation/lifton.raw.gff3",
         "results/annotation/lifton_output",
-        ANNOTATION_GFF3,
         "results/validation.json",
         "results/feature-transfer.tsv",
         "results/metrics.json",
@@ -67,15 +66,6 @@ def _provenance_inputs(wildcards):
         "logs/transfer-annotation.benchmark.tsv",
         "logs/validate-annotation.log",
         "logs/summarize-results.log",
-    ]
-    if config["annotation"]["id_prefix"]:
-        paths.append("logs/prefix-annotation.log")
-    return paths
-
-
-rule record_annotation_transfer_provenance:
-    input:
-        _provenance_inputs,
     output:
         artifacts="artifacts.yaml",
         provenance="provenance/run.json",

@@ -6,7 +6,7 @@ Prepare a genome and the isolates' raw reads for submission to any node of the I
 
 The official validators (`table2asn` at NCBI, Webin-CLI at ENA, DDBJ's checking tools) report problems as text logs and leave the fixing to the researcher. GenoPilot runs the pinned validator of the chosen node, shows its findings, and guides the fixes that need a decision: each is saved as YAML, and the next target reads it. Mechanical preparation, such as trimming `N` at sequence ends, is recorded; nothing that changes the science is fixed silently.
 
-This concept depends on [Post-LiftOn identifier rewriting](../annotation-id-rewriting.md), which is implemented first in annotation transfer. This workflow reuses that shared find-and-replace step unchanged and adds only what the repositories need on top of it: locus tags and transcript and protein IDs (see [Identifier preparation](#identifier-preparation)).
+This concept depends on the [GFF3 ID find-and-replace](../annotation-id-rewriting.md), a general application feature implemented first. This workflow uses it unchanged and adds only what the repositories need on top of it: locus tags and transcript and protein IDs (see [Identifier preparation](#identifier-preparation)).
 
 ## Repositories
 
@@ -101,7 +101,7 @@ Every stage before the node packaging is repository-neutral and its outputs are 
 
 ## Identifier preparation
 
-ID rewriting is the shared step from [Post-LiftOn identifier rewriting](../annotation-id-rewriting.md), used with the same contract, preview, validation, and `id-mapping.tsv`. When the input GFF3 already comes from an annotation-transfer run with final IDs, the step is left empty and skipped.
+ID rewriting is the [GFF3 ID find-and-replace](../annotation-id-rewriting.md), with its contract, preview, validation, and `id-mapping.tsv`. It runs in the application before the submission workflow starts, which reads the rewritten GFF3 as an imported input. When the input GFF3 already has its final IDs, it is skipped.
 
 **Locus tags** are specific to this workflow, because the repositories do not read them from `ID`. Two modes, chosen explicitly:
 
@@ -142,7 +142,7 @@ Decide these at kickoff:
 
 ## Work
 
-- [ ] Kickoff: confirm [Post-LiftOn identifier rewriting](../annotation-id-rewriting.md) is done, choose the first node, resolve the open questions, and record the answers in this file.
+- [ ] Kickoff: confirm the [GFF3 ID find-and-replace](../annotation-id-rewriting.md) is done, choose the first node, resolve the open questions, and record the answers in this file.
 - [ ] Add the `insdc-submission` manifest, parameters, configuration schema, and form, with the node as an explicit choice.
 - [ ] Implement FASTA trimming with GFF3 coordinate shifting and the short/N-rich report.
 - [ ] Implement locus-tag, transcript-ID, and protein-ID assignment with the ID mapping.

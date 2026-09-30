@@ -14,9 +14,6 @@ const validConfiguration = {
     reference: {source: 'local', fasta: '/data/reference.fa', gff3: '/data/reference.gff3'},
     target: {source: 'local', fasta: '/data/target.fa'},
   },
-  annotation: {
-    id_prefix: 'AN_CS',
-  },
   lifton: {
     profile: 'same-species',
   },
@@ -59,8 +56,6 @@ test('parses the minimal automatic-CPU configuration from YAML', () => {
       target:
         source: local
         fasta: /data/target.fa
-    annotation:
-      id_prefix: AN_CS
     lifton:
       profile: same-species
     resources:
@@ -73,7 +68,6 @@ test('parses the minimal automatic-CPU configuration from YAML', () => {
   `);
 
   assert.equal(parsed.workflow_id, 'annotation-transfer');
-  assert.equal(parsed.annotation.id_prefix, 'AN_CS');
   assert.deepEqual(parsed.resources, {cpu_mode: 'automatic', effective_cpus: 8});
   assert.equal(parsed.run.id, '2026-09-05_083412123_annotation-transfer');
   assert.equal(parsed.run.name, undefined);
@@ -276,23 +270,6 @@ test('rejects an unrecognized input source and mismatched fields for the chosen 
   assert.ok(localMissingGff3.some(issue => issue.path === '$.inputs.reference.gff3'));
 });
 
-test('validates the annotation prefix without imposing NCBI locus-tag rules', () => {
-  for (const idPrefix of ['9AN', 'AN CS', 'AN.CS']) {
-    const issues = validationIssues(configuration({annotation: {id_prefix: idPrefix}}));
-    assert.ok(issues.some(issue => issue.path === '$.annotation.id_prefix'));
-  }
-
-  const valid = validateAnnotationTransferConfiguration(
-    configuration({annotation: {id_prefix: 'AN-CS_2'}}),
-  );
-  assert.equal(valid.annotation.id_prefix, 'AN-CS_2');
-  assert.equal(
-    validateAnnotationTransferConfiguration(configuration({annotation: {id_prefix: ''}}))
-      .annotation.id_prefix,
-    '',
-  );
-});
-
 test('requires an ISO 8601 UTC created_at timestamp', () => {
   for (const created_at of [
     undefined,
@@ -400,7 +377,7 @@ test('accepts an optional non-empty run description', () => {
 });
 
 test('rejects missing required sections and nested fields', () => {
-  for (const field of ['inputs', 'annotation', 'lifton', 'resources', 'run']) {
+  for (const field of ['inputs', 'lifton', 'resources', 'run']) {
     const value = configuration();
     delete value[field];
     const issues = validationIssues(value);
@@ -423,8 +400,6 @@ test('rejects unknown fields at every configuration level', () => {
   const inputs = value.inputs as {reference: Record<string, unknown>; extra?: unknown};
   inputs.extra = true;
   inputs.reference.notes = 'draft';
-  const annotation = value.annotation as Record<string, unknown>;
-  annotation.extra_copies = true;
   const lifton = value.lifton as Record<string, unknown>;
   lifton.coverage = 0.9;
   const resources = value.resources as Record<string, unknown>;
@@ -437,7 +412,6 @@ test('rejects unknown fields at every configuration level', () => {
   assert.ok(paths.includes('$.unexpected'));
   assert.ok(paths.includes('$.inputs.extra'));
   assert.ok(paths.includes('$.inputs.reference.notes'));
-  assert.ok(paths.includes('$.annotation.extra_copies'));
   assert.ok(paths.includes('$.lifton.coverage'));
   assert.ok(paths.includes('$.resources.threads'));
   assert.ok(paths.includes('$.run.overwrite'));
