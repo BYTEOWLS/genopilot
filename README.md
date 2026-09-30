@@ -14,7 +14,7 @@
   <a href="https://www.npmjs.com/package/@byteowls/genopilot"><img src="https://img.shields.io/npm/v/@byteowls/genopilot?style=flat-square" alt="npm version" /></a>
 </p>
 
-The terminal interface configures and runs packaged Snakemake workflows. Every workflow remains runnable directly through Snakemake without the TUI, using a run configuration GenoPilot saved; the workflows do not validate edited configurations and must not be modified. Linux and macOS are supported.
+The terminal interface configures and runs packaged Snakemake workflows. Linux and macOS are supported.
 
 ## Workflows
 
@@ -68,6 +68,8 @@ The TUI checks for a newer release in the background and shows an update notice 
 The CLI checks Pixi, Conda, Snakemake, and the workflow runtime after launch. With explicit consent, guided setup downloads a checksum-verified Pixi release into the application data directory and uses it to install the pinned Conda and Snakemake versions. No `sudo` access is required. Native Windows execution is unsupported; WSL2 support is planned.
 
 ## Running a workflow directly
+
+Every workflow remains runnable directly through Snakemake without the TUI, using a run configuration GenoPilot saved; the workflows do not validate edited configurations and must not be modified.
 
 Each Snakefile's header lists its steps and the direct command for a run directory GenoPilot saved. GenoPilot adds `--keep-going`, so independent jobs, such as other isolates, finish when one fails, and its run-events logger, which records each job's progress and command in the run's `events.jsonl`. To record them in a direct run too, make the packaged plugin importable and name the logger:
 
