@@ -9,7 +9,7 @@ The container knows no workflow and no kind of content in particular. It provide
 | Kind | Library | Concept | State |
 |---|---|---|---|
 | `document` | none; the existing Markdown parser | [document.md](document.md) | first; the help documents, and the kind the container is built with |
-| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | next; the review of unresolved consensus loci and the accession catalog |
+| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | next; the review of unresolved consensus loci and the accession catalog, then the [annotation review](../annotation-review.md) |
 | `chart` | [Chart.js](https://www.chartjs.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
 | `table` | none | sketched below | later; tables too large or wide for the terminal |
 

@@ -2,7 +2,7 @@
 
 The `genome` kind of the [browser view](README.md): any genome GenoPilot knows, together with the evidence lying next to it, shown with [igv.js](https://github.com/igvteam/igv.js). The container provides the tab, navigation, guidance, drafting, downloads, and the server; this document covers what is particular to genomes.
 
-The first users are the review of unresolved consensus loci and the accession catalog. The researcher-facing background for the review is in [`science-background.md`](science-background.md). The genome view is also the natural place for [Manual annotation review and correction](../../later.md#manual-annotation-review-and-correction) to show evidence later.
+The first users are the review of unresolved consensus loci and the accession catalog. The researcher-facing background for the review is in [`science-background.md`](science-background.md). The genome view also shows the evidence for the [annotation review](../annotation-review.md) of transferred genes.
 
 ## Content
 
@@ -69,7 +69,7 @@ Each source contributes a view builder; the list grows by convention, not by cha
 
 - **Accession catalog**: a verified cached copy's `genomic.fna` with its `genomic.gff` when present. The index is built in memory, so the checksummed cache stays untouched.
 - **Isolate catalog**: saved sequences, once [saved isolate sequences](../saved-isolate-sequences.md) exist, each as its own reference.
-- **Run results**: each workflow's result screen, through its view builder. Reference consensus: the backbone with every isolate's alignment, variants, and consensus mask, the cohort's unresolved loci as items, and the backbone's GFF3 when the backbone is a catalogued accession with a verified cached annotation; the cohort consensus as its own reference. Annotation transfer: its target genome with the transferred GFF3; the source annotation is in the source genome's coordinates, so it is a view of its own rather than a track.
+- **Run results**: each workflow's result screen, through its view builder. Reference consensus: the backbone with every isolate's alignment, variants, and consensus mask, the cohort's unresolved loci as items, and the backbone's GFF3 when the backbone is a catalogued accession with a verified cached annotation; the cohort consensus as its own reference. Annotation transfer: its target genome with the transferred GFF3, LiftOn's candidate models, and the unresolved-bases BED, with the review list as items (see *Reviewing a transferred gene*); the source annotation is in the source genome's coordinates, so it is a view of its own rather than a track.
 
 ## Reviewing an unresolved locus
 
@@ -103,7 +103,29 @@ All voters are shown, on every side of the locus, because a tie is made by both 
 
 Two extensions came up while designing this review and wait for researchers' requirements in [later.md](../../later.md#per-vote-evidence-and-per-locus-overrides): **per-vote evidence**, each voter's depth and allele fraction at the locus as numbers in the item card and the CLI's Sites detail, and a **per-locus override**, choosing the allele at one locus in a cohort decision. With an override, the genome view's drafting would gain a third action, *Choose this allele at this locus*.
 
-## Interaction
+## Reviewing a transferred gene
+
+The second use, from the *Proteins* tab of an annotation transfer; the review list, its reasons, and the decision are in the [annotation review](../annotation-review.md) concept.
+
+**Reference**: the target genome of the transfer.
+
+**Tracks**, in this order:
+
+| Track | Shown by default |
+|---|---|
+| the review list as the loci track | yes |
+| the transferred GFF3 | yes |
+| LiftOn's miniprot models: the reference protein aligned to the target | yes |
+| LiftOn's Liftoff models: the reference gene lifted by its DNA | yes |
+| the target's unresolved bases (BED) | yes |
+| the reviewed GFF3 of the latest saved decision, when there is one | no |
+
+**Zoom**: the gene with about 500 bases on each side, so neighboring genes show whether the locus is part of a gene family or a rearranged region.
+
+**Reference view**: the item card offers the same gene in the reference genome with its source GFF3, as a view of its own; `v` on the review list returns to the review at the CLI's selected gene.
+
+**Actions** (target: item): *Confirm* and *Reject* with a required note, *Needs correction* with an optional note. On the candidate tracks (target: track-group) *Use this model for the gene* drafts the verdict *corrected* with that candidate. All of them add to the result screen's review draft, as the cohort actions do.
+
 
 On top of the container's navigation, the page uses igv.js's events (`locuschange`, `trackclick`, region selection, track menus):
 
@@ -150,4 +172,4 @@ The container's second step, after it was built with the [document kind](documen
 2. **Genome kind**: igv.js copied into `dist/vendor/igv/` at build, the content contract, the in-memory FASTA index, the track chooser, the loci track, the legend, and the states.
 3. **First sources**: the accession catalog and the reference-consensus results (Sites tab, isolate detail, cohort consensus), each with its view builder and tests on fixtures; for the review, the tracks per locus and their order, the item card, the presets and zoom, and its guide section in `results.md`.
 4. **Region selection and the two review actions**, with the container's navigation and drafting steps.
-5. **Further sources**: annotation transfer, then saved isolate sequences when they exist.
+5. **Further sources**: the annotation review (its steps are in [annotation-review.md](../annotation-review.md#work)), then saved isolate sequences when they exist.
