@@ -10,7 +10,7 @@ The container knows no workflow and no kind of content in particular. It provide
 |---|---|---|---|
 | `document` | none; the existing Markdown parser | [document.md](document.md) | first; the help documents, and the kind the container is built with |
 | `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | next; the review of unresolved consensus loci and the accession catalog, then the [annotation review](../annotation-review.md) |
-| `chart` | [Chart.js](https://www.chartjs.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
+| `chart` | [shadcn/ui charts](https://ui.shadcn.com/docs/components/chart) with [Recharts](https://recharts.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
 | `table` | none | sketched below | later; tables too large or wide for the terminal |
 
 This takes over the interactive part of [Browser-based HTML reports](../../later.md#browser-based-html-reports); static, self-contained report files stay deferred there.
@@ -135,6 +135,16 @@ The page is GenoPilot's own frame around the kind's main area. Libraries such as
 
 The page is a small React application under `src/browser/page/`, built for the browser by the same esbuild step as the [bundled package](../bundled-package.md) into `dist/vendor/browser/`. Each kind is a component of its own, loaded only when a view of that kind is shown.
 
+### Design and themes
+
+Use [shadcn/ui](https://ui.shadcn.com/) components with Tailwind CSS for a modern, restrained frame: clear typography, subtle borders, and color reserved for meaningful states. Add only the components the current view needs; their source lives with the page, with accessible primitives bundled locally. Charts use shadcn/ui's Recharts-based components, not Chart.js.
+
+- **Light, Dark, and Automatic** are available from the header. Automatic is the default and follows `prefers-color-scheme`, including changes while the page is open. Remember the choice in browser-local storage when available; unavailable storage must not prevent theme switching. This is a presentation preference, not a saved workflow setting.
+- Apply theme tokens consistently to the frame, documents, tables, and charts. Check contrast, focus indicators, tooltips, and disabled states in both themes. Genome-library styling is checked separately; do not invert scientific imagery or alter its nucleotide and evidence colors to fake a dark theme.
+- Print and downloaded images use a legible light background independently of the page theme, preserving meaningful series and evidence colors.
+- **Desktop and smaller laptops**, not phones, are the design target. The main area flexes with the window; the guide and item sidebar can collapse, secondary header controls move into menus, and wide tables scroll horizontally. Keep genome tracks useful rather than squeezing them to fit. At reduced widths and browser zoom, controls remain reachable and content never overlaps.
+- Test theme selection, automatic theme changes, unavailable storage, keyboard navigation, and the compact layout alongside the visible states.
+
 ## Downloads
 
 Every view can be downloaded in the formats its kind offers, generated in the browser from exactly what the CLI sent:
@@ -164,7 +174,8 @@ Every view can be downloaded in the formats its kind offers, generated in the br
 
 The page's libraries are exact-version development dependencies; nothing is added at runtime.
 
-- React, `react-dom`, Chart.js, and ExcelJS are bundled into the page by esbuild; ExcelJS as a separate file loaded on demand.
+- React, `react-dom`, the primitives used by shadcn/ui, Recharts, and ExcelJS are bundled into the page by esbuild; chart code is loaded with its kind and ExcelJS as a separate file loaded on demand. Tailwind generates a local CSS asset at build time; no CDN or runtime styling service is used.
+- Only the needed shadcn/ui component sources are included, with their license notice; their dependencies are pinned exactly like the other page libraries.
 - Libraries that ship a ready browser build, such as igv.js, are copied into `dist/vendor/` as published, with their license; see [genome.md](genome.md#packaging).
 - Every bundled or copied library is listed in `THIRD-PARTY-LICENSES.md`, as the [bundled package](../bundled-package.md) describes.
 
@@ -174,7 +185,7 @@ Until the bundled package exists, the build runs esbuild only for the page and c
 
 These are sketches so the container fits them; each kind gets its own concept when its first screen needs it.
 
-**Chart.** Values a workflow recorded, as rows with named columns, plus a Chart.js configuration without data: the type and which columns become axes and series. Items are data points or categories, such as one stage in a duration chart, so the CLI can select what was clicked. The first candidates are the open run-metrics task (durations and resources per stage) and LiftOn's mapped, unmapped, and rescued summaries.
+**Chart.** Values a workflow recorded, as rows with named columns, plus a declarative description of the chart type and which columns become axes and series. The page renders these through shadcn/ui's Recharts-based chart components, with theme-aware axes, legends, and tooltips; the contract contains no executable callbacks or library-specific configuration. Items are data points or categories, such as one stage in a duration chart, so the CLI can select what was clicked. PNG downloads rasterize the rendered SVG on a light background, including the provenance footer; the same image goes into XLSX. The first candidates are the open run-metrics task (durations and resources per stage) and LiftOn's mapped, unmapped, and rescued summaries.
 
 **Table.** Columns with labels and types, and rows read by the server from a workflow's TSV (bgzip included) in pages, so a table of hundreds of thousands of rows never loads whole. Sorting and filtering are on the server, by one linear pass per request until measurements ask for an index. Items are rows by key, such as a site's locus, so a table can drive a genome view: selecting a row in the CLI or the browser can open its locus in the genome kind.
 
@@ -189,7 +200,7 @@ These are sketches so the container fits them; each kind gets its own concept wh
 
 ## Work
 
-1. **Container with the document kind**: the view contract, server, browser opener, provider, CLI status line, shared key, and the page frame (header, item card, guide, legend, visible states, keys), built and tested with the [document kind](document.md#work) as its only content, which needs no library and no files beyond the packaged documentation. Tests for refused tokens, hosts, origins, unknown IDs, view replacement, and shutdown.
+1. **Container with the document kind**: the view contract, server, browser opener, provider, CLI status line, shared key, and the shadcn/ui page frame (header, item card, guide, legend, visible states, keys, light/dark/automatic themes, compact laptop layout), built and tested with the [document kind](document.md#work) as its only content, which needs no library and no files beyond the packaged documentation. Tests for refused tokens, hosts, origins, unknown IDs, view replacement, and shutdown.
 2. **Genome kind**: `Range` handling and the steps in [genome.md](genome.md#work).
 3. **Navigation from the browser**: previous/next, item selection, and following the view, routed to the opening screen.
 4. **Decision drafting**: the action contract and the draft tray.
