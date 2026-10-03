@@ -44,7 +44,7 @@ What the document kind adds to the container's [page](README.md#page):
 - **Contents**: the view's documents as a side list, like the tabs of the terminal's document page, and the open document's `##` and `###` headings as an outline.
 - **Search**: the browser's own find; no search index.
 - **Print**: a print stylesheet without the frame, side list, and connection state, with the provenance as a footer line, so the browser's print dialog produces a clean PDF.
-- **Downloads**: the open document's original Markdown file, unchanged.
+- **No download menu**: documentation is read in place. Printing and saving a PDF use the browser's normal Print command.
 
 ## Opening from the CLI
 

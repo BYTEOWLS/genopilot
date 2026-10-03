@@ -6,6 +6,9 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+- Open documentation in a local browser with `v`, with synchronized document selection, a collapsible outline and print/PDF support through the browser's normal Print command.
+- Use a Mantine browser frame with a trailing icon button cycling automatic, light, and dark themes; all assets and dependency license notices are packaged locally.
+
 ## [0.0.1] - 2026-09-30
 
 First release: a guided terminal interface for curated, reproducible genome workflows. Every workflow also runs directly through Snakemake.

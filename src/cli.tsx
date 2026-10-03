@@ -4,6 +4,7 @@ import {createRequire} from 'node:module';
 import React from 'react';
 import {render} from 'ink';
 import {selfUpdate} from './self-update.js';
+import {BrowserViewProvider} from './browser/provider.js';
 import {createTerminalTitleWriter} from './terminal-title.js';
 import {createMouseWheelInput} from './ui/mouse-wheel.js';
 import {TerminalTitleProvider} from './ui/terminal-title.js';
@@ -74,7 +75,9 @@ async function main(): Promise<void> {
   }
   const instance = render(
     <TerminalTitleProvider baseTitle={packageJson.label} onTitleChange={terminalTitle.set}>
-      <WelcomeScreen metadata={metadata} currentDirectory={process.cwd()} mouseReporting={mouse !== undefined} />
+      <BrowserViewProvider application={{name: metadata.label, version: metadata.version}}>
+        <WelcomeScreen metadata={metadata} currentDirectory={process.cwd()} mouseReporting={mouse !== undefined} />
+      </BrowserViewProvider>
     </TerminalTitleProvider>,
     {
       alternateScreen: true,

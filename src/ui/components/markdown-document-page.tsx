@@ -7,6 +7,8 @@ import {mutedColor} from '../theme.js';
 import {Markdown} from './markdown.js';
 import {Page} from './page.js';
 import {TabBar} from './tabs.js';
+import {useBrowserView} from '../../browser/provider.js';
+import {browserViewShortcut} from '../../browser/contract.js';
 
 type LoadState =
   | {state: 'loading'}
@@ -36,6 +38,8 @@ export function MarkdownDocumentPage({
   inputActive: boolean;
 }): React.JSX.Element {
   const {columns, rows} = useWindowSize();
+  const browser = useBrowserView();
+  const browserOwner = useRef({});
   const contentRef = useRef<DOMElement>(null);
   const [loaded, setLoaded] = useState<LoadState>({state: 'loading'});
   const [activeId, setActiveId] = useState(initialDocumentId);
@@ -67,8 +71,18 @@ export function MarkdownDocumentPage({
   const document = documents.find(candidate => candidate.id === activeId) ?? documents[0];
   const documentId = document?.id ?? '';
   const tabbed = documents.length > 1;
+  const browserRef = useRef(browser);
+  browserRef.current = browser;
+  useEffect(() => {
+    browserRef.current?.update({owner: browserOwner.current, title, documents, selectedId: documentId, select: setActiveId});
+  }, [title, loaded, documentId]);
+  useEffect(() => {
+    const owner = browserOwner.current;
+    return () => browserRef.current?.detach(owner);
+  }, []);
   // The page title, tab bar, and shortcut line take the remaining rows.
-  const visibleRows = Math.max(5, rows - (tabbed ? 8 : 6));
+  const browserStatusRows = browser?.status ? Math.ceil(browser.status.length / Math.max(1, columns)) : 0;
+  const visibleRows = Math.max(3, rows - (tabbed ? 8 : 6) - browserStatusRows);
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
   const scrollOffset = Math.min(scrollOffsets[documentId] ?? 0, maximumScrollOffset);
 
@@ -87,7 +101,9 @@ export function MarkdownDocumentPage({
 
   useInput(
     (input, key) => {
-      if (key.escape || input === '?') {
+      if (input === 'v' && browser && documents.length > 0) {
+        browser.show({owner: browserOwner.current, title, documents, selectedId: documentId, select: setActiveId});
+      } else if (key.escape || input === '?') {
         onClose();
       } else if (key.upArrow) {
         scrollBy(-1);
@@ -115,6 +131,7 @@ export function MarkdownDocumentPage({
         />
       ) : undefined}
       shortcuts={[
+        browser !== undefined && documents.length > 0 && browserViewShortcut,
         tabbed && 'Tab/←/→ — Switch document',
         maximumScrollOffset > 0 && '↑/↓ — Scroll · PageUp/PageDown (or fn + ↑/↓) — Page',
         `? — ${back}`,

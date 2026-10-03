@@ -4,6 +4,7 @@ import {useHomeSuspensionState} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 import {ValidationError} from './validation-error.js';
+import {useBrowserView} from '../../browser/provider.js';
 
 /** A shortcut hint such as `n — Add`; false or undefined entries are skipped. */
 export type Shortcut = string | false | undefined;
@@ -48,6 +49,7 @@ export function Page({
   children,
 }: PageProps): React.JSX.Element {
   const suspension = useHomeSuspensionState();
+  const browser = useBrowserView();
   const line = [
     ...shortcuts.filter((shortcut): shortcut is string => typeof shortcut === 'string' && shortcut.length > 0),
     back === false ? undefined : `Esc — ${back}`,
@@ -68,6 +70,7 @@ export function Page({
       <Box marginTop={1} flexDirection="column">
         {children}
       </Box>
+      {browser?.status ? <Text color={mutedColor} wrap="wrap">{sanitizeTerminalText(browser.status)}</Text> : null}
       <Box marginTop={1}>
         {/* Non-breaking spaces inside each shortcut, so the line only wraps between shortcuts. */}
         <Text color={mutedColor} wrap="wrap">{line.map(shortcut => shortcut.replaceAll(' ', '\u00a0')).join(' · ')}</Text>

@@ -33,9 +33,14 @@ GenoPilot checks its runtime after launch: Pixi, Conda, Snakemake, and the Pytho
 | Esc | Go back one step |
 | `h` | Return home from any screen |
 | `?` | Show the help of the current screen |
+| `v` | Open the current document page in the browser |
 | Ctrl+C twice | Exit GenoPilot |
 
 A running workflow is not left by Esc or `h` until it finished or was stopped.
+
+## Browser documents
+
+Press `v` on a document page to read it in a local browser tab, with links, an outline, themes, and printing. The terminal shows the URL if automatic opening is unavailable. See [Browser view](browser-view.md) for navigation, printing, privacy, and SSH port forwarding.
 
 ## Mouse
 

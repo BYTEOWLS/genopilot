@@ -111,6 +111,8 @@ Install dependencies:
 pnpm install
 ```
 
+The build also bundles the local browser page and its styles with esbuild, and collects its dependency licenses. Run `pnpm build` before opening browser documents from the source CLI; rebuild after changing browser code or styles.
+
 Run the CLI from source:
 
 ```bash

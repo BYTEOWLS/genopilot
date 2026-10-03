@@ -14,6 +14,8 @@ export type Document = {
   /** The first `#` heading, or the file name when there is none. */
   title: string;
   blocks?: Block[];
+  /** Server-side location for resolving links; never sent to the browser. */
+  sourceUrl?: string;
 };
 
 /** Loads the documents one page shows as tabs, in tab order. */
@@ -32,16 +34,16 @@ export async function readDocument(url: URL, read: ReadText = readText): Promise
     source = await read(url);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return {id, title: fileName};
+      return {id, title: fileName, sourceUrl: url.href};
     }
     throw error;
   }
   const blocks = parseMarkdown(source);
-  return {id, title: documentTitle(blocks) ?? fileName, blocks};
+  return {id, title: documentTitle(blocks) ?? fileName, blocks, sourceUrl: url.href};
 }
 
 /** The general documents in `docs/` the application shows, in tab order. */
-export const generalDocumentNames = ['help', 'import-review', 'run-results'] as const;
+export const generalDocumentNames = ['help', 'import-review', 'run-results', 'browser-view'] as const;
 
 /** General documents in `docs/`, by file name without `.md`. */
 export function readGeneralDocuments(

@@ -6,10 +6,10 @@
 
 export type Inline =
   | {kind: 'text'; text: string}
-  | {kind: 'code'; text: string}
+  | {kind: 'code'; text: string; href?: string}
   | {kind: 'bold'; text: string}
   | {kind: 'italic'; text: string}
-  | {kind: 'link'; text: string};
+  | {kind: 'link'; text: string; href: string};
 
 export type AlertVariant = 'note' | 'tip' | 'warning';
 
@@ -52,7 +52,11 @@ export function parseInline(text: string): Inline[] {
       // A link around inline code, such as a file name, keeps its code style.
       const codeLink = link && /^`[^`]+`$/.test(inner);
       const kind = code || codeLink ? 'code' : bold ? 'bold' : italic ? 'italic' : 'link';
-      spans.push({kind, text: codeLink ? inner.slice(1, -1) : inner});
+      if (kind === 'link') {
+        spans.push({kind, text: inner, href: link?.[2] ?? ''});
+      } else {
+        spans.push({kind, text: codeLink ? inner.slice(1, -1) : inner, ...(codeLink ? {href: link?.[2]} : {})});
+      }
       index += match[0].length;
     } else {
       plain += text[index];

@@ -10,7 +10,7 @@ The container knows no workflow and no kind of content in particular. It provide
 |---|---|---|---|
 | `document` | none; the existing Markdown parser | [document.md](document.md) | first; the help documents, and the kind the container is built with |
 | `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | next; the review of unresolved consensus loci and the accession catalog, then the [annotation review](../annotation-review.md) |
-| `chart` | [shadcn/ui charts](https://ui.shadcn.com/docs/components/chart) with [Recharts](https://recharts.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
+| `chart` | [Mantine charts](https://mantine.dev/charts/getting-started/) with [Recharts](https://recharts.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
 | `table` | none | sketched below | later; tables too large or wide for the terminal |
 
 This takes over the interactive part of [Browser-based HTML reports](../../later.md#browser-based-html-reports); static, self-contained report files stay deferred there.
@@ -105,7 +105,7 @@ The page is GenoPilot's own frame around the kind's main area. Libraries such as
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ GenoPilot · Run 2026-09-30 · Iteration 2     ● connected   [Download ▾]  │
+│ GenoPilot · Run 2026-09-30 · Iteration 2     ● connected       [Theme ◐]  │
 │ ◀ Prev   Tie 12 of 40 · chr3:1,204,551   Next ▶      View: [Votes ▾]     │
 ├───────────────────────────────────────────────┬──────────────────────────┤
 │                                               │ THIS LOCUS               │
@@ -124,7 +124,7 @@ The page is GenoPilot's own frame around the kind's main area. Libraries such as
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Header**: the view's title and provenance, the connection to the CLI, the download menu, previous and next with the position in the CLI's list (`12 of 40`), and the kind's own controls, such as a genome's view selector.
+- **Header**: the view's title and provenance, the connection to the CLI, previous and next with the position in the CLI's list (`12 of 40`), and the kind's own controls, such as a genome's view selector. The theme icon is the last control. Documents have no download menu; scientific exports below remain future work.
 - **Item card**: the selected item's `details`, the same facts as the CLI's detail view.
 - **Guide**: the view's `guide` section, rendered from Markdown. For a review it is a checklist of what to look at, each step optionally with a `show` button the kind defines, such as a genome view that colors reads by strand. The checkboxes help the researcher and are never saved. The text belongs to the source's documentation, such as a section of a workflow's `results.md`, so it is written for researchers, follows the documentation subset, and changes without code.
 - **How to read this**: a collapsible legend per kind, as a general page in `docs/`, such as what igv.js's colors and marks mean or how a chart's axes and error bars are drawn.
@@ -137,9 +137,9 @@ The page is a small React application under `src/browser/page/`, built for the b
 
 ### Design and themes
 
-Use [shadcn/ui](https://ui.shadcn.com/) components with Tailwind CSS for a modern, restrained frame: clear typography, subtle borders, and color reserved for meaningful states. Add only the components the current view needs; their source lives with the page, with accessible primitives bundled locally. Charts use shadcn/ui's Recharts-based components, not Chart.js.
+Use [Mantine](https://mantine.dev/) for a modern, restrained frame: clear typography, subtle borders, and color reserved for meaningful states. Its ready-made accessible components and built-in theme handling keep custom UI code small; libraries and styles are bundled locally. Charts use Mantine's Recharts-based charts package, not Chart.js. Mantine and Recharts are MIT-licensed.
 
-- **Light, Dark, and Automatic** are available from the header. Automatic is the default and follows `prefers-color-scheme`, including changes while the page is open. Remember the choice in browser-local storage when available; unavailable storage must not prevent theme switching. This is a presentation preference, not a saved workflow setting.
+- A single **theme icon**, last in the header, cycles **Automatic → Light → Dark → Automatic**. The monitor, sun, and moon icons show the preference; its tooltip and accessible name describe the current mode and the next one. Automatic is the default and follows `prefers-color-scheme`, including changes while the page is open. Remember the choice in browser-local storage when available; unavailable storage must not prevent theme switching. This is a presentation preference, not a saved workflow setting.
 - Apply theme tokens consistently to the frame, documents, tables, and charts. Check contrast, focus indicators, tooltips, and disabled states in both themes. Genome-library styling is checked separately; do not invert scientific imagery or alter its nucleotide and evidence colors to fake a dark theme.
 - Print and downloaded images use a legible light background independently of the page theme, preserving meaningful series and evidence colors.
 - **Desktop and smaller laptops**, not phones, are the design target. The main area flexes with the window; the guide and item sidebar can collapse, secondary header controls move into menus, and wide tables scroll horizontally. Keep genome tracks useful rather than squeezing them to fit. At reduced widths and browser zoom, controls remain reachable and content never overlaps.
@@ -147,11 +147,10 @@ Use [shadcn/ui](https://ui.shadcn.com/) components with Tailwind CSS for a moder
 
 ## Downloads
 
-Every view can be downloaded in the formats its kind offers, generated in the browser from exactly what the CLI sent:
+Document views have no download menu or source-download endpoint. Printing and saving PDF use the browser's normal Print command. For future scientific kinds, exports remain a separate, unimplemented step, generated from exactly what the CLI sent:
 
 | Kind | Downloads |
 |---|---|
-| `document` | the original Markdown file; PDF through the browser's print dialog |
 | `genome` | the current view as SVG and PNG (igv.js renders both) |
 | `chart` | PNG; the chart's data as TSV; XLSX with the data, the chart as an image, and an *About* sheet |
 | `table` | TSV of the rows shown, TSV of all rows, XLSX with the rows and an *About* sheet |
@@ -174,8 +173,8 @@ Every view can be downloaded in the formats its kind offers, generated in the br
 
 The page's libraries are exact-version development dependencies; nothing is added at runtime.
 
-- React, `react-dom`, the primitives used by shadcn/ui, Recharts, and ExcelJS are bundled into the page by esbuild; chart code is loaded with its kind and ExcelJS as a separate file loaded on demand. Tailwind generates a local CSS asset at build time; no CDN or runtime styling service is used.
-- Only the needed shadcn/ui component sources are included, with their license notice; their dependencies are pinned exactly like the other page libraries.
+- React, `react-dom`, Mantine core and hooks, Mantine charts with Recharts, and ExcelJS are bundled into the page by esbuild; chart code is loaded with its kind and ExcelJS as a separate file loaded on demand. Mantine styles and the page's CSS are bundled into a local CSS asset; no CDN or runtime styling service is used.
+- Import only the Mantine components the current view needs. Add Mantine charts and Recharts with the first chart kind, not with the initial document view. Dependencies are pinned exactly, and bundled packages' license texts are included in the package.
 - Libraries that ship a ready browser build, such as igv.js, are copied into `dist/vendor/` as published, with their license; see [genome.md](genome.md#packaging).
 - Every bundled or copied library is listed in `THIRD-PARTY-LICENSES.md`, as the [bundled package](../bundled-package.md) describes.
 
@@ -185,7 +184,7 @@ Until the bundled package exists, the build runs esbuild only for the page and c
 
 These are sketches so the container fits them; each kind gets its own concept when its first screen needs it.
 
-**Chart.** Values a workflow recorded, as rows with named columns, plus a declarative description of the chart type and which columns become axes and series. The page renders these through shadcn/ui's Recharts-based chart components, with theme-aware axes, legends, and tooltips; the contract contains no executable callbacks or library-specific configuration. Items are data points or categories, such as one stage in a duration chart, so the CLI can select what was clicked. PNG downloads rasterize the rendered SVG on a light background, including the provenance footer; the same image goes into XLSX. The first candidates are the open run-metrics task (durations and resources per stage) and LiftOn's mapped, unmapped, and rescued summaries.
+**Chart.** Values a workflow recorded, as rows with named columns, plus a declarative description of the chart type and which columns become axes and series. The page renders these through Mantine's Recharts-based chart components, with theme-aware axes, legends, and tooltips; the contract contains no executable callbacks or library-specific configuration. Items are data points or categories, such as one stage in a duration chart, so the CLI can select what was clicked. PNG downloads rasterize the rendered SVG on a light background, including the provenance footer; the same image goes into XLSX. The first candidates are the open run-metrics task (durations and resources per stage) and LiftOn's mapped, unmapped, and rescued summaries.
 
 **Table.** Columns with labels and types, and rows read by the server from a workflow's TSV (bgzip included) in pages, so a table of hundreds of thousands of rows never loads whole. Sorting and filtering are on the server, by one linear pass per request until measurements ask for an index. Items are rows by key, such as a site's locus, so a table can drive a genome view: selecting a row in the CLI or the browser can open its locus in the genome kind.
 
@@ -200,10 +199,10 @@ These are sketches so the container fits them; each kind gets its own concept wh
 
 ## Work
 
-1. **Container with the document kind**: the view contract, server, browser opener, provider, CLI status line, shared key, and the shadcn/ui page frame (header, item card, guide, legend, visible states, keys, light/dark/automatic themes, compact laptop layout), built and tested with the [document kind](document.md#work) as its only content, which needs no library and no files beyond the packaged documentation. Tests for refused tokens, hosts, origins, unknown IDs, view replacement, and shutdown.
+1. **Container with the document kind**: the view contract, server, browser opener, provider, CLI status line, shared key, and the Mantine page frame (header, item card, guide, legend, visible states, keys, light/dark/automatic themes, compact laptop layout), built and tested with the [document kind](document.md#work) as its only content, which needs no library and no files beyond the packaged documentation. Tests for refused tokens, hosts, origins, unknown IDs, view replacement, and shutdown.
 2. **Genome kind**: `Range` handling and the steps in [genome.md](genome.md#work).
 3. **Navigation from the browser**: previous/next, item selection, and following the view, routed to the opening screen.
 4. **Decision drafting**: the action contract and the draft tray.
-5. **Downloads**: the menu, provenance in file names, image footers, and the *About* sheet; Markdown and print for documents, SVG and PNG for genomes, ExcelJS with the first table or chart.
+5. **Downloads**: the menu, provenance in file names, image footers, and the *About* sheet; no downloads for documents, SVG and PNG for genomes, ExcelJS with the first table or chart.
 6. **Chart and table kinds**: each with its own concept when a screen needs it.
 7. **Documentation**: a general page in `docs/` (opening, the key, localhost only, SSH port forwarding, browser actions, downloads), the per-kind legends, each workflow's `results.md` for its views, and `CHANGELOG.md`.

@@ -67,12 +67,19 @@ test('parses inline code, bold, italic, and links shown as their text', () => {
     {kind: 'text', text: ', '},
     {kind: 'italic', text: 'italic'},
     {kind: 'text', text: ', and '},
-    {kind: 'link', text: 'the README'},
+    {kind: 'link', text: 'the README', href: 'README.md'},
     {kind: 'text', text: '.'},
   ]);
   // Brackets without a target stay text, such as citation numbers.
   assert.equal(inlineText(parseInline('Cited [5, 6].')), 'Cited [5, 6].');
   assert.deepEqual(parseInline('2 * 3 * 4').map(span => span.kind), ['text']);
+});
+
+test('retains targets for code-styled, external, relative, and anchor links', () => {
+  assert.deepEqual(parseInline('[`file`](../README.md#tools)'), [{kind: 'code', text: 'file', href: '../README.md#tools'}]);
+  for (const href of ['https://example.org/a', 'help.md', '#section']) {
+    assert.deepEqual(parseInline(`[label](${href})`), [{kind: 'link', text: 'label', href}]);
+  }
 });
 
 test('keeps unsupported syntax as plain text and reports it', () => {

@@ -98,7 +98,8 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Develop trunk-based on `main`, which must always pass CI.
 - Use short-lived `feat/…` or `fix/…` branches for larger changes.
 - Release by tagging `vX.Y.Z` on `main`; versions stay in the `0.x.x` range while contracts are unstable. Published npm versions are immutable.
-- Keep commit messages concise. Do not add `Co-Authored-By` trailers or any AI/tool attribution.
+- Keep commit messages concise and use scoped Conventional Commit prefixes: `docs(<scope>):` for documentation and design concepts, `feat(<scope>):` for new features, and the corresponding `fix`, `refactor`, `test`, or `chore` prefix for other changes. Use a meaningful scope, such as `docs(concepts):` or `feat(browser):`.
+- Do not add `Co-Authored-By` trailers or any AI/tool attribution.
 
 ## Privacy and repository hygiene
 
