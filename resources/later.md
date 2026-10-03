@@ -102,6 +102,25 @@ Reference-consensus writes only `A`, `C`, `G`, `T`, and `N` into `results/isolat
 
 Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. The cohort consensus already lets the researcher choose `N` or IUPAC codes for unresolved SNPs ([Task 4.3](concepts/done/consensus/4c-combined-consensus-generation.md#kickoff-decisions)); an isolate FASTA option would follow the same rule.
 
+## Per-vote evidence and per-locus overrides
+
+**Status:** waiting for requirements from researchers who have reviewed real unresolved loci.
+
+Two related extensions of the cohort review, discussed during the [browser view](concepts/browser-view/genome.md#reviewing-an-unresolved-locus) concept. Neither is needed for the genome view, which shows the reads themselves.
+
+**Per-vote evidence.** The support table records only which allele each voter chose, not how strongly. The values exist: every isolate's `all-sites.bcf` holds allele depths at every covered position, including where it voted for the backbone allele and has no variant record. A likely design: after aggregation has formed the loci, one step per voter reads its `all-sites.bcf` at those loci with the pinned `bcftools query`, and a join writes a separate `support-evidence.tsv.gz`, one row per locus and voter, so evidence never changes vote counting. Values: depth, the voted allele's fraction next to the threshold, and per-strand counts (`ADF`/`ADR`, which mpileup does not annotate today, so adding them reruns calling). Mapping quality per isolate is not available; reads below the minimum are already excluded. Loci of several bases take the indel record's depths where one exists and the weakest base otherwise. Shown in the Sites detail and the genome view's item card, without a new "weak vote" classification, which would be a hidden scientific rule.
+
+**Per-locus override.** Choosing the allele at one locus, such as where one isolate's call is an artefact but the isolate is sound elsewhere. A likely design: a list in the cohort decision with the locus span, the backbone allele as an identity check, the choice, and a required reason; read only by the consensus step, so a rerun recounts no votes; the choice limited to alleles present at the locus or keeping `N`/IUPAC; `consensus-sites.tsv.gz` records `decided_by` (`vote` or `override`) and the summary counts overrides. Excluding an isolate can change a locus's span, so the consensus step records each override as applied or not applicable, and the result screen lists those that no longer match. It does not scale: many unresolved loci usually have a systematic cause that a cohort-level change fixes reproducibly.
+
+Questions for researchers:
+
+- How do they decide a tie today, and which values do they look at?
+- Are depth and allele fraction enough, or do they need strand balance (which reruns calling) or other values?
+- How many unresolved loci do they review one by one, and from how many onwards do they look for a systematic cause?
+- Should an override be limited to unresolved loci, or may it overrule a locus the vote decided?
+- Should an override that no longer matches its locus after an exclusion be reported and kept, or stop the iteration until it is decided again?
+- Is evidence needed for every locus, or only for unresolved and flagged ones?
+
 ## Consensus chain file
 
 The cohort consensus FASTA is shorter or longer than the backbone wherever a deletion or insertion won (consensus Task 4.3). Its sites table gives every locus's backbone and consensus span, which is enough to relate the two by hand. A chain file, like the isolate FASTA's `consensus.chain`, would let tools such as liftover tools map any backbone coordinate or annotation onto the consensus. Add it when a downstream step needs coordinate mapping that LiftOn's own alignment does not provide.
@@ -114,9 +133,11 @@ Potential controls include minimum alignment coverage, minimum sequence identity
 
 ## Browser-based HTML reports
 
+Interactive charts, tables, and genome views in a browser tab that the CLI opens and leads, with downloads, are designed in the [browser view](concepts/browser-view/README.md) concept. What stays deferred here is static, self-contained report files that open without GenoPilot.
+
 Static browser reports are deferred until workflow selection, configuration, execution, progress, live logs, completion metrics, and result presentation work reliably in the TUI.
 
-A later reporting layer may use React and Chart.js to present interactive summaries for completed runs. It must consume the same versioned JSON and TSV metrics produced for the TUI rather than reimplementing scientific calculations in JavaScript. Reports should be self-contained static artifacts where practical, retain links to authoritative result and provenance files, and clearly identify generated, imported, and cached inputs.
+A later reporting layer may use React and Chart.js to present summaries for completed runs, reusing the browser view's kinds. It must consume the same versioned JSON and TSV metrics produced for the TUI rather than reimplementing scientific calculations in JavaScript. Reports should be self-contained static artifacts where practical, retain links to authoritative result and provenance files, and clearly identify generated, imported, and cached inputs.
 
 Potential capabilities include:
 
@@ -124,7 +145,7 @@ Potential capabilities include:
 - LiftOn mapped, unmapped, duplicated, rescued, and validation summaries;
 - comparisons between compatible run directories;
 - report opening and export from the TUI;
-- optional specialist genome views, such as JBrowse, when aggregate charts are insufficient.
+- links into the browser view's [genome kind](concepts/browser-view/genome.md) for specialist genome views.
 
 ## Future TUI capabilities
 

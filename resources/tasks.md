@@ -19,11 +19,13 @@ Every task includes proportionate unit tests in the same change. A task is not c
 - [ ] Show a systems check before a run: free disk against an estimate, CPUs, and memory, and duration estimates from the machine's completed runs ([concept](concepts/systems-check.md)).
 - [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](later.md#workflow-cancellation).
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
+- [ ] Open a local browser view from the CLI, starting with the help documents, then genomes and their evidence ([concept](concepts/browser-view/README.md)).
 - [ ] Separate workflow-specific UI and result code from the shared screens, so each workflow plugs in through one module ([notes](later.md#workflow-code-layout)).
 
 ## Integration and packaging
 
 - [ ] Add a direct-Snakemake cancellation test that checks cleanup and complete logs; success, failure, and resume are covered, and cancellation is covered only with an injected process.
+- [ ] Publish one bundled `dist/cli.js` without runtime dependencies, so every transitive dependency is pinned by the lockfile ([concept](concepts/bundled-package.md)).
 - [ ] Verify the packed CLI and bundled manifests in a clean temporary installation.
 
 ## Tooling
