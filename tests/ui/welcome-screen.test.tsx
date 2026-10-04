@@ -263,7 +263,7 @@ test('renders identity, directory, and commands without the ready tooling list',
   assert.match(frame, /GenoPilot/);
   assert.match(frame, /v0\.8\.0/);
   assert.match(frame, /Run selected genomic workflows\./);
-  assert.match(frame, /Author: Test Author/);
+  assert.match(frame, /Test Author/);
   assert.match(frame, /Current directory: \/research\/project/);
   assert.doesNotMatch(frame, /Required tooling/);
   assert.doesNotMatch(frame, /Node — Runtime|Pixi — Provisioning|Conda — Environments|Snakemake — Workflow/);

@@ -381,7 +381,7 @@ export function WelcomeScreen({
           <Text color={mutedColor}> v{metadata.version}</Text>
         </Text>
         <Text color={mutedColor} wrap="wrap">{metadata.description}</Text>
-        <Text>Author: {metadata.author} (https://byteowls.com)</Text>
+        <Text>Ⓒ {new Date().getFullYear()} {metadata.author} (https://byteowls.com) · MIT License</Text>
       </Box>
       {availableUpdateVersion ? (
         <Box marginTop={1}>
