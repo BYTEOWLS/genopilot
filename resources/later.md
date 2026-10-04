@@ -86,11 +86,11 @@ Builds on the [saved isolate sequences](concepts/saved-isolate-sequences.md).
   with a record under the sequence's entry in `isolates.yaml`: its origin (`generated`), the producing run and workflow, the reference it was transferred from, its checksum, and the checksum of the sequence it annotates. Saving refuses a GFF3 whose run targeted another sequence or another checksum.
 - **One sequence, several annotations.** A sequence can hold annotations transferred from different references or with different settings, each named like a saved sequence.
 - **Removal.** Removing a sequence removes its annotations, after confirming both.
-- **Final IDs.** Take this up after the [GFF3 ID find-and-replace](concepts/annotation-id-rewriting.md), so a researcher can save an annotation with rewritten IDs rather than raw LiftOn IDs.
+- **Final IDs.** Take this up after the [GFF3 find-and-replace](concepts/annotation-id-rewriting.md), so a researcher can save an annotation with rewritten IDs rather than raw LiftOn IDs.
 
 ## Sequence ID renaming
 
-The [GFF3 ID find-and-replace](concepts/annotation-id-rewriting.md) leaves sequence IDs alone. Renaming them, for example assembler contig names to chromosome names or to a submission's naming rules, has to rewrite the FASTA header IDs and the GFF3 seqid column together, so the annotation keeps matching its genome.
+The [GFF3 find-and-replace](concepts/annotation-id-rewriting.md) leaves sequence IDs (column 1) alone. Renaming them, for example assembler contig names to chromosome names or to a submission's naming rules, has to rewrite the FASTA header IDs and the GFF3 seqid column together, so the annotation keeps matching its genome.
 
 ## Reads without Illumina headers
 
