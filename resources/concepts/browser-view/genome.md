@@ -160,16 +160,57 @@ To confirm in the spike: the igv.js options for grouping reads by base at a posi
 
 ## Packaging
 
-igv.js is MIT-licensed and ships a ready ES module, which the page loads as its own file rather than bundling it into the page's code. The npm package `igv` has no dependencies but is about 19 MB unpacked: two module formats, each unminified, minified, and with a source map. The page needs only `dist/igv.esm.min.js` (1.5 MB, about 430 KB compressed).
+igv.js is MIT-licensed and is an exact-version development dependency, pinned to the latest evaluated release in `package.json`. The full npm package is fine in the development installation; no special extraction or copy of `igv.esm.min.js` is required for this integration.
 
-`igv` is therefore an exact-version development dependency. The build copies `igv.esm.min.js` and igv's `LICENSE` into `dist/vendor/igv/`, as the [bundled package](../bundled-package.md) describes for files served as they are, and the server reads it from there through the package-root helper. The copied file is not imported by Node code, so it is served byte for byte as published and never passes through esbuild. Updating igv.js is a version bump in `package.json`; its notice is listed in `THIRD-PARTY-LICENSES.md` with the bundled packages.
+Release packaging belongs to [Bundled package](../bundled-package.md). Its browser build will bundle the ESM imported by the genome renderer and load it only for genome views, carrying the used code and license notices rather than the whole npm distribution. A temporary esbuild check produced roughly 1.5 MB from the full development package, comparable to its published minified module; other module formats and source maps need not ship. The CLI and browser are separate execution environments, so one published npm package contains both the CLI bundle and browser assets, not one universal JavaScript file.
+
+IGV's `browser` entry points to a non-ESM build. The tested esbuild configuration uses `mainFields: ['module', 'browser', 'main']` to resolve a normal `import igv from 'igv'` to its ESM entry. Record license notices from the build metafile, as for other bundled dependencies. No IGV-specific vendoring step is added ahead of the release-packaging task.
+
+## Implementation boundaries and acceptance criteria
+
+### Reuse existing artifacts
+
+Serve existing workflow and verified cache artifacts unchanged: references and their indexes, alignments and their indexes, variants and their indexes, masks, and annotations. Build review items from existing Sites records and render their locus markers in memory rather than writing a new track file. Never modify a cache or add visualization-only workflow outputs merely for IGV.
+
+Generate a resource only when IGV requires it and no suitable artifact exists, such as an in-memory FASTA index. If a format or index is incompatible, record the limitation and decide whether an existing alternative suffices before proposing a conversion.
+
+### Spike acceptance
+
+- Verify the actual formats and index types produced by the workflows, particularly CSI-indexed VCF and the alignment indexes, against the pinned IGV dependency.
+- Verify a reference-consensus run and an accession cache copy through the secured local server, including Range requests and an in-memory FASTA index.
+- Record the required CSP allowances, preset options, hidden controls, and SVG export API. Confirm through observed requests that the page loads no external resources.
+- Record findings without private data or machine-specific paths. Real runs are local spike inputs only; permanent tests use small synthetic, redistributable fixtures.
+- An unsupported required artifact is a decision point, not permission to silently introduce a conversion or new workflow output.
+
+### Resource correctness and lifecycle
+
+- Test generated FASTA index byte offsets with wrapped sequences and different line endings. Cache indexes by path, size, and modification time; do not reuse an index after its source changes.
+- Check reference/track sequence compatibility where practical and show mismatches explicitly. Matching sequence names alone do not establish coordinate compatibility; the caller remains responsible for it.
+- Serve only explicitly registered resources through opaque IDs. Test malformed and unsatisfiable ranges, missing files and indexes, sources removed or changed after opening, and interrupted streams.
+- Replacing a view revokes its resource IDs, cancels outstanding loads, and disposes the old IGV instance. Updates to selection within the same view do not recreate IGV or unnecessarily reset zoom and track choices; a preset or item-specific track change remains intentional.
+- Shutdown releases streams and IGV resources and shows the disconnected state rather than leaving a blank page.
+
+### Size and packaging
+
+- Show track file sizes and keep large unindexed annotations and non-selected isolates' reads off by default. Measure initial loading and locus switching with a representative cohort before adding optimizations.
+- For this integration, use the full latest evaluated `igv` package as an exact-version development dependency. Do not add a special minified-file extraction or vendoring step.
+- Release bundling, transitive-dependency inclusion, license notices, removal of runtime dependencies, and consolidation of package-root/vendor paths remain in [Bundled package](../bundled-package.md); they are not prerequisites for development integration.
+- That later task verifies a packed installation contains and serves the necessary browser assets, excludes unnecessary IGV distribution files, and includes the licenses of all used dependencies.
+- Keep default genome-catalog loading disabled and external requests blocked by CSP. The latest release's failure-time remote mapping attempt is a known limitation documented in the compatibility findings, not a reason to silently downgrade or claim all error paths make zero external request attempts.
+
+## Deferred viewer refinements
+
+Reverse-strand default colors, an application-owned reference/track settings chooser, an amino-acid and codon-wheel guide, and a circular-view overlay are recorded in [deferred work](../../later.md#genome-view-controls-and-teaching-aids). They are not implemented by the current read-only preview.
 
 ## Work
 
 The container's second step, after it was built with the [document kind](document.md), in this order:
 
-1. **Spike** (throwaway): serve a real reference-consensus run and an accession cache copy; confirm the CSI-indexed VCF, BAM, an in-memory FASTA index, and an unindexed GFF3 load over `Range` requests; record what the Content Security Policy must allow and that the page makes no other requests; record the igv.js options the presets, the hidden controls, and SVG export need.
-2. **Genome kind**: igv.js copied into `dist/vendor/igv/` at build, the content contract, the in-memory FASTA index, the track chooser, the loci track, the legend, and the states.
-3. **First sources**: the accession catalog and the reference-consensus results (Sites tab, isolate detail, cohort consensus), each with its view builder and tests on fixtures; for the review, the tracks per locus and their order, the item card, the presets and zoom, and its guide section in `results.md`.
-4. **Region selection and the two review actions**, with the container's navigation and drafting steps.
-5. **Further sources**: the annotation review (its steps are in [annotation-review.md](../annotation-review.md#work)), then saved isolate sequences when they exist.
+1. **Spike** (throwaway, kept only under `/tmp`): serve a real reference-consensus run and an accession cache copy; confirm the CSI-indexed VCF, BAM, an in-memory FASTA index, and an unindexed GFF3 load over `Range` requests; record what the Content Security Policy must allow and that the page makes no other requests; record the igv.js options the presets, the hidden controls, and SVG export need. Successful-load checks are complete; see [compatibility findings](compatibility-findings.md) for observations and remaining production verification.
+2. **Read-only genome kind and accession catalog** (implemented as a development preview; release bundling pending): extend the document-specific contract, provider, server, and page; load IGV from the development dependency without special minified-file extraction; implement registered resources with Range support, the in-memory FASTA index when needed, the track chooser, the legend, and visible states. Open a verified cached accession with its available annotation as the first end-to-end integration, with fixture tests. No drafting or exports in this milestone.
+3. **Reference-consensus results**: Sites tab, isolate detail, and cohort consensus, each with its view builder and fixture tests. Add locus markers, the item card, presets and zoom, per-locus tracks in their required order, and the guide section in `results.md`. Minimal navigation includes opening at the CLI's selected item, following CLI item changes, and browser previous/next and item selection routed to the opening screen; it does not require panning-follow or region selection.
+4. **Region interaction and the two review actions**: panning-follow and region selection, then CLI-owned decision drafting and the draft tray. Move the cohort draft to the persistent result screen before accepting browser suggestions.
+5. **Downloads**: SVG and PNG with the container's provenance footer, separately from the read-only milestones.
+6. **Further sources**: the annotation review (its steps are in [annotation-review.md](../annotation-review.md#work)), then saved isolate sequences when they exist.
+
+Update researcher documentation and `CHANGELOG.md` alongside implemented features. Each milestone includes failure-path and lifecycle tests and the repository's required test, typecheck, build, and local packaging checks; changes under `workflows/` also require the Python tests.

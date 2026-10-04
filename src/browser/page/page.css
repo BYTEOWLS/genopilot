@@ -32,9 +32,31 @@ body { margin: 0; }
 .alert { background: var(--muted); border-left: 4px solid var(--primary); padding: 1rem; border-radius: .25rem; }
 .alert p:last-child { margin-bottom: 0; }
 .notice { margin: 1rem 1.5rem; }
-.provenance { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: .8rem; color: var(--muted-foreground); }
+.provenance { overflow-wrap: anywhere; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: .8rem; color: var(--muted-foreground); }
 @media (max-width: 900px) { .with-sidebar { grid-template-columns: 12rem minmax(0, 1fr); } .contents { padding: 1rem; } .document-area { padding: 1.5rem; } .frame-header { gap: .5rem; } }
 @media (max-width: 640px) { .with-sidebar { display: block; } .contents { border-right: 0; border-bottom: 1px solid var(--border); } }
+.genome-workspace { max-width: none; width: 100%; }
+.genome-main { min-width: 0; padding: 1rem 1.5rem; }
+.genome-area { min-width: 0; }
+.genome-viewer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
+.genome-viewer.with-details { grid-template-columns: minmax(0, 1fr) 22rem; }
+.genome-details { min-width: 0; max-height: max(32rem, calc(100dvh - 13rem)); overflow: auto; padding: 1rem; border: 1px solid var(--border); border-radius: .5rem; background: var(--muted); }
+.genome-details dl { margin: 0; }
+.genome-details dt { font-size: .8rem; color: var(--muted-foreground); margin-top: .8rem; }
+.genome-details dd { margin: .2rem 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-width: 1100px) { .genome-viewer.with-details { grid-template-columns: minmax(0, 1fr); } .genome-details { max-height: 24rem; grid-row: 1; } .with-details .genome-canvas { grid-row: 2; } }
+@media (max-width: 700px) { .genome-main { padding: 1rem .75rem; } }
+.genome-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.genome-navigation input { flex: 1; min-width: 12rem; padding: .5rem; border: 1px solid var(--border); background: var(--background); color: var(--foreground); border-radius: .25rem; }
+/* Theme canvas paints explicitly; never invert nucleotide/evidence hues. */
+:root { --genome-track-color: var(--mantine-color-blue-7); }
+:root[data-mantine-color-scheme='dark'] { --genome-track-color: var(--mantine-color-blue-3); }
+.genome-canvas { background: var(--background); color: var(--foreground); height: max(32rem, calc(100dvh - 17rem)); min-width: 0; overflow: auto; border: 1px solid var(--border); border-radius: .5rem; }
+.genome-tracks { display: flex; flex-wrap: wrap; gap: .75rem 1.5rem; border: 1px solid var(--border); border-radius: .25rem; padding: .5rem .75rem; margin: 0 0 .75rem; min-width: 0; }
+.genome-tracks legend { font-size: .8rem; }
+.genome-navigation select { max-width: 100%; padding: .5rem; border: 1px solid var(--border); background: var(--background); color: var(--foreground); border-radius: .25rem; }
+.genome-help { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 8rem); overflow: auto; }
+.genome-help .provenance { overflow-wrap: anywhere; }
 @media print {
   :root, :root[data-mantine-color-scheme='dark'] { color-scheme: light; --background: #fff; --foreground: #000; --primary: #185d75; --muted: #f1f5f7; --muted-foreground: #333; --border: #bbb; }
   .frame-header, .contents, .notice, .document-navigation, .skip-link { display: none; }

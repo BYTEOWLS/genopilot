@@ -9,7 +9,7 @@ Publish GenoPilot as a small npm package whose code is exactly what was built an
 Today `dist/` is the TypeScript output file by file, and `ink`, `@inkjs/ui`, `react`, and `yaml` are runtime dependencies. A user's npm install resolves them anew:
 
 - **Unpinned transitive versions.** `package.json` pins only the direct dependencies, and npm does not read `pnpm-lock.yaml`. The 40 transitive packages, such as `es-toolkit` and `ws`, resolve to whatever matches at install time, so two users can run different code under Ink. The scientific results are unaffected, because workflows run in pinned environments, but the application itself is not reproducible.
-- **Size.** The production dependencies take about 25 MB in 44 packages, 18 MB of it `es-toolkit`, of which Ink uses a few functions. The [genome view](browser-view/genome.md) would add 19 MB more for one 1.5 MB file of igv.js.
+- **Size.** The production dependencies take about 25 MB in 44 packages, 18 MB of it `es-toolkit`, of which Ink uses a few functions. The [genome view](browser-view/genome.md)'s full IGV development package is about 19 MB, but a trial browser bundle of its ESM entry is about 1.5 MB. Keep the full development package and let release bundling include the imported code rather than installing or copying the entire distribution.
 
 Large Ink applications publish a bundle for the same reasons: the Gemini CLI publishes `bundle/gemini.js` without runtime dependencies, and Claude Code published one `cli.js` with none.
 
@@ -22,7 +22,7 @@ esbuild bundles `src/cli.tsx` and everything it imports into one ES module, `dis
 The package contains:
 
 - `dist/cli.js`, the bundle, keeping the entry's `#!/usr/bin/env node`;
-- `dist/vendor/`, files served as they are rather than imported, such as igv.js with its license, and the [browser view](browser-view/README.md)'s page;
+- locally bundled [browser view](browser-view/README.md) assets, including IGV loaded only for genome views, and `dist/vendor/` only for any files that genuinely need serving unchanged;
 - `THIRD-PARTY-LICENSES.md`, see below;
 - `workflows/`, `docs/`, `runtime/pixi.toml`, `runtime/pixi.lock`, `CHANGELOG.md`, and `README.md`, as today.
 
@@ -36,7 +36,10 @@ The package contains:
    - `react-devtools-core` aliased to an empty module. Ink loads its devtools module on demand, only when `DEV=true`, and that module imports `react-devtools-core`, an optional package that is not installed. esbuild inlines Ink's devtools module, so the import of the missing package becomes a top-level import of the bundle, which then fails to start;
    - a banner defining `require` through `createRequire(import.meta.url)`, for bundled CommonJS code that requires Node built-ins from an ES module;
    - a metafile, which the next step reads.
-3. A small Node script that copies the vendor files and writes `THIRD-PARTY-LICENSES.md`.
+3. The browser build bundles its imports and their used transitive code into local assets, with IGV loaded separately for genome views. Prefer IGV's ESM `module` entry over its non-ESM `browser` entry (`mainFields: ['module', 'browser', 'main']` was verified). No special extraction of its published minified file is needed.
+4. A small Node script that copies any necessary unchanged vendor files and writes `THIRD-PARTY-LICENSES.md` from both build metafiles.
+
+One npm package delivers both the CLI bundle and browser assets; Node and browser code cannot share one executable bundle. Shrinking means excluding unused distribution files and bundling the imported code, not assuming every library's internal features can be tree-shaken away.
 
 The bundle is not minified: about 1.8 MB instead of 0.8 MB, in exchange for stack traces with real function names in bug reports.
 
@@ -75,6 +78,6 @@ Bundling copies third-party code into GenoPilot's own file, so the package must 
 ## Work
 
 1. One package-root helper replaces the seven module-relative paths, with tests in the sources.
-2. The esbuild build, the vendor copy, and `THIRD-PARTY-LICENSES.md`; dependencies move to `devDependencies`; `package.json` `files` updated.
+2. The CLI and browser esbuild builds, any necessary vendor copy, and `THIRD-PARTY-LICENSES.md`; dependencies move to `devDependencies`; `package.json` `files` updated. Verify the packed browser uses only the needed IGV bundle and includes its license, not its full development distribution.
 3. The no-dependencies test and the clean-installation check of the packed CLI.
 4. `README.md` (build and packaging) and `CHANGELOG.md`.

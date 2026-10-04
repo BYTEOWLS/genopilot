@@ -29,6 +29,7 @@ import {
   type NcbiApiKeySaver,
 } from './api-key-tab.js';
 import {RootsTab} from './roots-tab.js';
+import type {accessionGenomeView} from '../../accessions/views.js';
 
 export type AccessionsTabId = 'accessions' | 'roots' | 'api-key';
 
@@ -70,8 +71,10 @@ export function AccessionsScreen({
   saveApiKey,
   clearApiKey,
   apiKeyPath,
+  buildGenomeView,
 }: {
   onBack: () => void;
+  buildGenomeView?: typeof accessionGenomeView;
   inputActive: boolean;
   currentDirectory: string;
   catalogPath: string;
@@ -206,6 +209,7 @@ export function AccessionsScreen({
             onCatalogChange={setLoaded}
             onRescan={rescan}
             onLockChange={lockAccessions}
+            buildGenomeView={buildGenomeView}
           />
         </Box>
       ) : null}

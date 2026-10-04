@@ -9,7 +9,7 @@ The container knows no workflow and no kind of content in particular. It provide
 | Kind | Library | Concept | State |
 |---|---|---|---|
 | `document` | none; the existing Markdown parser | [document.md](document.md) | first; the help documents, and the kind the container is built with |
-| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | next; the review of unresolved consensus loci and the accession catalog, then the [annotation review](../annotation-review.md) |
+| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | accession catalog development preview implemented; next the review of unresolved consensus loci, then the [annotation review](../annotation-review.md) |
 | `chart` | [Mantine charts](https://mantine.dev/charts/getting-started/) with [Recharts](https://recharts.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
 | `table` | none | sketched below | later; tables too large or wide for the terminal |
 
@@ -175,10 +175,10 @@ The page's libraries are exact-version development dependencies; nothing is adde
 
 - React, `react-dom`, Mantine core and hooks, Mantine charts with Recharts, and ExcelJS are bundled into the page by esbuild; chart code is loaded with its kind and ExcelJS as a separate file loaded on demand. Mantine styles and the page's CSS are bundled into a local CSS asset; no CDN or runtime styling service is used.
 - Import only the Mantine components the current view needs. Add Mantine charts and Recharts with the first chart kind, not with the initial document view. Dependencies are pinned exactly, and bundled packages' license texts are included in the package.
-- Libraries that ship a ready browser build, such as igv.js, are copied into `dist/vendor/` as published, with their license; see [genome.md](genome.md#packaging).
+- igv.js uses the full npm development package during integration; no minified-file extraction is needed. Its release browser bundle and license collection belong to [Bundled package](../bundled-package.md); see [genome.md](genome.md#packaging).
 - Every bundled or copied library is listed in `THIRD-PARTY-LICENSES.md`, as the [bundled package](../bundled-package.md) describes.
 
-Until the bundled package exists, the build runs esbuild only for the page and copies the vendored files beside the TypeScript output.
+Until the bundled package exists, retain the current page build beside the TypeScript output. Development integration may use installed development dependencies; do not add library-specific release-copy steps ahead of the packaging task.
 
 ## Later kinds
 

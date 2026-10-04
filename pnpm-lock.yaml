@@ -42,6 +42,9 @@ importers:
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
+      igv:
+        specifier: 3.8.9
+        version: 3.8.9
       jsdom:
         specifier: 30.1.1
         version: 30.1.1
@@ -562,6 +565,9 @@ packages:
   html-encoding-sniffer@7.0.0:
     resolution: {integrity: sha512-UikN5yr7xsCDAq87Or5or0PAlD3HJJOKVzM05az588WnpDJ4Ux7a2A53Qi6gofGg2/EtvF/H4hCi/TXfCW4Y6w==}
     engines: {node: ^22.13.0 || >=24.0.0}
+
+  igv@3.8.9:
+    resolution: {integrity: sha512-d+m5gPeMc8k1K9TaLP11WCKW5JXtyXxAbrcBgSPP1XEQrHBhijD4l3+ZJ1VH79JGzDJnfqf9DicljjSinMZO9g==}
 
   indent-string@5.0.0:
     resolution: {integrity: sha512-m6FAo/spmsW2Ab2fU35JTYwtOKa2yAwXSwgjSv1TJzh4Mh7mC3lzAOVLBprb72XsTrgkEIsl7YrFNAiDiRhIGg==}
@@ -1219,6 +1225,8 @@ snapshots:
       '@exodus/bytes': 1.16.0
     transitivePeerDependencies:
       - '@noble/hashes'
+
+  igv@3.8.9: {}
 
   indent-string@5.0.0: {}
 

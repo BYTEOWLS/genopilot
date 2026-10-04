@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import type {AccessionCacheDeleter, CacheScan, ScannedCopy} from '../../accessions/cache-discovery.js';
 import {
@@ -16,6 +16,9 @@ import {AccessionForm, localFields, withLocalFields} from './accession-form.js';
 import {Page} from '../components/page.js';
 import type {AccessionsPageFrame} from './screen.js';
 import type {AccessionCatalogUpdater} from '../../accessions/registration.js';
+import {accessionGenomeView} from '../../accessions/views.js';
+import {useBrowserView} from '../../browser/provider.js';
+import {browserViewShortcut} from '../../browser/contract.js';
 
 type View =
   | {kind: 'list'}
@@ -63,8 +66,10 @@ export function AccessionsTab({
   onRescan,
   onLockChange,
   verifying = false,
+  buildGenomeView = accessionGenomeView,
 }: {
   page: AccessionsPageFrame;
+  buildGenomeView?: typeof accessionGenomeView;
   catalogPath: string;
   /** While caches are verified, removing and rescanning wait; a running scan could undo them. */
   verifying?: boolean;
@@ -82,6 +87,12 @@ export function AccessionsTab({
   onRescan: () => void;
   onLockChange: (locked: boolean) => void;
 }): React.JSX.Element {
+  const browser = useBrowserView();
+  const owner = useRef({});
+  const browserRef = useRef(browser);
+  browserRef.current = browser;
+  const request = useRef(0);
+  const verification = useRef<AbortController | undefined>(undefined);
   const entries = loaded.catalog.accessions;
   const [view, setView] = useState<View>({kind: 'list'});
   const [selected, setSelected] = useState<string | undefined>(entries[0]?.accession);
@@ -91,6 +102,42 @@ export function AccessionsTab({
   useEffect(() => onLockChange(locked), [locked, onLockChange]);
 
   const selectedEntry = entries.find(entry => entry.accession === selected) ?? entries[0];
+  const canView = !!browser?.genomeAvailable && !verifying && !!selectedEntry && recordedCacheState(selectedEntry) === 'cached' &&
+    scan.copies.some(copy => copy.state === 'verified' && copy.path === selectedEntry.cached_copies[0]?.path);
+  useEffect(() => {
+    const currentOwner = owner.current;
+    return () => {
+      request.current += 1;
+      verification.current?.abort();
+      browserRef.current?.detach(currentOwner);
+    };
+  }, [inputActive, view.kind]);
+
+  const openGenome = (entry: AccessionEntry): void => {
+    if (!browser || !canView) {
+      return;
+    }
+    const currentRequest = ++request.current;
+    verification.current?.abort();
+    const controller = new AbortController();
+    verification.current = controller;
+    setBusy('Checking cached genome files…');
+    setMessage(undefined);
+    void buildGenomeView(entry, browser.application, controller.signal).then(genome => {
+      if (request.current === currentRequest) {
+        browser.show({owner: owner.current, view: genome});
+      }
+    }).catch(error => {
+      if (request.current === currentRequest && !controller.signal.aborted) {
+        setMessage({text: errorMessage(error), error: true});
+      }
+    }).finally(() => {
+      if (verification.current === controller) {
+        verification.current = undefined;
+        setBusy(undefined);
+      }
+    });
+  };
 
   const refreshMetadata = (entry: AccessionEntry): void => {
     setBusy(`Looking up NCBI metadata for ${entry.accession}…`);
@@ -172,7 +219,9 @@ export function AccessionsTab({
       if (!selectedEntry) {
         return;
       }
-      if (key.upArrow || key.downArrow) {
+      if (input === 'v') {
+        openGenome(selectedEntry);
+      } else if (key.upArrow || key.downArrow) {
         const index = entries.indexOf(selectedEntry);
         const offset = key.upArrow ? -1 : 1;
         setSelected(entries[(index + offset + entries.length) % entries.length]?.accession);
@@ -229,7 +278,8 @@ export function AccessionsTab({
       description={`Catalog: ${sanitizeTerminalText(catalogPath)}`}
       shortcuts={view.kind === 'confirm-remove'
         ? ['y — Remove']
-        : ['↑/↓ — Select', 'Enter — Show and edit', 'n — Add', 'm — Refresh metadata', 'd — Remove', 'r — Rescan caches', 'Tab/←/→ — Tab']}
+        : ['↑/↓ — Select', 'Enter — Show and edit', 'n — Add', 'm — Refresh metadata', 'd — Remove', 'r — Rescan caches', canView && browserViewShortcut,
+            browser && !browser.genomeAvailable && `${browserViewShortcut} (unavailable: release bundling pending)`, 'Tab/←/→ — Tab']}
       back={view.kind === 'confirm-remove' ? 'Keep' : 'Back'}
     >
       {notice}

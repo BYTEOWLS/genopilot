@@ -6,6 +6,17 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+- Add a read-only accession genome-view development preview using IGV, with verified cache checksums, in-memory FASTA indexing, secure byte-range serving, annotation controls, and visible loading/errors. Release bundling remains pending; installations without IGV mark genome viewing unavailable.
+- Give genome tracks the available width and a taller responsive viewport; show click-selected feature details in a themed inline panel instead of hover text or IGV popups.
+- Move genome guidance and provenance into a `?` button, keep controls above the viewer, and add pointer-anchored wheel zoom, a crosshair, and a chromosome/contig selector and overview.
+- Keep checksum-verified file identities through genome-view publication, use in-place wheel zoom, and offer an all-chromosomes ruler including short contigs.
+- Theme genome backgrounds, rulers, annotation tracks, and labels in place while preserving nucleotide hues; use contrast-aware blue for annotations in light and dark modes.
+- Fill DNA glyphs with contrast-adjusted nucleotide colors and faint backplates; give translated protein codons opaque theme-aware fills and contrasting letters, preserving start/stop highlights.
+- Resolve annotation colors inside IGV's shadow tree with a valid fallback, keeping exon fills visible before amino-acid letters appear.
+- Increase default genome text size and add smaller/larger controls for track labels, DNA letters, and bp coordinates, with matching row spacing and closer zoom.
+- Await and serialize genome zoom, region, and resize loads so failures surface in the viewer; abort accession checksum reads on cleanup and validate supplied FASTA indexes against the actual reference layout.
+- Clear browser document-selection notices instead of leaving them on every CLI screen.
+
 - Open documentation in a local browser with `v`, with synchronized document selection, a collapsible outline and print/PDF support through the browser's normal Print command.
 - Use a Mantine browser frame with a trailing icon button cycling automatic, light, and dark themes; all assets and dependency license notices are packaged locally.
 

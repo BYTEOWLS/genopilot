@@ -3,7 +3,8 @@ import {spawn} from 'node:child_process';
 import {existsSync} from 'node:fs';
 import type {Document} from '../docs/documents.js';
 import {documentView} from './documents.js';
-import {startBrowserServer, type BrowserServer} from './server.js';
+import type {GenomeView} from './contract.js';
+import {resolveGenomeModule, startBrowserServer, type BrowserServer} from './server.js';
 
 export function openBrowser(url: string): Promise<void> {
   const command = process.platform === 'darwin' ? 'open' : 'xdg-open';
@@ -23,8 +24,10 @@ export function openBrowser(url: string): Promise<void> {
 const compiledAssets = new URL('./assets/', import.meta.url);
 const defaultAssetsDirectory = existsSync(compiledAssets) ? compiledAssets : new URL('../../dist/browser/assets/', import.meta.url);
 
-type Session = {owner: object; title: string; documents: Document[]; selectedId: string; select: (id: string) => void};
+type Session = {owner: object} & ({title: string; documents: Document[]; selectedId: string; select: (id: string) => void} | {view: GenomeView});
 type BrowserContextValue = {
+  application: {name: string; version: string};
+  genomeAvailable: boolean;
   status?: string;
   show: (session: Session) => void;
   update: (session: Session) => void;
@@ -40,16 +43,24 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
   assetsDirectory?: URL;
 }): React.JSX.Element {
   const [status, setStatus] = useState<string>();
+  const module = resolveGenomeModule();
+  const genomeAvailable = module !== undefined && existsSync(module);
   const server = useRef<Promise<BrowserServer> | undefined>(undefined);
   const opening = useRef<Promise<void> | undefined>(undefined);
   const current = useRef<Session | undefined>(undefined);
   const disposed = useRef(false);
-  const publish = (service: BrowserServer, session: Session): void => {
-    service.show(documentView(session.title, session.documents, session.selectedId, application),
+  const publish = async (service: BrowserServer, session: Session): Promise<void> => {
+    if ('view' in session) {
+      await service.show(session.view);
+      return;
+    }
+    await service.show(documentView(session.title, session.documents, session.selectedId, application),
       id => {
         if (current.current?.owner === session.owner) {
-          current.current.select(id);
-          setStatus(`Browser selected a document · ${service.url}`);
+          if ('select' in current.current) {
+            current.current.select(id);
+          }
+          setStatus(undefined);
         }
       });
   };
@@ -72,12 +83,18 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
           }
         }).catch(() => {});
       }
-    }});
+    }}).catch(error => {
+      server.current = undefined;
+      throw error;
+    });
     void server.current.then(async service => {
       if (disposed.current || current.current?.owner !== session.owner) {
         return;
       }
-      publish(service, current.current);
+      await publish(service, current.current);
+      if (disposed.current || current.current?.owner !== session.owner) {
+        return;
+      }
       setStatus(`Browser ${service.connected ? 'open at' : 'waiting at'} ${service.url}`);
       if (!service.connected && !opening.current) {
         // Keep one launch pending even when v is pressed again before the tab connects.
@@ -96,19 +113,18 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
         }
       }
     }).catch(error => {
-      server.current = undefined;
-      if (!disposed.current) {
+      if (!disposed.current && current.current === session && !(error instanceof Error && error.name === 'AbortError')) {
         setStatus(`Browser failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
   };
-  return <BrowserContext.Provider value={{status, show,
+  return <BrowserContext.Provider value={{application, genomeAvailable, status, show,
     update: session => {
       if (current.current?.owner === session.owner) {
         current.current = session;
-        void server.current?.then(service => {
+        void server.current?.then(async service => {
           if (!disposed.current && current.current?.owner === session.owner) {
-            publish(service, current.current);
+            await publish(service, current.current);
           }
         }).catch(() => {});
       }

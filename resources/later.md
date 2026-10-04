@@ -135,6 +135,15 @@ The first annotation-transfer workflow uses one pinned same-species profile with
 
 Potential controls include minimum alignment coverage, minimum sequence identity, extra-copy search, selected feature types, and chromosome correspondence. Before exposing any of them, verify the exact semantics and defaults of the pinned LiftOn release, define how the setting affects Liftoff- and miniprot-derived evidence, and preserve rejected or additional mappings as diagnostic candidates rather than automatic biological conclusions.
 
+## Genome-view controls and teaching aids
+
+Follow-ups to the read-only [genome view](concepts/browser-view/genome.md), deferred from the current development preview:
+
+- [ ] **Reverse-strand annotation colors.** Set a contrasting `altColor` by default for reverse-strand genes/transcripts, including translated coding exons, rather than leaving IGV's alternate color unset. Keep it distinguishable from forward-strand annotations in both themes and configurable through track settings. Strand arrows and recorded strand attributes remain available without color; start/stop codon highlights retain their separate meaning.
+- [ ] **Application-owned settings chooser.** Replace reliance on IGV's hard-to-see cog with a clear custom settings control. Let the researcher choose the reference/backbone or an annotation track, then show that target's applicable display settings, including forward/reverse colors and translation controls. Changes affect visualization only, not source files or workflow configuration.
+- [ ] **Amino-acid and codon guide.** Add a readily accessible guide listing full amino-acid names with their one-letter and three-letter abbreviations, together with a codon wheel (the “coding sun”). Identify the genetic code the guide represents and its relationship to the viewer's translation; do not imply one code applies to every organism. Explain start/stop markers and unresolved or ambiguous codons.
+- [ ] **Circular-view overlay.** Offer a toggleable circular genome/gene-view overlay using the pinned IGV.js support where applicable. Verify that its API actually supports the desired annotation display, not just alignment or interaction chords, before promising it. Opening and closing the overlay should preserve the linear view's region and track choices; a circular layout must not imply that a chromosome or contig is biologically circular. Keep assets local and retain the existing CSP boundary.
+
 ## Browser-based HTML reports
 
 Interactive charts, tables, and genome views in a browser tab that the CLI opens and leads, with downloads, are designed in the [browser view](concepts/browser-view/README.md) concept. What stays deferred here is static, self-contained report files that open without GenoPilot.

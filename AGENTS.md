@@ -126,4 +126,6 @@ python3 -m unittest discover -s tests -p "test_*.py"
 
 Direct-Snakemake execution tests skip themselves unless the pinned `snakemake` is on `PATH`; per-rule Conda provisioning is opt-in through `RUN_SNAKEMAKE_CONDA_INTEGRATION=1`.
 
+While the browser UI is changing rapidly, do not create, restore, maintain, or run browser-specific tests, including browser integration tests and browser-specific cases embedded in CLI test files. Keep existing browser tests parked in the Git-ignored `.parked-tests/browser/` folder, outside the active test tree, until the user explicitly asks to resume browser testing. Do not include this folder in test discovery, CI, or packaged artifacts. Normal CLI tests, typechecking, builds, and packaging checks remain required.
+
 Tests should cover visible states, input behavior, cancellation/exit behavior, resizing, and failure paths. Treat UI labels as mutable presentation text: do not assert exact command, workflow, field, or screen labels, and do not use those labels as behavioral selectors. Test functionality through stable IDs, injected callbacks, state transitions, and observable outcomes instead. Inject external checks and process runners so unit tests do not depend on locally installed bioinformatics tooling.

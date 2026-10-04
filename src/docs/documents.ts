@@ -43,7 +43,7 @@ export async function readDocument(url: URL, read: ReadText = readText): Promise
 }
 
 /** The general documents in `docs/` the application shows, in tab order. */
-export const generalDocumentNames = ['help', 'import-review', 'run-results', 'browser-view'] as const;
+export const generalDocumentNames = ['help', 'import-review', 'run-results', 'browser-view', 'genome-view'] as const;
 
 /** General documents in `docs/`, by file name without `.md`. */
 export function readGeneralDocuments(

@@ -7,6 +7,9 @@ node_modules/
 dist/
 *.tgz
 
+# Browser tests parked during rapid UI development
+/.parked-tests/
+
 # Pixi environments of a locally installed runtime workspace
 .pixi/
 
