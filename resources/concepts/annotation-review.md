@@ -2,7 +2,7 @@
 
 ## Goal
 
-Help a researcher find and settle the transferred genes that need a closer look. The annotation transfer rates every coding gene by how well its protein survived the transfer and lists the genes to review with their reasons. A genome view shows each one with its evidence, and the researcher records a verdict per gene, or picks one of LiftOn's alternative models, in a saved decision. A rule turns the decision into a reviewed GFF3; LiftOn's output stays unchanged.
+Help a researcher find and settle the transferred genes that need a closer look. The annotation transfer rates every coding gene by how well its protein survived the transfer and lists the genes to review with their reasons. The browser's genome view shows each one with its evidence, following the CLI's list, and the researcher records a verdict per gene, or picks one of LiftOn's alternative models, in a decision saved in the CLI. A rule turns the decision into a reviewed GFF3; LiftOn's output stays unchanged.
 
 This is the first step of [Manual annotation review and correction](../later.md#manual-annotation-review-and-correction): it keeps every provenance requirement listed there but edits no gene structure itself.
 
@@ -28,11 +28,13 @@ The decision and its evidence are recorded, and a curated GFF3 is written next t
 
 ## Rating
 
-No new tool or alignment is needed. LiftOn already translates every transferred coding transcript, aligns it to the reference protein with parasail, and writes `protein_identity`, its mutation classes, and the transcript `status` into the raw GFF3. The rating is a new summary rule of the annotation transfer over these values, the target FASTA, and the existing per-feature transfer TSV.
+No new tool or alignment is needed. LiftOn already translates every transferred coding transcript, aligns it to the reference protein with parasail, and writes `protein_identity`, its mutation classes, and the transcript `status` into the raw GFF3. Our summary step (`summarize_annotation_transfer` with `collect_transfer_metrics.py`) already copies them into `results/feature-transfer.tsv`, one row per reference feature and target copy, with its mapping `status` (primary, additional copy, or unmapped), `transfer_method`, `minimum_protein_identity` over the feature's transcripts, and `mutations`. The script already reads LiftOn's transcript `status` from the raw GFF3, which the *model rebuilt* reason needs. The rating extends that step rather than adding a rule: it reads the target FASTA as well, adds four columns to the same table, and writes one BED.
+
+The rating stays a workflow output, not a CLI calculation, so a direct Snakemake run produces it, the saved decision can name its checksum, and the application only displays it.
 
 ### Unit
 
-One row per coding reference gene, rated by its primary target copy, consistent with the existing count of coding reference features with a protein change or loss. A gene with several transcripts takes its worst transcript: the lowest protein identity and the most severe category. Additional copies stay in the per-feature transfer TSV and are not rated. Non-coding genes are not rated.
+The row of a coding reference gene's primary target copy, or its unmapped row, consistent with the existing count of coding reference features with a protein change or loss. A gene with several transcripts takes its worst transcript: the lowest protein identity, as the table already records, and the most severe category. Rows of additional copies and of non-coding features keep the new columns empty.
 
 ### Categories
 
@@ -51,7 +53,7 @@ Categories come from mutation classes rather than identity bands, because a fram
 
 ### Unresolved bases
 
-The rating reads the target FASTA and counts, per gene, the bases of its CDS that are not A, C, G, or T: `N` from gaps or uncallable regions, and IUPAC codes from unresolved positions. A codon with such a base translates to `X` and lowers the identity, or breaks the frame, without any real change. Such genes get the flag `unresolved bases` and a count, so the researcher sees that the finding may be an artifact of the data. The same pass writes the target's unresolved intervals as a BED for the genome view. This needs no knowledge of how the target was made and works for every target.
+The summary step reads the target FASTA and counts, per gene, the bases that are not A, C, G, or T in the union of its transcripts' CDS, each position once: `N` from gaps or uncallable regions, and IUPAC codes from unresolved positions. A codon with such a base translates to `X` and lowers the identity, or breaks the frame, without any real change. Such genes get the flag `unresolved bases` and a count, so the researcher sees that the finding may be an artifact of the data. The same pass writes the target's unresolved intervals as a BED: the evidence behind the counts, checksummed with the run and readable in any genome browser, which the review view shows as a track rather than computing it again. This needs no knowledge of how the target was made and works for every target.
 
 Input validation also counts the target's bases that are not A, C, G, or T, and reports them as a warning on the overview before the transfer runs.
 
@@ -67,24 +69,69 @@ A gene is listed for review with one or more reasons:
 | below threshold | Protein identity below the minimum protein identity, a run parameter in percent. |
 | unresolved bases | The CDS contains bases that are not A, C, G, or T. |
 
-The list is sorted so likely real changes come first: genes flagged disrupted, lost, or rebuilt without unresolved bases, then the rest by identity. Changing the threshold reruns only the rating rule and reuses LiftOn's results.
+The *Proteins* tab lists the rows with at least one reason, sorted so likely real changes come first: genes flagged disrupted, lost, or rebuilt without unresolved bases, then the rest by identity. Filtering and sorting is presentation; every value comes from the table. The threshold is a parameter of the summary step, so changing it reruns only that step and reuses LiftOn's results. Its default ships as 95%, provisional until the kickoff confirms it.
 
 ### Outputs
 
-- `results/protein-rating.tsv`: one row per coding reference gene with its target ID and coordinates, protein identity, category, mutation classes, LiftOn status, unresolved base count, and review reasons (empty when none).
-- `results/protein-review.tsv`: the rows with at least one review reason, in review order.
-- `results/target-unresolved.bed`: the target's intervals of bases that are not A, C, G, or T.
+- `results/feature-transfer.tsv` gains `protein_category`, `lifton_status` (LiftOn's transcript statuses, comma-separated, which `transfer_method` shows only when the GFF3 `source` is missing), `unresolved_bases` (the count in the CDS), and `review_reasons` (comma-separated, empty when none). The threshold and the counts per category and per reason go into `results/metrics.json` with their definitions, as the existing metrics do.
+- `results/target-unresolved.bed`: the target's intervals of bases that are not A, C, G, or T, linked from `results/summary.json`.
 - A *Proteins* result tab: the threshold, the count per category, the count per review reason, and the review list with its reasons and, once reviewed, its verdicts. Documented in the workflow's `results.md`, including what each reason suggests to check.
 
 ## Review view
 
-A [genome view](done/browser-view/genome.md#reviewing-a-transferred-gene) opened with `v` from the review list on the *Proteins* tab, in the target genome's coordinates:
+The read-only genome view, built like the reference consensus's Sites view, which already provides everything the review needs: verified references, annotation and BED tracks served by Range, item markers drawn in memory, item cards, presets, a guide section from `results.md`, and navigation synchronized with the CLI. The review adds a view builder, `src/workflows/annotation-transfer/views.ts`, and no change to the shared browser code.
 
-- **Items**: the review list in its order; the item card shows the reasons, identity, category, mutation classes, LiftOn status, unresolved base count, and the draft's verdict.
-- **Tracks**: the transferred GFF3, LiftOn's candidate models from its Liftoff and miniprot outputs in `lifton_output/`, and the unresolved-bases BED. The miniprot track is the key evidence: it shows where and how the reference protein aligns to the target, independent of the reference's gene structure.
-- **Guide**: a *What to check* section in `results.md` per review reason, such as: does the frameshift lie next to an unresolved base; do the transferred and the miniprot models differ in their exons; does the gene sit among others of its family.
+`v` on the *Proteins* tab's review list opens the view at the selected gene, in the target genome's coordinates; `v` in the review form does the same. As with Sites, the browser's previous and next move the CLI's selection, and changing the list's filter or leaving it detaches navigation until `v` is pressed again. Opening the review form is such a change today: the result screen keys its genome session by its mode, so entering the form detaches the tab's navigation and `v` in the form reopens the view on the form's list. Keeping one session across both, so the browser follows the researcher from the tab into the form without a reopen, is a refinement for when the review form is built.
 
-The source annotation is in the reference genome's coordinates, so it is a view of its own: the item card offers the gene in the reference view, which replaces the tab's content until `v` is pressed again on the review list.
+- **Reference**: the resolved target FASTA, verified against the checksum the run's provenance records before it is served, as the consensus views verify their backbone.
+- **Items**: the listed genes in review order, each targeting its primary copy's span. The item card shows the same facts as the CLI's gene detail: reference and target IDs and coordinates, reasons, protein identity, category, mutation classes, LiftOn status (`lifton_status`), unresolved base count, and the latest saved verdict with its candidate and note.
+- **Tracks**, in this order, all in the target's coordinates and the same for every gene, so items carry no per-item track list:
+
+  | Track | File | Shown |
+  |---|---|---|
+  | transferred annotation | `results/annotation/lifton.raw.gff3` | yes |
+  | miniprot models: the reference protein aligned to the target | from `lifton_output/miniprot/` | yes |
+  | Liftoff models: the reference gene lifted by its DNA | from `lifton_output/liftoff/` | yes |
+  | unresolved bases | `results/target-unresolved.bed` | yes |
+  | reviewed annotation of the latest completed review run | `results/review/review-<n>/annotation.reviewed.gff3` | no; listed only once that run has finished |
+
+  The three GFF3 tracks have no index and load whole, which suits fungal and bacterial genomes. Following the [genome design](done/browser-view/genome.md#content), an annotation too large to load whole is listed with its size and not shown by default; indexing waits for a real case.
+
+  The miniprot track is the key evidence: it shows where and how the reference protein aligns to the target, independent of the reference's gene structure. The target FASTA, the transferred GFF3, and the BED are verified against their checksums in the run's `artifacts.yaml`, and the reviewed GFF3 against `provenance/review/review-<n>.json`. The candidate files are served unverified, as the Sites view serves alignments and variants: `artifacts.yaml` records `lifton_output/` as one directory checksum, and hashing the whole directory on every opening would grow with LiftOn's intermediates. The view's sources label them unverified; they are shown as evidence and never imported. A file missing from an older run is listed with its problem rather than hidden. The exact candidate file names are fixed in the kickoff ([open questions](#open-questions)).
+- **Presets**: *Gene*, the gene with about 500 bases on each side, so neighboring genes show whether the locus belongs to a gene family or a rearranged region; and *Region*, about 10 kilobases, to see a cluster of flagged genes or a gap. Neither shows reads.
+- **Guide**: a `## Proteins genome review` section in the workflow's `results.md`, offered from the page's help menu while the view is open, as the Sites guide is. It explains the tracks and presets and holds the checks below, written for researchers.
+- **Click details**: LiftOn's attributes, such as `protein_identity`, `mutation`, and `status`, already appear as recorded attributes. The guide explains them; the general glossary in `docs/` stays tool-agnostic.
+
+The view comes before the decision in the [work order](#work): it is useful on its own, and it is how the open questions about the review list and the candidate models get answered on a representative transfer.
+
+### What the researcher checks
+
+The browser shows evidence only; the verdict is set in the CLI's review form, which the view follows. Per review reason, with what the view already offers:
+
+| Reason | What to look at | Points to |
+|---|---|---|
+| disrupted (frameshift or stop) | Zoom into the CDS: IGV translates the transferred model and marks start and stop codons, so a premature stop shows inside an exon. The reference's three-frame translation, in the display settings, shows which frame the sequence continues in after a frameshift. | a real change: *confirmed* |
+| disrupted, on or next to an unresolved base | The unresolved-bases track marks an `N` or IUPAC code at or beside the break. | an artifact of the data: *rejected*, or resolve the target first, such as through a consensus iteration |
+| model rebuilt | Compare the exons of the transferred, miniprot, and Liftoff models. Where miniprot follows the reference protein better, a splice site, start, or stop has moved in the target. | *corrected* with the fitting candidate, or *confirmed* |
+| below threshold | The *Region* preset: does the gene sit among others of its family, so the copy may sit at the wrong member? | a misplacement: *rejected*; otherwise *confirmed* |
+| unmapped or lost | Is there a gap at the expected place, and does the miniprot track place the reference protein anywhere nearby? | *needs correction*, or *confirmed* when the gene is absent in this strain |
+
+Clicking a model shows LiftOn's recorded `protein_identity`, `mutation`, and `status` in the click details. These checks guide the researcher; they are never saved and decide nothing on their own.
+
+### Implementation notes
+
+- Model the builder on `consensusSitesView` in `src/workflows/reference-consensus/views.ts`: the same `GenomeView` shape from `src/browser/contract.ts`, a stable view ID from the run's configuration path and the listed genes, provenance sources for every file, and `verifyFileChecksum` from `src/browser/verified-file.ts` for the verified files listed under *Tracks*.
+- Item IDs are stable per row, such as the reference gene ID with its copy number, so selecting the same gene again only moves the selection. Items carry `details` but no `target.tracks`, because the tracks do not change per gene.
+- Extract the guide from `results.md` by its heading, as the Sites view does with `Sites genome review`.
+- Presets use the existing `GenomePreset` fields: `padding` 500 and 10000, `reads: false`.
+- Build opening, following, and detaching on `useGenomeSession` (`src/browser/use-genome-session.ts`), its `open` and `updateSelection`, as the Sites tab does. The Sites wiring itself is consensus-specific and inline in `src/ui/run-results-screen/screen.tsx`; keep the annotation-transfer wiring beside `annotation-transfer-results.tsx` instead of adding a second workflow's branch there, in line with the [workflow code layout](../later.md#workflow-code-layout) task.
+- Fixture tests for the builder: the track order, a missing candidate file shown with its problem, a checksum mismatch refusing the reference, item cards from table rows, and the reviewed track appearing only once a review run has finished. Browser tests stay parked.
+
+### Not in the browser
+
+Verdict buttons wait for the browser's decision drafting ([deferred](#deferred)); the view changes no shared browser code.
+
+The source annotation is in the reference genome's coordinates, so the transferred view cannot show it. The item card names the reference gene's ID and coordinates; when the reference is a catalogued accession, the researcher opens it from the accession catalog. A linked reference view is [deferred](#deferred).
 
 A consensus run's isolate reads are aligned to its backbone, not to the consensus, so they cannot be tracks here. Following a gene to its locus in the consensus run's backbone view is [later](../later.md#annotation-transfer-from-a-consensus-result).
 
@@ -92,7 +139,7 @@ A consensus run's isolate reads are aligned to its backbone, not to the consensu
 
 ### Verdicts
 
-Per gene on the review list, drafted in the CLI's review form or through the view's actions, and saved only in the CLI:
+Per gene on the review list, drafted and saved in the CLI's review form; the browser shows the evidence and the saved verdicts but drafts nothing ([deferred](#deferred)):
 
 | Verdict | Meaning | Note |
 |---|---|---|
@@ -103,6 +150,8 @@ Per gene on the review list, drafted in the CLI's review form or through the vie
 
 A gene without a verdict stays as transferred and is reported as not reviewed. Only genes on the review list take a verdict.
 
+The list can change after a decision was saved, such as when a new threshold rewrites `feature-transfer.tsv`. The review form starts from the latest decision against the current table: verdicts of genes still listed are kept, newly listed genes have none, and genes no longer listed are shown as such with their verdicts, never dropped silently. Saving keeps or removes each of them as the researcher chooses, and the review rules apply only what the saved decision holds, so a decision whose table checksum no longer matches is reported as made on an earlier rating.
+
 ### Choosing a candidate model
 
 LiftOn builds up to three structures per gene: the Liftoff model, lifted from the reference's DNA; the miniprot model, from the reference protein aligned to the target; and its own chained combination. It keeps one in its GFF3 and the others stay in its output directory. When the kept one is wrong but another fits the evidence, the researcher chooses that one: *corrected, use the miniprot model*. This is a choice among models that exist, like a vote, not an edit: no coordinate is typed in, and the chosen model is copied as LiftOn wrote it.
@@ -111,7 +160,7 @@ The reviewed GFF3 keeps the transferred gene's `ID` and the reference's attribut
 
 ### Saved decision and outputs
 
-A decision is saved as `decisions/review-<n>.yaml`, numbered from 1. Each one is complete, starting from the previous one in the review form, so the latest decision alone describes the review; earlier ones stay as history. It records, per gene, the verdict, the chosen candidate, the note, the reviewer, and the time, and it names the checksums of the raw LiftOn GFF3 and of the rating it was made on.
+A decision is saved as `decisions/review-<n>.yaml`, numbered from 1. Each one is complete, starting from the previous one in the review form, so the latest decision alone describes the review; earlier ones stay as history. It records, per gene, the verdict, the chosen candidate, the note, the reviewer, and the time, and it names the checksums of the raw LiftOn GFF3 and of the `feature-transfer.tsv` it was made on.
 
 Snakemake writes the reviewed annotation by asking for its provenance record, as cohort iterations do. It reruns only the review rules and reuses everything else:
 
@@ -137,6 +186,8 @@ The suggestion and warning live only in that workflow's documentation; shared co
 
 ## Deferred
 
+- **Verdict actions in the browser**: *Confirm*, *Reject*, and *Needs correction* on the item, and *Use this model for the gene* on a candidate track, drafting into the review instead of the CLI form. They wait for the browser's [decision drafting](browser-view-follow-up.md), which is held until researchers ask for it. When they come, the review draft moves from the review form into the result screen, which stays mounted while the view is open, as the [genome design](done/browser-view/genome.md#decision-drafting) describes for the cohort review.
+- **Linked reference view**: the reviewed gene in the reference genome with its source GFF3, opened from the item card or the gene detail. Take it up when looking the gene up in the accession catalog proves too slow, and design how one screen offers two views under the one `v` key.
 - **Importing a corrected model** for genes marked *needs correction*: the researcher fixes the gene in a specialist editor, such as Apollo, and GenoPilot imports its replacement GFF3, validates it, records its checksum as `imported`, and shows the difference ([later](../later.md#corrected-gene-model-import)). Take it up when a researcher needs a structure LiftOn did not build.
 - **Typing a structure** in a CLI form, with CDS phases recalculated and validated: not planned; the import covers it.
 - **Read evidence** for a consensus target, through the consensus run's backbone view.
@@ -144,16 +195,19 @@ The suggestion and warning live only in that workflow's documentation; shared co
 
 ## Open questions
 
-- Can each gene's Liftoff and miniprot models be matched in `lifton_output/`, by ID or locus, and which attributes does the reviewed GFF3 take from them? Check against the pinned LiftOn on a representative transfer; if they cannot be matched reliably, the candidate choice waits and *needs correction* covers those genes.
-- Default threshold: confirm a value, such as 95%, against a representative same-species transfer.
-- Does the reasons table catch the genes a researcher would curate? Check the review list of a representative transfer with a researcher before finishing the result tab.
+Answered in the kickoff (work step 6) with the review view on a representative same-species transfer:
+
+- Which files in `lifton_output/liftoff/` and `lifton_output/miniprot/` hold the candidate models, and does IGV show them as gene models, translation included? A file it cannot show is a decision point, not a reason for a converted copy.
+- Can each gene's Liftoff and miniprot models be matched to the transferred gene, by ID or locus, and which attributes does the reviewed GFF3 take from them? If they cannot be matched reliably, the candidate choice waits and *needs correction* covers those genes.
+- Default threshold: confirm the provisional 95% or change it.
+- Does the reasons table catch the genes a researcher would curate? Walk the review list in the view with a researcher; their feedback also counts as the [browser follow-up](browser-view-follow-up.md)'s requirements collection.
 
 ## Work
 
 1. [ ] Count the target's bases that are not A, C, G, or T in input validation and warn about them.
-2. [ ] Rating: the threshold parameter, the rating rule and script with categories, unresolved bases, and review reasons, both TSVs and the BED, with tests on synthetic FASTA and GFF3 rows for every category and reason.
-3. [ ] The *Proteins* result tab, documented in the annotation transfer's `README.md` and `results.md`.
-4. [ ] The consensus suggestion with the warning about unresolved positions in the reference consensus's `README.md` and `results.md`.
-5. [ ] Kickoff for the decision: answer the candidate-matching question.
-6. [ ] Review decision: the review form, `decisions/review-<n>.yaml`, the review rules, the reviewed GFF3 and its validation, and provenance, with tests for every verdict, a candidate replacement, and an unchanged raw GFF3.
-7. [ ] Review view, after the [browser view](done/browser-view/README.md)'s genome kind and decision drafting: the view builder, tracks, guide section, and the verdict actions.
+2. [ ] Rating in the summary step: the threshold parameter, the target FASTA as input, the four new columns, the metrics, and the BED, with tests on synthetic FASTA and GFF3 rows for every category and reason, and for the empty columns on additional copies and non-coding features.
+3. [ ] The *Proteins* result tab with its gene detail, documented in the annotation transfer's `README.md` and `results.md`.
+4. [ ] Review view: the view builder with the verified target, the tracks, item cards, presets, and synchronized navigation from the review list, the `## Proteins genome review` guide section, and fixture tests for the builder (track order, missing candidate files, checksum mismatch, item cards).
+5. [ ] The consensus suggestion with the warning about unresolved positions in the reference consensus's `README.md` and `results.md`.
+6. [ ] Kickoff for the decision: answer the [open questions](#open-questions) with the review view.
+7. [ ] Review decision: the review form with `v`, `decisions/review-<n>.yaml`, the review rules, the reviewed GFF3 and its validation, provenance, and the reviewed track and saved verdicts in the view, with tests for every verdict, a candidate replacement, an unchanged raw GFF3, and a decision made on an earlier rating.

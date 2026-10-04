@@ -69,7 +69,7 @@ Each source contributes a view builder; the list grows by convention, not by cha
 
 - **Accession catalog**: a verified cached copy's `genomic.fna` with its `genomic.gff` when present. The index is built in memory, so the checksummed cache stays untouched.
 - **Isolate catalog**: saved sequences, once [saved isolate sequences](../../saved-isolate-sequences.md) exist, each as its own reference.
-- **Run results**: each workflow's result screen, through its view builder. Reference consensus: the backbone with every isolate's alignment, variants, and consensus mask, the cohort's unresolved loci as items, and the backbone's GFF3 when the backbone is a catalogued accession with a verified cached annotation; the cohort consensus as its own reference. Annotation transfer: its target genome with the transferred GFF3, LiftOn's candidate models, and the unresolved-bases BED, with the review list as items (see *Reviewing a transferred gene*); the source annotation is in the source genome's coordinates, so it is a view of its own rather than a track.
+- **Run results**: each workflow's result screen, through its view builder. Reference consensus: the backbone with every isolate's alignment, variants, and consensus mask, the cohort's unresolved loci as items, and the backbone's GFF3 when the backbone is a catalogued accession with a verified cached annotation; the cohort consensus as its own reference. Annotation transfer: its target genome with the transferred GFF3, LiftOn's candidate models, and the unresolved-bases BED, with the review list as items (see *Reviewing a transferred gene*).
 
 ## Reviewing an unresolved locus
 
@@ -105,27 +105,9 @@ Two extensions came up while designing this review and wait for researchers' req
 
 ## Reviewing a transferred gene
 
-The second use, from the *Proteins* tab of an annotation transfer; the review list, its reasons, and the decision are in the [annotation review](../../annotation-review.md) concept.
+The second use, from the *Proteins* tab of an annotation transfer. Its view, tracks, guide, and the decision are designed in the [annotation review](../../annotation-review.md#review-view) concept, which supersedes the first sketch here: it reuses the read-only genome kind as built for Sites, and its browser verdict actions wait with the drafting below.
 
-**Reference**: the target genome of the transfer.
-
-**Tracks**, in this order:
-
-| Track | Shown by default |
-|---|---|
-| the review list as the loci track | yes |
-| the transferred GFF3 | yes |
-| LiftOn's miniprot models: the reference protein aligned to the target | yes |
-| LiftOn's Liftoff models: the reference gene lifted by its DNA | yes |
-| the target's unresolved bases (BED) | yes |
-| the reviewed GFF3 of the latest saved decision, when there is one | no |
-
-**Zoom**: the gene with about 500 bases on each side, so neighboring genes show whether the locus is part of a gene family or a rearranged region.
-
-**Reference view**: the item card offers the same gene in the reference genome with its source GFF3, as a view of its own; `v` on the review list returns to the review at the CLI's selected gene.
-
-**Actions** (target: item): *Confirm* and *Reject* with a required note, *Needs correction* with an optional note. On the candidate tracks (target: track-group) *Use this model for the gene* drafts the verdict *corrected* with that candidate. All of them add to the result screen's review draft, as the cohort actions do.
-
+## Navigation
 
 On top of the container's navigation, the page uses igv.js's events (`locuschange`, `trackclick`, region selection, track menus):
 
@@ -134,7 +116,7 @@ On top of the container's navigation, the page uses igv.js's events (`locuschang
 - **Select a region**: the request `region`; the CLI lists the view's items inside it.
 - **Track chooser**: every track of the view, grouped, with the ones not shown by default; choosing tracks is a page-only change and needs no CLI round trip.
 
-### Decision drafting
+## Decision drafting
 
 Genome actions target an `item`, a `track-group`, or a `region`, offered in the loci track, a track group's menu, and a region selection. For the reference-consensus review, the first actions are:
 
