@@ -285,6 +285,8 @@ Paths are inside the run directory. Positions in the support tables are 1-based 
 | `provenance/run.json` | configuration, inputs, tool versions, and commands of the whole run; with `artifacts.yaml`, the record of the first cohort |
 | `logs/` | the log and benchmark of every step |
 
+Existing alignments, indexed variants, and masks can be inspected against the backbone in a read-only local browser view. A cohort consensus is inspected as its own reference, never with evidence in backbone coordinates. No visualization-only outputs or conversions are created; the [results guide](results.md) explains opening and interpreting these views.
+
 Trimmed reads and per-pair alignments are temporary: the isolate's alignment keeps every read, and the fastp reports record what trimming did.
 
 ## Tools

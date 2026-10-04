@@ -72,6 +72,16 @@ export function inlineText(spans: readonly Inline[]): string {
   return spans.map(span => span.text).join('');
 }
 
+/** A heading and its content, ending before the next heading at the same or a higher level. */
+export function markdownSection(blocks: readonly Block[], start: number): Block[] {
+  const heading = blocks[start];
+  if (heading?.kind !== 'heading') {
+    return [];
+  }
+  const end = blocks.findIndex((block, index) => index > start && block.kind === 'heading' && block.level <= heading.level);
+  return blocks.slice(start, end < 0 ? undefined : end);
+}
+
 function tableCells(line: string): Inline[][] {
   const trimmed = line.trim().replace(/^\|/, '').replace(/\|$/, '');
   return trimmed.split(/(?<!\\)\|/).map(cell => parseInline(cell.trim().replaceAll('\\|', '|')));

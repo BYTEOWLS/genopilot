@@ -81,7 +81,7 @@ export function MarkdownDocumentPage({
     return () => browserRef.current?.detach(owner);
   }, []);
   // The page title, tab bar, and shortcut line take the remaining rows.
-  const browserStatusRows = browser?.status ? Math.ceil(browser.status.length / Math.max(1, columns)) : 0;
+  const browserStatusRows = browser?.status ? 2 + Math.ceil(browser.status.length / Math.max(1, columns - 4)) : 0;
   const visibleRows = Math.max(3, rows - (tabbed ? 8 : 6) - browserStatusRows);
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
   const scrollOffset = Math.min(scrollOffsets[documentId] ?? 0, maximumScrollOffset);

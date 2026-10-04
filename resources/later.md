@@ -2,6 +2,10 @@
 
 Ideas that are intentionally outside the current task list in [`tasks.md`](tasks.md). Revisit them when a concrete requirement exists.
 
+## Browser view follow-up
+
+The current document and genome views are sufficient for the next release. Collect researcher requirements before resuming browser work. Remaining features, visual verification, and restoration of parked browser tests are deferred in the [follow-up checklist](concepts/browser-view-follow-up.md). Release bundling stays in the active packaging tasks.
+
 ## Reruns of existing runs
 
 A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](concepts/reruns.md). Its release basics are tracked in consensus Tasks 5.1 and 5.3 and the task list; the rest waits for a concrete use case.
@@ -106,7 +110,7 @@ Take this up only when a concrete downstream use needs it. A likely answer is a 
 
 **Status:** waiting for requirements from researchers who have reviewed real unresolved loci.
 
-Two related extensions of the cohort review, discussed during the [browser view](concepts/browser-view/genome.md#reviewing-an-unresolved-locus) concept. Neither is needed for the genome view, which shows the reads themselves.
+Two related extensions of the cohort review, discussed during the [browser view](concepts/done/browser-view/genome.md#reviewing-an-unresolved-locus) concept. Neither is needed for the genome view, which shows the reads themselves.
 
 **Per-vote evidence.** The support table records only which allele each voter chose, not how strongly. The values exist: every isolate's `all-sites.bcf` holds allele depths at every covered position, including where it voted for the backbone allele and has no variant record. A likely design: after aggregation has formed the loci, one step per voter reads its `all-sites.bcf` at those loci with the pinned `bcftools query`, and a join writes a separate `support-evidence.tsv.gz`, one row per locus and voter, so evidence never changes vote counting. Values: depth, the voted allele's fraction next to the threshold, and per-strand counts (`ADF`/`ADR`, which mpileup does not annotate today, so adding them reruns calling). Mapping quality per isolate is not available; reads below the minimum are already excluded. Loci of several bases take the indel record's depths where one exists and the weakest base otherwise. Shown in the Sites detail and the genome view's item card, without a new "weak vote" classification, which would be a hidden scientific rule.
 
@@ -137,16 +141,15 @@ Potential controls include minimum alignment coverage, minimum sequence identity
 
 ## Genome-view controls and teaching aids
 
-Follow-ups to the read-only [genome view](concepts/browser-view/genome.md), deferred from the current development preview:
+Follow-ups to the read-only [genome view](concepts/done/browser-view/genome.md), deferred from the current development preview:
 
-- [ ] **Reverse-strand annotation colors.** Set a contrasting `altColor` by default for reverse-strand genes/transcripts, including translated coding exons, rather than leaving IGV's alternate color unset. Keep it distinguishable from forward-strand annotations in both themes and configurable through track settings. Strand arrows and recorded strand attributes remain available without color; start/stop codon highlights retain their separate meaning.
-- [ ] **Application-owned settings chooser.** Replace reliance on IGV's hard-to-see cog with a clear custom settings control. Let the researcher choose the reference/backbone or an annotation track, then show that target's applicable display settings, including forward/reverse colors and translation controls. Changes affect visualization only, not source files or workflow configuration.
-- [ ] **Amino-acid and codon guide.** Add a readily accessible guide listing full amino-acid names with their one-letter and three-letter abbreviations, together with a codon wheel (the “coding sun”). Identify the genetic code the guide represents and its relationship to the viewer's translation; do not imply one code applies to every organism. Explain start/stop markers and unresolved or ambiguous codons.
+- [ ] **Codon wheel.** Amino-acid names/abbreviations and translation caveats are implemented in genome help. Add a codon wheel (the “coding sun”), identifying the genetic code it represents and its relationship to the viewer's translation; do not imply one code applies to every organism.
+- [ ] **IGV upgrade verification.** Before upgrading IGV, recheck the [documented canvas paint rules and geometry assumptions](concepts/done/browser-view/canvas-colors.md), discover additional paints with the opt-in local diagnostics, and visually verify nucleotide/quality cues and translation markers. Palette, glyph, geometry, and lifecycle separation is implemented; browser tests remain parked.
 - [ ] **Circular-view overlay.** Offer a toggleable circular genome/gene-view overlay using the pinned IGV.js support where applicable. Verify that its API actually supports the desired annotation display, not just alignment or interaction chords, before promising it. Opening and closing the overlay should preserve the linear view's region and track choices; a circular layout must not imply that a chromosome or contig is biologically circular. Keep assets local and retain the existing CSP boundary.
 
 ## Browser-based HTML reports
 
-Interactive charts, tables, and genome views in a browser tab that the CLI opens and leads, with downloads, are designed in the [browser view](concepts/browser-view/README.md) concept. What stays deferred here is static, self-contained report files that open without GenoPilot.
+Interactive charts, tables, and genome views in a browser tab that the CLI opens and leads, with downloads, are designed in the [browser view](concepts/done/browser-view/README.md) concept. What stays deferred here is static, self-contained report files that open without GenoPilot.
 
 Static browser reports are deferred until workflow selection, configuration, execution, progress, live logs, completion metrics, and result presentation work reliably in the TUI.
 
@@ -158,7 +161,7 @@ Potential capabilities include:
 - LiftOn mapped, unmapped, duplicated, rescued, and validation summaries;
 - comparisons between compatible run directories;
 - report opening and export from the TUI;
-- links into the browser view's [genome kind](concepts/browser-view/genome.md) for specialist genome views.
+- links into the browser view's [genome kind](concepts/done/browser-view/genome.md) for specialist genome views.
 
 ## Future TUI capabilities
 

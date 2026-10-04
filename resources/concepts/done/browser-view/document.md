@@ -30,7 +30,7 @@ The view's `items` are its documents, in the order of the screen's tabs, so choo
 
 ## Rendering
 
-The browser renders the blocks of the existing parser (`src/docs/markdown.ts`), not the Markdown again. The parser is pure TypeScript without Node imports, so the page bundles it as it is, and both renderers show exactly the [documentation subset](../done/workflow-documentation.md#format). The packaged-docs test that keeps every document within the subset covers both.
+The browser renders the blocks of the existing parser (`src/docs/markdown.ts`), not the Markdown again. The parser is pure TypeScript without Node imports, so the page bundles it as it is, and both renderers show exactly the [documentation subset](../workflow-documentation.md#format). The packaged-docs test that keeps every document within the subset covers both.
 
 - A second renderer, `src/browser/page/document/`, maps each block to HTML elements with React: headings with anchors, paragraphs, lists, tables, code blocks, and alerts with their names (`Note`, `Tip`, `Warning`), so they read without color as in the terminal.
 - Links need their target, which the parser drops today because the terminal shows only the text. The `link` span gains an `href`; the terminal keeps ignoring it.
@@ -53,6 +53,8 @@ Every screen that shows documents today offers the shared `v — View in browser
 The guide panel and the per-kind legends of the container render Markdown sections with the same renderer.
 
 ## Work
+
+The document kind is implemented and sufficient for the next release. These milestones record its implementation scope; any additional work belongs in the requirements-led [follow-up](../../browser-view-follow-up.md).
 
 1. The `href` on links in the parser, with tests; the terminal renderer unchanged.
 2. The HTML renderer and the document kind, with tests for every block, links within and outside the view, escaping, and the print stylesheet.

@@ -34,7 +34,10 @@ export function BrowserApp({loadGenomeLibrary}: {loadGenomeLibrary?: GenomeLibra
   const documents = content?.kind === 'document' ? content.documents : [];
   const openId = localId ?? (content?.kind === 'document' ? content.openId : undefined);
   const openDocument = documents.find(candidate => candidate.id === openId) ?? documents[0];
-  const selectedIndex = documents.findIndex(candidate => candidate.id === openDocument?.id);
+  const genome = content?.kind === 'genome' ? view as GenomeView : undefined;
+  const entries = genome?.items?.entries ?? documents;
+  const selectedId = genome?.selectedItemId ?? openDocument?.id;
+  const selectedIndex = entries.findIndex(candidate => candidate.id === selectedId);
   useEffect(() => {
     if (view) {
       document.title = `${view.provenance.application.name} · ${openDocument?.title ?? view.title}`;
@@ -44,6 +47,9 @@ export function BrowserApp({loadGenomeLibrary}: {loadGenomeLibrary?: GenomeLibra
     // Each click is a new scroll request, even when its target is unchanged.
     setAnchor(heading ? {viewId: view?.id, documentId: id, id: heading} : undefined);
     if (!connected || !state?.navigationAvailable) {
+      if (genome) {
+        return;
+      }
       setLocalId(id);
       return;
     }
@@ -56,13 +62,18 @@ export function BrowserApp({loadGenomeLibrary}: {loadGenomeLibrary?: GenomeLibra
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
   };
   const move = (offset: number): void => {
-    const next = documents[selectedIndex + offset];
+    const next = entries[selectedIndex + offset];
     if (next) {
       select(next.id);
     }
   };
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      // Portalled menus/dialogs still reach this window listener. Never let their
+      // keystrokes change the CLI's selected item underneath an overlay.
+      if (event.defaultPrevented || document.querySelector('[role="dialog"], [role="menu"]')) {
+        return;
+      }
       if (event.target instanceof HTMLElement && (event.target.closest('input, textarea, select, [contenteditable="true"]') || event.ctrlKey || event.metaKey || event.altKey)) {
         return;
       }
@@ -107,7 +118,20 @@ export function BrowserApp({loadGenomeLibrary}: {loadGenomeLibrary?: GenomeLibra
       </nav> : null}
       <main id="main" className={content?.kind === 'genome' ? 'genome-main' : 'document-area'} tabIndex={-1}>
         {documents.length > 1 ? <Group gap="sm" className="document-navigation" mb="xl"><Button variant="default" disabled={selectedIndex <= 0} onClick={() => move(-1)}>Previous</Button><Text size="sm" c="dimmed">{selectedIndex + 1} of {documents.length}</Text><Button variant="default" disabled={selectedIndex >= documents.length - 1} onClick={() => move(1)}>Next</Button><Text size="xs" c="dimmed">p / n</Text></Group> : null}
-        {content?.kind === 'genome' ? <GenomePanel view={view as GenomeView} load={loadGenomeLibrary} /> : openDocument ? <DocumentBody document={openDocument} select={select} /> : <Text role="status">{state ? 'No view is open. Press v on a CLI page that offers a browser view.' : 'Connecting to the CLI…'}</Text>}
+        {genome ? <>
+          {genome.items ? <Group gap="sm" className="genome-item-navigation">
+            <Button variant="default" disabled={!connected || !state?.navigationAvailable || selectedIndex <= 0} onClick={() => move(-1)}>Previous</Button>
+            <label htmlFor="genome-item">{genome.items.name}</label>
+            <select id="genome-item" value={selectedId ?? ''} disabled={!connected || !state?.navigationAvailable} onChange={event => select(event.currentTarget.value)}>
+              {genome.items.entries.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+            <Text size="sm">{selectedIndex + 1} of {entries.length}</Text>
+            <Button variant="default" disabled={!connected || !state?.navigationAvailable || selectedIndex >= entries.length - 1} onClick={() => move(1)}>Next</Button>
+            <Text size="xs" c="dimmed">p / n</Text>
+            {!state?.navigationAvailable ? <Text size="sm">The CLI review is no longer open. Locus navigation is disabled.</Text> : null}
+          </Group> : null}
+          <GenomePanel key={genome.id} view={genome} load={loadGenomeLibrary} select={connected && state?.navigationAvailable ? select : undefined} />
+        </> : openDocument ? <DocumentBody document={openDocument} select={select} /> : <Text role="status">{state ? 'No view is open. Press v on a CLI page that offers a browser view.' : 'Connecting to the CLI…'}</Text>}
         {view && content?.kind !== 'genome' ? <Provenance view={view} title={openDocument?.title ?? view.title} /> : null}
       </main>
     </div>

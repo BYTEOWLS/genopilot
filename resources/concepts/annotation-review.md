@@ -78,7 +78,7 @@ The list is sorted so likely real changes come first: genes flagged disrupted, l
 
 ## Review view
 
-A [genome view](browser-view/genome.md#reviewing-a-transferred-gene) opened with `v` from the review list on the *Proteins* tab, in the target genome's coordinates:
+A [genome view](done/browser-view/genome.md#reviewing-a-transferred-gene) opened with `v` from the review list on the *Proteins* tab, in the target genome's coordinates:
 
 - **Items**: the review list in its order; the item card shows the reasons, identity, category, mutation classes, LiftOn status, unresolved base count, and the draft's verdict.
 - **Tracks**: the transferred GFF3, LiftOn's candidate models from its Liftoff and miniprot outputs in `lifton_output/`, and the unresolved-bases BED. The miniprot track is the key evidence: it shows where and how the reference protein aligns to the target, independent of the reference's gene structure.
@@ -156,4 +156,4 @@ The suggestion and warning live only in that workflow's documentation; shared co
 4. [ ] The consensus suggestion with the warning about unresolved positions in the reference consensus's `README.md` and `results.md`.
 5. [ ] Kickoff for the decision: answer the candidate-matching question.
 6. [ ] Review decision: the review form, `decisions/review-<n>.yaml`, the review rules, the reviewed GFF3 and its validation, and provenance, with tests for every verdict, a candidate replacement, and an unchanged raw GFF3.
-7. [ ] Review view, after the [browser view](browser-view/README.md)'s genome kind and decision drafting: the view builder, tracks, guide section, and the verdict actions.
+7. [ ] Review view, after the [browser view](done/browser-view/README.md)'s genome kind and decision drafting: the view builder, tracks, guide section, and the verdict actions.

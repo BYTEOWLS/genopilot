@@ -4,12 +4,13 @@ import {createInterface} from 'node:readline';
 import {readGeneralDocuments} from '../docs/documents.js';
 import type {GenomeSequence, GenomeTrack, GenomeView} from './contract.js';
 import {FastaIndexes, fileSnapshot, sameFile, type FileSnapshot} from './fasta-index.js';
+import {trackSequences} from './track-sequences.js';
 
 export type BrowserResource = {bytes: Buffer} | {snapshot: FileSnapshot};
 
 function requireUnchanged(expected: FileSnapshot | undefined, actual: FileSnapshot): void {
   if (expected && (expected.path !== actual.path || !sameFile(expected, actual))) {
-    throw new Error(`Verified file changed before publication: ${actual.path}. Rescan the caches.`);
+    throw new Error(`Verified file changed before publication: ${actual.path}. Verify the source before reopening.`);
   }
 }
 
@@ -67,13 +68,38 @@ export async function prepareGenome(view: GenomeView, indexes: FastaIndexes, sig
   for (const track of view.content.tracks) {
     signal.throwIfAborted();
     const {snapshot: verifiedSnapshot, ...publicTrack} = track;
-    const snapshot = await fileSnapshot(track.file);
-    requireUnchanged(verifiedSnapshot, snapshot);
-    const problem = await annotationProblem(track, index.sequences, signal);
-    if (!sameFile(snapshot, await fileSnapshot(track.file))) {
-      throw new Error(`Track changed while checking: ${track.file}`);
+    if (track.problem) {
+      // Caller-rejected evidence must not be inspected or registered for serving.
+      tracks.push({...publicTrack, file: '', index: undefined, shown: false});
+      continue;
     }
-    tracks.push({...publicTrack, file: register({snapshot}), size: snapshot.size, shown: track.shown && !problem && snapshot.size <= automaticAnnotationLimit, ...(problem ? {problem} : {})});
+    try {
+      const snapshot = await fileSnapshot(track.file);
+      requireUnchanged(verifiedSnapshot, snapshot);
+      let indexSnapshot: FileSnapshot | undefined;
+      let problem: string | undefined;
+      if (track.kind === 'annotation') {
+        problem = await annotationProblem(track, index.sequences, signal);
+      } else {
+        if (!track.index) {
+          throw new Error(`Missing required index for ${track.file}`);
+        }
+        indexSnapshot = await fileSnapshot(track.index);
+        const names = await trackSequences(track, signal);
+        const referenceNames = new Set(index.sequences.map(sequence => sequence.name));
+        const mismatch = names.find(name => !referenceNames.has(name));
+        problem = mismatch ? `Sequence ${mismatch} is not in the reference.` : undefined;
+      }
+      if (!sameFile(snapshot, await fileSnapshot(track.file))) {
+        throw new Error(`Track changed while checking: ${track.file}`);
+      }
+      tracks.push({...publicTrack, file: register({snapshot}), index: indexSnapshot ? register({snapshot: indexSnapshot}) : undefined,
+        size: snapshot.size, shown: track.shown && !problem && (track.kind !== 'annotation' || snapshot.size <= automaticAnnotationLimit), ...(problem ? {problem} : {})});
+    } catch (error) {
+      signal.throwIfAborted();
+      tracks.push({...publicTrack, file: '', index: undefined, shown: false,
+        problem: `${track.file}: ${error instanceof Error ? error.message : String(error)}`});
+    }
   }
   const [legend] = await readGeneralDocuments(['genome-view']);
   for (const resource of resources.values()) {
@@ -85,7 +111,7 @@ export async function prepareGenome(view: GenomeView, indexes: FastaIndexes, sig
   signal.throwIfAborted();
   return {
     resources,
-    view: {...view, content: {kind: 'genome', reference: {name: reference.name, fasta, index: indexURL, sequences: index.sequences}, tracks,
+    view: {...view, content: {...view.content, kind: 'genome', reference: {name: reference.name, fasta, index: indexURL, sequences: index.sequences}, tracks,
       ...(legend?.blocks ? {legend: {id: legend.id, title: legend.title, blocks: legend.blocks, links: {}}} : {})}},
   };
 }

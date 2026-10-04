@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {documentTitle, inlineText, parseInline, parseMarkdown, unsupportedMarkdown} from '../../src/docs/markdown.js';
+import {documentTitle, inlineText, markdownSection, parseInline, parseMarkdown, unsupportedMarkdown} from '../../src/docs/markdown.js';
 
 test('parses every supported block', () => {
   const blocks = parseMarkdown([
@@ -109,6 +109,23 @@ test('keeps unsupported syntax as plain text and reports it', () => {
     assert.match(problems, new RegExp(expected));
   }
   assert.doesNotMatch(problems, /^9:/m, 'code blocks are not checked');
+});
+
+test('slices a heading with its nested content, stopping at a peer or parent heading', () => {
+  const blocks = parseMarkdown('# A\n\n## B\n\nBody.\n\n### C\n\nDetail.\n\n## D\n\nLast.\n\n# E');
+  assert.deepEqual(markdownSection(blocks, 1), blocks.slice(1, 5));
+  assert.deepEqual(markdownSection(blocks, 3), blocks.slice(3, 5));
+  assert.deepEqual(markdownSection(blocks, 5), blocks.slice(5, 7));
+  assert.deepEqual(markdownSection(blocks, 7), blocks.slice(7));
+  assert.deepEqual(markdownSection(blocks, 0), blocks.slice(0, 7));
+});
+
+test('does not treat missing headings or body blocks as sections', () => {
+  const blocks = parseMarkdown('# A\n\nBody.');
+  for (const start of [-1, 1, 2]) {
+    assert.deepEqual(markdownSection(blocks, start), []);
+  }
+  assert.deepEqual(markdownSection([], 0), []);
 });
 
 test('accepts the documented subset without problems', () => {

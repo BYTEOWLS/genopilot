@@ -2,7 +2,7 @@ import {randomBytes} from 'node:crypto';
 import {createServer, type ServerResponse} from 'node:http';
 import {open, readFile} from 'node:fs/promises';
 import type {BrowserState, BrowserView} from './contract.js';
-import {FastaIndexes, fileSnapshot, sameFile} from './fasta-index.js';
+import {FastaIndexes} from './fasta-index.js';
 import {prepareGenome, type BrowserResource} from './genomes.js';
 
 const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
@@ -90,12 +90,14 @@ export async function startBrowserServer({assets, onConnection = () => {}}: {
         }
         if (!body || typeof body !== 'object' || !('viewId' in body) || !('itemId' in body) ||
             body.viewId !== state.view?.id || typeof body.itemId !== 'string' ||
-            !(state.view?.content.kind === 'document' && state.view.content.documents.some(document => document.id === body.itemId))) {
+            !(state.view?.content.kind === 'document'
+              ? state.view.content.documents.some(document => document.id === body.itemId)
+              : state.view && 'items' in state.view && state.view.items?.entries.some(item => item.id === body.itemId))) {
           send(400, 'Unknown view or item');
           return;
         }
         if (!select) {
-          send(409, 'The CLI document page is not open');
+          send(409, 'The opening CLI list is not open');
           return;
         }
         select(body.itemId);
@@ -223,24 +225,6 @@ export async function startBrowserServer({assets, onConnection = () => {}}: {
       preparation?.abort();
       const controller = new AbortController();
       preparation = controller;
-      if (view.content.kind === 'genome' && state.view?.id === view.id && state.view.content.kind === 'genome') {
-        const unchanged = await Promise.all([...resources.values()].map(async resource => {
-          if ('bytes' in resource) {
-            return true;
-          }
-          try {
-            return sameFile(resource.snapshot, await fileSnapshot(resource.snapshot.path));
-          } catch {
-            return false;
-          }
-        }));
-        controller.signal.throwIfAborted();
-        if (unchanged.every(Boolean)) {
-          state = {...state, view: {...state.view, title: view.title, provenance: view.provenance}};
-          broadcast();
-          return;
-        }
-      }
       let next = view;
       let nextResources = new Map<string, BrowserResource>();
       if (view.content.kind === 'genome') {
@@ -268,6 +252,16 @@ export async function startBrowserServer({assets, onConnection = () => {}}: {
       }
       resources = nextResources;
       state = {view: next, navigationAvailable: onSelect !== undefined};
+      select = onSelect;
+      broadcast();
+    },
+    updateGenomeSelection(viewId: string, itemId: string, onSelect?: (id: string) => void): void {
+      const view = state.view;
+      if (view?.id !== viewId || view.content.kind !== 'genome' || !('items' in view) ||
+          !view.items?.entries.some(item => item.id === itemId)) {
+        return;
+      }
+      state = {view: {...view, selectedItemId: itemId}, navigationAvailable: onSelect !== undefined};
       select = onSelect;
       broadcast();
     },

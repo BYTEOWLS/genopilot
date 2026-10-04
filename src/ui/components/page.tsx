@@ -1,5 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import {Alert} from '@inkjs/ui';
 import {useHomeSuspensionState} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
@@ -70,7 +71,7 @@ export function Page({
       <Box marginTop={1} flexDirection="column">
         {children}
       </Box>
-      {browser?.status ? <Text color={mutedColor} wrap="wrap">{sanitizeTerminalText(browser.status)}</Text> : null}
+      {browser?.status ? <Alert variant="error">{sanitizeTerminalText(browser.status)}</Alert> : null}
       <Box marginTop={1}>
         {/* Non-breaking spaces inside each shortcut, so the line only wraps between shortcuts. */}
         <Text color={mutedColor} wrap="wrap">{line.map(shortcut => shortcut.replaceAll(' ', '\u00a0')).join(' · ')}</Text>

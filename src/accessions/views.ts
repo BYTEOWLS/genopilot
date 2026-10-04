@@ -1,23 +1,8 @@
 import {createHash} from 'node:crypto';
-import {createReadStream} from 'node:fs';
 import {join} from 'node:path';
-import {pipeline} from 'node:stream/promises';
 import {accessionDisplayName, recordedCacheState, type AccessionEntry} from './catalog.js';
-import {fileSnapshot, sameFile, type FileSnapshot} from '../browser/fasta-index.js';
+import {verifyFileChecksum as verify} from '../browser/verified-file.js';
 import type {GenomeView} from '../browser/contract.js';
-
-async function verify(path: string, expected: string, signal?: AbortSignal): Promise<FileSnapshot> {
-  signal?.throwIfAborted();
-  const before = await fileSnapshot(path);
-  const hash = createHash('sha256');
-  await pipeline(createReadStream(path, {signal}), hash, {signal});
-  signal?.throwIfAborted();
-  if (hash.digest('hex') !== expected || !sameFile(before, await fileSnapshot(path))) {
-    throw new Error(`Cached file no longer matches its verified checksum: ${path}. Rescan the caches.`);
-  }
-  signal?.throwIfAborted();
-  return before;
-}
 
 /** Open only recorded, verified copies; browsing never downloads, converts, or writes them. */
 export async function accessionGenomeView(entry: AccessionEntry, application: {name: string; version: string}, signal?: AbortSignal): Promise<GenomeView> {

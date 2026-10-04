@@ -9,7 +9,7 @@ Publish GenoPilot as a small npm package whose code is exactly what was built an
 Today `dist/` is the TypeScript output file by file, and `ink`, `@inkjs/ui`, `react`, and `yaml` are runtime dependencies. A user's npm install resolves them anew:
 
 - **Unpinned transitive versions.** `package.json` pins only the direct dependencies, and npm does not read `pnpm-lock.yaml`. The 40 transitive packages, such as `es-toolkit` and `ws`, resolve to whatever matches at install time, so two users can run different code under Ink. The scientific results are unaffected, because workflows run in pinned environments, but the application itself is not reproducible.
-- **Size.** The production dependencies take about 25 MB in 44 packages, 18 MB of it `es-toolkit`, of which Ink uses a few functions. The [genome view](browser-view/genome.md)'s full IGV development package is about 19 MB, but a trial browser bundle of its ESM entry is about 1.5 MB. Keep the full development package and let release bundling include the imported code rather than installing or copying the entire distribution.
+- **Size.** The production dependencies take about 25 MB in 44 packages, 18 MB of it `es-toolkit`, of which Ink uses a few functions. The [genome view](done/browser-view/genome.md)'s full IGV development package is about 19 MB, but a trial browser bundle of its ESM entry is about 1.5 MB. Keep the full development package and let release bundling include the imported code rather than installing or copying the entire distribution.
 
 Large Ink applications publish a bundle for the same reasons: the Gemini CLI publishes `bundle/gemini.js` without runtime dependencies, and Claude Code published one `cli.js` with none.
 
@@ -22,7 +22,7 @@ esbuild bundles `src/cli.tsx` and everything it imports into one ES module, `dis
 The package contains:
 
 - `dist/cli.js`, the bundle, keeping the entry's `#!/usr/bin/env node`;
-- locally bundled [browser view](browser-view/README.md) assets, including IGV loaded only for genome views, and `dist/vendor/` only for any files that genuinely need serving unchanged;
+- locally bundled [browser view](done/browser-view/README.md) assets, including IGV loaded only for genome views, and `dist/vendor/` only for any files that genuinely need serving unchanged;
 - `THIRD-PARTY-LICENSES.md`, see below;
 - `workflows/`, `docs/`, `runtime/pixi.toml`, `runtime/pixi.lock`, `CHANGELOG.md`, and `README.md`, as today.
 

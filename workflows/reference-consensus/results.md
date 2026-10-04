@@ -129,6 +129,35 @@ Loci are counted in loci, bases in bases; a locus is explained under *Terms*.
 | Provenance | Checksums of every input and output, tool versions, and commands of the cohort. For the initial cohort this is the run's provenance record. |
 | Logs | The logs and benchmarks of the cohort steps. |
 
+## Browser views
+
+From an isolate's detail page, press `v` to inspect its reads and variants against the resolved backbone. Its consensus mask is available in the track chooser but starts hidden. Reads, calls, and masks use backbone coordinates; the isolate FASTA is not overlaid on them because indels shift its coordinates. Variants include filtered records, not only `PASS`; inspect their filter fields. Browser coverage can include evidence the caller excluded, so it is not the workflow's filtered depth.
+
+On the Iterations tab, select a completed iteration and press `v` to inspect its cohort consensus as a separate reference. It has no backbone-coordinate evidence tracks: a winning insertion or deletion shifts positions, so matching sequence names alone would not make those tracks compatible. Use the consensus sites table to relate the two coordinate systems.
+
+The shortcut is offered only when the reference and checksum provenance are available. GenoPilot checks the backbone's recorded checksum or the consensus summary's FASTA checksum before opening, retaining the verified file identity through publication. Files remain unchanged; a missing FASTA index is prepared in memory. Missing or incompatible evidence is listed explicitly without hiding usable tracks. Sources and provenance in the `?` menu identifies the run, workflow, source files, and verified reference checksum. General controls and the evidence legend are explained in [Reading a genome view](../../docs/genome-view.md).
+
+On the Sites list or detail, press `v` to open the selected locus with the current filter's loci as browser items. Previous/Next, `p`/`n`, the locus selector, and clicking a locus marker select the same item in the CLI. Changing the CLI's selected locus follows in the browser without recreating the viewer. Leaving Sites, changing its filter, or selecting another iteration detaches that review; press `v` again to open the new list.
+
+These are read-only development views. Browser opening does not rerun a workflow or save a decision. Panning does not select a CLI locus, and browser decision suggestions and image downloads are not available yet.
+
+## Sites genome review
+
+Open this guide from the `?` help menu while viewing Sites. The menu adds it only when a Sites view is open.
+
+The reference is the resolved backbone, not the cohort consensus. The locus card shows recorded outcomes, allele votes, and each isolate's vote or no-vote state; it does not recalculate the workflow's decision.
+
+- **Reads by allele** opens with about 50 bases on either side. Voting isolates appear in allele order, with the backbone allele first: reads and variants are shown; their masks are available in the track chooser. Within each alignment, IGV groups reads by the base at the locus's first position. For an indel or a multi-base allele, this grouping is not a full haplotype or a new vote; inspect the complete span and the recorded vote.
+- **Votes** hides reads while keeping the locus's variant and mask evidence. Variant records are not votes: the card reports votes from the workflow's tables.
+- **Reads by strand** keeps the voting isolates' reads and colors them by strand to help inspect directional patterns.
+- **Region** opens about three kilobases on either side to show neighboring locus markers. It hides reads; use the chooser to add evidence as needed.
+
+Voting isolates with no vote here show variants and consensus masks; their reads are one checkbox away. Other isolates, including excluded ones, start hidden. The track chooser is ordered for this locus and labels each isolate's vote or state. Changing locus or preset reapplies its track choices and zoom; manual track choices are presentation only.
+
+A backbone annotation is shown when a catalogued accession has a non-conflicting cached copy with the exact backbone FASTA checksum and a verified GFF3 checksum. Large unindexed annotations remain off by default. If the optional cached annotation is missing or fails checksum verification, it stays disabled with an explanation in Track chooser; the verified backbone and other evidence can still be viewed. The loci track is built in memory from the current Sites filter, without adding a file to the run.
+
+Inspect both sides of a disagreement. Mixed reads, strand bias, repeats, and mapping artefacts may explain a weak call, but the viewer does not classify them. If the same isolate has weak evidence across many loci, consider excluding it through the CLI review. If the backbone vote alone creates the tie, consider switching that vote off. A real split may honestly remain `N` or an IUPAC code. The cohort review cannot choose an allele at just one locus.
+
 ## Sites
 
 ### Locus list

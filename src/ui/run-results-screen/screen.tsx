@@ -53,6 +53,10 @@ import {
 import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
 import {formatLocalDateTime} from "../utils.js";
 import {SectionList, type SectionListItem} from "./section-list.js";
+import {useGenomeSession} from '../../browser/use-genome-session.js';
+import {browserViewShortcut} from '../../browser/contract.js';
+import {documentView} from '../../browser/documents.js';
+import {cohortConsensusView, consensusIsolateView, consensusSitesView, siteItemId} from '../../workflows/reference-consensus/views.js';
 
 export type SupportPath = ResultPath & {id: string; label: string};
 
@@ -149,12 +153,62 @@ export function RunResultsScreen({
   const [consensusView, setConsensusView] = useState<ConsensusView | undefined>(
     () => consensus ? initialConsensusView(consensus) : undefined,
   );
-  const [annotationTab, setAnnotationTab] = useState<AnnotationTransferTabId>('overview');
   const [sites, setSites] = useState<SitesState>();
   const sitesCohort = consensus && consensusView?.tab === 'sites' ? consensus.cohorts[consensusView.cohortIndex] : undefined;
   const sitesTables = cohortSiteTables(sitesCohort);
   const sitesCohortId = sitesTables ? sitesCohort?.id : undefined;
   const loadedSitesCohortId = sites && sites.state !== 'failed' ? sites.cohortId : undefined;
+  const readySites = sites?.state === 'ready' && sites.cohortId === sitesCohortId ? sites.sites : undefined;
+  const listedSites = readySites && consensusView ? filteredSites(readySites, consensusView.siteFilter) : [];
+  const selectedSite = listedSites[Math.min(consensusView?.siteIndex ?? 0, listedSites.length - 1)];
+  const selectedSiteRef = useRef(selectedSite);
+  selectedSiteRef.current = selectedSite;
+  const selectedIsolate = consensusView?.tab === 'isolates' && consensusView.isolateDetail ? consensus?.isolates[consensusView.isolateIndex] : undefined;
+  const selectedConsensus = consensusView?.tab === 'cohorts' ? consensus?.cohorts[consensusView.cohortIndex] : undefined;
+  const genome = useGenomeSession(JSON.stringify([inputActive, mode.kind, view, consensusView?.tab, consensusView?.isolateDetail,
+    selectedIsolate?.id, selectedConsensus?.id, sitesCohortId, consensusView?.siteFilter]));
+  const browser = genome.browser;
+  const backboneAvailable = !!(consensus?.backbone.paths.fasta.available && consensus.backbone.sha256 && consensus.backbone.issues.length === 0);
+  const genomeSourceAvailable = !!((selectedSite || selectedIsolate) && backboneAvailable) ||
+    !!(selectedConsensus?.state === 'completed' && selectedConsensus.paths['consensus-fasta']?.available && selectedConsensus.paths['consensus-summary']?.available);
+  const canViewGenome = !!browser?.genomeAvailable && genomeSourceAvailable && !genome.busy;
+  const selectBrowserSite = (id: string): void => {
+    const index = listedSites.findIndex(site => siteItemId(site) === id);
+    if (index >= 0) {
+      setConsensusView(current => current ? {...current, siteIndex: index} : current);
+      setScrollOffsets(current => ({...current, results: 0}));
+    }
+  };
+  useEffect(() => {
+    if (selectedSite) {
+      genome.updateSelection(siteItemId(selectedSite), selectBrowserSite);
+    }
+  }, [selectedSite]);
+  const openResultGenome = (): void => {
+    if (!canViewGenome || !browser || !isReferenceConsensusResult(loaded)) {
+      return;
+    }
+    genome.open(async signal => {
+      const context = {result: loaded.result, configuration: loaded.configuration, application: browser.application,
+        workflow: {id: manifest.id, version: manifest.workflow_version}, signal};
+      if (selectedSite && sitesCohort && readySites) {
+        const documents = await loadHelp();
+        signal.throwIfAborted();
+        const guide = documentView(manifest.id, documents, documents[0]?.id ?? '', browser.application).content.documents[0];
+        const next = await consensusSitesView({...context, cohort: sitesCohort, sites: readySites, listed: listedSites, selected: selectedSite, guide});
+        next.selectedItemId = selectedSiteRef.current ? siteItemId(selectedSiteRef.current) : next.selectedItemId;
+        return next;
+      }
+      if (selectedIsolate) {
+        return consensusIsolateView({...context, isolate: selectedIsolate});
+      }
+      if (selectedConsensus) {
+        return cohortConsensusView({...context, cohort: selectedConsensus});
+      }
+      throw new Error('No genome source is selected.');
+    }, selectedSite ? selectBrowserSite : undefined);
+  };
+  const [annotationTab, setAnnotationTab] = useState<AnnotationTransferTabId>('overview');
 
   // The Sites tab reads the selected cohort's tables once, when it is first shown; leaving the tab
   // or choosing another cohort before they are read cancels the reading.
@@ -315,6 +369,10 @@ export function RunResultsScreen({
 
   useInput((input, key) => {
     if (!inputActive || mode.kind !== 'results' || view === 'help') {
+      return;
+    }
+    if (input === 'v' && canViewGenome) {
+      openResultGenome();
       return;
     }
     if (consensusKey(input, key)) {
@@ -519,6 +577,8 @@ export function RunResultsScreen({
     cohortRerun && consensusView?.tab === 'cohorts' && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending'
       ? 'c — Continue iteration'
       : '',
+    canViewGenome ? browserViewShortcut : '',
+    genomeSourceAvailable && browser && !browser.genomeAvailable ? `${browserViewShortcut} (unavailable: release bundling pending)` : '',
     '? — Help',
   ];
   let back: string | false = onBack ? 'Back' : false;
@@ -556,6 +616,8 @@ export function RunResultsScreen({
       shortcuts={shortcuts}
       back={back}
     >
+      {genome.busy ? <Text>Checking genome reference checksum…</Text> : null}
+      {genome.error ? <Alert variant="error">{sanitizeTerminalText(genome.error)}</Alert> : null}
       <Box
         height={contentHeight === 0 ? undefined : visibleRows}
         overflow={contentHeight === 0 ? 'visible' : 'hidden'}

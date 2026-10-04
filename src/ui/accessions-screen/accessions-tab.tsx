@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import type {AccessionCacheDeleter, CacheScan, ScannedCopy} from '../../accessions/cache-discovery.js';
 import {
@@ -17,7 +17,7 @@ import {Page} from '../components/page.js';
 import type {AccessionsPageFrame} from './screen.js';
 import type {AccessionCatalogUpdater} from '../../accessions/registration.js';
 import {accessionGenomeView} from '../../accessions/views.js';
-import {useBrowserView} from '../../browser/provider.js';
+import {useGenomeSession} from '../../browser/use-genome-session.js';
 import {browserViewShortcut} from '../../browser/contract.js';
 
 type View =
@@ -87,56 +87,26 @@ export function AccessionsTab({
   onRescan: () => void;
   onLockChange: (locked: boolean) => void;
 }): React.JSX.Element {
-  const browser = useBrowserView();
-  const owner = useRef({});
-  const browserRef = useRef(browser);
-  browserRef.current = browser;
-  const request = useRef(0);
-  const verification = useRef<AbortController | undefined>(undefined);
   const entries = loaded.catalog.accessions;
   const [view, setView] = useState<View>({kind: 'list'});
   const [selected, setSelected] = useState<string | undefined>(entries[0]?.accession);
   const [message, setMessage] = useState<{text: string; error: boolean}>();
-  const [busy, setBusy] = useState<string>();
+  const [operationBusy, setBusy] = useState<string>();
+  const genome = useGenomeSession(JSON.stringify([inputActive, view.kind]));
+  const browser = genome.browser;
+  const busy = genome.busy ? 'Checking cached genome files…' : operationBusy;
   const locked = view.kind !== 'list' || busy !== undefined;
   useEffect(() => onLockChange(locked), [locked, onLockChange]);
 
   const selectedEntry = entries.find(entry => entry.accession === selected) ?? entries[0];
   const canView = !!browser?.genomeAvailable && !verifying && !!selectedEntry && recordedCacheState(selectedEntry) === 'cached' &&
     scan.copies.some(copy => copy.state === 'verified' && copy.path === selectedEntry.cached_copies[0]?.path);
-  useEffect(() => {
-    const currentOwner = owner.current;
-    return () => {
-      request.current += 1;
-      verification.current?.abort();
-      browserRef.current?.detach(currentOwner);
-    };
-  }, [inputActive, view.kind]);
-
   const openGenome = (entry: AccessionEntry): void => {
     if (!browser || !canView) {
       return;
     }
-    const currentRequest = ++request.current;
-    verification.current?.abort();
-    const controller = new AbortController();
-    verification.current = controller;
-    setBusy('Checking cached genome files…');
     setMessage(undefined);
-    void buildGenomeView(entry, browser.application, controller.signal).then(genome => {
-      if (request.current === currentRequest) {
-        browser.show({owner: owner.current, view: genome});
-      }
-    }).catch(error => {
-      if (request.current === currentRequest && !controller.signal.aborted) {
-        setMessage({text: errorMessage(error), error: true});
-      }
-    }).finally(() => {
-      if (verification.current === controller) {
-        verification.current = undefined;
-        setBusy(undefined);
-      }
-    });
+    genome.open(signal => buildGenomeView(entry, browser.application, signal));
   };
 
   const refreshMetadata = (entry: AccessionEntry): void => {
@@ -194,6 +164,7 @@ export function AccessionsTab({
       if (busy !== undefined || view.kind === 'form') {
         return;
       }
+      genome.clearError();
       if (view.kind === 'confirm-remove') {
         if (input.toLowerCase() === 'y') {
           remove(view.accession);
@@ -346,6 +317,7 @@ export function AccessionsTab({
       ) : null}
 
       {busy ? <Box marginTop={1}><Text>{sanitizeTerminalText(busy)}</Text></Box> : null}
+      {genome.error ? <Box marginTop={1}><Text color="red" wrap="wrap">Error: {sanitizeTerminalText(genome.error)}</Text></Box> : null}
       {message ? (
         <Box marginTop={1}>
           <Text color={message.error ? 'red' : undefined} wrap="wrap">

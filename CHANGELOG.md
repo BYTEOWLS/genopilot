@@ -6,6 +6,46 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+- Identify annotation codon fills by their native drawing scope, keeping codon shading and start/stop highlights independent of custom strand colors that match IGV's literal colors.
+
+- Separate genome palette rules, canvas glyph drawing, geometry, and wrapper lifecycle; document track-scoped color mappings and deliberate evidence-color preservation. Add opt-in, local-only unmapped-paint diagnostics in Settings with deduplication, bounded collection, and no source or biological metadata.
+
+- Recheck genome evidence when reopening so restored files become available; keep selection-only updates separate and release removed tracks' theme state during locus review.
+- Share cancellable genome opening between CLI screens, isolate genome navigation/display settings, and reuse backbone verification and Markdown section extraction.
+
+- Use lighter/darker shades of each annotation feature's strand color for amino-acid codon backgrounds, including custom reverse-strand colors, with contrasting text and distinct start/stop highlights retained.
+
+- Structure genome click details by evidence type with expanded field names and a Markdown glossary; preserve separate annotation feature blocks with gene/transcript/exon/CDS headings and expand common GFF3 keys such as `gbkey`. Link researcher-facing IGV Desktop guides rather than developer documentation. Add a dedicated × close button, keyboard/pointer panel resizing, and a visible wheel toggle between zoom and vertical track scrolling.
+
+- Add a standard-genetic-code codon sun mapping table to genome help, with coding-direction guidance and alternative-code caveats.
+
+- Hide IGV’s native track cog controls; use the extracted genome display settings and track chooser instead.
+
+- Use magnifying-glass icons for genome zoom controls, retaining accessible labels and disabled states.
+
+- Contain IGV’s internal stacking layers so track elements and boundaries stay below genome settings, track chooser, and help overlays.
+
+- Separate genome tracks with theme-aware horizontal boundaries and contrasting gutters, keeping track edges visible when labels are hidden without changing canvas colors or genomic geometry.
+
+- Skip superseded locus loads and hide outdated evidence while the current selection loads; suspend background navigation shortcuts in help overlays, and disable failed optional annotations without blocking usable Sites evidence.
+
+- Turn genome `?` help into a topic menu with reading-guide sections, source provenance, and dynamically supplied review guides such as Sites genome review; read topics in a dialog instead of a separate review-guide panel.
+
+- Add a global Show track labels switch to genome Display settings, including tracks loaded later; keep names available in the chooser.
+
+- Move the genome track chooser beside Display settings into a scrollable Mantine switch list, retaining file sizes and visible availability notices.
+
+- Add a read-only Sites genome-review preview at the CLI's selected locus, with synchronized locus navigation, in-memory markers, recorded vote cards, per-locus evidence ordering, presets, and a review guide; verify the backbone and any matching cached annotation before opening. Decision drafting and exports remain deferred.
+
+- Open isolate backbone evidence and a selected completed cohort consensus from run results with `v`, checking reference checksums and serving existing BAM/BAI, VCF/CSI, and BED artifacts locally without conversions; keep consensus and backbone coordinates separate.
+- Explain whole-read coloring in click details with an original-IGV-color chip and read-specific pairing reason, including IGV thresholds only when they explain a short/long fragment; capture alignment popup targets because IGV's public click event supplies features only for annotations. Add a paired-read color legend and link to IGV's alignment documentation.
+- Scale aligned-read lane heights with viewer text size and center filled mismatch letters without changing genomic coordinates or read packing; theme nucleotide-glyph brightness while retaining base-quality opacity and original IGV whole-read, coverage, and connector colors. Move text controls into Display settings and add alignment coverage/read visibility and expanded/compact lane controls.
+
+- Add a visible genome display-settings chooser for reference orientation/three-frame translation and annotation strand colors/layout; explain amino-acid abbreviations and the viewer's standard-genetic-code limitation.
+- Use theme-matched teal/rose translation-marker fills and contrasting start/stop labels without recoloring DNA bases; vertically center three-frame letters and marker labels within their bars.
+
+- Distinguish forward-strand annotations in blue from reverse-strand annotations in purple, with contrast-aware shades in both genome-view themes and unchanged start/stop codon highlights.
+
 - Add a read-only accession genome-view development preview using IGV, with verified cache checksums, in-memory FASTA indexing, secure byte-range serving, annotation controls, and visible loading/errors. Release bundling remains pending; installations without IGV mark genome viewing unavailable.
 - Give genome tracks the available width and a taller responsive viewport; show click-selected feature details in a themed inline panel instead of hover text or IGV popups.
 - Move genome guidance and provenance into a `?` button, keep controls above the viewer, and add pointer-anchored wheel zoom, a crosshair, and a chromosome/contig selector and overview.

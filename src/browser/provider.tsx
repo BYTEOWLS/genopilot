@@ -24,13 +24,16 @@ export function openBrowser(url: string): Promise<void> {
 const compiledAssets = new URL('./assets/', import.meta.url);
 const defaultAssetsDirectory = existsSync(compiledAssets) ? compiledAssets : new URL('../../dist/browser/assets/', import.meta.url);
 
-type Session = {owner: object} & ({title: string; documents: Document[]; selectedId: string; select: (id: string) => void} | {view: GenomeView});
+type DocumentSession = {owner: object; title: string; documents: Document[]; selectedId: string; select: (id: string) => void};
+type Session = DocumentSession | {owner: object; view: GenomeView; select?: (id: string) => void};
 type BrowserContextValue = {
   application: {name: string; version: string};
   genomeAvailable: boolean;
+  /** Browser errors only; successful operations stay silent. */
   status?: string;
   show: (session: Session) => void;
-  update: (session: Session) => void;
+  update: (session: DocumentSession) => void;
+  updateGenomeSelection: (owner: object, itemId: string, select: (id: string) => void) => void;
   detach: (owner: object) => void;
 };
 const BrowserContext = createContext<BrowserContextValue | undefined>(undefined);
@@ -49,20 +52,21 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
   const opening = useRef<Promise<void> | undefined>(undefined);
   const current = useRef<Session | undefined>(undefined);
   const disposed = useRef(false);
-  const publish = async (service: BrowserServer, session: Session): Promise<void> => {
-    if ('view' in session) {
-      await service.show(session.view);
-      return;
+  const selectionCallback = (session: Session): ((id: string) => void) | undefined => session.select ? id => {
+    const active = current.current;
+    if (active?.owner === session.owner) {
+      active.select?.(id);
+      setStatus(undefined);
     }
-    await service.show(documentView(session.title, session.documents, session.selectedId, application),
-      id => {
-        if (current.current?.owner === session.owner) {
-          if ('select' in current.current) {
-            current.current.select(id);
-          }
-          setStatus(undefined);
-        }
-      });
+  } : undefined;
+  const updateSelection = (service: BrowserServer, session: Session): void => {
+    if ('view' in session && session.view.selectedItemId) {
+      service.updateGenomeSelection(session.view.id, session.view.selectedItemId, selectionCallback(session));
+    }
+  };
+  const publish = async (service: BrowserServer, session: Session): Promise<void> => {
+    const view = 'view' in session ? session.view : documentView(session.title, session.documents, session.selectedId, application);
+    await service.show(view, selectionCallback(session));
   };
   useEffect(() => {
     disposed.current = false;
@@ -74,14 +78,10 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
   }, []);
   const show = (session: Session): void => {
     current.current = session;
-    setStatus('Browser starting…');
+    setStatus(undefined);
     server.current ??= startBrowserServer({assets: assetsDirectory, onConnection: connected => {
-      if (!disposed.current) {
-        void server.current?.then(service => {
-          if (!disposed.current) {
-            setStatus(`Browser ${connected ? 'open at' : 'waiting at'} ${service.url}`);
-          }
-        }).catch(() => {});
+      if (connected && !disposed.current) {
+        setStatus(undefined);
       }
     }}).catch(error => {
       server.current = undefined;
@@ -95,7 +95,8 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
       if (disposed.current || current.current?.owner !== session.owner) {
         return;
       }
-      setStatus(`Browser ${service.connected ? 'open at' : 'waiting at'} ${service.url}`);
+      // Selection may have changed while preparing the reference and evidence.
+      updateSelection(service, current.current);
       if (!service.connected && !opening.current) {
         // Keep one launch pending even when v is pressed again before the tab connects.
         const pending = Promise.resolve().then(() => open(service.url));
@@ -125,6 +126,17 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
         void server.current?.then(async service => {
           if (!disposed.current && current.current?.owner === session.owner) {
             await publish(service, current.current);
+          }
+        }).catch(() => {});
+      }
+    },
+    updateGenomeSelection: (owner, itemId, select) => {
+      const session = current.current;
+      if (session?.owner === owner && 'view' in session) {
+        current.current = {...session, view: {...session.view, selectedItemId: itemId}, select};
+        void server.current?.then(service => {
+          if (!disposed.current && current.current?.owner === owner) {
+            updateSelection(service, current.current);
           }
         }).catch(() => {});
       }

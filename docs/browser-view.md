@@ -14,9 +14,13 @@ Opening another document page with `v` replaces the browser's view. Closing the 
 
 In a development checkout with dependencies installed, select a verified cached accession under Manage NCBI accessions and press `v` to view its sequence and available annotation. GenoPilot checks the recorded checksums again before opening; conflicting or damaged copies cannot be viewed. It does not download an accession just to display it.
 
-The genome view offers a chromosome/contig selector and overview, local region navigation, pointer-anchored wheel zoom, a crosshair, and an annotation track chooser. The `?` button opens reading guidance and identifies the verified imported files; no footer or controls sit below the genome. See [Reading a genome view](genome-view.md) for coordinates, annotation, and error states. Opening another view replaces the tab's content; pressing `v` again for the same unchanged genome preserves its zoom and track choices.
+Run-result screens can also offer genome views through the same `v` shortcut when their reference and provenance are available; each workflow's result help explains its entry points and coordinate system.
 
-Genome views currently require the full IGV development dependency. Release bundling is not yet implemented; installations without it mark the shortcut unavailable rather than claiming the viewer is ready. Scientific exports, run-result genome views, and decision drafting remain planned.
+The genome view offers a chromosome/contig selector and overview, local region navigation, pointer-anchored wheel zoom, a crosshair, and an evidence/annotation track chooser. The `?` button opens a menu of reading topics, any current review guide, and source provenance; no footer or controls sit below the genome. See [Reading a genome view](genome-view.md) for coordinates, annotation, and error states. Opening another view replaces the tab's content; pressing `v` again for the same unchanged genome preserves its zoom and track choices.
+
+Review views can also offer a locus selector, Previous/Next (`p`/`n`), recorded item details, an evidence preset selector, and a review guide in the `?` help menu. Locus selection follows the opening CLI screen in both directions; panning is local and does not select a CLI item. Leaving that review disables browser item navigation. Choosing another locus or preset intentionally reapplies its evidence tracks and zoom; workflow result help explains the choices.
+
+Genome views currently require the full IGV development dependency. Release bundling is not yet implemented; installations without it mark the shortcut unavailable rather than claiming the viewer is ready. Scientific exports and decision drafting remain planned.
 
 ## Printing
 

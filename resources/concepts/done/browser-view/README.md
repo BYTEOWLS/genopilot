@@ -9,11 +9,11 @@ The container knows no workflow and no kind of content in particular. It provide
 | Kind | Library | Concept | State |
 |---|---|---|---|
 | `document` | none; the existing Markdown parser | [document.md](document.md) | first; the help documents, and the kind the container is built with |
-| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | accession catalog development preview implemented; next the review of unresolved consensus loci, then the [annotation review](../annotation-review.md) |
+| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | accession catalog development preview implemented; next the review of unresolved consensus loci, then the [annotation review](../../annotation-review.md) |
 | `chart` | [Mantine charts](https://mantine.dev/charts/getting-started/) with [Recharts](https://recharts.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
 | `table` | none | sketched below | later; tables too large or wide for the terminal |
 
-This takes over the interactive part of [Browser-based HTML reports](../../later.md#browser-based-html-reports); static, self-contained report files stay deferred there.
+This takes over the interactive part of [Browser-based HTML reports](../../../later.md#browser-based-html-reports); static, self-contained report files stay deferred there.
 
 ## Principles
 
@@ -133,7 +133,7 @@ The page is GenoPilot's own frame around the kind's main area. Libraries such as
 - **Keys**: `n` and `p` for the next and previous item, `?` for the legend, matching the CLI where it has the same action.
 - **Usable without color** for the frame, as in the terminal; a kind's own color encoding, such as nucleotides or chart series, is explained in its legend.
 
-The page is a small React application under `src/browser/page/`, built for the browser by the same esbuild step as the [bundled package](../bundled-package.md) into `dist/vendor/browser/`. Each kind is a component of its own, loaded only when a view of that kind is shown.
+The page is a small React application under `src/browser/page/`, built for the browser by the same esbuild step as the [bundled package](../../bundled-package.md) into `dist/vendor/browser/`. Each kind is a component of its own, loaded only when a view of that kind is shown.
 
 ### Design and themes
 
@@ -175,8 +175,8 @@ The page's libraries are exact-version development dependencies; nothing is adde
 
 - React, `react-dom`, Mantine core and hooks, Mantine charts with Recharts, and ExcelJS are bundled into the page by esbuild; chart code is loaded with its kind and ExcelJS as a separate file loaded on demand. Mantine styles and the page's CSS are bundled into a local CSS asset; no CDN or runtime styling service is used.
 - Import only the Mantine components the current view needs. Add Mantine charts and Recharts with the first chart kind, not with the initial document view. Dependencies are pinned exactly, and bundled packages' license texts are included in the package.
-- igv.js uses the full npm development package during integration; no minified-file extraction is needed. Its release browser bundle and license collection belong to [Bundled package](../bundled-package.md); see [genome.md](genome.md#packaging).
-- Every bundled or copied library is listed in `THIRD-PARTY-LICENSES.md`, as the [bundled package](../bundled-package.md) describes.
+- igv.js uses the full npm development package during integration; no minified-file extraction is needed. Its release browser bundle and license collection belong to [Bundled package](../../bundled-package.md); see [genome.md](genome.md#packaging).
+- Every bundled or copied library is listed in `THIRD-PARTY-LICENSES.md`, as the [bundled package](../../bundled-package.md) describes.
 
 Until the bundled package exists, retain the current page build beside the TypeScript output. Development integration may use installed development dependencies; do not add library-specific release-copy steps ahead of the packaging task.
 
@@ -194,15 +194,18 @@ These are sketches so the container fits them; each kind gets its own concept wh
 - Editing sequences, annotations, or tables in the browser.
 - Saving decisions, settings, or catalogs from the browser.
 - Several tabs at once; one tab follows the CLI.
-- Static report files that open without GenoPilot ([later](../../later.md#browser-based-html-reports)).
-- Native Windows; WSL follows the [Windows task](../../tasks.md#windows-support-last), where opening the browser needs `wslview` or `explorer.exe`.
+- Static report files that open without GenoPilot ([later](../../../later.md#browser-based-html-reports)).
+- Native Windows; WSL follows the [Windows task](../../../tasks.md#windows-support-last), where opening the browser needs `wslview` or `explorer.exe`.
 
-## Work
+## Release scope
 
-1. **Container with the document kind**: the view contract, server, browser opener, provider, CLI status line, shared key, and the Mantine page frame (header, item card, guide, legend, visible states, keys, light/dark/automatic themes, compact laptop layout), built and tested with the [document kind](document.md#work) as its only content, which needs no library and no files beyond the packaged documentation. Tests for refused tokens, hosts, origins, unknown IDs, view replacement, and shutdown.
-2. **Genome kind**: `Range` handling and the steps in [genome.md](genome.md#work).
-3. **Navigation from the browser**: previous/next, item selection, and following the view, routed to the opening screen.
-4. **Decision drafting**: the action contract and the draft tray.
-5. **Downloads**: the menu, provenance in file names, image footers, and the *About* sheet; no downloads for documents, SVG and PNG for genomes, ExcelJS with the first table or chart.
-6. **Chart and table kinds**: each with its own concept when a screen needs it.
-7. **Documentation**: a general page in `docs/` (opening, the key, localhost only, SSH port forwarding, browser actions, downloads), the per-kind legends, each workflow's `results.md` for its views, and `CHANGELOG.md`.
+The current document and read-only genome views, including Sites navigation, are sufficient for the next release. Remaining browser work is deferred to the [follow-up checklist](../../browser-view-follow-up.md), starting with researcher requirements. Existing verification limitations remain documented in [compatibility findings](compatibility-findings.md); release packaging remains a separate active task.
+
+## Completed scope
+
+- Local server, provider, shared CLI shortcut/status, and document view.
+- Read-only genome views for verified accessions and run-result evidence, with Range handling, track controls, themes, and help.
+- Sites navigation synchronized between CLI and browser, with recorded evidence cards, locus markers, and presentation presets.
+- Researcher documentation for the implemented views.
+
+The sections above retain the original design, including capabilities not yet implemented. Decision drafting, exports, additional kinds and sources, and remaining verification are tracked in the separate [follow-up concept](../../browser-view-follow-up.md), not as completed work here.

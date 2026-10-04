@@ -2,7 +2,7 @@
 
 The `genome` kind of the [browser view](README.md): any genome GenoPilot knows, together with the evidence lying next to it, shown with [igv.js](https://github.com/igvteam/igv.js). The container provides the tab, navigation, guidance, drafting, downloads, and the server; this document covers what is particular to genomes.
 
-The first users are the review of unresolved consensus loci and the accession catalog. The researcher-facing background for the review is in [`science-background.md`](science-background.md). The genome view also shows the evidence for the [annotation review](../annotation-review.md) of transferred genes.
+The first users are the review of unresolved consensus loci and the accession catalog. The researcher-facing background for the review is in [`science-background.md`](science-background.md). The genome view also shows the evidence for the [annotation review](../../annotation-review.md) of transferred genes.
 
 ## Content
 
@@ -68,7 +68,7 @@ BCF is not supported by igv.js; a caller offers the VCF instead or leaves the fi
 Each source contributes a view builder; the list grows by convention, not by changing the container:
 
 - **Accession catalog**: a verified cached copy's `genomic.fna` with its `genomic.gff` when present. The index is built in memory, so the checksummed cache stays untouched.
-- **Isolate catalog**: saved sequences, once [saved isolate sequences](../saved-isolate-sequences.md) exist, each as its own reference.
+- **Isolate catalog**: saved sequences, once [saved isolate sequences](../../saved-isolate-sequences.md) exist, each as its own reference.
 - **Run results**: each workflow's result screen, through its view builder. Reference consensus: the backbone with every isolate's alignment, variants, and consensus mask, the cohort's unresolved loci as items, and the backbone's GFF3 when the backbone is a catalogued accession with a verified cached annotation; the cohort consensus as its own reference. Annotation transfer: its target genome with the transferred GFF3, LiftOn's candidate models, and the unresolved-bases BED, with the review list as items (see *Reviewing a transferred gene*); the source annotation is in the source genome's coordinates, so it is a view of its own rather than a track.
 
 ## Reviewing an unresolved locus
@@ -101,11 +101,11 @@ All voters are shown, on every side of the locus, because a tie is made by both 
 
 ### Deferred
 
-Two extensions came up while designing this review and wait for researchers' requirements in [later.md](../../later.md#per-vote-evidence-and-per-locus-overrides): **per-vote evidence**, each voter's depth and allele fraction at the locus as numbers in the item card and the CLI's Sites detail, and a **per-locus override**, choosing the allele at one locus in a cohort decision. With an override, the genome view's drafting would gain a third action, *Choose this allele at this locus*.
+Two extensions came up while designing this review and wait for researchers' requirements in [later.md](../../../later.md#per-vote-evidence-and-per-locus-overrides): **per-vote evidence**, each voter's depth and allele fraction at the locus as numbers in the item card and the CLI's Sites detail, and a **per-locus override**, choosing the allele at one locus in a cohort decision. With an override, the genome view's drafting would gain a third action, *Choose this allele at this locus*.
 
 ## Reviewing a transferred gene
 
-The second use, from the *Proteins* tab of an annotation transfer; the review list, its reasons, and the decision are in the [annotation review](../annotation-review.md) concept.
+The second use, from the *Proteins* tab of an annotation transfer; the review list, its reasons, and the decision are in the [annotation review](../../annotation-review.md) concept.
 
 **Reference**: the target genome of the transfer.
 
@@ -162,7 +162,7 @@ To confirm in the spike: the igv.js options for grouping reads by base at a posi
 
 igv.js is MIT-licensed and is an exact-version development dependency, pinned to the latest evaluated release in `package.json`. The full npm package is fine in the development installation; no special extraction or copy of `igv.esm.min.js` is required for this integration.
 
-Release packaging belongs to [Bundled package](../bundled-package.md). Its browser build will bundle the ESM imported by the genome renderer and load it only for genome views, carrying the used code and license notices rather than the whole npm distribution. A temporary esbuild check produced roughly 1.5 MB from the full development package, comparable to its published minified module; other module formats and source maps need not ship. The CLI and browser are separate execution environments, so one published npm package contains both the CLI bundle and browser assets, not one universal JavaScript file.
+Release packaging belongs to [Bundled package](../../bundled-package.md). Its browser build will bundle the ESM imported by the genome renderer and load it only for genome views, carrying the used code and license notices rather than the whole npm distribution. A temporary esbuild check produced roughly 1.5 MB from the full development package, comparable to its published minified module; other module formats and source maps need not ship. The CLI and browser are separate execution environments, so one published npm package contains both the CLI bundle and browser assets, not one universal JavaScript file.
 
 IGV's `browser` entry points to a non-ESM build. The tested esbuild configuration uses `mainFields: ['module', 'browser', 'main']` to resolve a normal `import igv from 'igv'` to its ESM entry. Record license notices from the build metafile, as for other bundled dependencies. No IGV-specific vendoring step is added ahead of the release-packaging task.
 
@@ -182,35 +182,41 @@ Generate a resource only when IGV requires it and no suitable artifact exists, s
 - Record findings without private data or machine-specific paths. Real runs are local spike inputs only; permanent tests use small synthetic, redistributable fixtures.
 - An unsupported required artifact is a decision point, not permission to silently introduce a conversion or new workflow output.
 
+### Canvas styling
+
+The light/dark adapter is split into palette rules, track-specific glyph drawing, geometry, and lifecycle. Its documented color inventory, role-aware fallbacks, deliberate evidence-color preservation, opt-in local diagnostics, and pending visual checks are in [Genome canvas styling](canvas-colors.md). The inventory remains open to colors introduced by additional formats and rendering modes; unfamiliar evidence colors are preserved rather than assigned guessed semantics.
+
 ### Resource correctness and lifecycle
 
 - Test generated FASTA index byte offsets with wrapped sequences and different line endings. Cache indexes by path, size, and modification time; do not reuse an index after its source changes.
 - Check reference/track sequence compatibility where practical and show mismatches explicitly. Matching sequence names alone do not establish coordinate compatibility; the caller remains responsible for it.
 - Serve only explicitly registered resources through opaque IDs. Test malformed and unsatisfiable ranges, missing files and indexes, sources removed or changed after opening, and interrupted streams.
-- Replacing a view revokes its resource IDs, cancels outstanding loads, and disposes the old IGV instance. Updates to selection within the same view do not recreate IGV or unnecessarily reset zoom and track choices; a preset or item-specific track change remains intentional.
+- Reopening a view prepares its resources again, including previously unavailable evidence; it revokes the old resource IDs, cancels outstanding loads, and disposes the old IGV instance. Selection-only updates have a separate server operation and do not prepare resources or recreate IGV; a preset or item-specific track change remains intentional.
+- Removing or replacing a track also releases its canvas-theme wrapper and overrides; the theme adapter must not retain discarded evidence across locus changes. CLI entry points share one cancellable genome-session hook, while browser navigation and display settings remain focused adapters around IGV.
 - Shutdown releases streams and IGV resources and shows the disconnected state rather than leaving a blank page.
 
 ### Size and packaging
 
 - Show track file sizes and keep large unindexed annotations and non-selected isolates' reads off by default. Measure initial loading and locus switching with a representative cohort before adding optimizations.
 - For this integration, use the full latest evaluated `igv` package as an exact-version development dependency. Do not add a special minified-file extraction or vendoring step.
-- Release bundling, transitive-dependency inclusion, license notices, removal of runtime dependencies, and consolidation of package-root/vendor paths remain in [Bundled package](../bundled-package.md); they are not prerequisites for development integration.
+- Release bundling, transitive-dependency inclusion, license notices, removal of runtime dependencies, and consolidation of package-root/vendor paths remain in [Bundled package](../../bundled-package.md); they are not prerequisites for development integration.
 - That later task verifies a packed installation contains and serves the necessary browser assets, excludes unnecessary IGV distribution files, and includes the licenses of all used dependencies.
 - Keep default genome-catalog loading disabled and external requests blocked by CSP. The latest release's failure-time remote mapping attempt is a known limitation documented in the compatibility findings, not a reason to silently downgrade or claim all error paths make zero external request attempts.
 
 ## Deferred viewer refinements
 
-Reverse-strand default colors, an application-owned reference/track settings chooser, an amino-acid and codon-wheel guide, and a circular-view overlay are recorded in [deferred work](../../later.md#genome-view-controls-and-teaching-aids). They are not implemented by the current read-only preview.
+Reverse-strand default colors and an application-owned reference/annotation settings chooser are implemented and visually approved. The chooser controls reference orientation and three-frame translation, annotation strand colors and layout, and resetting to theme defaults. Genome help explains amino-acid abbreviations, UTR/CDS rendering, soft masking, and translation limitations. Start/stop markers use theme-aware teal/rose fills with contrasting, vertically centered labels. All controls affect presentation only.
+
+The click-details panel now groups applicable recorded evidence, retains original field names alongside short explanatory names, and links to a Markdown glossary. A dedicated × button closes it independently of long track titles. A pointer/keyboard divider resizes its width, or its height above the genome on narrow windows; sizing stays in the open view. The wheel-mode button switches between pointer-centered zoom and vertical track scrolling, with explicit zoom controls retained and independent details scrolling. Browser-specific tests remain paused; visual verification is pending. The codon wheel and circular-view overlay remain in [deferred work](../../../later.md#genome-view-controls-and-teaching-aids).
 
 ## Work
+
+The current read-only genome scope is sufficient for the next release. Remaining work is deferred to the [follow-up checklist](../../browser-view-follow-up.md) until researcher requirements are collected. The milestones below record the implemented preview scope; they do not imply deferred verification is complete.
 
 The container's second step, after it was built with the [document kind](document.md), in this order:
 
 1. **Spike** (throwaway, kept only under `/tmp`): serve a real reference-consensus run and an accession cache copy; confirm the CSI-indexed VCF, BAM, an in-memory FASTA index, and an unindexed GFF3 load over `Range` requests; record what the Content Security Policy must allow and that the page makes no other requests; record the igv.js options the presets, the hidden controls, and SVG export need. Successful-load checks are complete; see [compatibility findings](compatibility-findings.md) for observations and remaining production verification.
 2. **Read-only genome kind and accession catalog** (implemented as a development preview; release bundling pending): extend the document-specific contract, provider, server, and page; load IGV from the development dependency without special minified-file extraction; implement registered resources with Range support, the in-memory FASTA index when needed, the track chooser, the legend, and visible states. Open a verified cached accession with its available annotation as the first end-to-end integration, with fixture tests. No drafting or exports in this milestone.
-3. **Reference-consensus results**: Sites tab, isolate detail, and cohort consensus, each with its view builder and fixture tests. Add locus markers, the item card, presets and zoom, per-locus tracks in their required order, and the guide section in `results.md`. Minimal navigation includes opening at the CLI's selected item, following CLI item changes, and browser previous/next and item selection routed to the opening screen; it does not require panning-follow or region selection.
-4. **Region interaction and the two review actions**: panning-follow and region selection, then CLI-owned decision drafting and the draft tray. Move the cohort draft to the persistent result screen before accepting browser suggestions.
-5. **Downloads**: SVG and PNG with the container's provenance footer, separately from the read-only milestones.
-6. **Further sources**: the annotation review (its steps are in [annotation-review.md](../annotation-review.md#work)), then saved isolate sequences when they exist.
+3. **Reference-consensus results** (implemented for visual review; Sites now opens the current filtered list at the selected locus, with checksum checks, optional verified matching backbone annotation, recorded item cards, in-memory markers, per-locus evidence ordering, and read/vote/strand/region presets; browser and CLI item navigation are synchronized. Changing filter or leaving Sites detaches navigation; reopening rebuilds the list. Browser tests remain parked): Sites tab, isolate detail, and cohort consensus, each with its view builder and fixture tests. Add locus markers, the item card, presets and zoom, per-locus tracks in their required order, and the guide section in `results.md`. Minimal navigation includes opening at the CLI's selected item, following CLI item changes, and browser previous/next and item selection routed to the opening screen; it does not require panning-follow or region selection.
 
-Update researcher documentation and `CHANGELOG.md` alongside implemented features. Each milestone includes failure-path and lifecycle tests and the repository's required test, typecheck, build, and local packaging checks; changes under `workflows/` also require the Python tests.
+Region interaction, review drafting, downloads, further sources, and remaining verification belong to the separate [follow-up concept](../../browser-view-follow-up.md).
