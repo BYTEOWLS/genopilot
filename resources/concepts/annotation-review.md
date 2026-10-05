@@ -79,7 +79,7 @@ The *Proteins* tab lists the rows with at least one reason, sorted so likely rea
 
 ## Review view
 
-It builds on the target view of the [transfer genome views](transfer-genome-view.md); this section is revised against that design when the review is worked on.
+It builds on the target view of the [transfer genome views](done/transfer-genome-view.md); this section is revised against that design when the review is worked on.
 
 The read-only genome view, built like the reference consensus's Sites view, which already provides everything the review needs: verified references, annotation and BED tracks served by Range, item markers drawn in memory, item cards, presets, a guide section from `results.md`, and navigation synchronized with the CLI. The review adds a view builder, `src/workflows/annotation-transfer/views.ts`, and no change to the shared browser code.
 
@@ -199,7 +199,7 @@ The suggestion and warning live only in that workflow's documentation; shared co
 
 Answered in the kickoff (work step 6) with the review view on a representative same-species transfer:
 
-- Which files hold the candidate models, and does IGV show them: answered by the [transfer genome views](transfer-genome-view.md#open-questions).
+- Which files hold the candidate models, and does IGV show them: answered by the [transfer genome views](done/transfer-genome-view.md#open-questions).
 - Show unmapped genes in the reference view of the transfer genome views?
 - Can each gene's Liftoff and miniprot models be matched to the transferred gene, by ID or locus, and which attributes does the reviewed GFF3 take from them? If they cannot be matched reliably, the candidate choice waits and *needs correction* covers those genes.
 - Default threshold: confirm the provisional 95% or change it.

@@ -7,7 +7,7 @@ import {recordedCacheState} from '../../accessions/catalog.js';
 import {inlineText, markdownSection} from '../../docs/markdown.js';
 import {verifyFileChecksum} from '../../browser/verified-file.js';
 import {isRecord} from '../configuration-validation.js';
-import type {BrowserDocument, GenomeItem, GenomeTrack, GenomeView, ViewProvenance} from '../../browser/contract.js';
+import {runViewTitle, type BrowserDocument, type GenomeItem, type GenomeTrack, type GenomeView, type ViewProvenance} from '../../browser/contract.js';
 import type {ReferenceConsensusConfiguration} from './configuration.js';
 import type {CohortResult, IsolateResult, ReferenceConsensusResult} from './results.js';
 import {siteCalls, type CohortSite, type CohortSites} from './sites.js';
@@ -68,11 +68,12 @@ function reviewItem(site: CohortSite, sites: CohortSites, result: ReferenceConse
   ]};
 }
 
-type Context = {result: ReferenceConsensusResult; configuration: ReferenceConsensusConfiguration; application: ViewProvenance['application']; workflow: {id: string; version: number}};
+type Context = {result: ReferenceConsensusResult; configuration: ReferenceConsensusConfiguration; application: ViewProvenance['application']; workflow: {id: string; version: number; label: string}};
 function base(context: Context, suffix: string, title: string, reference: GenomeView['content']['reference'], tracks: GenomeTrack[]): GenomeView {
   const {configuration, application, workflow} = context;
-  return {id: createHash('sha256').update(JSON.stringify([context.result.runFiles.configuration.absolutePath, suffix])).digest('hex'), title,
-    provenance: {application, run: {id: configuration.run.id, name: configuration.run.name, workflow}, sources: [
+  return {id: createHash('sha256').update(JSON.stringify([context.result.runFiles.configuration.absolutePath, suffix])).digest('hex'),
+    title: runViewTitle(workflow, configuration.run, title),
+    provenance: {application, run: {id: configuration.run.id, name: configuration.run.name, workflow: {id: workflow.id, version: workflow.version}}, sources: [
       {label: 'Reference', path: reference.fasta, ...(reference.fasta === context.result.backbone.paths.fasta.absolutePath && context.result.backbone.sha256 ? {sha256: context.result.backbone.sha256} : {})},
       ...tracks.flatMap(track => [{label: track.name, path: track.file}, ...(track.index ? [{label: `${track.name} index`, path: track.index}] : [])]),
     ]}, content: {kind: 'genome', reference, tracks}};

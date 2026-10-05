@@ -19,10 +19,13 @@ export type DisplayTrack = Parameters<Browser['removeTrack']>[0] & {
 };
 type AlignmentDisplay = {coverage: boolean; reads: boolean; layout: 'EXPANDED' | 'SQUISHED'};
 export const defaultAlignmentDisplay: AlignmentDisplay = {coverage: true, reads: true, layout: 'EXPANDED'};
+/** GFF3 types IGV leaves out while parsing; its own default hides only `chromosome`. */
+export const defaultHiddenTypes: readonly string[] = ['chromosome'];
 type TrackSettings = {
   colors: Record<string, AnnotationColors>;
   modes: Record<string, string>;
   alignments: Record<string, AlignmentDisplay>;
+  hiddenTypes: Record<string, readonly string[]>;
 };
 function applyAlignmentDisplay(track: DisplayTrack, settings: AlignmentDisplay): void {
   track.showCoverage = settings.coverage;
@@ -51,7 +54,7 @@ export function useGenomeDisplay(
   const colorDiagnosticsRef = useRef(colorDiagnostics);
   colorDiagnosticsRef.current = colorDiagnostics;
   const [target, setTarget] = useState('reference');
-  const [trackSettings, setTrackSettings] = useState<TrackSettings>({colors: {}, modes: {}, alignments: {}});
+  const [trackSettings, setTrackSettings] = useState<TrackSettings>({colors: {}, modes: {}, alignments: {}, hiddenTypes: {}});
   const settingsRef = useRef(trackSettings);
   const [trackLabels, setTrackLabels] = useState(true);
   const [referenceDisplay, setReferenceDisplay] = useState({translated: false, reversed: false});
@@ -72,7 +75,7 @@ export function useGenomeDisplay(
   };
   const reset = (): void => {
     setTarget('reference');
-    updateSettings({colors: {}, modes: {}, alignments: {}});
+    updateSettings({colors: {}, modes: {}, alignments: {}, hiddenTypes: {}});
     setReferenceDisplay({translated: false, reversed: false});
     setTrackLabels(true);
   };
@@ -121,6 +124,12 @@ export function useGenomeDisplay(
       track.trackView?.repaintViews();
     }
   };
+  /** Load-time options of an annotation track; a change takes effect when the track is loaded again. */
+  const annotationLoadOptions = (id: string): {filterTypes: string[]} => ({filterTypes: [...(settingsRef.current.hiddenTypes[id] ?? defaultHiddenTypes)]});
+  const changeHiddenTypes = (types: readonly string[]): void => {
+    const current = settingsRef.current;
+    updateSettings({...current, hiddenTypes: {...current.hiddenTypes, [target]: types}});
+  };
   const changeTrackLabels = (visible: boolean): void => {
     const viewer = browser.current as ViewerBrowser | undefined;
     if (viewer) {
@@ -146,5 +155,6 @@ export function useGenomeDisplay(
   };
   return {textSize, textSizeRef, setTextSize, colorDiagnostics, colorDiagnosticsRef, setColorDiagnostics, target, setTarget, trackLabels, changeTrackLabels,
     referenceDisplay, changeReference, colors, changeColors, mode: trackSettings.modes[target] ?? 'EXPANDED', changeMode,
-    alignment: trackSettings.alignments[target] ?? defaultAlignmentDisplay, changeAlignment, applyTrack, reset};
+    alignment: trackSettings.alignments[target] ?? defaultAlignmentDisplay, changeAlignment,
+    hiddenTypes: trackSettings.hiddenTypes[target] ?? defaultHiddenTypes, changeHiddenTypes, annotationLoadOptions, applyTrack, reset};
 }

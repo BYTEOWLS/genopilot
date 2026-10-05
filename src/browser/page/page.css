@@ -72,10 +72,15 @@ body { margin: 0; }
 .genome-canvas { isolation: isolate; background: var(--background); color: var(--foreground); height: max(32rem, calc(100dvh - 17rem)); min-width: 0; overflow: auto; border: 1px solid var(--border); border-radius: .5rem; }
 .genome-track-chooser { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 8rem); overflow: auto; }
 .genome-track-list { list-style: none; padding: 0; margin: 0; }
-.genome-track-list li { padding: .75rem 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.genome-track-list li { display: flex; align-items: flex-start; gap: .75rem; padding: .75rem 0; border-top: 1px solid var(--border); }
+.genome-track-list li > .mantine-Switch-root { flex: none; }
+.genome-track-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.genome-track-text > label { display: block; cursor: pointer; }
 .genome-navigation select { max-width: 100%; padding: .5rem; border: 1px solid var(--border); background: var(--background); color: var(--foreground); border-radius: .25rem; }
-.genome-help-menu { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 8rem); overflow: auto; }
-.genome-help-menu .mantine-Menu-itemLabel { white-space: normal; overflow-wrap: anywhere; }
+/* The top-level menu must not clip: Mantine renders a submenu inside its parent dropdown. */
+.genome-help-menu { max-width: calc(100vw - 2rem); overflow: visible; }
+.genome-help-submenu { width: 300px; max-width: calc(100vw - 2rem); max-height: calc(100dvh - 8rem); overflow: auto; }
+.genome-help-menu .mantine-Menu-itemLabel, .genome-help-submenu .mantine-Menu-itemLabel { white-space: normal; overflow-wrap: anywhere; }
 .genome-help-body .provenance { margin-top: 0; padding-top: 0; border-top: 0; }
 .genome-settings { max-width: calc(100vw - 2rem); max-height: calc(100dvh - 8rem); overflow: auto; }
 .genome-settings select { width: 100%; padding: .5rem; border: 1px solid var(--border); border-radius: .25rem; background: var(--background); color: var(--foreground); }

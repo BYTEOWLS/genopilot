@@ -13,14 +13,32 @@ export type ViewerBrowser = Browser & {
   setCursorGuideVisibility: (visible: boolean) => void;
   doShowTrackLabels: boolean;
   setTrackLabelVisibility: (visible: boolean) => void;
+  /** One viewport per region panel, in the order of `referenceFrameList`. */
+  trackViews: {viewports?: {viewportElement: HTMLElement}[]}[];
 };
 
-export async function zoomGenome(instance: Browser, scale: number, center?: number): Promise<void> {
+/** The region panel an element lies in, as an index into `referenceFrameList`; 0 outside any panel. */
+export function frameIndexAt(instance: Browser, target: EventTarget | null): number {
+  const element = target instanceof Element ? target.closest('.igv-viewport') : null;
+  for (const trackView of (instance as ViewerBrowser).trackViews ?? []) {
+    const index = trackView.viewports?.findIndex(viewport => viewport.viewportElement === element) ?? -1;
+    if (index >= 0) {
+      return index;
+    }
+  }
+  return 0;
+}
+
+/** Zooms one region panel, or every panel around its own centre when no panel is given. */
+export async function zoomGenome(instance: Browser, scale: number, center?: number, index?: number): Promise<void> {
   const viewer = instance as ViewerBrowser;
-  const current = viewer.referenceFrameList[0];
-  if (current) {
-    await current.zoomWithScaleFactor(instance, scale, viewer.calculateViewportWidth(1), center);
-    viewer.fireEvent('zoom', [[current]]);
+  const frames = index === undefined ? viewer.referenceFrameList : viewer.referenceFrameList.slice(index, index + 1);
+  const width = viewer.calculateViewportWidth(viewer.referenceFrameList.length);
+  for (const current of frames) {
+    await current.zoomWithScaleFactor(instance, scale, width, index === undefined ? undefined : center);
+  }
+  if (frames.length > 0) {
+    viewer.fireEvent('zoom', [frames]);
   }
 }
 

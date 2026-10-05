@@ -8,9 +8,10 @@ import {Provenance} from './provenance.js';
 import {themeGenomeBrowser} from './genome-theme.js';
 import {alignmentColorDetails, captureAlignmentClicks} from './alignment-details.js';
 import {FeatureDetailsPanel, type FeatureDetails} from './feature-details.js';
-import {useGenomeNavigation, zoomGenome, type ReferenceFrame, type ViewerBrowser} from './use-genome-navigation.js';
+import {frameIndexAt, useGenomeNavigation, zoomGenome, type ReferenceFrame, type ViewerBrowser} from './use-genome-navigation.js';
 import {useGenomeDisplay, type DisplayTrack} from './use-genome-display.js';
 import {GenomeSettings} from './genome-settings.js';
+import {attachTrackResize} from './track-resize.js';
 
 export type GenomeLibrary = Pick<IGV, 'createBrowser' | 'removeBrowser' | 'removeAllBrowsers'>;
 export type GenomeLibraryLoader = () => Promise<GenomeLibrary>;
@@ -72,17 +73,19 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
   const [presetId, setPresetId] = useState(view.content.presets?.[0]?.id);
   const [itemCard, setItemCard] = useState(true);
   const [chooserOpen, setChooserOpen] = useState(false);
-  const helpDocuments = [view.content.legend, view.guide].filter((document): document is BrowserDocument => !!document);
-  const helpSections = helpDocuments.flatMap(document => {
+  // The view's own guide comes first, then the general viewer guide.
+  const helpDocuments = [view.guide, view.content.legend].filter((document): document is BrowserDocument => !!document);
+  const helpMenu = helpDocuments.map(document => {
     const blocks = document.blocks ?? [];
-    return blocks.flatMap((block, index) => {
+    return {document, sections: blocks.flatMap((block, index) => {
       if (block.kind !== 'heading' || block.level !== 2 || inlineText(block.content) === document.title) {
         return [];
       }
       return [{...document, id: `${document.id}:section:${index}`, title: inlineText(block.content), blocks: markdownSection(blocks, index)}];
-    });
+    })};
   });
-  const clickDetailsHelp = helpSections.find(section => section.title === 'Click details');
+  // The details panel links to the general guide's section, even when a view's guide has one of the same name.
+  const clickDetailsHelp = helpMenu.find(entry => entry.document === view.content.legend)?.sections.find(section => section.title === 'Click details');
   const openHelp = (topic: BrowserDocument | 'sources'): void => {
     setLegend(false);
     setHelpTopic(topic);
@@ -107,12 +110,18 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
     return order(left.id) - order(right.id);
   });
 
+  // Heights set by dragging a track's separator; they last until the view is replaced.
+  const resizedHeights = useRef(new Map<string, number>());
+  // Attaches each loaded track's separators again after IGV rebuilds its region panels.
+  const resizeAttachers = useRef(new Map<string, () => void>());
+  /** Alignments share the free height; annotations and variants take the height of their content. */
   const fitTracks = (): void => {
     if (view.items) {
       return;
     }
-    const height = Math.max(180, Math.floor(((element.current?.clientHeight || 560) - 100) / Math.max(1, loaded.current.size)));
-    for (const track of loaded.current.values()) {
+    const fitted = [...loaded.current].filter(([id, track]) => (track as DisplayTrack).type === 'alignment' && !resizedHeights.current.has(id));
+    const height = Math.max(180, Math.floor(((element.current?.clientHeight || 560) - 100) / Math.max(1, fitted.length)));
+    for (const [, track] of fitted) {
       const display = track as DisplayTrack;
       if (display.height !== height) {
         display.trackView?.setTrackHeight(height, true);
@@ -126,6 +135,7 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
       theme.current?.releaseTrack(track);
       instance.removeTrack(track);
       loaded.current.delete(id);
+      resizeAttachers.current.delete(id);
       setDetails(current => current?.trackId === id ? undefined : current);
     }
   };
@@ -138,14 +148,17 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
     try {
       const common = {name: trackName(track), url: track.file,
         order, removable: false,
-        height: view.items ? track.kind === 'alignment' ? 280 : 65 : Math.max(280, (element.current?.clientHeight || 560) - 100), autoHeight: false,
+        ...(resizedHeights.current.has(track.id) ? {height: resizedHeights.current.get(track.id), autoHeight: false}
+          : track.kind === 'alignment' ? {height: view.items ? 280 : Math.max(280, (element.current?.clientHeight || 560) - 100), autoHeight: false}
+            : {height: 50, autoHeight: true, minHeight: 50, maxHeight: 600}),
         ...(item && track.kind === 'alignment' ? {groupBy: `base:${item.target.chrom}:${item.target.start}`, ...(preset?.colorBy ? {colorBy: preset.colorBy} : {})} : {}),
         ...settings};
       const result = track.kind === 'alignment'
         ? await instance.loadTrack({...common, type: 'alignment', format: 'bam', indexURL: track.index})
         : track.kind === 'variant'
           ? await instance.loadTrack({...common, type: 'variant', format: 'vcf', indexURL: track.index, displayMode: 'COLLAPSED'})
-          : await instance.loadTrack({...common, type: 'annotation', format: track.format as 'gff3' | 'bed', indexed: false});
+          : await instance.loadTrack({...common, type: 'annotation', format: track.format as 'gff3' | 'bed', indexed: false,
+            ...(track.format === 'gff3' ? display.annotationLoadOptions(track.id) : {})});
       if (!current()) {
         if (browser.current === instance && result) {
           instance.removeTrack(result);
@@ -156,6 +169,21 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
         throw new Error('The genome library could not load this track.');
       }
       loaded.current.set(track.id, result);
+      const attach = (): void => attachTrackResize(result as DisplayTrack, trackName(track), height => {
+        if (height === undefined) {
+          resizedHeights.current.delete(track.id);
+          if (view.items && track.kind === 'alignment') {
+            // Review views do not fit tracks to the canvas; return to the height the track was loaded with.
+            (result as DisplayTrack).trackView?.setTrackHeight(280, true);
+          } else {
+            fitTracks();
+          }
+        } else {
+          resizedHeights.current.set(track.id, height);
+        }
+      });
+      resizeAttachers.current.set(track.id, attach);
+      attach();
       if (track.kind === 'alignment') {
         captureAlignmentClicks(result, readClickPayloads.current);
       }
@@ -176,6 +204,8 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
     let library: GenomeLibrary | undefined;
     let removed = false;
     let removeMouseHandlers: (() => void) | undefined;
+    // The region panel of the latest pointer press, for the clicked position in the details.
+    let clickedPanel = 0;
     const dispose = (): void => {
       if (instance && library && !removed) {
         removed = true;
@@ -198,6 +228,8 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
     setHelpTopic(undefined);
     display.reset();
     loaded.current.clear();
+    resizedHeights.current.clear();
+    resizeAttachers.current.clear();
     readClickPayloads.current = new WeakMap();
     setTracks(Object.fromEntries(view.content.tracks.map(track => [track.id, {state: track.problem ? 'failed' : 'hidden', message: track.problem}])));
     const sequence = reference.sequences?.[0];
@@ -239,8 +271,12 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
             frame.current = frames[0];
             // IGV switches its guide off on entry to whole-genome view; retain our crosshair.
             (instance as ViewerBrowser).setCursorGuideVisibility(true);
+            // Several regions open side by side as panels; the field lists them all, separated by spaces.
             setChromosome(frames[0].chr);
-            setLocus(frames[0].chr === 'all' ? 'all' : frames[0].getLocusString?.() ?? `${frames[0].chr}:${Math.floor(frames[0].start) + 1}-${Math.ceil(frames[0].end)}`);
+            setLocus(frames.map(current => current.chr === 'all' ? 'all' : current.getLocusString?.() ?? `${current.chr}:${Math.floor(current.start) + 1}-${Math.ceil(current.end)}`).join(' '));
+            for (const attach of resizeAttachers.current.values()) {
+              attach();
+            }
           }
         });
         // The fourth event argument is populated only for annotations. Alignment
@@ -264,8 +300,9 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
             if (clickedRead && !rows.some(row => row.label === 'Read Name')) {
               rows.unshift({label: 'Read Name', value: clickedRead.readName});
             }
-            if (rows.length && position !== undefined && frame.current) {
-              rows.unshift({label: 'Clicked position', value: `${frame.current.chr}:${Math.floor(position) + 1}`});
+            const clickedFrame = (instance as ViewerBrowser).referenceFrameList[clickedPanel] ?? frame.current;
+            if (rows.length && position !== undefined && clickedFrame) {
+              rows.unshift({label: 'Clicked position', value: `${clickedFrame.chr}:${Math.floor(position) + 1}`});
             }
             setDetails(rows.length ? {trackId: source?.id, title: source ? currentNames.current.get(source.id) ?? source.name : track.name ?? reference.name, kind, rows} : undefined);
           }
@@ -276,27 +313,63 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
           // App tokens inherit into the shadow root; canvas paints use the adapter below.
           const style = document.createElement('style');
           style.textContent = `
-            .igv-container { color: var(--foreground); background: var(--background); }
-            .igv-track-label, .igv-track-label:hover, .igv-track-label:focus, .igv-track-label:active,
-            .igv-zoom-in-notice-container, .igv-zoom-in-notice-container > div,
-            .igv-zoom-in-notice div, .igv-ruler-tooltip > div {
+            div.igv-container { color: var(--foreground); background: var(--background); }
+            /* IGV adopts its own stylesheet into this shadow root, and adopted sheets win over this
+               element at equal specificity, so every rule here is scoped below or onto .igv-container. */
+            .igv-container .igv-track-label, .igv-container .igv-track-label:hover, .igv-container .igv-track-label:focus,
+            .igv-container .igv-track-label:active, .igv-container .igv-zoom-in-notice-container,
+            .igv-container .igv-zoom-in-notice-container > div, .igv-container .igv-zoom-in-notice div,
+            .igv-container .igv-ruler-tooltip > div {
               color: var(--foreground); background: var(--background); border-color: var(--border);
               font-family: var(--mantine-font-family); font-size: var(--genome-text-size, 16px);
             }
-            .igv-track-label { border-radius: 3px; padding: 2px 4px; }
+            .igv-container .igv-track-label { border-radius: 3px; padding: 2px 4px; }
+            /* The separator below each track: drag or ↑/↓ to resize, double click or Home for the automatic height. */
+            .igv-container .genome-track-resize {
+              position: absolute; inset-inline: 0; bottom: 0; height: 6px; z-index: 600; cursor: row-resize; touch-action: none;
+            }
+            .igv-container .genome-track-resize:hover, .igv-container .genome-track-resize:focus-visible {
+              background: color-mix(in srgb, var(--foreground) 35%, transparent); outline: none;
+            }
             /* IGV retains gear elements even with showGearColumn disabled. */
-            .igv-gear-menu-column { display: none !important; }
+            .igv-container .igv-gear-menu-column { display: none !important; }
             /* Emphasize IGV's existing inter-track gutters without changing viewport
                geometry or canvas colors. Boundaries remain visible with labels off. */
-            .igv-column { background: var(--muted); }
-            .igv-viewport { border-color: var(--border); background: var(--background); }
-            .igv-viewport::after {
+            .igv-container .igv-column { background: var(--muted); }
+            .igv-container .igv-viewport { border-color: var(--border); background: var(--background); }
+            .igv-container .igv-viewport::after {
               content: ''; position: absolute; inset: 0; z-index: 500; pointer-events: none;
               border-block: 1px solid color-mix(in srgb, var(--foreground) 35%, var(--background));
             }
-            .igv-column-shim { background: var(--border); }
+            .igv-container .igv-column-shim { background: var(--border); }
+            /* The track area reaches the bottom of the canvas, so the space below the last track pans too. */
+            div.igv-container { min-height: 100%; box-sizing: border-box; }
+            .igv-container .igv-column-container { flex: 1 0 auto; align-items: flex-start; cursor: grab; }
+            /* Track columns keep their content height, so the space below them shows the canvas
+               background; the empty separator columns between the axis and the panels still reach
+               down, as they have no height of their own. */
+            .igv-container .igv-column-shim { align-self: stretch; }
           `;
           shadow.appendChild(style);
+          // IGV starts a pan only from a track's viewport; the empty space below the tracks hands
+          // its mouse-down to IGV's own handler, which then follows the drag like any track.
+          const panBrowser = instance as unknown as {columnContainer?: HTMLElement; trackViews?: {viewports?: unknown[]}[];
+            mouseDownOnViewport?: (event: MouseEvent, viewport: unknown) => void};
+          panBrowser.columnContainer?.addEventListener('mousedown', event => {
+            // The panel above the pointer, when several regions are shown side by side.
+            const viewports = ([...(panBrowser.trackViews ?? [])].reverse().find(trackView => trackView.viewports?.length)?.viewports ?? []) as {viewportElement: HTMLElement}[];
+            const viewport = viewports.find(candidate => {
+              const bounds = candidate.viewportElement.getBoundingClientRect();
+              return event.clientX >= bounds.left && event.clientX <= bounds.right;
+            }) ?? viewports[0];
+            // Track viewports start their own pan; anything else in the track area, such as the space
+            // below the last track or a stretched column there, starts one here.
+            const empty = event.target instanceof Element && !event.target.closest('.igv-viewport');
+            if (empty && event.button === 0 && viewport && !evidenceUpdatingRef.current) {
+              event.preventDefault();
+              panBrowser.mouseDownOnViewport?.(event, viewport);
+            }
+          });
           const clearTitles = (event: Event): void => {
             for (const target of event.composedPath()) {
               if (target instanceof HTMLElement) {
@@ -316,10 +389,14 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
             setDetails({trackId: source?.id, title: source ? currentNames.current.get(source.id) ?? source.name : target.textContent ?? reference.name,
               rows: source ? [{label: 'Format', value: source.format.toUpperCase()}] : []});
           };
+          const notePanel = (event: Event): void => {
+            clickedPanel = frameIndexAt(instance!, event.target);
+          };
           let wheelFrame: number | undefined;
           let wheelDelta = 0;
           let wheelX = 0;
           let wheelBounds: DOMRect | undefined;
+          let wheelPanel = 0;
           let zooming = false;
           const scheduleZoom = (): void => {
             if (wheelFrame !== undefined || zooming) {
@@ -327,7 +404,7 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
             }
             wheelFrame = requestAnimationFrame(() => {
               wheelFrame = undefined;
-              const current = frame.current;
+              const current = (instance as ViewerBrowser).referenceFrameList[wheelPanel] ?? frame.current;
               const delta = wheelDelta;
               wheelDelta = 0;
               if (!active || !current || !wheelBounds || browser.current !== instance || wheelModeRef.current !== 'zoom') {
@@ -366,7 +443,7 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
                 }
                 const length = Math.min(contig.length, Math.max(minimumBases, span * scale));
                 const center = current.start + fraction * span + (0.5 - fraction) * length;
-                operation = () => zoomGenome(instance!, length / span, center);
+                operation = () => zoomGenome(instance!, length / span, center, wheelPanel);
               }
               zooming = true;
               void runNavigation(instance!, operation).finally(() => {
@@ -398,12 +475,14 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
             wheelDelta += input.deltaY * (input.deltaMode === 1 ? 16 : input.deltaMode === 2 ? bounds.height : 1);
             wheelX = input.clientX;
             wheelBounds = bounds;
+            wheelPanel = frameIndexAt(instance!, viewport);
             scheduleZoom();
           };
           shadow.addEventListener('wheel', wheel, {passive: false, capture: true});
           shadow.addEventListener('mouseover', clearTitles);
           shadow.addEventListener('mousemove', clearTitles);
           shadow.addEventListener('click', labelClick, true);
+          shadow.addEventListener('pointerdown', notePanel, true);
           removeMouseHandlers = () => {
             style.remove();
             if (wheelFrame !== undefined) {
@@ -413,6 +492,7 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
             shadow.removeEventListener('mouseover', clearTitles);
             shadow.removeEventListener('mousemove', clearTitles);
             shadow.removeEventListener('click', labelClick, true);
+            shadow.removeEventListener('pointerdown', notePanel, true);
           };
         }
         theme.current = themeGenomeBrowser(instance, element.current!, display.textSizeRef.current);
@@ -552,16 +632,21 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
       searchRegion('all');
       return;
     }
-    const match = /^(.+):(\d[\d,]*)(?:-(\d[\d,]*))?$/.exec(locus.trim());
-    const sequence = reference.sequences?.find(candidate => candidate.name === match?.[1]);
-    const start = Number(match?.[2]?.replaceAll(',', ''));
-    const end = Number((match?.[3] ?? match?.[2])?.replaceAll(',', ''));
-    if (!sequence || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start || end > sequence.length) {
-      setError('Enter a region in this reference as sequence:start-end, using 1-based inclusive coordinates.');
+    // Several regions separated by spaces open side by side, as IGV's split view.
+    const regions = locus.trim().split(/\s+/).map(text => {
+      const match = /^(.+):(\d[\d,]*)(?:-(\d[\d,]*))?$/.exec(text);
+      const sequence = reference.sequences?.find(candidate => candidate.name === match?.[1]);
+      const start = Number(match?.[2]?.replaceAll(',', ''));
+      const end = Number((match?.[3] ?? match?.[2])?.replaceAll(',', ''));
+      return sequence && Number.isSafeInteger(start) && Number.isSafeInteger(end) && start >= 1 && end >= start && end <= sequence.length
+        ? `${sequence.name}:${start}-${end}` : undefined;
+    });
+    if (regions.length === 0 || regions.some(region => region === undefined)) {
+      setError('Enter one or more regions in this reference, separated by spaces, each as sequence:start-end with 1-based inclusive coordinates.');
       return;
     }
     setError(undefined);
-    searchRegion(`${sequence.name}:${start}-${end}`);
+    searchRegion(regions.join(' '));
   };
   const toggle = (track: GenomeTrack): void => {
     const instance = browser.current;
@@ -578,6 +663,26 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
       } else {
         await addTrack(instance, track, undefined, {}, current);
       }
+    }, current);
+  };
+  /** Hidden feature types are applied while IGV parses the file, so a shown track is loaded again. */
+  const changeHiddenTypes = (types: readonly string[]): void => {
+    const instance = browser.current;
+    const track = view.content.tracks.find(candidate => candidate.id === display.target);
+    const shown = !!track && loaded.current.has(track.id);
+    if (shown && evidenceUpdating) {
+      // The setting must not disagree with the drawn track; it can be changed once loading ends.
+      return;
+    }
+    display.changeHiddenTypes(types);
+    if (!instance || !track || !shown) {
+      return;
+    }
+    const key = evidenceKey;
+    const current = (): boolean => browser.current === instance && requestedEvidence.current === key;
+    void runNavigation(instance, async () => {
+      removeTrack(instance, track.id);
+      await addTrack(instance, track, undefined, {}, current);
     }, current);
   };
   return <section className="genome-area" data-view-kind="genome">
@@ -608,7 +713,7 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
       </ActionIcon>
       <Button data-control="genome-wheel-mode" type="button" variant="default" disabled={!ready} aria-pressed={wheelMode === 'scroll'} onClick={() => setWheelMode(current => current === 'zoom' ? 'scroll' : 'zoom')}>Wheel: {wheelMode === 'zoom' ? 'Zoom' : 'Vertical scroll'}</Button>
       <GenomeSettings ready={ready} opened={settingsOpen} setOpened={setSettingsOpen} referenceName={reference.name}
-        tracks={view.content.tracks} shown={id => tracks[id]?.state === 'shown'} display={display} />
+        tracks={view.content.tracks} shown={id => tracks[id]?.state === 'shown'} display={display} changeHiddenTypes={changeHiddenTypes} />
       <Popover opened={chooserOpen} onChange={setChooserOpen} position="bottom-end" width={420} withinPortal>
         <Popover.Target><Button data-control="genome-track-chooser" type="button" variant="default" disabled={!ready} aria-expanded={chooserOpen} onClick={() => setChooserOpen(current => !current)}>Tracks{Object.values(tracks).some(track => track.state === 'failed') ? ' · unavailable tracks' : ''}</Button></Popover.Target>
         <Popover.Dropdown className="genome-track-chooser">
@@ -617,9 +722,15 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
           {orderedTracks.length === 0 ? <Text size="sm">No tracks are available for this reference.</Text> : null}
           <ul className="genome-track-list" aria-label="Track visibility">
             {orderedTracks.map(track => <li key={track.id} className="genome-track" data-track-group={track.group}>
-              <Switch data-track-id={track.id} label={trackName(track)} checked={tracks[track.id]?.state === 'shown' || tracks[track.id]?.state === 'loading'} disabled={!ready || evidenceUpdating || !!track.problem || tracks[track.id]?.state === 'loading'} onChange={() => toggle(track)} />
-              <Text size="xs" c="dimmed">{track.size === undefined ? '' : `${(track.size / 1024 / 1024).toFixed(1)} MiB · `}{tracks[track.id]?.state ?? 'hidden'}</Text>
-              {tracks[track.id]?.message ? <Text role="alert" size="sm">{tracks[track.id]?.message}</Text> : null}
+              <Switch id={`genome-track-${track.id}`} data-track-id={track.id} aria-label={trackName(track)} checked={tracks[track.id]?.state === 'shown' || tracks[track.id]?.state === 'loading'} disabled={!ready || evidenceUpdating || !!track.problem || tracks[track.id]?.state === 'loading'} onChange={() => toggle(track)} />
+              <div className="genome-track-text">
+                {/* The switch shows whether the track is drawn; only states it cannot show are written out. */}
+                <label htmlFor={`genome-track-${track.id}`}>{trackName(track)}</label>
+                {track.size !== undefined || tracks[track.id]?.state === 'loading' || tracks[track.id]?.state === 'failed' ? <Text component="span" size="xs" c="dimmed">
+                  {[track.size === undefined ? '' : `${(track.size / 1024 / 1024).toFixed(1)} MiB`, tracks[track.id]?.state === 'loading' || tracks[track.id]?.state === 'failed' ? tracks[track.id]?.state : ''].filter(Boolean).join(' · ')}
+                </Text> : null}
+                {tracks[track.id]?.message ? <Text role="alert" size="sm">{tracks[track.id]?.message}</Text> : null}
+              </div>
             </li>)}
           </ul>
         </Popover.Dropdown>
@@ -627,9 +738,20 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
       <Menu opened={legend} onChange={setLegend} position="bottom-end" width={300} withinPortal>
         <Menu.Target><ActionIcon data-control="genome-help" type="button" variant="default" size="lg" aria-label="Genome help topics" aria-expanded={legend}>?</ActionIcon></Menu.Target>
         <Menu.Dropdown className="genome-help-menu">
-          {helpDocuments.map(document => <Menu.Item key={document.id} onClick={() => openHelp(document)}>{document.title}</Menu.Item>)}
-          {helpSections.length > 0 ? <Menu.Divider /> : null}
-          {helpSections.map(section => <Menu.Item key={section.id} onClick={() => openHelp(section)}>{section.title}</Menu.Item>)}
+          {helpMenu.map(({document, sections}, index) => <React.Fragment key={document.id}>
+            {/* The view's own guide is set apart from the general viewer guide below it. */}
+            {index > 0 ? <Menu.Divider /> : null}
+            {sections.length === 0
+            ? <Menu.Item onClick={() => openHelp(document)}>{document.title}</Menu.Item>
+            : <Menu.Sub position="left-start">
+              <Menu.Sub.Target><Menu.Sub.Item>{document.title}</Menu.Sub.Item></Menu.Sub.Target>
+              <Menu.Sub.Dropdown className="genome-help-submenu">
+                <Menu.Item onClick={() => openHelp(document)}>Whole guide</Menu.Item>
+                <Menu.Divider />
+                {sections.map(section => <Menu.Item key={section.id} onClick={() => openHelp(section)}>{section.title}</Menu.Item>)}
+              </Menu.Sub.Dropdown>
+            </Menu.Sub>}
+          </React.Fragment>)}
           <Menu.Divider />
           <Menu.Item onClick={() => openHelp('sources')}>Sources and provenance</Menu.Item>
         </Menu.Dropdown>

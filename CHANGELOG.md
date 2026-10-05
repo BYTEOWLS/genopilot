@@ -6,6 +6,24 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+- Accept several regions separated by spaces in the genome Region field and show them side by side; the field, wheel zoom, clicked positions, panning, and track separators follow each panel, and the zoom buttons zoom all panels. Correct the transfer guide, which promised a search by transcript ID that the Region field does not offer.
+
+- Rename the general genome help to *Using the genome viewer* and list a view's own guide first in the help menu, set apart from the general guide by a divider.
+
+- Lay out the genome track chooser as a switch beside each track's name and file size, which wrap in their own column; only loading and failed states are written out.
+
+- Fix unreadable genome track labels (light text on IGV's white label background in dark mode): GenoPilot's viewer styles now outrank IGV's adopted stylesheet, which also lets the track area reach the bottom of the canvas for panning.
+
+- Size genome annotation and variant tracks to their content, let researchers drag (or use ↑/↓ on) the separator below any track to set its height and double-click it to reset; dragging the empty space below the last track pans the view; a track resized taller than its content no longer lets a vertical drag move the content below its top edge.
+
+- Name where a browser view was opened from in its headline, such as the workflow and run (`Workflow "<label>": <run>: <view>`) or the accession catalog.
+
+- Group the genome help menu by guide: a guide's sections move into its own submenu, opened with Whole guide first, instead of being listed beside the guides.
+
+- Add per-track Show `region` records and Show `chromosome` records switches for GFF3 annotation tracks in genome Settings (`region` shown, `chromosome` hidden by default, as before), and explain whole-sequence records and overlapping annotation rows in genome help.
+
+- Open an annotation transfer's genomes in the browser with `v`: the target with the transferred annotation and LiftOn's unverified intermediate Liftoff and miniprot annotations (hidden by default), or the reference with its source annotation. Verified files are checked against `artifacts.yaml` before they are served; the workflow's result help gains a guide to reading the views.
+
 - Identify annotation codon fills by their native drawing scope, keeping codon shading and start/stop highlights independent of custom strand colors that match IGV's literal colors.
 
 - Separate genome palette rules, canvas glyph drawing, geometry, and wrapper lifecycle; document track-scoped color mappings and deliberate evidence-color preservation. Add opt-in, local-only unmapped-paint diagnostics in Settings with deduplication, bounded collection, and no source or biological metadata.

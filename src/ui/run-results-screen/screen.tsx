@@ -56,6 +56,7 @@ import {SectionList, type SectionListItem} from "./section-list.js";
 import {useGenomeSession} from '../../browser/use-genome-session.js';
 import {browserViewShortcut} from '../../browser/contract.js';
 import {documentView} from '../../browser/documents.js';
+import {useTransferGenomeViews} from './transfer-genome-views.js';
 import {cohortConsensusView, consensusIsolateView, consensusSitesView, siteItemId} from '../../workflows/reference-consensus/views.js';
 
 export type SupportPath = ResultPath & {id: string; label: string};
@@ -190,7 +191,7 @@ export function RunResultsScreen({
     }
     genome.open(async signal => {
       const context = {result: loaded.result, configuration: loaded.configuration, application: browser.application,
-        workflow: {id: manifest.id, version: manifest.workflow_version}, signal};
+        workflow: {id: manifest.id, version: manifest.workflow_version, label: manifest.label}, signal};
       if (selectedSite && sitesCohort && readySites) {
         const documents = await loadHelp();
         signal.throwIfAborted();
@@ -209,6 +210,8 @@ export function RunResultsScreen({
     }, selectedSite ? selectBrowserSite : undefined);
   };
   const [annotationTab, setAnnotationTab] = useState<AnnotationTransferTabId>('overview');
+  const transferViews = useTransferGenomeViews({loaded: isAnnotationTransferResult(loaded) ? loaded : undefined, runDirectory,
+    manifest, loadHelp, scope: JSON.stringify([inputActive, mode.kind, view])});
 
   // The Sites tab reads the selected cohort's tables once, when it is first shown; leaving the tab
   // or choosing another cohort before they are read cancels the reading.
@@ -233,7 +236,7 @@ export function RunResultsScreen({
     // The tables are derived from the cohort, so its ID is enough to decide when to read again.
   }, [sitesCohortId]);
   // The tab bar takes two more rows above the scrolled content.
-  const visibleRows = Math.max(5, rows - (consensus || annotationTransfer ? 17 : 15));
+  const visibleRows = Math.max(5, rows - (consensus || annotationTransfer ? 17 : 15) - transferViews.choiceRows);
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
   const effectiveScrollOffset = Math.min(scrollOffsets.results, maximumScrollOffset);
 
@@ -373,6 +376,9 @@ export function RunResultsScreen({
     }
     if (input === 'v' && canViewGenome) {
       openResultGenome();
+      return;
+    }
+    if (transferViews.handleInput(input, key)) {
       return;
     }
     if (consensusKey(input, key)) {
@@ -566,7 +572,7 @@ export function RunResultsScreen({
   const listTab = consensusView && (consensusView.tab === 'cohorts' ||
     (consensusView.tab === 'isolates' && !consensusView.isolateDetail) ||
     (consensusView.tab === 'sites' && !consensusView.siteDetail));
-  const shortcuts = [
+  const shortcuts = transferViews.choosing ? transferViews.shortcuts : [
     consensus || annotationTransfer ? 'Tab/←/→ — Switch tab' : '',
     listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 ? '↑/↓ — Scroll' : '',
     maximumScrollOffset > 0 ? 'PageUp/PageDown (or fn + ↑/↓) — Page' : '',
@@ -578,10 +584,14 @@ export function RunResultsScreen({
       ? 'c — Continue iteration'
       : '',
     canViewGenome ? browserViewShortcut : '',
+    ...transferViews.shortcuts,
     genomeSourceAvailable && browser && !browser.genomeAvailable ? `${browserViewShortcut} (unavailable: release bundling pending)` : '',
     '? — Help',
   ];
   let back: string | false = onBack ? 'Back' : false;
+  if (transferViews.back) {
+    back = transferViews.back;
+  }
   if (consensusView?.isolateDetail) {
     back = 'Back to isolates';
   } else if (consensusView?.tab === 'sites' && consensusView.siteDetail) {
@@ -610,7 +620,7 @@ export function RunResultsScreen({
             setAnnotationTab(tab);
             setScrollOffsets(current => ({...current, results: 0}));
           }}
-          inputActive={inputActive}
+          inputActive={inputActive && !transferViews.choosing}
         />
       ) : undefined}
       shortcuts={shortcuts}
@@ -618,6 +628,7 @@ export function RunResultsScreen({
     >
       {genome.busy ? <Text>Checking genome reference checksum…</Text> : null}
       {genome.error ? <Alert variant="error">{sanitizeTerminalText(genome.error)}</Alert> : null}
+      {transferViews.status}
       <Box
         height={contentHeight === 0 ? undefined : visibleRows}
         overflow={contentHeight === 0 ? 'visible' : 'hidden'}
@@ -653,6 +664,7 @@ export function RunResultsScreen({
           </>}
         </Box>
       </Box>
+      {transferViews.choice}
     </Page>
   );
 }

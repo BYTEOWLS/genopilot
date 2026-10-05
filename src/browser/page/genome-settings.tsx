@@ -1,11 +1,11 @@
 import React from 'react';
 import {Button, Group, Popover, Stack, Switch, Text} from '@mantine/core';
 import type {GenomeTrack} from '../contract.js';
-import {defaultAlignmentDisplay, type useGenomeDisplay} from './use-genome-display.js';
+import {defaultAlignmentDisplay, defaultHiddenTypes, type useGenomeDisplay} from './use-genome-display.js';
 
 type Display = ReturnType<typeof useGenomeDisplay>;
 
-export function GenomeSettings({ready, opened, setOpened, referenceName, tracks, shown, display}: {
+export function GenomeSettings({ready, opened, setOpened, referenceName, tracks, shown, display, changeHiddenTypes}: {
   ready: boolean;
   opened: boolean;
   setOpened: (opened: boolean) => void;
@@ -13,9 +13,11 @@ export function GenomeSettings({ready, opened, setOpened, referenceName, tracks,
   tracks: GenomeTrack[];
   shown: (id: string) => boolean;
   display: Display;
+  changeHiddenTypes: (types: readonly string[]) => void;
 }): React.JSX.Element {
   const selected = tracks.find(track => track.id === display.target);
-  const {alignment, referenceDisplay, colors} = display;
+  const {alignment, referenceDisplay, colors, hiddenTypes} = display;
+  const showType = (type: string, visible: boolean): void => changeHiddenTypes(visible ? hiddenTypes.filter(hidden => hidden !== type) : [...hiddenTypes, type]);
   return <Popover opened={opened} onChange={setOpened} position="bottom-end" width={360} withinPortal>
     <Popover.Target><Button data-control="genome-settings" type="button" variant="default" disabled={!ready} aria-expanded={opened} onClick={() => setOpened(!opened)}>Settings</Button></Popover.Target>
     <Popover.Dropdown className="genome-settings">
@@ -59,8 +61,14 @@ export function GenomeSettings({ready, opened, setOpened, referenceName, tracks,
           <select id="genome-annotation-layout" value={display.mode} onChange={event => display.changeMode(event.currentTarget.value)}>
             <option value="EXPANDED">Expanded</option><option value="SQUISHED">Compact</option><option value="COLLAPSED">Collapsed</option>
           </select>
+          {selected.format === 'gff3' ? <>
+            <label><input type="checkbox" checked={!hiddenTypes.includes('region')} onChange={event => showType('region', event.currentTarget.checked)} /> Show <code>region</code> records</label>
+            <label><input type="checkbox" checked={!hiddenTypes.includes('chromosome')} onChange={event => showType('chromosome', event.currentTarget.checked)} /> Show <code>chromosome</code> records (hidden by default)</label>
+            <Text size="xs" c="dimmed">These records span a whole sequence and describe its source, such as strain and collection site, rather than a gene. Changing them reloads the track.</Text>
+          </> : null}
           <Text size="xs" c="dimmed">{shown(display.target) ? 'Changes apply immediately.' : 'Show this track to see its display settings.'} Coding-exon translation appears automatically at close zoom when CDS frame information is available. Start/stop highlights keep their own colors.</Text>
           <Button variant="default" onClick={() => display.changeColors()}>Reset strand colors to theme defaults</Button>
+          {selected.format === 'gff3' ? <Button variant="default" onClick={() => changeHiddenTypes(defaultHiddenTypes)}>Reset record types</Button> : null}
         </> : null}
         <Switch data-control="genome-color-diagnostics" label="Collect unmapped canvas colors (browser console)" checked={display.colorDiagnostics} disabled={!ready} onChange={event => display.setColorDiagnostics(event.currentTarget.checked)} />
         <Text size="xs" c="dimmed">Presentation only. Nothing is written to source files or saved workflow settings. Custom colors persist across theme changes until reset; check their contrast in both themes.</Text>

@@ -2,6 +2,14 @@ import type {Block} from '../docs/markdown.js';
 import type {FileSnapshot} from './fasta-index.js';
 
 export const browserViewShortcut = 'v — View in browser';
+/** A view's headline: the CLI place it was opened from, then what it shows, such as `Accession catalog: <genome>`. */
+export function viewTitle(...parts: string[]): string {
+  return parts.join(': ');
+}
+/** The headline of a view opened from a run's results. */
+export function runViewTitle(workflow: {label: string}, run: {id: string; name?: string}, part: string): string {
+  return viewTitle(`Workflow "${workflow.label}"`, run.name || run.id, part);
+}
 export type BrowserDocument = {
   id: string;
   title: string;
