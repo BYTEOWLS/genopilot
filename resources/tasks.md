@@ -9,6 +9,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 ## Workflows
 
 - [ ] Save isolate FASTAs from a run to the isolate catalog ([concept](concepts/saved-isolate-sequences.md)).
+- [ ] Transfer genome views: reference and target from the annotation transfer's result page ([concept](concepts/transfer-genome-view.md)).
 - [ ] Annotation review: rate transferred proteins, list genes to review, record verdicts and candidate-model choices, and suggest transferring the consensus annotation ([concept](concepts/annotation-review.md)).
 - [ ] GFF3 find-and-replace ([concept](concepts/annotation-id-rewriting.md)); required before INSDC submission.
 - [ ] INSDC submission preparation (NCBI, ENA, or DDBJ): genome and isolate reads ([concept](concepts/insdc-submission/README.md)).

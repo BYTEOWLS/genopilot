@@ -79,6 +79,8 @@ The *Proteins* tab lists the rows with at least one reason, sorted so likely rea
 
 ## Review view
 
+It builds on the target view of the [transfer genome views](transfer-genome-view.md); this section is revised against that design when the review is worked on.
+
 The read-only genome view, built like the reference consensus's Sites view, which already provides everything the review needs: verified references, annotation and BED tracks served by Range, item markers drawn in memory, item cards, presets, a guide section from `results.md`, and navigation synchronized with the CLI. The review adds a view builder, `src/workflows/annotation-transfer/views.ts`, and no change to the shared browser code.
 
 `v` on the *Proteins* tab's review list opens the view at the selected gene, in the target genome's coordinates; `v` in the review form does the same. As with Sites, the browser's previous and next move the CLI's selection, and changing the list's filter or leaving it detaches navigation until `v` is pressed again. Opening the review form is such a change today: the result screen keys its genome session by its mode, so entering the form detaches the tab's navigation and `v` in the form reopens the view on the form's list. Keeping one session across both, so the browser follows the researcher from the tab into the form without a reopen, is a refinement for when the review form is built.
@@ -197,7 +199,8 @@ The suggestion and warning live only in that workflow's documentation; shared co
 
 Answered in the kickoff (work step 6) with the review view on a representative same-species transfer:
 
-- Which files in `lifton_output/liftoff/` and `lifton_output/miniprot/` hold the candidate models, and does IGV show them as gene models, translation included? A file it cannot show is a decision point, not a reason for a converted copy.
+- Which files hold the candidate models, and does IGV show them: answered by the [transfer genome views](transfer-genome-view.md#open-questions).
+- Show unmapped genes in the reference view of the transfer genome views?
 - Can each gene's Liftoff and miniprot models be matched to the transferred gene, by ID or locus, and which attributes does the reviewed GFF3 take from them? If they cannot be matched reliably, the candidate choice waits and *needs correction* covers those genes.
 - Default threshold: confirm the provisional 95% or change it.
 - Does the reasons table catch the genes a researcher would curate? Walk the review list in the view with a researcher; their feedback also counts as the [browser follow-up](browser-view-follow-up.md)'s requirements collection.
