@@ -86,6 +86,7 @@ function previousRunFormValues(configuration: AnnotationTransferConfiguration): 
     'target-source': target.source,
     'target-fasta': target.source === 'local' ? target.fasta : '',
     'target-accession': target.source === 'ncbi' ? target.accession : '',
+    'minimum-protein-identity': String(configuration.review.minimum_protein_identity),
     'cpu-allocation': configuration.resources.cpu_mode,
     'manual-cpu-limit': String(configuration.resources.manual_limit ?? ''),
     'output-root': configuration.run.output_root,
@@ -130,6 +131,7 @@ function annotationTransferDraft(
     targetSource: values['target-source'] === 'ncbi' ? 'ncbi' : 'local',
     targetFasta: values['target-fasta'] ?? '',
     targetAccession: values['target-accession'] ?? '',
+    minimumProteinIdentity: values['minimum-protein-identity'] ?? '',
     cpuMode:
       values['cpu-allocation'] === 'leave-one-free' ||
       values['cpu-allocation'] === 'manual'
@@ -157,6 +159,7 @@ function resolvedValues(
     'target-fasta': target.source === 'local' ? target.fasta : '',
     'target-accession': target.source === 'ncbi' ? target.accession : '',
     'lifton-profile': configuration.lifton.profile,
+    'minimum-protein-identity': String(configuration.review.minimum_protein_identity),
     'cpu-allocation': configuration.resources.cpu_mode,
     'manual-cpu-limit': String(configuration.resources.manual_limit ?? ''),
     'output-root': configuration.run.output_root,

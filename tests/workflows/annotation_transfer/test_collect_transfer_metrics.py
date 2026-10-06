@@ -32,6 +32,9 @@ chrC	LiftOn	sequence_feature	941	960	.	+	.	ID=note1
 """
 
 
+TARGET_FASTA = ">chrA\n" + "A" * 1000 + "\n>chrB\n" + "C" * 1000 + "\n>chrC\n" + "G" * 1000 + "\n"
+
+
 class CollectTransferMetricsTests(unittest.TestCase):
     def prepare(self, temp_dir: Path) -> argparse.Namespace:
         reference = temp_dir / "resolved" / "reference.gff3"
@@ -45,6 +48,8 @@ class CollectTransferMetricsTests(unittest.TestCase):
         stats.mkdir(parents=True)
         intermediate.mkdir(parents=True)
         reference.write_text(REFERENCE_GFF3, encoding="utf-8")
+        target_fasta = temp_dir / "resolved" / "target.fasta"
+        target_fasta.write_text(TARGET_FASTA, encoding="utf-8")
         raw.write_text(TARGET_GFF3, encoding="utf-8")
         validation.write_text(
             json.dumps(
@@ -90,6 +95,9 @@ class CollectTransferMetricsTests(unittest.TestCase):
             reference_gff3=reference,
             raw_gff3=raw,
             validation=validation,
+            target_fasta=target_fasta,
+            minimum_protein_identity=99,
+            unresolved_bed=temp_dir / "results" / "target-unresolved.bed",
             diagnostics=diagnostics,
             details=temp_dir / "results" / "feature-transfer.tsv",
             metrics=temp_dir / "results" / "metrics.json",
@@ -101,11 +109,46 @@ class CollectTransferMetricsTests(unittest.TestCase):
             effective_cpus=4,
         )
 
+    @staticmethod
+    def argv(args: argparse.Namespace) -> list[str]:
+        return [
+            "--reference-gff3",
+            str(args.reference_gff3),
+            "--raw-gff3",
+            str(args.raw_gff3),
+            "--validation",
+            str(args.validation),
+            "--target-fasta",
+            str(args.target_fasta),
+            "--minimum-protein-identity",
+            str(args.minimum_protein_identity),
+            "--unresolved-bed",
+            str(args.unresolved_bed),
+            "--diagnostics",
+            str(args.diagnostics),
+            "--details",
+            str(args.details),
+            "--metrics",
+            str(args.metrics),
+            "--summary",
+            str(args.summary),
+            "--workflow-id",
+            args.workflow_id,
+            "--workflow-version",
+            str(args.workflow_version),
+            "--run-id",
+            args.run_id,
+            "--run-created-at",
+            args.run_created_at,
+            "--effective-cpus",
+            str(args.effective_cpus),
+        ]
+
     def test_collects_deterministic_per_feature_rows_and_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = self.prepare(Path(tmp))
 
-            metrics, summary, rows = collect_transfer_metrics.collect(args)
+            metrics, summary, rows, _unresolved = collect_transfer_metrics.collect(args)
             collect_transfer_metrics.write_details(args.details, rows)
 
             self.assertEqual(
@@ -121,6 +164,10 @@ class CollectTransferMetricsTests(unittest.TestCase):
             self.assertEqual(rows[1]["minimum_protein_identity"], 0.93)
             self.assertEqual(rows[1]["mutations"], "frameshift,stop_missing")
             self.assertEqual(rows[3]["target_id"], "")
+            self.assertEqual(
+                [(row["reference_seqid"], row["reference_start"], row["reference_end"], row["reference_strand"]) for row in rows],
+                [("chr1", 1, 100, "+"), ("chr1", 201, 300, "+"), ("chr1", 201, 300, "+"), ("chr1", 401, 500, "+")],
+            )
 
             transfer = metrics["transfer"]
             self.assertEqual(transfer["reference_features"], 3)
@@ -172,7 +219,7 @@ class CollectTransferMetricsTests(unittest.TestCase):
             ).replace(";protein_identity=0.900", "")
             args.raw_gff3.write_text(without_identities, encoding="utf-8")
 
-            metrics, _summary, _rows = collect_transfer_metrics.collect(args)
+            metrics, _summary, _rows, _unresolved = collect_transfer_metrics.collect(args)
 
             identity = metrics["transfer"]["protein_identity_by_transcript_model"]
             self.assertEqual(identity["unit"], "transcript_model")
@@ -207,7 +254,7 @@ class CollectTransferMetricsTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            metrics, _summary, _rows = collect_transfer_metrics.collect(args)
+            metrics, _summary, _rows, _unresolved = collect_transfer_metrics.collect(args)
 
             self.assertEqual(
                 metrics["transfer"]["changed_primary_protein_coding_features"], 0
@@ -228,7 +275,7 @@ class CollectTransferMetricsTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            metrics, _summary, _rows = collect_transfer_metrics.collect(args)
+            metrics, _summary, _rows, _unresolved = collect_transfer_metrics.collect(args)
 
             self.assertEqual(
                 metrics["transfer"]["changed_primary_protein_coding_features"], 0
@@ -248,7 +295,7 @@ class CollectTransferMetricsTests(unittest.TestCase):
                     encoding="utf-8",
                 )
 
-                metrics, _summary, _rows = collect_transfer_metrics.collect(args)
+                metrics, _summary, _rows, _unresolved = collect_transfer_metrics.collect(args)
 
                 self.assertEqual(
                     metrics["transfer"]["changed_primary_protein_coding_features"], 1
@@ -274,7 +321,7 @@ class CollectTransferMetricsTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            metrics, summary, _rows = collect_transfer_metrics.collect(args)
+            metrics, summary, _rows, _unresolved = collect_transfer_metrics.collect(args)
 
             self.assertEqual(metrics["validation"]["status"], "failed")
             self.assertEqual(summary["status"], "validation-failed")
@@ -305,42 +352,160 @@ class CollectTransferMetricsTests(unittest.TestCase):
             ):
                 collect_transfer_metrics.collect(args)
 
-    def test_main_writes_all_three_outputs(self) -> None:
+    def test_rates_primary_coding_copies_and_leaves_other_rows_empty(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = self.prepare(Path(tmp))
-            exit_code = collect_transfer_metrics.main(
+
+            metrics, _summary, rows, _unresolved = collect_transfer_metrics.collect(args)
+
+            rating = [
+                (row["protein_category"], row["lifton_status"], row["unresolved_bases"], row["review_reasons"])
+                for row in rows
+            ]
+            self.assertEqual(
+                rating,
                 [
-                    "--reference-gff3",
-                    str(args.reference_gff3),
-                    "--raw-gff3",
-                    str(args.raw_gff3),
-                    "--validation",
-                    str(args.validation),
-                    "--diagnostics",
-                    str(args.diagnostics),
-                    "--details",
-                    str(args.details),
-                    "--metrics",
-                    str(args.metrics),
-                    "--summary",
-                    str(args.summary),
-                    "--workflow-id",
-                    args.workflow_id,
-                    "--workflow-version",
-                    str(args.workflow_version),
-                    "--run-id",
-                    args.run_id,
-                    "--run-created-at",
-                    args.run_created_at,
-                    "--effective-cpus",
-                    str(args.effective_cpus),
-                ]
+                    ("unchanged", "Liftoff", 0, ""),
+                    ("disrupted", "LiftOn_miniprot", 0, "disrupted,below_threshold"),
+                    ("", "", "", ""),
+                    ("unmapped", "", "", "unmapped_or_lost"),
+                ],
             )
+            proteins = metrics["proteins"]
+            self.assertEqual(proteins["minimum_protein_identity_percent"], 99)
+            self.assertEqual(proteins["rated_genes"], 3)
+            self.assertEqual(
+                proteins["genes_by_category"],
+                {"unmapped": 1, "lost": 0, "disrupted": 1, "inframe_indel": 0, "substitutions": 0, "unchanged": 1},
+            )
+            self.assertEqual(
+                proteins["genes_by_review_reason"],
+                {"unmapped_or_lost": 1, "disrupted": 1, "below_threshold": 1, "unresolved_bases": 0},
+            )
+            self.assertEqual(proteins["genes_listed_for_review"], 2)
+            self.assertEqual(
+                proteins["genes_by_match"], {"exact_match": 1, "near_match": 0, "needs_review": 2}
+            )
+            for key in proteins:
+                if key not in ("source", "unresolved_intervals"):
+                    self.assertIn(key, metrics["definitions"])
+
+    def test_counts_a_changed_protein_above_the_threshold_as_a_near_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self.prepare(Path(tmp))
+            args.raw_gff3.write_text(
+                TARGET_GFF3.replace(
+                    "protein_identity=1.000;mutation=synonymous", "protein_identity=0.995;mutation=nonsynonymous"
+                ),
+                encoding="utf-8",
+            )
+
+            metrics, _summary, rows, _unresolved = collect_transfer_metrics.collect(args)
+
+            self.assertEqual(rows[0]["protein_category"], "substitutions")
+            self.assertEqual(rows[0]["review_reasons"], "")
+            self.assertEqual(
+                metrics["proteins"]["genes_by_match"], {"exact_match": 0, "near_match": 1, "needs_review": 2}
+            )
+
+    def test_leaves_non_coding_features_unrated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self.prepare(Path(tmp))
+            (args.diagnostics / "stats" / "mapped_feature.txt").write_text(
+                "gene1\t1\tnon-coding\ngene2\t2\tcoding\n", encoding="utf-8"
+            )
+            (args.diagnostics / "stats" / "unmapped_features.txt").write_text("gene3\tnon-coding\n", encoding="utf-8")
+
+            metrics, _summary, rows, _unresolved = collect_transfer_metrics.collect(args)
+
+            self.assertEqual([row["protein_category"] for row in rows], ["", "disrupted", "", ""])
+            self.assertEqual(rows[3]["review_reasons"], "")
+            self.assertEqual(metrics["proteins"]["rated_genes"], 1)
+
+    def test_counts_unresolved_bases_in_the_cds_and_writes_them_as_bed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self.prepare(Path(tmp))
+            args.target_fasta.write_text(
+                TARGET_FASTA.replace("A" * 1000, "A" * 49 + "NR" + "A" * 949), encoding="utf-8"
+            )
+            args.raw_gff3.write_text(
+                TARGET_GFF3.replace(
+                    "mutation=synonymous\n",
+                    "mutation=synonymous\nchrA\tLiftOn\tCDS\t11\t110\t.\t+\t0\tID=cds1;Parent=mrna1\n",
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(collect_transfer_metrics.main(self.argv(args)), 0)
+
+            with open(args.details, encoding="utf-8", newline="") as handle:
+                gene1 = next(csv.DictReader(handle, delimiter="\t"))
+            self.assertEqual(gene1["unresolved_bases"], "2")
+            self.assertEqual(gene1["review_reasons"], "unresolved_bases")
+            self.assertEqual(args.unresolved_bed.read_text(encoding="utf-8"), "chrA\t49\t51\n")
+            metrics = json.loads(args.metrics.read_text(encoding="utf-8"))
+            self.assertEqual(metrics["proteins"]["unresolved_target_bases"], {"n": 1, "other": 1})
+
+    def test_main_writes_every_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self.prepare(Path(tmp))
+            exit_code = collect_transfer_metrics.main(self.argv(args))
 
             self.assertEqual(exit_code, 0)
             self.assertTrue(args.details.is_file())
             self.assertTrue(args.metrics.is_file())
             self.assertTrue(args.summary.is_file())
+            self.assertTrue(args.unresolved_bed.is_file())
+
+
+class ProteinRatingTests(unittest.TestCase):
+    def test_takes_the_most_severe_category(self) -> None:
+        cases = [
+            ([], 1.0, "unchanged"),
+            (["identical"], 1.0, "unchanged"),
+            (["synonymous"], 1.0, "unchanged"),
+            (["nonsynonymous"], 0.99, "substitutions"),
+            (["inframe_deletion", "nonsynonymous"], 0.98, "inframe_indel"),
+            (["inframe_insertion", "start_lost"], 0.9, "disrupted"),
+            (["frameshift", "no_protein"], 0.5, "lost"),
+            (["full_transcript_loss"], 0.0, "lost"),
+            ([], None, "lost"),
+        ]
+        for classes, identity, expected in cases:
+            with self.subTest(classes=classes, identity=identity):
+                self.assertEqual(collect_transfer_metrics.protein_category(classes, identity, "t1"), expected)
+
+    def test_refuses_an_unknown_mutation_class(self) -> None:
+        with self.assertRaisesRegex(collect_transfer_metrics.SummaryError, "does not know: novel_class"):
+            collect_transfer_metrics.protein_category(["novel_class"], 0.9, "t1")
+
+    def test_lists_reasons_with_the_threshold_as_an_exclusive_bound(self) -> None:
+        reasons = collect_transfer_metrics.review_reasons
+        self.assertEqual(reasons("unchanged", 0.99, 0, 99), [])
+        self.assertEqual(reasons("substitutions", 0.989, 0, 99), ["below_threshold"])
+        self.assertEqual(reasons("substitutions", 0.57, 0, 57), [])
+        self.assertEqual(reasons("lost", None, 0, 99), ["unmapped_or_lost"])
+        self.assertEqual(reasons("unmapped", None, 0, 99), ["unmapped_or_lost"])
+        self.assertEqual(
+            reasons("disrupted", 0.5, 3, 99), ["disrupted", "below_threshold", "unresolved_bases"]
+        )
+
+    def test_reads_unresolved_runs_across_lines_and_counts_each_cds_position_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            fasta = Path(tmp) / "target.fasta"
+            fasta.write_text(">s1 description\nacNN\nNNAC\nRT\n>s2\nACGT\n", encoding="utf-8")
+
+            intervals, counts = collect_transfer_metrics.read_unresolved_intervals(fasta)
+
+            self.assertEqual(intervals, {"s1": [(2, 6), (8, 9)], "s2": []})
+            self.assertEqual(counts, {"n": 4, "other": 1})
+            cds = [
+                collect_transfer_metrics.Feature("s1", "LiftOn", "CDS", 1, 6, "+", {"Parent": "m1"}),
+                collect_transfer_metrics.Feature("s1", "LiftOn", "CDS", 4, 9, "+", {"Parent": "m2"}),
+                collect_transfer_metrics.Feature("s1", "LiftOn", "exon", 1, 10, "+", {"Parent": "m1"}),
+            ]
+            self.assertEqual(collect_transfer_metrics.unresolved_in_cds(cds, intervals), 5)
+            self.assertEqual(collect_transfer_metrics.unresolved_in_cds(cds[:1], intervals), 4)
 
 
 if __name__ == "__main__":

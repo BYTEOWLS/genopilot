@@ -131,7 +131,7 @@ The cohort consensus FASTA is shorter or longer than the backbone wherever a del
 
 ## Annotation transfer from a consensus result
 
-A result-page action on a consensus iteration that starts a new annotation transfer with the iteration's `consensus.fasta` as target and the backbone as reference, prefilled. It needs a way for one workflow to hand inputs to another without shared code naming either; until then the consensus documentation suggests the transfer ([concept](concepts/annotation-review.md#reference-consensus)).
+A result-page action on a consensus iteration that starts a new annotation transfer with the iteration's `consensus.fasta` as target and the backbone as reference, prefilled. It needs a way for one workflow to hand inputs to another without shared code naming either; until then the consensus documentation suggests the transfer ([concept](concepts/done/annotation-review.md#reference-consensus)).
 
 ## Advanced LiftOn controls
 
@@ -256,7 +256,7 @@ Any LiftOn-produced GFF3 may require review for genes that appear shifted, inser
 - short-read coverage loss is evidence but not proof of gene absence;
 - repetitive regions make gene and transposon placement difficult.
 
-The [annotation review](concepts/annotation-review.md) is the first step: a rating and review list, verdicts, and a choice among LiftOn's candidate models, shown in the genome view. Drawing a new structure stays delegated to a specialist genome-annotation editor (see *Corrected gene model import*). Any correction workflow must preserve:
+The [annotation review](concepts/done/annotation-review.md) is the first step: a rating and review list, shown in the genome view. The [annotation review decision](concepts/annotation-review-decision.md) adds verdicts and a choice among LiftOn's candidate models. Drawing a new structure stays delegated to a specialist genome-annotation editor (see *Corrected gene model import*). Any correction workflow must preserve:
 
 - the unmodified LiftOn output;
 - exact assembly and GFF3 checksums;
@@ -270,7 +270,7 @@ Manual corrections must never modify the nucleotide consensus without independen
 
 ## Corrected gene model import
 
-For genes the [annotation review](concepts/annotation-review.md#deferred) marks *needs correction*: the researcher corrects the gene in a specialist editor, such as Apollo, and GenoPilot imports the replacement GFF3 for that gene into the next review decision. The import is validated like LiftOn's GFF3, recorded with its checksum as `imported`, and shown as a difference to the transferred model before it is saved.
+For genes the [annotation review decision](concepts/annotation-review-decision.md#deferred) marks *needs correction*: the researcher corrects the gene in a specialist editor, such as Apollo, and GenoPilot imports the replacement GFF3 for that gene into the next review decision. The import is validated like LiftOn's GFF3, recorded with its checksum as `imported`, and shown as a difference to the transferred model before it is saved.
 
 ## Optional curated annotation from external workbooks
 

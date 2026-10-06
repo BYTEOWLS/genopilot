@@ -17,8 +17,9 @@ directory, and every step writes its log to logs/):
        Check the structure of the transferred annotation.
        -> results/validation.json
   5. summarize_annotation_transfer               shared/rules/summarize_results.smk
-       Per-feature table, metrics, and completion summary.
-       -> results/feature-transfer.tsv, results/metrics.json, results/summary.json
+       Per-feature table with the protein rating, metrics, and completion summary.
+       -> results/feature-transfer.tsv, results/metrics.json, results/summary.json,
+          results/target-unresolved.bed
   6. record_annotation_transfer_provenance       shared/rules/record_provenance.smk
        Checksums, tool versions, and commands of the whole run.
        -> artifacts.yaml, provenance/run.json
@@ -70,5 +71,6 @@ rule all:
         "results/feature-transfer.tsv",
         "results/metrics.json",
         "results/summary.json",
+        "results/target-unresolved.bed",
         "artifacts.yaml",
         "provenance/run.json",

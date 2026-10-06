@@ -11,8 +11,10 @@ Snakemake console output is never parsed.
 from __future__ import annotations
 
 import argparse
+import bisect
 import csv
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -25,6 +27,10 @@ SUMMARY_SCHEMA_VERSION = 1
 DETAIL_COLUMNS = (
     "reference_id",
     "feature_type",
+    "reference_seqid",
+    "reference_start",
+    "reference_end",
+    "reference_strand",
     "lifton_category",
     "status",
     "copy_number",
@@ -37,10 +43,28 @@ DETAIL_COLUMNS = (
     "minimum_dna_identity",
     "minimum_protein_identity",
     "mutations",
+    "protein_category",
+    "lifton_status",
+    "unresolved_bases",
+    "review_reasons",
 )
 
 # LiftOn mutation classes that describe no protein-level change.
 UNCHANGED_PROTEIN_CLASSES = frozenset({"identical", "synonymous", "non_coding"})
+
+# Protein categories of a coding gene's primary copy from its mutation classes, most severe first.
+# LiftOn writes no class at all for an identical protein, which therefore counts as unchanged.
+CATEGORY_CLASSES = (
+    ("lost", frozenset({"full_transcript_loss", "no_protein"})),
+    ("disrupted", frozenset({"frameshift", "stop_codon_gain", "stop_missing", "start_lost"})),
+    ("inframe_indel", frozenset({"inframe_insertion", "inframe_deletion"})),
+    ("substitutions", frozenset({"nonsynonymous"})),
+    ("unchanged", UNCHANGED_PROTEIN_CLASSES),
+)
+PROTEIN_CATEGORIES = ("unmapped", *(category for category, _classes in CATEGORY_CLASSES))
+KNOWN_MUTATION_CLASSES = frozenset().union(*(classes for _category, classes in CATEGORY_CLASSES))
+REVIEW_REASONS = ("unmapped_or_lost", "disrupted", "below_threshold", "unresolved_bases")
+_UNRESOLVED_RUN = re.compile(r"[^ACGTacgt]+")
 
 METRIC_EXPLANATIONS = {
     "reference_features": "Count of top-level reference features that LiftOn selected for transfer.",
@@ -56,11 +80,22 @@ METRIC_EXPLANATIONS = {
     "mutation_classifications_by_target_copy": "Count of target copies carrying each LiftOn mutation class; one copy can carry several classes.",
     "dna_identity_by_transcript_model": "Minimum, mean, and maximum LiftOn dna_identity over transcript models: aligned transcript sequence identity between reference and target.",
     "protein_identity_by_transcript_model": "Minimum, mean, and maximum LiftOn protein_identity over transcript models: aligned protein sequence identity between reference and target.",
+    "minimum_protein_identity_percent": "Run parameter: a rated gene whose lowest protein identity lies below this percentage is listed for review.",
+    "rated_genes": "Count of coding reference features rated: each primary target copy and each unmapped feature.",
+    "genes_by_category": "Count of rated genes per protein category; see the protein_category column.",
+    "genes_by_review_reason": "Count of rated genes per review reason; one gene can have several reasons.",
+    "genes_listed_for_review": "Count of rated genes with at least one review reason.",
+    "genes_by_match": "Rated genes split into three disjoint groups: exact_match (not listed for review, protein unchanged), near_match (not listed for review, protein changed but its identity at or above the minimum protein identity), and needs_review (listed for review).",
+    "unresolved_target_bases": "Count of target bases that are not A, C, G, or T, listed as intervals in the unresolved-bases BED: n for N, other for every other code, such as an IUPAC ambiguity code or a gap character.",
 }
 
 DETAIL_EXPLANATIONS = {
     "reference_id": "Identifier of the selected top-level feature in the reference GFF3 file.",
     "feature_type": "GFF3 type of the reference feature, for example gene.",
+    "reference_seqid": "Reference sequence carrying the feature, in the reference genome's coordinates.",
+    "reference_start": "One-based start coordinate of the feature on the reference sequence.",
+    "reference_end": "One-based inclusive end coordinate of the feature on the reference sequence.",
+    "reference_strand": "Strand of the feature on the reference sequence.",
     "lifton_category": "LiftOn category of the reference feature: coding, non-coding, or other.",
     "status": "mapped for the primary target copy, extra-copy for an additional target copy, or unmapped.",
     "copy_number": "Zero for the primary target copy; positive values identify additional LiftOn copies.",
@@ -73,6 +108,10 @@ DETAIL_EXPLANATIONS = {
     "minimum_dna_identity": "Lowest LiftOn DNA identity among transcript models below this target copy.",
     "minimum_protein_identity": "Lowest LiftOn protein identity among transcript models below this target copy.",
     "mutations": "Distinct LiftOn mutation classes observed below this target copy.",
+    "protein_category": "Most severe protein change of a coding feature's primary copy: unmapped, lost, disrupted, inframe_indel, substitutions, or unchanged; empty on additional copies and non-coding features.",
+    "lifton_status": "LiftOn's transcript statuses below this target copy, which say how LiftOn built each model, such as Liftoff, LiftOn_chaining_algorithm, or miniprot; empty where no rating applies.",
+    "unresolved_bases": "Count of target bases that are not A, C, G, or T in the union of this copy's CDS, each position once; empty where no rating applies.",
+    "review_reasons": "Reasons this gene is listed for review: unmapped_or_lost, disrupted, below_threshold, unresolved_bases; empty when none.",
 }
 
 
@@ -411,12 +450,118 @@ def transfer_method(feature: Feature, records: list[Feature]) -> str:
     return ",".join(statuses) if statuses else feature.source
 
 
+Intervals = dict[str, list[tuple[int, int]]]
+
+
+def read_unresolved_intervals(path: Path) -> tuple[Intervals, dict[str, int]]:
+    """The FASTA's runs of bases that are not A, C, G, or T, per sequence, 0-based and half-open,
+    and their bases counted as `n` (N) and `other`.
+
+    Streams the file and keeps only the intervals, never the sequence.
+    """
+    intervals: Intervals = {}
+    counts = {"n": 0, "other": 0}
+    current: list[tuple[int, int]] | None = None
+    position = 0
+    with open(path, encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if line.startswith(">"):
+                current = intervals.setdefault(line[1:].split()[0], [])
+                position = 0
+                continue
+            if current is None or not line:
+                continue
+            for match in _UNRESOLVED_RUN.finditer(line):
+                start, end = position + match.start(), position + match.end()
+                n = match.group().upper().count("N")
+                counts["n"] += n
+                counts["other"] += end - start - n
+                if current and current[-1][1] == start:
+                    current[-1] = (current[-1][0], end)
+                else:
+                    current.append((start, end))
+            position += len(line)
+    return intervals, counts
+
+
+def write_bed(path: Path, intervals: Intervals) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        for seqid, spans in intervals.items():
+            for start, end in spans:
+                handle.write(f"{seqid}\t{start}\t{end}\n")
+
+
+def unresolved_in_cds(records: list[Feature], intervals: Intervals) -> int:
+    """Unresolved bases in the union of the records' CDS, each position counted once."""
+    count = 0
+    by_seqid: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    for record in records:
+        if record.feature_type == "CDS":
+            by_seqid[record.seqid].append((record.start - 1, record.end))
+    for seqid, spans in by_seqid.items():
+        unresolved = intervals.get(seqid, [])
+        ends = [end for _start, end in unresolved]
+        merged: list[tuple[int, int]] = []
+        for start, end in sorted(spans):
+            if merged and start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else:
+                merged.append((start, end))
+        for start, end in merged:
+            index = bisect.bisect_right(ends, start)
+            while index < len(unresolved) and unresolved[index][0] < end:
+                count += min(end, unresolved[index][1]) - max(start, unresolved[index][0])
+                index += 1
+    return count
+
+
+def protein_category(classes: list[str], protein_identity: float | None, target_id: str) -> str:
+    unknown = sorted(set(classes) - KNOWN_MUTATION_CLASSES)
+    if unknown:
+        raise SummaryError(
+            f"target '{target_id}' has mutation classes the rating does not know: {', '.join(unknown)}"
+        )
+    if protein_identity is None:
+        return "lost"
+    for category, category_classes in CATEGORY_CLASSES:
+        if category_classes & set(classes):
+            return category
+    return "unchanged"
+
+
+def review_reasons(
+    category: str, protein_identity: float | None, unresolved: int, threshold_percent: int
+) -> list[str]:
+    reasons = []
+    if category in ("unmapped", "lost"):
+        reasons.append("unmapped_or_lost")
+    if category == "disrupted":
+        reasons.append("disrupted")
+    # Both sides come from decimal text, so the fraction is compared rather than identity * 100.
+    if protein_identity is not None and protein_identity < threshold_percent / 100:
+        reasons.append("below_threshold")
+    if unresolved:
+        reasons.append("unresolved_bases")
+    return reasons
+
+
+def lifton_statuses(records: list[Feature]) -> str:
+    return ",".join(sorted({record.attributes["status"] for record in records if record.attributes.get("status")}))
+
+
+UNRATED = {"protein_category": "", "lifton_status": "", "unresolved_bases": "", "review_reasons": ""}
+
+
 def build_detail_rows(
     reference_features: list[Feature],
     target_features: list[Feature],
     all_target: list[Feature],
     mapped_report: dict[str, ReportedFeature],
     unmapped_report: dict[str, ReportedFeature],
+    unresolved: Intervals,
+    threshold_percent: int,
 ) -> list[dict[str, object]]:
     reference_by_id = {feature.feature_id: feature for feature in reference_features}
     assert None not in reference_by_id
@@ -444,6 +589,12 @@ def build_detail_rows(
         reference_id = reference.feature_id
         assert reference_id is not None
         targets = sorted(targets_by_reference.get(reference_id, []), key=lambda item: item[0])
+        reference_position = {
+            "reference_seqid": reference.seqid,
+            "reference_start": reference.start,
+            "reference_end": reference.end,
+            "reference_strand": reference.strand,
+        }
         if reference_id in unmapped_report:
             if targets:
                 raise SummaryError(
@@ -453,6 +604,7 @@ def build_detail_rows(
                 {
                     "reference_id": reference_id,
                     "feature_type": reference.feature_type,
+                    **reference_position,
                     "lifton_category": unmapped_report[reference_id].category,
                     "status": "unmapped",
                     "copy_number": 0,
@@ -465,6 +617,12 @@ def build_detail_rows(
                     "minimum_dna_identity": "",
                     "minimum_protein_identity": "",
                     "mutations": "",
+                    **UNRATED,
+                    **(
+                        {"protein_category": "unmapped", "review_reasons": "unmapped_or_lost"}
+                        if unmapped_report[reference_id].category == "coding"
+                        else {}
+                    ),
                 }
             )
             continue
@@ -484,10 +642,24 @@ def build_detail_rows(
             records = [target, *descendants.get(target_id, [])]
             dna_identity = minimum_identity(records, "dna_identity")
             protein_identity = minimum_identity(records, "protein_identity")
+            classes = mutation_classes(records)
+            rating = dict(UNRATED)
+            if copy_number == 0 and report.category == "coding":
+                category = protein_category(classes, protein_identity, target_id)
+                unresolved_bases = unresolved_in_cds(records, unresolved)
+                rating = {
+                    "protein_category": category,
+                    "lifton_status": lifton_statuses(records),
+                    "unresolved_bases": unresolved_bases,
+                    "review_reasons": ",".join(
+                        review_reasons(category, protein_identity, unresolved_bases, threshold_percent)
+                    ),
+                }
             rows.append(
                 {
                     "reference_id": reference_id,
                     "feature_type": reference.feature_type,
+                    **reference_position,
                     "lifton_category": report.category,
                     "status": "extra-copy" if copy_number else "mapped",
                     "copy_number": copy_number,
@@ -501,7 +673,8 @@ def build_detail_rows(
                     "minimum_protein_identity": protein_identity
                     if protein_identity is not None
                     else "",
-                    "mutations": ",".join(mutation_classes(records)),
+                    "mutations": ",".join(classes),
+                    **rating,
                 }
             )
     return rows
@@ -620,7 +793,7 @@ def write_details(path: Path, rows: list[dict[str, object]]) -> None:
         writer.writerows(rows)
 
 
-def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object]]]:
+def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object]], Intervals]:
     stats_dir = args.diagnostics / "stats"
     selected_types_path = args.diagnostics / "intermediate_files" / "auto_feature_types.txt"
     run_manifest_path = args.diagnostics / "run_manifest.json"
@@ -650,12 +823,24 @@ def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object
         completeness,
         manifest_counts,
     )
+    unresolved, unresolved_counts = read_unresolved_intervals(args.target_fasta)
     rows = build_detail_rows(
         reference,
         target,
         target_all,
         mapped_report,
         unmapped_report,
+        unresolved,
+        args.minimum_protein_identity,
+    )
+    rated = [row for row in rows if row["protein_category"]]
+    reason_counts = Counter(
+        reason for row in rated for reason in str(row["review_reasons"]).split(",") if reason
+    )
+    category_counts = Counter(str(row["protein_category"]) for row in rated)
+    listed = sum(1 for row in rated if row["review_reasons"])
+    exact = sum(
+        1 for row in rated if not row["review_reasons"] and row["protein_category"] == "unchanged"
     )
 
     validation = read_json(args.validation)
@@ -743,6 +928,21 @@ def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object
             ],
             "detail_enrichment_source": str(args.raw_gff3),
         },
+        "proteins": {
+            "minimum_protein_identity_percent": args.minimum_protein_identity,
+            "rated_genes": len(rated),
+            "genes_by_category": {category: category_counts[category] for category in PROTEIN_CATEGORIES},
+            "genes_by_review_reason": {reason: reason_counts[reason] for reason in REVIEW_REASONS},
+            "genes_listed_for_review": listed,
+            "genes_by_match": {
+                "exact_match": exact,
+                "near_match": len(rated) - listed - exact,
+                "needs_review": listed,
+            },
+            "unresolved_target_bases": unresolved_counts,
+            "source": str(args.details),
+            "unresolved_intervals": str(args.unresolved_bed),
+        },
         "validation": {
             "status": validation_status,
             "errors": len(validation_errors),
@@ -798,12 +998,13 @@ def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object
             "aggregated_metrics": str(args.metrics),
             "completion_summary": str(args.summary),
             "validation": str(args.validation),
+            "target_unresolved_bed": str(args.unresolved_bed),
         },
         "source_evidence": {
             name: evidence_entry(path) for name, path in evidence_paths.items()
         },
     }
-    return metrics, summary, rows
+    return metrics, summary, rows, unresolved
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -811,6 +1012,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--reference-gff3", type=Path, required=True)
     parser.add_argument("--raw-gff3", type=Path, required=True)
     parser.add_argument("--validation", type=Path, required=True)
+    parser.add_argument("--target-fasta", type=Path, required=True)
+    parser.add_argument("--minimum-protein-identity", type=int, required=True)
+    parser.add_argument("--unresolved-bed", type=Path, required=True)
     parser.add_argument("--diagnostics", type=Path, required=True)
     parser.add_argument("--details", type=Path, required=True)
     parser.add_argument("--metrics", type=Path, required=True)
@@ -826,7 +1030,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
-        metrics, summary, rows = collect(args)
+        metrics, summary, rows, unresolved = collect(args)
+        write_bed(args.unresolved_bed, unresolved)
         write_details(args.details, rows)
         write_json(args.metrics, metrics)
         write_json(args.summary, summary)

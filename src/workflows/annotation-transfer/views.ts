@@ -8,9 +8,12 @@ import {verifyFileChecksum} from '../../browser/verified-file.js';
 import {isRecord} from '../configuration-validation.js';
 import {runViewTitle, type BrowserDocument, type GenomeTrack, type GenomeView, type ViewProvenance} from '../../browser/contract.js';
 import type {AnnotationTransferConfiguration} from './configuration.js';
+import {geneFacts, type ReviewGene} from './proteins.js';
 
 /** The heading of the guide section in the workflow's `results.md`. */
 export const transferGuideHeading = 'Transfer genome views';
+/** The heading of the review view's guide section, which directly precedes the transfer guide. */
+export const proteinsGuideHeading = 'Proteins genome review';
 
 export type TransferViewContext = {
   runDirectory: string;
@@ -62,12 +65,12 @@ function inputName(input: AnnotationTransferConfiguration['inputs']['reference' 
   return input.source === 'ncbi' ? input.accession : fallback;
 }
 
-function guideSection(guide: BrowserDocument | undefined): BrowserDocument | undefined {
+function guideSection(guide: BrowserDocument | undefined, heading = transferGuideHeading): BrowserDocument | undefined {
   const blocks = guide?.blocks ?? [];
-  const start = blocks.findIndex(block => block.kind === 'heading' && inlineText(block.content) === transferGuideHeading);
-  const heading = blocks[start];
+  const start = blocks.findIndex(block => block.kind === 'heading' && inlineText(block.content) === heading);
+  const found = blocks[start];
   // The guide closes the results page, so its own `##` sections, listed in the help menu, run to the end.
-  return guide && heading?.kind === 'heading' ? {...guide, title: inlineText(heading.content), blocks: blocks.slice(start)} : undefined;
+  return guide && found?.kind === 'heading' ? {...guide, title: inlineText(found.content), blocks: blocks.slice(start)} : undefined;
 }
 
 function view(context: TransferViewContext, side: 'reference' | 'target', fasta: VerifiedFile, name: string,
@@ -109,11 +112,14 @@ const intermediates = [
   {id: 'miniprot', name: 'miniprot annotation · GFF3 · LiftOn intermediate, unverified', path: 'results/annotation/lifton_output/miniprot/miniprot.gff3'},
 ] as const;
 
-/** The resolved target with the transferred annotation and the intermediate annotations LiftOn built it from. */
+const unresolvedBed = 'results/target-unresolved.bed';
+
+/** The resolved target with the transferred annotation, the intermediate annotations LiftOn built it from, and its unresolved bases. */
 export async function transferTargetView(context: TransferViewContext): Promise<GenomeView> {
   const artifacts = await recordedArtifacts(context.runDirectory, context.signal);
   const fasta = await verified(context, artifacts, 'resolved/target.fasta');
   const transferred = await verified(context, artifacts, 'results/annotation/lifton.raw.gff3');
+  const unresolved = await verified(context, artifacts, unresolvedBed);
   context.signal?.throwIfAborted();
   const tracks: GenomeTrack[] = [
     {id: 'transferred', name: 'Transferred annotation · GFF3 · LiftOn result', kind: 'annotation', format: 'gff3', file: transferred.path, snapshot: transferred.snapshot, shown: true},
@@ -122,9 +128,47 @@ export async function transferTargetView(context: TransferViewContext): Promise<
       return {id: intermediate.id, name: intermediate.name, kind: 'annotation' as const, format: 'gff3' as const, file, shown: false,
         ...(existsSync(file) ? {} : {problem: `${file}: not found in this run.`})};
     }),
+    {id: 'unresolved', name: 'Unresolved bases · BED · not A, C, G, or T', kind: 'annotation', format: 'bed', file: unresolved.path,
+      snapshot: unresolved.snapshot, shown: true},
   ];
   return view(context, 'target', fasta, inputName(context.configuration.inputs.target, 'Target'), tracks, [
     {label: `Verified ${transferred.artifact.origin} transferred annotation`, path: transferred.path, sha256: transferred.artifact.sha256},
-    ...tracks.slice(1).map(track => ({label: `Unverified LiftOn intermediate ${track.id} annotation`, path: track.file})),
+    ...tracks.slice(1, 1 + intermediates.length).map(track => ({label: `Unverified LiftOn intermediate ${track.id} annotation`, path: track.file})),
+    {label: `Verified ${unresolved.artifact.origin} unresolved target bases`, path: unresolved.path, sha256: unresolved.artifact.sha256},
   ]);
+}
+
+/** The listed gene's item ID: its reference ID, since only a primary copy is rated. */
+export function reviewItemId(gene: ReviewGene): string {
+  return gene.referenceId;
+}
+
+/**
+ * The target view with the genes listed for review as its items, in the CLI's order. An unmapped
+ * gene has no target locus and is not an item; every track is the same for every gene.
+ */
+export async function transferReviewView(context: TransferViewContext & {genes: readonly ReviewGene[]; selected?: ReviewGene}): Promise<GenomeView> {
+  const target = await transferTargetView(context);
+  const items = context.genes.filter(gene => gene.target);
+  const listed = createHash('sha256').update(JSON.stringify(items.map(reviewItemId))).digest('hex');
+  return {
+    ...target,
+    id: createHash('sha256').update(JSON.stringify([resolve(context.runDirectory), 'review', listed])).digest('hex'),
+    title: runViewTitle(context.workflow, context.configuration.run, `Proteins · ${inputName(context.configuration.inputs.target, 'Target')}`),
+    items: {name: 'Genes to review', itemName: 'gene', entries: items.map(gene => ({
+      id: reviewItemId(gene),
+      label: gene.referenceId,
+      target: {chrom: gene.target!.seqid, start: gene.target!.start, end: gene.target!.end},
+      details: [{title: 'Gene', rows: geneFacts(gene).map(({label, value}) => ({label, value}))}],
+    }))},
+    ...(context.selected?.target ? {selectedItemId: reviewItemId(context.selected)} : {}),
+    guide: guideSection(context.guide, proteinsGuideHeading),
+    // The Liftoff and miniprot annotations bring the reference gene's structure and protein into the
+    // target's coordinates, so a review shows them from the start; the general target view hides them.
+    content: {...target.content, tracks: target.content.tracks.map(track =>
+      intermediates.some(intermediate => intermediate.id === track.id) && !track.problem ? {...track, shown: true} : track), presets: [
+      {id: 'gene', label: 'Gene', padding: 500, reads: false},
+      {id: 'region', label: 'Region', padding: 10000, reads: false},
+    ]},
+  };
 }

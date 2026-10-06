@@ -5,12 +5,13 @@ import type {TabDefinition} from '../components/tabs.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {SectionList, type SectionListItem} from './section-list.js';
 
-export type AnnotationTransferTabId = 'overview' | 'transfer' | 'evidence' | 'files' | 'run';
+export type AnnotationTransferTabId = 'overview' | 'transfer' | 'evidence' | 'proteins' | 'files' | 'run';
 
 export const annotationTransferTabs: readonly TabDefinition<AnnotationTransferTabId>[] = [
   {id: 'overview', label: 'Overview'},
   {id: 'transfer', label: 'Transfer'},
   {id: 'evidence', label: 'Model Evidence'},
+  {id: 'proteins', label: 'Proteins'},
   {id: 'files', label: 'Files'},
   {id: 'run', label: 'Run Details'},
 ];
@@ -22,6 +23,7 @@ const reportLabels: Record<string, string> = {
   aggregated_metrics: 'Metrics (JSON)',
   completion_summary: 'Completion summary (JSON)',
   validation: 'Validation report (JSON)',
+  target_unresolved_bed: 'Target unresolved bases (BED)',
 };
 
 const evidenceLabels: Record<string, string> = {
@@ -82,6 +84,13 @@ function pathItems(
   });
 }
 
+function unresolvedBasesItem(value: AnnotationTransferResult['proteins']['unresolvedTargetBases']): SectionListItem {
+  const total = value.n + value.other;
+  return {id: 'proteins.unresolved_target_bases', label: 'Target bases that are not A, C, G, or T',
+    value: total === 0 ? 'none' : `${value.n.toLocaleString('en-US')} N, ${value.other.toLocaleString('en-US')} other codes; genes containing them are listed for review`,
+    color: total > 0 ? 'yellow' : undefined};
+}
+
 /** Result items grouped into sections; item IDs are stable metric or path keys. */
 function annotationTransferSections(result: AnnotationTransferResult): ResultSection[] {
   const transfer = result.transfer;
@@ -119,6 +128,12 @@ function annotationTransferSections(result: AnnotationTransferResult): ResultSec
       ],
     },
     {
+      id: 'unresolved-bases',
+      tab: 'overview',
+      title: 'Target Sequence',
+      items: [unresolvedBasesItem(result.proteins.unresolvedTargetBases)],
+    },
+    {
       id: 'validation',
       tab: 'overview',
       title: 'Transferred GFF3 Structural Validation',
@@ -144,6 +159,7 @@ export function AnnotationTransferResults({
   filesHeader,
   filesFooter,
   runDetails,
+  proteins,
 }: {
   result: AnnotationTransferResult;
   tab: AnnotationTransferTabId;
@@ -155,6 +171,8 @@ export function AnnotationTransferResults({
   filesFooter: React.ReactNode;
   /** The run's technical metadata, on a tab of its own. */
   runDetails: React.ReactNode;
+  /** The Proteins tab's rating and review list, owned by `useProteinReview`. */
+  proteins: React.ReactNode;
 }): React.JSX.Element {
   return (
     <Box flexDirection="column">
@@ -164,6 +182,7 @@ export function AnnotationTransferResults({
         <SectionList key={section.id} title={section.title} items={section.items} />
       ))}
       {tab === 'files' ? filesFooter : null}
+      {tab === 'proteins' ? proteins : null}
       {tab === 'run' ? runDetails : null}
     </Box>
   );

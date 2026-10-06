@@ -101,6 +101,13 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
   evidenceUpdatingRef.current = evidenceUpdating;
   const selectRef = useRef(select);
   selectRef.current = select;
+  const itemsRef = useRef(view.items);
+  itemsRef.current = view.items;
+  const itemName = view.items?.itemName ?? 'locus';
+  // Tracks the researcher showed or hid in this view; they keep that choice when another item is selected.
+  const chosenTracks = useRef(new Map<string, boolean>());
+  // A clicked marker's facts, kept until its item is selected, so the selection's reload does not clear them.
+  const markerDetails = useRef<{id: string; details: FeatureDetails | undefined}>(undefined);
   const itemTracks = item?.target.tracks;
   const trackName = (track: GenomeTrack): string => itemTracks?.find(candidate => candidate.id === track.id)?.name ?? track.name;
   const currentNames = useRef(new Map<string, string>());
@@ -230,6 +237,7 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
     loaded.current.clear();
     resizedHeights.current.clear();
     resizeAttachers.current.clear();
+    chosenTracks.current.clear();
     readClickPayloads.current = new WeakMap();
     setTracks(Object.fromEntries(view.content.tracks.map(track => [track.id, {state: track.problem ? 'failed' : 'hidden', message: track.problem}])));
     const sequence = reference.sequences?.[0];
@@ -287,6 +295,12 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
               const feature = features?.find(feature => feature && typeof feature === 'object' && 'id' in feature) as {id?: string} | undefined;
               if (feature?.id) {
                 selectRef.current?.(feature.id);
+                // The markers come from the CLI's list, not from a file, so their facts are the item's.
+                const clicked = itemsRef.current?.entries.find(entry => entry.id === feature.id);
+                const facts = clicked?.details?.length ? {title: clicked.label, kind: itemsRef.current?.name,
+                  rows: clicked.details.flatMap(section => section.rows)} : undefined;
+                markerDetails.current = {id: feature.id, details: facts};
+                setDetails(facts);
               }
               return false;
             }
@@ -542,7 +556,8 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
     let cancelled = false;
     const current = (): boolean => !cancelled && browser.current === instance && requestedEvidence.current === key;
     setDisplayedEvidence(undefined);
-    setDetails(undefined);
+    setDetails(markerDetails.current?.id === selected.id ? markerDetails.current.details : undefined);
+    markerDetails.current = undefined;
     setError(undefined);
     void runNavigation(instance, async () => {
       const length = reference.sequences?.find(sequence => sequence.name === selected.target.chrom)?.length;
@@ -565,7 +580,9 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
           return;
         }
         const track = view.content.tracks.find(track => track.id === choice.id);
-        if (track && choice.shown && !track.problem && (track.kind !== 'annotation' || track.group || track.shown) && (track.kind !== 'alignment' || mode.reads)) {
+        const chosen = chosenTracks.current.get(choice.id);
+        const shown = chosen ?? (choice.shown && (track?.kind !== 'annotation' || !!track.group || track.shown));
+        if (track && shown && !track.problem && track.size !== 0 && (track.kind !== 'alignment' || mode.reads)) {
           await addTrack(instance, track, order, track.kind === 'alignment' ? {
             groupBy: `base:${selected.target.chrom}:${selected.target.start}`, ...(mode.colorBy ? {colorBy: mode.colorBy} : {}),
           } : {}, current);
@@ -657,10 +674,12 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
     const current = (): boolean => browser.current === instance && requestedEvidence.current === key;
     void runNavigation(instance, async () => {
       if (loaded.current.has(track.id)) {
+        chosenTracks.current.set(track.id, false);
         removeTrack(instance, track.id);
         fitTracks();
         setTracks(current => ({...current, [track.id]: {state: 'hidden'}}));
       } else {
+        chosenTracks.current.set(track.id, true);
         await addTrack(instance, track, undefined, {}, current);
       }
     }, current);
@@ -722,12 +741,12 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
           {orderedTracks.length === 0 ? <Text size="sm">No tracks are available for this reference.</Text> : null}
           <ul className="genome-track-list" aria-label="Track visibility">
             {orderedTracks.map(track => <li key={track.id} className="genome-track" data-track-group={track.group}>
-              <Switch id={`genome-track-${track.id}`} data-track-id={track.id} aria-label={trackName(track)} checked={tracks[track.id]?.state === 'shown' || tracks[track.id]?.state === 'loading'} disabled={!ready || evidenceUpdating || !!track.problem || tracks[track.id]?.state === 'loading'} onChange={() => toggle(track)} />
+              <Switch id={`genome-track-${track.id}`} data-track-id={track.id} aria-label={trackName(track)} checked={tracks[track.id]?.state === 'shown' || tracks[track.id]?.state === 'loading'} disabled={!ready || evidenceUpdating || !!track.problem || track.size === 0 || tracks[track.id]?.state === 'loading'} onChange={() => toggle(track)} />
               <div className="genome-track-text">
                 {/* The switch shows whether the track is drawn; only states it cannot show are written out. */}
                 <label htmlFor={`genome-track-${track.id}`}>{trackName(track)}</label>
                 {track.size !== undefined || tracks[track.id]?.state === 'loading' || tracks[track.id]?.state === 'failed' ? <Text component="span" size="xs" c="dimmed">
-                  {[track.size === undefined ? '' : `${(track.size / 1024 / 1024).toFixed(1)} MiB`, tracks[track.id]?.state === 'loading' || tracks[track.id]?.state === 'failed' ? tracks[track.id]?.state : ''].filter(Boolean).join(' · ')}
+                  {[track.size === undefined ? '' : track.size === 0 ? 'empty file: nothing to show' : `${(track.size / 1024 / 1024).toFixed(1)} MiB`, tracks[track.id]?.state === 'loading' || tracks[track.id]?.state === 'failed' ? tracks[track.id]?.state : ''].filter(Boolean).join(' · ')}
                 </Text> : null}
                 {tracks[track.id]?.message ? <Text role="alert" size="sm">{tracks[track.id]?.message}</Text> : null}
               </div>
@@ -766,9 +785,9 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
         <select id="genome-preset" value={presetId} disabled={!ready} onChange={event => setPresetId(event.currentTarget.value)}>
           {view.content.presets?.map(preset => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
         </select>
-        <Button variant="default" aria-expanded={itemCard} onClick={() => setItemCard(current => !current)}>Locus details</Button>
+        <Button variant="default" aria-expanded={itemCard} onClick={() => setItemCard(current => !current)}>{itemName[0]!.toUpperCase()}{itemName.slice(1)} details</Button>
       </Group>
-      {itemCard ? <aside className="genome-item-card" aria-label="Selected locus">
+      {itemCard ? <aside className="genome-item-card" aria-label={`Selected ${itemName}`}>
         <Text fw={600}>{item.label}</Text>
         <div className="genome-item-sections">{item.details?.map(section => <section key={section.title}>
           <Text fw={600} size="sm">{section.title}</Text>
@@ -777,7 +796,7 @@ export function GenomePanel({view, load = loadGenomeLibrary, select}: {view: Gen
       </aside> : null}
     </> : null}
     {error ? <Alert role="alert" color="red">{error}</Alert> : !ready ? <Text role="status">Loading reference…</Text> : null}
-    {ready && evidenceUpdating && !error ? <Text role="status">Updating evidence for the selected locus…</Text> : null}
+    {ready && evidenceUpdating && !error ? <Text role="status">Updating evidence for the selected {itemName}…</Text> : null}
     <div className={!evidenceUpdating && details ? 'genome-viewer with-details' : 'genome-viewer'} aria-busy={evidenceUpdating}>
       <div className={evidenceUpdating ? 'genome-canvas evidence-updating' : 'genome-canvas'} ref={element} />
       <FeatureDetailsPanel key={view.id} details={evidenceUpdating ? undefined : details} close={() => setDetails(undefined)} help={clickDetailsHelp ? () => openHelp(clickDetailsHelp) : undefined} />

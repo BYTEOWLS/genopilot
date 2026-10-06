@@ -817,6 +817,7 @@ test('labels a previous run by its name and creation time, not its run ID', () =
       target: {source: 'local', fasta: '/data/target.fa'},
     },
     lifton: {profile: 'same-species'},
+    review: {minimum_protein_identity: 99},
     resources: {cpu_mode: 'automatic', effective_cpus: 8},
     run: {
       output_root: '/data/runs',

@@ -42,6 +42,11 @@ export type AnnotationTransferConfiguration = {
   lifton: {
     profile: 'same-species';
   };
+  /** How the summary step rates transferred proteins for review. */
+  review: {
+    /** Protein identity in percent below which a coding gene is listed for review. */
+    minimum_protein_identity: number;
+  };
   resources: ResourceSettings;
   run: RunDetails;
 };
@@ -145,6 +150,23 @@ function validateLifton(
   return lifton as AnnotationTransferConfiguration['lifton'];
 }
 
+function validateReview(
+  value: unknown,
+  issues: ConfigurationValidationIssue[],
+): AnnotationTransferConfiguration['review'] | undefined {
+  const review = requireObject(value, '$.review', issues);
+  if (!review) {
+    return undefined;
+  }
+  rejectUnknownFields(review, ['minimum_protein_identity'], '$.review', issues);
+  const threshold = review.minimum_protein_identity;
+  if (!Number.isSafeInteger(threshold) || (threshold as number) < 0 || (threshold as number) > 100) {
+    issues.push({path: '$.review.minimum_protein_identity', message: 'must be an integer from 0 to 100'});
+    return undefined;
+  }
+  return {minimum_protein_identity: threshold as number};
+}
+
 export function validateAnnotationTransferConfiguration(
   value: unknown,
 ): AnnotationTransferConfiguration {
@@ -161,6 +183,7 @@ export function validateAnnotationTransferConfiguration(
       'workflow_version',
       'inputs',
       'lifton',
+      'review',
       'resources',
       'run',
     ],
@@ -175,6 +198,7 @@ export function validateAnnotationTransferConfiguration(
 
   const inputs = validateInputs(value.inputs, issues);
   const lifton = validateLifton(value.lifton, issues);
+  const review = validateReview(value.review, issues);
   const resources = validateResources(value.resources, issues);
   const run = validateRun(value.run, issues);
 
@@ -188,6 +212,7 @@ export function validateAnnotationTransferConfiguration(
     workflow_version: ANNOTATION_TRANSFER_WORKFLOW_VERSION,
     inputs: inputs as AnnotationTransferConfiguration['inputs'],
     lifton: lifton as AnnotationTransferConfiguration['lifton'],
+    review: review as AnnotationTransferConfiguration['review'],
     resources: resources as AnnotationTransferConfiguration['resources'],
     run: run as AnnotationTransferConfiguration['run'],
   };

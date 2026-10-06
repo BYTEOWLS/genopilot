@@ -4,7 +4,7 @@ This page explains every item of the annotation transfer result page, grouped by
 
 ## Overview
 
-The overview shows the execution outcome, the workflow's own status, and the check of the transferred annotation.
+The overview shows the execution outcome, the workflow's own status, the target's unresolved bases, and the check of the transferred annotation.
 
 ### Run status
 
@@ -15,6 +15,12 @@ The scientific status saved by the workflow. A Snakemake process that exits succ
 | `completed` | Transfer finished and the transferred GFF3 passed validation without warnings. |
 | `completed-with-warnings` | Transfer finished and the transferred GFF3 passed validation, but warnings need review. |
 | `validation-failed` | Transfer finished, but the transferred GFF3 has structural errors. All evidence is kept for review; do not use the annotation downstream without fixing the errors. |
+
+### Target sequence
+
+| Item | Meaning |
+|---|---|
+| Target bases that are not A, C, G, or T | The target's bases written as `N`, where its sequence is unknown, and as other codes: IUPAC codes, where it is ambiguous, such as `R` for A or G, and gap characters (`-` or `.`). A codon containing one cannot be translated, so every gene whose coding sequence contains one is listed for review with the reason *unresolved bases* (see *Proteins* below). Lowercase bases, which some assemblies use to mark repeats, count as resolved. The input check warns about these bases before LiftOn runs; the count shown here is the summary step's, from the same target. |
 
 ### Transferred GFF3 structural validation
 
@@ -75,6 +81,53 @@ The scientific status saved by the workflow. A Snakemake process that exits succ
 | `full_transcript_loss` | The transcript sequence could not be aligned to the reference at all. |
 | `no_protein` | The transcript aligned, but no protein could be aligned to the reference protein. |
 
+## Proteins
+
+The summary step rates every coding gene's protein and lists the genes that need a closer look; the workflow's [README](README.md) explains why and how. The tab shows the rating's counts and the list of genes to review; a warning replaces the list when the per-feature table is missing or cannot be read.
+
+The summary at the top splits the rated genes into three groups, which add up to all of them:
+
+| Item | Meaning |
+|---|---|
+| Exact match | Not listed for review, and the predicted protein is identical to the reference: category *unchanged*. Synonymous changes in the DNA can remain. |
+| Near match | Not listed for review, but the protein changed (substitutions or an in-frame indel) while its identity stays at or above the minimum protein identity, shown in the label. |
+| Needs review | Listed for review with at least one reason; the list below shows them. |
+
+Each count is followed by its share of the rated genes.
+
+| Item | Meaning |
+|---|---|
+| Coding genes rated | Every coding reference gene: its primary target copy, or the gene itself when it was not placed. Additional copies and non-coding features are not rated. |
+| Minimum protein identity | The run parameter: a gene whose protein identity lies below it is listed with the reason *below threshold*. |
+| Categories | The rated genes per protein category; each gene has exactly one. See *Protein categories* below. |
+| Showing | The review reason the list shows, and how many genes have each reason. Press `f` to show the genes with the next reason. One gene can have several reasons, so the reason counts can add up to more than the listed genes. |
+
+The list puts the genes most likely to carry a real change first: those that are disrupted, lost, or unmapped and contain no unresolved base. The rest follow. Within each group the genes are ordered by protein identity, lowest first, with genes that have no protein at the top. Press Enter for a gene's detail: its reference and target IDs, its reference and target positions, reasons, category, protein identity, mutation classes, LiftOn status, transfer method, and the unresolved bases in its coding sequence.
+
+### Protein categories
+
+| Category | Meaning |
+|---|---|
+| unmapped | LiftOn placed the gene nowhere on the target. |
+| lost | The gene was placed, but no protein could be aligned to the reference protein. |
+| disrupted | A frameshift, a premature stop codon, a missing stop codon, or a lost start changes the protein's end or reading frame. |
+| in-frame indel | Amino acids were inserted or deleted without shifting the reading frame. |
+| substitutions | The protein differs by amino-acid substitutions only. |
+| unchanged | The predicted protein is identical to the reference. |
+
+When a gene has several transcripts, the most severe category among them counts, and its protein identity is the lowest among them.
+
+### Review reasons
+
+| Reason | Meaning | What to check |
+|---|---|---|
+| unmapped or lost | No target copy, or no protein could be aligned. | Is there a gap at the expected place, and does the miniprot annotation place the reference protein anywhere nearby? The gene may be absent in this strain. |
+| disrupted | A frameshift, premature stop, missing stop, or lost start. | Whether the break is real or lies on an unresolved base; a real one can make the gene a pseudogene in this strain. |
+| below threshold | The protein identity lies below the minimum protein identity. | Whether the gene sits among related genes, so the copy may sit at the wrong member of its family. |
+| unresolved bases | The coding sequence contains bases that are not A, C, G, or T. | Whether an unresolved base explains the change; resolving the target first, for example with deeper sequencing, gives a cleaner rating. |
+
+The *Proteins genome review* section below explains how to check each reason in the browser.
+
 ## Files
 
 The run directory and the run's own files are explained in the general run results page.
@@ -87,6 +140,7 @@ The run directory and the run's own files are explained in the general run resul
 | Metrics (JSON) | All metrics shown on this page with their persisted one-line definitions, in machine-readable form. |
 | Completion summary (JSON) | The entry point read by this application: run status, the metrics, and links to all reports and evidence. |
 | Validation report (JSON) | Every structural validation error and warning found in the transferred GFF3. |
+| Target unresolved bases (BED) | The target's intervals of bases that are not A, C, G, or T, in 0-based BED coordinates: the evidence behind each gene's count of unresolved bases, readable in any genome browser. |
 
 ### Source evidence
 
@@ -102,9 +156,39 @@ The run directory and the run's own files are explained in the general run resul
 | LiftOn extra-copy features | LiftOn's list of reference features placed more than once, with their copy count. |
 | LiftOn selected feature types | The top-level feature types LiftOn selected for transfer from the reference GFF3. |
 
+## Proteins genome review
+
+On the Proteins tab, press `v` to open the selected gene's locus in the browser and walk the genes listed for review from there; on the other tabs, `v` offers *Proteins* next to *Target* and *Reference* and opens the view at the gene selected on the Proteins tab. The view is the target view (see *Target genome view* below) with the listed genes as its items, in the same order and with the same filter as the tab. Each item card shows the facts of the gene detail. The browser's previous and next move the selection on the Proteins tab too, and selecting another gene on the tab moves the browser. Choosing another filter closes the view; press `v` again to open it for the new list. An unmapped gene has no position on the target, so it is not an item, and `v` on it says so instead of opening the view.
+
+Two presets set the zoom:
+
+| Preset | Shows |
+|---|---|
+| Gene | The gene with about 500 bases on each side, so the neighbouring genes show whether the locus belongs to a gene family or a rearranged region. |
+| Region | About 10,000 bases around the gene, to see a cluster of listed genes or a gap. |
+
+The view has the target view's tracks, with two differences from the plain target view:
+
+- **The Liftoff and miniprot annotations are shown on opening.** The reference annotation lies in the reference genome's coordinates and cannot be drawn on the target, but these two bring the reference gene into the target's coordinates: the Liftoff annotation is the reference gene's structure lifted by its DNA, under the reference's IDs, and the miniprot annotation is the reference protein aligned to the target, with its frameshifts and stops. Compare both with the transferred model to see what changed.
+- **The Unresolved bases track** marks every stretch of bases that are not A, C, G, or T. It is shown on opening and is checked against its recorded checksum like the transferred annotation. When the target has no such base, its file is empty and Tracks lists it as an empty file that cannot be switched on.
+
+The **Genes to review** track above them is not a file: it marks each listed gene at its target position. Click a marker to select that gene and see its facts in the details panel; *Gene details* above the viewer shows the same facts for the selected gene, including its reference position. To see the gene as it is in the reference, open the Reference view and enter that position. A track you show or hide keeps that choice when you move to the next or previous gene.
+
+What to look at for each reason; the browser only shows evidence, and nothing it shows is saved:
+
+| Reason | What to look at | Points to |
+|---|---|---|
+| disrupted | Zoom into the coding sequence: a stop mark inside an exon is a premature stop codon. For a frameshift, switch on the three-frame translation and see which frame the sequence continues in. | a real change, such as a pseudogene in this strain |
+| disrupted, on or next to an unresolved base | The Unresolved bases track marks an `N` or IUPAC code at or beside the break. | an artifact of the data; resolve the target first |
+| below threshold | The *Region* preset: does the gene sit among related genes? Compare the miniprot annotation's model whose `Target` names this gene. | the copy may sit at the wrong member of a gene family |
+| unmapped or lost | A lost gene: is there a gap at its place, and does the miniprot annotation place the reference protein nearby? | the gene may be absent in this strain, or its structure changed |
+| unresolved bases | The Unresolved bases track inside the gene's exons. | the finding may be an artifact of the data |
+
+A gene's LiftOn status says how LiftOn built its model; it is not a review reason. Where it is not `Liftoff`, switch on the Liftoff and miniprot annotations and compare their exons: where miniprot follows the reference protein better, a splice site, start, or stop has moved in the target.
+
 ## Transfer genome views
 
-Press `v` on the result page and choose *Target* or *Reference* to look at the transfer in the browser. Open this guide from the `?` help menu while a view is open. The views only show what the run produced; they change nothing.
+Press `v` on the result page and choose *Target* or *Reference* to look at the transfer in the browser; *Proteins* opens the target view with the genes listed for review (see *Proteins genome review* above). Open this guide from the `?` help menu while a view is open. The views only show what the run produced; they change nothing.
 
 A gene lies at different coordinates in the reference and the target, because the assemblies differ in length and order. The two views therefore cannot be shown on top of each other; open the other view to compare, which replaces the current one. The assemblies and the reference and transferred annotations are checked against their recorded checksums before a view opens, and a view whose file changed is refused.
 
@@ -122,13 +206,14 @@ Use the reference view to see a gene as it was before the transfer: its exons, i
 
 A **model** is a proposed structure for one copy of a gene at one place in the genome: where its exons lie, which part of them codes for protein, and so which protein the gene makes. It is a prediction from evidence, not an observation. In the browser, one model is one drawn transcript, with boxes for exons, thin lines for introns, and thick parts for the coding sequence; in a GFF3 file it is an `mRNA` record with its `exon` and `CDS` records. For one gene, the target view can show up to three models at the same place: Liftoff's suggestion, miniprot's suggestion, and LiftOn's final choice. When they agree, the transfer was straightforward; when they differ, the transferred model shows which suggestion LiftOn chose.
 
-The target view shows the target assembly with three annotations below the DNA sequence. All three are GFF3 files of the same kind, holding gene models; they differ in which program made them and in their role. Each track's label says both:
+The target view shows the target assembly with three annotations below the DNA sequence, and the target's unresolved bases below them. All three are GFF3 files of the same kind, holding gene models; they differ in which program made them and in their role. Each track's label says both:
 
 | Track | File | What it holds | Shown on opening |
 |---|---|---|---|
 | Transferred annotation · GFF3 · LiftOn result | `results/annotation/lifton.raw.gff3` | LiftOn's final result, the annotation this run produced: one model per gene copy. | yes |
 | Liftoff annotation · GFF3 · LiftOn intermediate | `lifton_output/liftoff/liftoff.gff3` | LiftOn's first step: Liftoff lifts each reference gene by its DNA sequence, one model per gene where the gene was placed. | no |
 | miniprot annotation · GFF3 · LiftOn intermediate | `lifton_output/miniprot/miniprot.gff3` | LiftOn's second source: miniprot aligns each reference protein to the target. | no |
+| Unresolved bases · BED | `results/target-unresolved.bed` | The stretches of target bases that are not A, C, G, or T. | yes |
 
 LiftOn starts from the Liftoff annotation and uses miniprot only to repair a protein or to add a missing gene; see *Transfer methods* above. The transferred annotation is therefore the Liftoff annotation for almost every gene: the two differ only where a transcript's `status` in the click details is not `Liftoff`, that is where LiftOn chained Liftoff and miniprot parts (`LiftOn_chaining_algorithm`), replaced the Liftoff model (`LiftOn_miniprot`), or added a gene from miniprot (`miniprot`). The transferred annotation also carries LiftOn's `protein_identity`, `dna_identity`, `mutation`, and `status`, which the Liftoff annotation lacks.
 

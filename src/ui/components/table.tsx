@@ -24,15 +24,19 @@ const minimumLastColumnWidth = 30;
  *
  * With `selectedRow`, the rows become a selectable list: every row is one line, truncated instead of
  * wrapped, and the selected one carries the `›` marker and bold text, so it is visible without color.
+ *
+ * `align` sets a column's alignment, such as `right` for numbers; columns are left-aligned by default.
  */
 export function Table({
   header,
   rows,
   selectedRow,
+  align = [],
 }: {
   header: readonly TableCell[];
   rows: readonly (readonly TableCell[])[];
   selectedRow?: number;
+  align?: readonly ('left' | 'right')[];
 }): React.JSX.Element {
   const selectable = selectedRow !== undefined;
   const widths = header.slice(0, -1).map((title, column) =>
@@ -56,11 +60,12 @@ export function Table({
       </Text>
     );
     const width = widths[column];
+    const justifyContent = align[column] === 'right' ? 'flex-end' : undefined;
     return width === undefined ? (
-      <Box key={column} flexGrow={1} flexShrink={selectable ? 1 : 0} flexBasis={selectable ? undefined : lastColumnBasis}>{text}</Box>
+      <Box key={column} flexGrow={1} flexShrink={selectable ? 1 : 0} flexBasis={selectable ? undefined : lastColumnBasis} justifyContent={justifyContent}>{text}</Box>
     ) : (
       // A selectable row is one truncated line, so its leading columns keep their width.
-      <Box key={column} flexBasis={width + (column === 0 && selectable ? 2 : 0)} flexShrink={selectable ? 0 : 1} paddingRight={2}>{text}</Box>
+      <Box key={column} flexBasis={width + (column === 0 && selectable ? 2 : 0)} flexShrink={selectable ? 0 : 1} paddingRight={2} justifyContent={justifyContent}>{text}</Box>
     );
   });
   return (

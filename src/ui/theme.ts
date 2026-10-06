@@ -11,3 +11,6 @@ export const headingColor = '#5fafff';
 
 /** Colour of inline code in documents, such as file names and values. */
 export const codeColor = '#d7af5f';
+
+/** Colour of informational alerts; Ink UI's default `blue` renders too dark on dark backgrounds. */
+export const infoColor = headingColor;

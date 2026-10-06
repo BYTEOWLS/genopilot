@@ -17,6 +17,7 @@ const validConfiguration = {
   lifton: {
     profile: 'same-species',
   },
+  review: {minimum_protein_identity: 99},
   resources: {
     cpu_mode: 'automatic',
     effective_cpus: 8,
@@ -58,6 +59,8 @@ test('parses the minimal automatic-CPU configuration from YAML', () => {
         fasta: /data/target.fa
     lifton:
       profile: same-species
+    review:
+      minimum_protein_identity: 99
     resources:
       cpu_mode: automatic
       effective_cpus: 8
@@ -121,6 +124,17 @@ test('rejects unsupported CPU modes', () => {
 test('requires the fixed same-species LiftOn profile', () => {
   const issues = validationIssues(configuration({lifton: {profile: 'advanced'}}));
   assert.ok(issues.some(issue => issue.path === '$.lifton.profile'));
+});
+
+test('requires a minimum protein identity from 0 to 100 percent', () => {
+  for (const value of [0, 99, 100]) {
+    assert.equal(validateAnnotationTransferConfiguration(configuration({review: {minimum_protein_identity: value}})).review.minimum_protein_identity, value);
+  }
+  for (const review of [{minimum_protein_identity: 101}, {minimum_protein_identity: -1}, {minimum_protein_identity: 98.5},
+    {minimum_protein_identity: Number.NaN}, {}, undefined]) {
+    const issues = validationIssues(configuration({review}));
+    assert.ok(issues.some(issue => issue.path.startsWith('$.review')), JSON.stringify(review));
+  }
 });
 
 test('requires the expected schema and workflow identity', () => {

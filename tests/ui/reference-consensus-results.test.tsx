@@ -228,13 +228,25 @@ test('opens on the overview with the backbone and the active cohort, and keeps r
   try {
     await settle();
     const frame = screen.output.readOutput();
-    for (const expected of ['GCF_000000001.1', 'c'.repeat(64), 'iso-a, iso-c']) {
+    for (const expected of ['GCF_000000001.1', 'c'.repeat(64), 'iso-a, iso-c', '/runs/run-a/results/cohort/iteration-2/consensus-fasta']) {
       assert.ok(frame.includes(expected), `missing ${expected}`);
     }
     assert.doesNotMatch(frame, /formatted:2026-01-02T10:00:00\.000Z/, 'run metadata is not on the overview');
     const details = await screen.press(SHIFT_TAB);
     assert.match(details, /formatted:2026-01-02T10:00:00\.000Z/);
     assert.doesNotMatch(details, /GCF_000000001\.1/);
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('suggests no annotation transfer before a consensus FASTA exists', async () => {
+  const result = consensusResult();
+  result.cohorts[1] = cohort('iteration-2', 2, {paths: {...result.cohorts[1]!.paths, 'consensus-fasta': path('results/cohort/iteration-2/consensus-fasta', false)}});
+  const screen = renderScreen({loaded: loaded(result)});
+  try {
+    await settle();
+    assert.doesNotMatch(screen.output.readOutput(), /\/runs\/run-a\/results\/cohort\/iteration-2\/consensus-fasta/);
   } finally {
     screen.unmount();
   }

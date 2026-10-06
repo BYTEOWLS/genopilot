@@ -27,6 +27,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
                 "target": {"source": "local", "fasta": "/inputs/target.fasta"},
             },
             "lifton": {"profile": "same-species"},
+            "review": {"minimum_protein_identity": 99},
             "resources": {"cpu_mode": "manual", "manual_limit": 3, "effective_cpus": 3},
             "run": {
                 "output_root": str(self.temp_dir.parent),
@@ -68,6 +69,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
             "results/feature-transfer.tsv",
             "results/metrics.json",
             "results/summary.json",
+            "results/target-unresolved.bed",
             "logs/resolve-reference.log",
             "logs/resolve-target.log",
             "logs/validate-inputs.log",

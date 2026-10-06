@@ -62,6 +62,7 @@ rule record_annotation_transfer_provenance:
         "results/feature-transfer.tsv",
         "results/metrics.json",
         "results/summary.json",
+        "results/target-unresolved.bed",
         "logs/resolve-reference.log",
         "logs/resolve-target.log",
         "logs/validate-inputs.log",

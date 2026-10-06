@@ -9,7 +9,7 @@ The container knows no workflow and no kind of content in particular. It provide
 | Kind | Library | Concept | State |
 |---|---|---|---|
 | `document` | none; the existing Markdown parser | [document.md](document.md) | first; the help documents, and the kind the container is built with |
-| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | accession catalog development preview implemented; next the review of unresolved consensus loci, then the [annotation review](../../annotation-review.md) |
+| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | accession catalog development preview implemented; next the review of unresolved consensus loci, then the [annotation review](../annotation-review.md) |
 | `chart` | [Mantine charts](https://mantine.dev/charts/getting-started/) with [Recharts](https://recharts.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
 | `table` | none | sketched below | later; tables too large or wide for the terminal |
 

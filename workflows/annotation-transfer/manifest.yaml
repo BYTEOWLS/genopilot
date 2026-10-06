@@ -27,7 +27,7 @@ stages:
     rules: [validate_annotation]
   - id: summarize-results
     label: Summarize results
-    description: Collect transfer metrics, the per-feature report, and the completion summary.
+    description: Collect transfer metrics, the per-feature report with the protein rating, and the completion summary.
     rules: [summarize_annotation_transfer]
   - id: record-provenance
     label: Record provenance
@@ -73,6 +73,12 @@ artifacts:
     label: Completion summary
     path: results/summary.json
     type: json
+    produced_by: summarize-results
+  - id: target-unresolved-bases
+    label: Target unresolved bases
+    description: Intervals of target bases that are not A, C, G, or T, behind the per-gene counts.
+    path: results/target-unresolved.bed
+    type: bed
     produced_by: summarize-results
   - id: artifact-index
     label: Artifact index

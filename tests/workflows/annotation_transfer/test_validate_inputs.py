@@ -39,6 +39,32 @@ class ParseFastaTests(unittest.TestCase):
 
             self.assertTrue(any("non-IUPAC characters" in error for error in result.errors))
 
+    def test_counts_unresolved_bases_and_reads_soft_masking_as_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "in.fasta"
+            path.write_text(">a\nacgtNNnR\n>b\nACGTYs-\n", encoding="utf-8")
+
+            result = validate_inputs.parse_fasta(path)
+
+            self.assertEqual(result.unresolved_bases, {"n": 3, "iupac": 4})
+            self.assertEqual(result.errors, [])
+
+    def test_warns_only_about_unresolved_target_bases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = Path(tmp) / "clean.fasta"
+            clean.write_text(">a\nACGT\n", encoding="utf-8")
+            unresolved = Path(tmp) / "unresolved.fasta"
+            unresolved.write_text(">a\nACNR\n", encoding="utf-8")
+
+            clean_result = validate_inputs.parse_fasta(clean)
+            validate_inputs.warn_about_unresolved_target_bases(clean_result)
+            unresolved_result = validate_inputs.parse_fasta(unresolved)
+            validate_inputs.warn_about_unresolved_target_bases(unresolved_result)
+
+            self.assertEqual(clean_result.warnings, [])
+            self.assertEqual(len(unresolved_result.warnings), 1)
+            self.assertEqual(unresolved_result.errors, [])
+
     def test_flags_empty_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "in.fasta"

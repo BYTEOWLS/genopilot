@@ -81,6 +81,14 @@ parameters:
     required: true
     hidden: true
     default: same-species
+  - id: minimum-protein-identity
+    label: Minimum protein identity (%)
+    section: Workflow options
+    kind: integer
+    required: true
+    default: '99'
+    hidden: false
+    preview: Coding genes whose transferred protein matches the reference less closely are listed for review
   - id: output-root
     label: Output directory
     section: Run details

@@ -2,7 +2,7 @@
 
 The `genome` kind of the [browser view](README.md): any genome GenoPilot knows, together with the evidence lying next to it, shown with [igv.js](https://github.com/igvteam/igv.js). The container provides the tab, navigation, guidance, drafting, downloads, and the server; this document covers what is particular to genomes.
 
-The first users are the review of unresolved consensus loci and the accession catalog. The researcher-facing background for the review is in [`science-background.md`](science-background.md). The genome view also shows the evidence for the [annotation review](../../annotation-review.md) of transferred genes.
+The first users are the review of unresolved consensus loci and the accession catalog. The researcher-facing background for the review is in [`science-background.md`](science-background.md). The genome view also shows the evidence for the [annotation review](../annotation-review.md) of transferred genes.
 
 ## Content
 
@@ -105,7 +105,7 @@ Two extensions came up while designing this review and wait for researchers' req
 
 ## Reviewing a transferred gene
 
-The second use, from the *Proteins* tab of an annotation transfer. Its view, tracks, guide, and the decision are designed in the [annotation review](../../annotation-review.md#review-view) concept, which supersedes the first sketch here: it reuses the read-only genome kind as built for Sites, and its browser verdict actions wait with the drafting below.
+The second use, from the *Proteins* tab of an annotation transfer. Its view, tracks, guide, and the decision are designed in the [annotation review](../annotation-review.md#review-view) and [annotation review decision](../../annotation-review-decision.md) concepts, which supersede the first sketch here: the view reuses the read-only genome kind as built for Sites, and its browser verdict actions wait with the drafting below.
 
 ## Navigation
 

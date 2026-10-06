@@ -42,6 +42,7 @@ export type AnnotationTransferConfigurationDraft = {
   targetSource: InputSourceMode;
   targetFasta: string;
   targetAccession: string;
+  minimumProteinIdentity: string;
   cpuMode: CpuMode;
   manualCpuLimit: string;
   outputRoot: string;
@@ -69,6 +70,7 @@ export function createAnnotationTransferDraft(
     targetSource: 'local',
     targetFasta: '',
     targetAccession: '',
+    minimumProteinIdentity: '99',
     cpuMode: 'automatic',
     manualCpuLimit: '',
     outputRoot: resolve(currentDirectory, 'runs'),
@@ -114,6 +116,8 @@ export function buildAnnotationTransferConfiguration(
           : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.targetFasta)},
     },
     lifton: {profile: 'same-species'},
+    // An empty field is not silently read as zero.
+    review: {minimum_protein_identity: draft.minimumProteinIdentity.trim() ? Number(draft.minimumProteinIdentity.trim()) : Number.NaN},
     resources: {
       cpu_mode: draft.cpuMode,
       ...(draft.cpuMode === 'manual' ? {manual_limit: manualLimit} : {}),

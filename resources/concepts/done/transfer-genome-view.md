@@ -4,7 +4,7 @@
 
 Let a researcher look at what an annotation transfer did, on both genomes, in the browser's [genome view](browser-view/genome.md): the reference with its source annotation, and the target with the transferred annotation and LiftOn's candidate models. The views are read-only and work for any finished annotation-transfer run, without a rating or review.
 
-The [annotation review](../annotation-review.md) builds on the target view later and may revise this design when it is worked on.
+The [annotation review](annotation-review.md) builds on the target view.
 
 ## Opening
 
@@ -48,7 +48,7 @@ The closing `##` sections of the workflow's `results.md`, from `## Transfer geno
 Answered at the kickoff with a representative run and by reading the pinned igv.js:
 
 - **Candidate files**: `lifton_output/liftoff/liftoff.gff3` (gene, mRNA, exon, and CDS with the reference's IDs) and `lifton_output/miniprot/miniprot.gff3` (mRNA, CDS, and `stop_codon`; IDs such as `MP000001`, and `Target=` names the reference transcript). LiftOn also writes `*.gff3_db` databases beside them, which are not served. IGV shows both as gene models: for miniprot's CDS-only transcripts it assembles exons from the CDS, so the three-frame translation and start and stop marks work. On a fungal genome the Liftoff file is about 30 MB, below the size rule.
-- **Gene IDs in the locus field**: igv.js would find a transcript's `ID` (not a gene's own ID, which it folds into the transcripts) in a loaded unindexed GFF3 track, but the page's Region field accepts only `sequence:start-end` regions and never passes a name to igv.js. An earlier answer here, taken from igv.js's code alone, missed that check. The guide therefore finds genes by their positions in the per-feature transfer table; searching by ID is a decision for the [annotation review](../annotation-review.md), not this view. The field accepts several regions separated by spaces, which igv.js shows side by side.
+- **Gene IDs in the locus field**: igv.js would find a transcript's `ID` (not a gene's own ID, which it folds into the transcripts) in a loaded unindexed GFF3 track, but the page's Region field accepts only `sequence:start-end` regions and never passes a name to igv.js. An earlier answer here, taken from igv.js's code alone, missed that check. The guide therefore finds genes by their positions in the per-feature transfer table; searching by ID is a decision for the [annotation review](annotation-review.md), not this view. The field accepts several regions separated by spaces, which igv.js shows side by side.
 
 ## Decisions
 

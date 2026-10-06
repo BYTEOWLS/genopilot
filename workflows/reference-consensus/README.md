@@ -250,6 +250,17 @@ The iteration runs by asking Snakemake for its provenance record, `provenance/co
 
 **An isolate that failed**, for example because its reads are unusable, stops the first cohort, so the run cannot complete. When the failure cannot be fixed, a decision that excludes it creates the first cohort as iteration 2, from the other isolates' existing results. The failed isolate's logs and partial results stay in place, and the iteration's provenance records it as excluded and `incomplete`, and that the first cohort was never aggregated.
 
+## Annotating the consensus
+
+The consensus is not annotated: this workflow transfers no annotation and keeps only the FASTAs and chains. To annotate it, run the [annotation transfer](../annotation-transfer/README.md) next, as a new run, with:
+
+- **target**: the active iteration's `consensus.fasta`, in `results/cohort/initial/` or `results/cohort/iteration-<n>/`, as a local file;
+- **reference**: the backbone and a GFF3 annotation of it, either the same NCBI accession, whose annotation the transfer downloads, or the local backbone FASTA with a matching GFF3.
+
+The consensus keeps the backbone's sequence names, but every winning insertion or deletion shifts the coordinates after it, so the backbone's GFF3 cannot be reused directly and has to be lifted.
+
+Unresolved positions carry over. Every base the consensus writes as `N` or as an IUPAC code is an unresolved base for the transfer: it warns about them before LiftOn runs, and every gene whose coding sequence contains one is listed for review, because a codon with such a base cannot be translated and looks changed without any real change. Resolving loci first, for example through an iteration that excludes a poorly covered isolate, or with deeper sequencing, gives a cleaner rating. A later iteration writes a new consensus, so an annotation transferred onto an earlier one describes that earlier sequence.
+
 ## Outputs
 
 Paths are inside the run directory. Positions in the support tables are 1-based and inclusive, like in a VCF.

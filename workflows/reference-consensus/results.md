@@ -46,6 +46,17 @@ Loci are counted in loci, bases in bases; a locus is explained under *Terms*.
 | Bases written as IUPAC codes | Consensus bases written as an IUPAC ambiguity code for an unresolved single-base position. |
 | Bases written as N | Consensus bases written as `N`: every unresolved locus, every base without enough votes, and every backbone base that is not A, C, G, or T. The consensus summary splits them by reason. |
 
+### Next: annotate the consensus
+
+Shown once the active iteration's consensus FASTA exists. The consensus is not annotated; this section suggests the [annotation transfer](../annotation-transfer/README.md) as the next run and names its inputs. Nothing is started or prefilled; see *Annotating the consensus* in the workflow's [README](README.md).
+
+| Item | Meaning |
+|---|---|
+| Workflow | The workflow to start as a new run from the welcome screen. |
+| Target FASTA | The active iteration's consensus FASTA, to choose as the transfer's local target file. |
+| Reference | The backbone, as its NCBI accession, whose annotation the transfer downloads, or as its local FASTA, which needs a GFF3 annotation of the same assembly. |
+| Unresolved bases | The consensus bases written as `N` or as IUPAC codes. The transfer lists every gene whose coding sequence contains one for review, since it may look changed only because the base is unknown. |
+
 ## Isolates
 
 ### Isolate list

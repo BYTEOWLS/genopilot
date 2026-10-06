@@ -55,7 +55,8 @@ export type GenomeView = {
   id: string;
   title: string;
   provenance: ViewProvenance;
-  items?: {name: string; entries: GenomeItem[]};
+  /** `itemName` names one item in the page, such as `gene`; `locus` when absent. */
+  items?: {name: string; itemName?: string; entries: GenomeItem[]};
   selectedItemId?: string;
   guide?: BrowserDocument;
   content: {

@@ -57,6 +57,8 @@ import {useGenomeSession} from '../../browser/use-genome-session.js';
 import {browserViewShortcut} from '../../browser/contract.js';
 import {documentView} from '../../browser/documents.js';
 import {useTransferGenomeViews} from './transfer-genome-views.js';
+import {useProteinReview} from './protein-review.js';
+import {readReviewGenes as defaultReadReviewGenes} from '../../workflows/annotation-transfer/proteins.js';
 import {cohortConsensusView, consensusIsolateView, consensusSitesView, siteItemId} from '../../workflows/reference-consensus/views.js';
 
 export type SupportPath = ResultPath & {id: string; label: string};
@@ -125,6 +127,7 @@ export function RunResultsScreen({
   formatDateTime = formatLocalDateTime,
   cohortRerun,
   readSites = readCohortSites,
+  readReviewGenes = defaultReadReviewGenes,
   loadHelp = () => loadResultHelp(manifest.id),
 }: {
   runDirectory: string;
@@ -138,6 +141,8 @@ export function RunResultsScreen({
   formatDateTime?: (value: string) => string;
   cohortRerun?: CohortRerun;
   readSites?: typeof readCohortSites;
+  /** Reads the genes the annotation transfer listed for review. */
+  readReviewGenes?: typeof defaultReadReviewGenes;
   /** The documents result help shows; the workflow's results page and the general run results. */
   loadHelp?: DocumentsLoader;
 }): React.JSX.Element {
@@ -210,8 +215,13 @@ export function RunResultsScreen({
     }, selectedSite ? selectBrowserSite : undefined);
   };
   const [annotationTab, setAnnotationTab] = useState<AnnotationTransferTabId>('overview');
+  const proteinReview = useProteinReview({result: annotationTransfer, active: !!annotationTransfer && annotationTab === 'proteins',
+    readGenes: readReviewGenes});
   const transferViews = useTransferGenomeViews({loaded: isAnnotationTransferResult(loaded) ? loaded : undefined, runDirectory,
-    manifest, loadHelp, scope: JSON.stringify([inputActive, mode.kind, view])});
+    manifest, loadHelp, scope: JSON.stringify([inputActive, mode.kind, view, proteinReview.filter]),
+    review: {available: proteinReview.state?.state === 'ready' && proteinReview.listed.length > 0, listed: proteinReview.listed,
+      selected: proteinReview.selected, select: proteinReview.select},
+    onProteinsTab: !!annotationTransfer && annotationTab === 'proteins'});
 
   // The Sites tab reads the selected cohort's tables once, when it is first shown; leaving the tab
   // or choosing another cohort before they are read cancels the reading.
@@ -244,7 +254,7 @@ export function RunResultsScreen({
     if (contentRef.current) {
       setContentHeight(measureElement(contentRef.current).height);
     }
-  }, [columns, rows, loaded, view, consensusView, annotationTab, sites]);
+  }, [columns, rows, loaded, view, consensusView, annotationTab, sites, proteinReview.state, proteinReview.listing]);
 
   const scrollBy = (delta: number): void => {
     setScrollOffsets(current => ({
@@ -379,6 +389,9 @@ export function RunResultsScreen({
       return;
     }
     if (transferViews.handleInput(input, key)) {
+      return;
+    }
+    if (proteinReview.handleInput(input, key)) {
       return;
     }
     if (consensusKey(input, key)) {
@@ -574,7 +587,8 @@ export function RunResultsScreen({
     (consensusView.tab === 'sites' && !consensusView.siteDetail));
   const shortcuts = transferViews.choosing ? transferViews.shortcuts : [
     consensus || annotationTransfer ? 'Tab/←/→ — Switch tab' : '',
-    listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 ? '↑/↓ — Scroll' : '',
+    listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 && !proteinReview.listing ? '↑/↓ — Scroll' : '',
+    ...proteinReview.shortcuts,
     maximumScrollOffset > 0 ? 'PageUp/PageDown (or fn + ↑/↓) — Page' : '',
     consensusView?.tab === 'isolates' && !consensusView.isolateDetail ? 'Enter — Isolate details' : '',
     consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'f — Filter' : '',
@@ -589,6 +603,9 @@ export function RunResultsScreen({
     '? — Help',
   ];
   let back: string | false = onBack ? 'Back' : false;
+  if (proteinReview.back) {
+    back = proteinReview.back;
+  }
   if (transferViews.back) {
     back = transferViews.back;
   }
@@ -654,6 +671,7 @@ export function RunResultsScreen({
               filesHeader={runDirectorySection}
               filesFooter={runFilesSection}
               runDetails={metadataSection}
+              proteins={proteinReview.element(visibleRows)}
             />
           ) : <>
           {metadataSection}

@@ -49,6 +49,15 @@ class FastaResult:
     sequence_lengths: dict[str, int] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # Bases that are not A, C, G, or T in any case: N, and every other IUPAC code or gap character.
+    unresolved_bases: dict[str, int] = field(default_factory=lambda: {"n": 0, "iupac": 0})
+
+
+def _count_unresolved(line: str, counts: dict[str, int]) -> None:
+    upper = line.upper()
+    n = upper.count("N")
+    counts["n"] += n
+    counts["iupac"] += len(upper) - n - sum(upper.count(base) for base in "ACGT")
 
 
 def parse_fasta(path: Path) -> FastaResult:
@@ -89,6 +98,7 @@ def parse_fasta(path: Path) -> FastaResult:
                         f"sequence '{current_id}': line {line_number} has non-IUPAC characters"
                     )
                 current_length += len(line.strip())
+                _count_unresolved(line.strip(), result.unresolved_bases)
 
     if current_id is not None:
         if current_length == 0:
@@ -212,6 +222,17 @@ def cross_check(reference_fasta: FastaResult, reference_gff3: Gff3Result) -> lis
     return errors
 
 
+def warn_about_unresolved_target_bases(target_fasta: FastaResult) -> None:
+    """A codon with such a base cannot be translated, so it changes the protein comparison of the
+    gene it lies in without any real change in the target."""
+    counts = target_fasta.unresolved_bases
+    if counts["n"] or counts["iupac"]:
+        target_fasta.warnings.append(
+            f"the target has {counts['n']} bases written as N and {counts['iupac']} other bases "
+            "that are not A, C, G, or T; genes containing them are marked for review"
+        )
+
+
 def build_summary(
     reference_fasta_path: Path,
     reference_fasta: FastaResult,
@@ -235,6 +256,7 @@ def build_summary(
             "path": str(reference_fasta_path),
             "sequence_count": len(reference_fasta.sequence_ids),
             "sequence_lengths": reference_fasta.sequence_lengths,
+            "unresolved_bases": reference_fasta.unresolved_bases,
             "errors": reference_fasta.errors,
             "warnings": reference_fasta.warnings,
         },
@@ -249,6 +271,7 @@ def build_summary(
             "path": str(target_fasta_path),
             "sequence_count": len(target_fasta.sequence_ids),
             "sequence_lengths": target_fasta.sequence_lengths,
+            "unresolved_bases": target_fasta.unresolved_bases,
             "errors": target_fasta.errors,
             "warnings": target_fasta.warnings,
         },
@@ -273,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
     reference_fasta = parse_fasta(args.reference_fasta)
     reference_gff3 = parse_gff3(args.reference_gff3)
     target_fasta = parse_fasta(args.target_fasta)
+    warn_about_unresolved_target_bases(target_fasta)
     cross_check_errors = cross_check(reference_fasta, reference_gff3)
 
     summary = build_summary(

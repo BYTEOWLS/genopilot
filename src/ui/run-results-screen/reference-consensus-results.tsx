@@ -182,7 +182,30 @@ function overviewSections(result: ReferenceConsensusResult): RowSection[] {
       rows: countRows(active.counts).map(row => ({id: row.id, label: row.label, value: integer(row.value)})),
     });
   }
+  const fasta = active?.paths['consensus-fasta'];
+  if (fasta?.available) {
+    sections.push({id: 'annotation-transfer', title: 'Next: Annotate the Consensus', rows: annotationTransferRows(result, fasta.absolutePath, active?.counts)});
+  }
   return sections;
+}
+
+/**
+ * The cohort consensus is not annotated; the annotation transfer lifts the backbone's annotation
+ * onto it. Only a suggestion with the inputs to choose: nothing is prefilled or started.
+ */
+function annotationTransferRows(result: ReferenceConsensusResult, fasta: string, counts: CohortCounts | undefined): ParameterRow[] {
+  const backbone = result.backbone;
+  const unresolved = counts ? counts.basesIupac + Object.values(counts.basesN).reduce((total, count) => total + count, 0) : undefined;
+  return [
+    {id: 'annotation_transfer.workflow', label: 'Workflow', value: 'annotation transfer, as a new run'},
+    {id: 'annotation_transfer.target', label: 'Target FASTA', value: fasta},
+    {id: 'annotation_transfer.reference', label: 'Reference', value: backbone.source === 'ncbi' && backbone.accession
+      ? `NCBI accession ${backbone.accession}, with its annotation`
+      : `${backbone.path ?? 'the backbone FASTA'} with a GFF3 annotation of it`},
+    {id: 'annotation_transfer.unresolved', label: 'Unresolved bases', value: unresolved === undefined
+      ? 'not counted'
+      : unresolved === 0 ? 'none' : `${integer(unresolved)}; genes containing them are listed for review there`},
+  ];
 }
 
 const isolateColumns: readonly {id: string; label: string}[] = [

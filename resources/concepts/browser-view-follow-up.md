@@ -15,8 +15,8 @@ The current browser view is sufficient for the next release. Further browser wor
 - [ ] Add panning-follow and region selection ([genome design](done/browser-view/genome.md#work)).
 - [ ] Add CLI-owned decision drafting, browser review actions, and the draft tray; first move the cohort draft into the persistent result screen ([decision design](done/browser-view/genome.md#decision-drafting)).
 - [ ] Add genome SVG/PNG downloads with provenance, the download menu, and the About sheet ([container design](done/browser-view/README.md#downloads)).
-- [ ] Add the genome source for saved isolate sequences when that feature exists ([genome work](done/browser-view/genome.md#work)); the annotation review's read-only view is part of its [own concept](annotation-review.md#review-view).
-- [ ] With drafting: the annotation review's verdict actions ([deferred there](annotation-review.md#deferred)).
+- [ ] Add the genome source for saved isolate sequences when that feature exists ([genome work](done/browser-view/genome.md#work)); the annotation review's read-only view is part of its [own concept](done/annotation-review.md#review-view).
+- [ ] With drafting: the annotation review's verdict actions ([deferred there](annotation-review-decision.md#deferred)).
 - [ ] Design chart and table kinds when a researcher-facing screen needs them.
 - [ ] Update researcher documentation, legends, workflow result guides, and the changelog alongside any implemented follow-up.
 

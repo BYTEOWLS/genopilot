@@ -3,11 +3,13 @@
 import {createRequire} from 'node:module';
 import React from 'react';
 import {render} from 'ink';
+import {ThemeProvider} from '@inkjs/ui';
 import {selfUpdate} from './self-update.js';
 import {BrowserViewProvider} from './browser/provider.js';
 import {createTerminalTitleWriter} from './terminal-title.js';
 import {createMouseWheelInput} from './ui/mouse-wheel.js';
 import {TerminalTitleProvider} from './ui/terminal-title.js';
+import {inkTheme} from './ui/ink-theme.js';
 import {WelcomeScreen, type CliMetadata} from './ui/welcome-screen.js';
 
 type PackageJson = {
@@ -76,11 +78,13 @@ async function main(): Promise<void> {
     process.once('exit', mouse.dispose);
   }
   const instance = render(
-    <TerminalTitleProvider baseTitle={packageJson.label} onTitleChange={terminalTitle.set}>
-      <BrowserViewProvider application={{name: metadata.label, version: metadata.version}}>
-        <WelcomeScreen metadata={metadata} currentDirectory={process.cwd()} mouseReporting={mouse !== undefined} />
-      </BrowserViewProvider>
-    </TerminalTitleProvider>,
+    <ThemeProvider theme={inkTheme}>
+      <TerminalTitleProvider baseTitle={packageJson.label} onTitleChange={terminalTitle.set}>
+        <BrowserViewProvider application={{name: metadata.label, version: metadata.version}}>
+          <WelcomeScreen metadata={metadata} currentDirectory={process.cwd()} mouseReporting={mouse !== undefined} />
+        </BrowserViewProvider>
+      </TerminalTitleProvider>
+    </ThemeProvider>,
     {
       alternateScreen: true,
       exitOnCtrlC: false,

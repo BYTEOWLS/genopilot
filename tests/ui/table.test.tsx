@@ -34,3 +34,18 @@ test('caps a very long leading cell so the last column keeps room', () => {
   const meaningColumn = output.split('\n')[0]?.indexOf('Meaning') ?? -1;
   assert.equal(meaningColumn, 30);
 });
+
+test('right-aligns the columns it is asked to, for numbers in a column of their own', () => {
+  const output = renderToString(
+    <Table header={['Group', 'Genes', 'Meaning']} rows={[['exact', '10,091', 'Same.'], ['near', '7', 'Close.']]} align={['left', 'right']} />,
+    {columns: 60},
+  );
+  const lines = output.split('\n');
+  const end = (line: string | undefined, text: string): number => (line?.indexOf(text) ?? -1) + text.length;
+  const header = lines[0];
+  const exact = lines.find(line => line.startsWith('exact'));
+  const near = lines.find(line => line.startsWith('near'));
+  assert.equal(end(exact, '10,091'), end(near, '7'), 'the numbers end in the same column');
+  assert.equal(end(header, 'Genes'), end(exact, '10,091'), 'the header aligns with its column');
+  assert.equal(near?.indexOf('Close.'), exact?.indexOf('Same.'), 'the next column still starts in one place');
+});

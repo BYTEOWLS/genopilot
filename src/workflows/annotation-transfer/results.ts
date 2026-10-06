@@ -4,6 +4,7 @@ import {
   ANNOTATION_TRANSFER_WORKFLOW_ID,
   ANNOTATION_TRANSFER_WORKFLOW_VERSION,
 } from './configuration.js';
+import {proteinCategories, reviewReasons, type ProteinCategory, type ReviewReason} from './proteins.js';
 
 export const ANNOTATION_TRANSFER_SUMMARY_SCHEMA_VERSION = 1 as const;
 export const ANNOTATION_TRANSFER_METRICS_SCHEMA_VERSION = 1 as const;
@@ -54,6 +55,18 @@ export type AnnotationTransferResult = {
     proteinIdentityByTranscriptModel: IdentitySummary;
   };
   validation: {status: 'passed' | 'failed'; errors: number; warnings: number};
+  /** The protein rating of the summary step. */
+  proteins: {
+    minimumProteinIdentityPercent: number;
+    ratedGenes: number;
+    genesByCategory: Record<ProteinCategory, number>;
+    genesByReviewReason: Record<ReviewReason, number>;
+    genesListedForReview: number;
+    /** Disjoint: unchanged and not listed, changed but at or above the threshold, and listed for review. */
+    genesByMatch: {exactMatch: number; nearMatch: number; needsReview: number};
+    /** The target's bases that are not A, C, G, or T: `N`, and every other code. */
+    unresolvedTargetBases: {n: number; other: number};
+  };
   /** Persisted one-line explanations keyed by metric and detail-column name. */
   definitions: {metrics: Record<string, string>; detailColumns: Record<string, string>};
   reports: Record<string, ResultPath>;
@@ -337,6 +350,54 @@ function parseTransfer(value: unknown, issues: Issues): AnnotationTransferResult
   };
 }
 
+function parseProteins(value: unknown, issues: Issues): AnnotationTransferResult['proteins'] | undefined {
+  const path = '$.metrics.payload.proteins';
+  const source = record(value, path, issues);
+  if (!source) {
+    return undefined;
+  }
+  fields(source, ['minimum_protein_identity_percent', 'rated_genes', 'genes_by_category', 'genes_by_review_reason',
+    'genes_listed_for_review', 'genes_by_match', 'unresolved_target_bases', 'source', 'unresolved_intervals'], path, issues);
+  const c = (key: string) => count(source[key], `${path}.${key}`, issues);
+  const keyed = <Key extends string>(key: string, keys: readonly Key[]): Record<Key, number> | undefined => {
+    const counts = countMap(source[key], `${path}.${key}`, issues);
+    if (!counts) {
+      return undefined;
+    }
+    fields(counts, keys, `${path}.${key}`, issues);
+    const missing = keys.filter(item => counts[item] === undefined);
+    if (missing.length > 0) {
+      issues.push({path: `${path}.${key}`, message: `must count ${missing.join(', ')}`});
+      return undefined;
+    }
+    return counts as Record<Key, number>;
+  };
+  const minimumProteinIdentityPercent = c('minimum_protein_identity_percent');
+  if (minimumProteinIdentityPercent !== undefined && minimumProteinIdentityPercent > 100) {
+    issues.push({path: `${path}.minimum_protein_identity_percent`, message: 'must not exceed 100'});
+  }
+  const ratedGenes = c('rated_genes');
+  const genesByCategory = keyed('genes_by_category', proteinCategories);
+  const genesByReviewReason = keyed('genes_by_review_reason', reviewReasons);
+  const genesListedForReview = c('genes_listed_for_review');
+  const byMatch = keyed('genes_by_match', ['exact_match', 'near_match', 'needs_review'] as const);
+  const unresolvedTargetBases = keyed('unresolved_target_bases', ['n', 'other'] as const);
+  stringValue(source.source, `${path}.source`, issues);
+  stringValue(source.unresolved_intervals, `${path}.unresolved_intervals`, issues);
+  if (minimumProteinIdentityPercent === undefined || ratedGenes === undefined || !genesByCategory || !genesByReviewReason ||
+      genesListedForReview === undefined || !byMatch || !unresolvedTargetBases) {
+    return undefined;
+  }
+  requireEqualCount(sumCounts(genesByCategory), ratedGenes, `${path}.genes_by_category`, 'rated_genes', issues);
+  requireEqualCount(sumCounts(byMatch), ratedGenes, `${path}.genes_by_match`, 'rated_genes', issues);
+  requireEqualCount(byMatch.needs_review, genesListedForReview, `${path}.genes_by_match.needs_review`, 'genes_listed_for_review', issues);
+  if (genesListedForReview > ratedGenes) {
+    issues.push({path: `${path}.genes_listed_for_review`, message: 'must not exceed rated_genes'});
+  }
+  return {minimumProteinIdentityPercent, ratedGenes, genesByCategory, genesByReviewReason, genesListedForReview,
+    genesByMatch: {exactMatch: byMatch.exact_match, nearMatch: byMatch.near_match, needsReview: byMatch.needs_review}, unresolvedTargetBases};
+}
+
 /** Strictly validates schema v1 and resolves its persisted paths inside the run directory. */
 export async function readAnnotationTransferResult(
   value: unknown,
@@ -379,6 +440,7 @@ export async function readAnnotationTransferResult(
   let validation: AnnotationTransferResult['validation'] | undefined;
   let metricsPath: ResultPath | undefined;
   let definitions: AnnotationTransferResult['definitions'] | undefined;
+  let proteins: AnnotationTransferResult['proteins'] | undefined;
   if (metrics) {
     fields(metrics, ['schema_version', 'path', 'payload'], '$.metrics', issues);
     if (metrics.schema_version !== ANNOTATION_TRANSFER_METRICS_SCHEMA_VERSION) {
@@ -387,7 +449,7 @@ export async function readAnnotationTransferResult(
     metricsPath = safeRelativePath(metrics.path, '$.metrics.path', runDirectory, issues);
     const payload = record(metrics.payload, '$.metrics.payload', issues);
     if (payload) {
-      fields(payload, ['schema_version', 'generated_at', 'workflow', 'definitions', 'detail_column_definitions', 'transfer', 'validation'], '$.metrics.payload', issues);
+      fields(payload, ['schema_version', 'generated_at', 'workflow', 'definitions', 'detail_column_definitions', 'transfer', 'proteins', 'validation'], '$.metrics.payload', issues);
       if (payload.schema_version !== ANNOTATION_TRANSFER_METRICS_SCHEMA_VERSION) {
         issues.push({path: '$.metrics.payload.schema_version', message: `must equal supported version ${ANNOTATION_TRANSFER_METRICS_SCHEMA_VERSION}`});
       }
@@ -399,6 +461,7 @@ export async function readAnnotationTransferResult(
         definitions = {metrics: metricDefinitions, detailColumns: detailColumnDefinitions};
       }
       transfer = parseTransfer(payload.transfer, issues);
+      proteins = parseProteins(payload.proteins, issues);
       const validationSource = record(payload.validation, '$.metrics.payload.validation', issues);
       if (validationSource) {
         fields(validationSource, ['status', 'errors', 'warnings', 'source', 'explanation'], '$.metrics.payload.validation', issues);
@@ -419,7 +482,7 @@ export async function readAnnotationTransferResult(
   const reportsSource = record(summary.generated_reports, '$.generated_reports', issues);
   const reports: Record<string, ResultPath> = {};
   if (reportsSource) {
-    const expected = ['feature_transfer', 'aggregated_metrics', 'completion_summary', 'validation'];
+    const expected = ['feature_transfer', 'aggregated_metrics', 'completion_summary', 'validation', 'target_unresolved_bed'];
     fields(reportsSource, expected, '$.generated_reports', issues);
     for (const key of expected) {
       const parsed = safeRelativePath(reportsSource[key], `$.generated_reports.${key}`, runDirectory, issues);
@@ -467,7 +530,7 @@ export async function readAnnotationTransferResult(
     }
   }
 
-  if (issues.length > 0 || !generatedAt || !runModel || !statusExplanation || !transfer || !validation || !metricsPath || !definitions) {
+  if (issues.length > 0 || !generatedAt || !runModel || !statusExplanation || !transfer || !proteins || !validation || !metricsPath || !definitions) {
     throw new AnnotationTransferResultError(issues);
   }
 
@@ -478,8 +541,9 @@ export async function readAnnotationTransferResult(
   })));
   return {
     generatedAt, run: runModel, status: summary.status as AnnotationTransferStatus,
-    statusExplanation, transfer, validation, definitions,
+    statusExplanation, transfer, validation, definitions, proteins,
     reports: checkedReports, evidence: checkedEvidence,
     metricsPath: await checkPath(metricsPath),
   };
 }
+

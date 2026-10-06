@@ -16,6 +16,7 @@ import {
 } from '../../src/workflows/results.js';
 import type {DocumentsLoader} from '../../src/docs/documents.js';
 import {parseMarkdown} from '../../src/docs/markdown.js';
+import type {ReviewGene} from '../../src/workflows/annotation-transfer/proteins.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -77,6 +78,7 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
         target: {source: 'local', fasta: '/data/target.fa'},
       },
       lifton: {profile: 'same-species'},
+      review: {minimum_protein_identity: 99},
       resources: {cpu_mode: 'automatic', effective_cpus: 7},
       run: {
         output_root: '/runs',
@@ -112,6 +114,15 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
         proteinIdentityByTranscriptModel: {unit: 'transcript_model', count: 0, minimum: null, mean: null, maximum: null, unavailableReason: 'No protein values.'},
       },
       validation: {status: 'passed', errors: 0, warnings: 1},
+      proteins: {
+        minimumProteinIdentityPercent: 99,
+        ratedGenes: 120,
+        genesByCategory: {unmapped: 0, lost: 0, disrupted: 1, inframe_indel: 0, substitutions: 1, unchanged: 118},
+        genesByReviewReason: {unmapped_or_lost: 0, disrupted: 1, below_threshold: 2, unresolved_bases: 0},
+        genesListedForReview: 2,
+        genesByMatch: {exactMatch: 117, nearMatch: 1, needsReview: 2},
+        unresolvedTargetBases: {n: 0, other: 0},
+      },
       definitions: {
         metrics: {mapped_features: 'Persisted definition sentinel for mapped features.'},
         detailColumns: {},
@@ -163,6 +174,7 @@ function renderScreen(
     pathExists?: (path: string) => boolean;
     formatDateTime?: (value: string) => string;
     loadHelp?: DocumentsLoader;
+    readReviewGenes?: (options: {path: string; signal?: AbortSignal}) => Promise<ReviewGene[]>;
   } = {},
 ): {input: TestInput; output: TestOutput; frame: () => string; unmount: () => void} {
   const input = new TestInput();
@@ -178,6 +190,7 @@ function renderScreen(
       pathExists={options.pathExists ?? (() => true)}
       formatDateTime={options.formatDateTime ?? (value => `formatted:${value}`)}
       loadHelp={options.loadHelp ?? helpDocuments}
+      readReviewGenes={options.readReviewGenes}
     />,
     {
       exitOnCtrlC: false,
@@ -191,7 +204,7 @@ function renderScreen(
 }
 
 /** The screen's frame on each tab, from the first; Tab moves to the next one. */
-async function tabFrames(screen: ReturnType<typeof renderScreen>, count = 5): Promise<string[]> {
+async function tabFrames(screen: ReturnType<typeof renderScreen>, count = 6): Promise<string[]> {
   await settle();
   const frames = [screen.frame()];
   for (let index = 1; index < count; index += 1) {
@@ -207,7 +220,7 @@ test('presents compatible run metadata, scientific metrics, and direct result pa
   const screen = renderScreen(compatibleResult(), {inputActive: true});
   try {
     const frames = await tabFrames(screen);
-    const [overview, transfer, , files, details] = frames;
+    const [overview, transfer, , , files, details] = frames;
     // The overview shows the outcome; metrics, files, and run metadata have tabs of their own.
     assert.ok(!overview!.includes('annotation-transfer@1') && !overview!.includes('131'));
     assert.ok(transfer!.includes('131') && !transfer!.includes('annotation-transfer@1'));
@@ -278,7 +291,7 @@ test('distinguishes current evidence availability from availability at summary t
   loaded.result.evidence.mapped_features!.recordedAvailable = false;
   const screen = renderScreen(loaded, {inputActive: true});
   try {
-    const frame = (await tabFrames(screen, 4)).at(-1) ?? '';
+    const frame = (await tabFrames(screen, 5)).at(-1) ?? '';
     assert.match(frame, /lifton\.raw\.gff3 \(missing\) \(available when summarized\)/);
     assert.match(frame, /mapped\.txt \(unavailable when summarized; available now\)/);
   } finally {
@@ -443,6 +456,89 @@ test('opens the result help documents also for incompatible results', async () =
     screen.input.write(HELP);
     await settle();
     assert.match(screen.frame(), /Result help sentinel/);
+  } finally {
+    screen.unmount();
+  }
+});
+
+const ENTER = '\r';
+
+const reviewGenes: ReviewGene[] = [
+  {referenceId: 'gene-low', featureType: 'gene', reference: {seqid: 'refchr', start: 1, end: 900, strand: '+'}, target: {id: 'gene-low', seqid: 'chr1', start: 10, end: 90, strand: '+'}, transferMethod: 'Liftoff',
+    proteinIdentity: 0.97, mutations: ['nonsynonymous'], category: 'substitutions', liftonStatus: ['Liftoff'], unresolvedBases: 0, reasons: ['below_threshold']},
+  {referenceId: 'gene-frame', featureType: 'gene', reference: {seqid: 'refchr', start: 1, end: 900, strand: '+'}, target: {id: 'gene-frame-target', seqid: 'chr2', start: 100, end: 900, strand: '-'}, transferMethod: 'Liftoff',
+    proteinIdentity: 0.6, mutations: ['frameshift'], category: 'disrupted', liftonStatus: ['LiftOn_chaining_algorithm'], unresolvedBases: 0,
+    reasons: ['disrupted', 'below_threshold']},
+];
+
+
+/** The screen on the Proteins tab, the fourth. */
+async function proteinsTab(screen: ReturnType<typeof renderScreen>): Promise<string> {
+  return (await tabFrames(screen, 4)).at(-1) ?? '';
+}
+
+test('the Proteins tab lists the genes in review order and opens and closes a gene detail', async () => {
+  const paths: string[] = [];
+  let backs = 0;
+  const screen = renderScreen(compatibleResult(), {inputActive: true, onBack: () => {
+    backs += 1;
+  }, readReviewGenes: async ({path: table}) => {
+    paths.push(table);
+    return reviewGenes;
+  }});
+  try {
+    const list = await proteinsTab(screen);
+    assert.deepEqual(paths, ['/runs/result-42/results/feature-transfer.tsv']);
+    assert.ok(list.includes('99%') && list.includes('120') && list.includes('117'));
+    assert.ok(list.indexOf('gene-frame') < list.indexOf('gene-low'), 'the disrupted gene comes first');
+
+    screen.output.clearOutput();
+    screen.input.write(ENTER);
+    await settle();
+    const detail = screen.frame();
+    assert.ok(detail.includes('gene-frame-target') && detail.includes('LiftOn_chaining_algorithm') && detail.includes('60.0%'));
+    assert.ok(!detail.includes('gene-low'));
+
+    screen.output.clearOutput();
+    screen.input.write(ESCAPE);
+    await settle();
+    assert.ok(screen.frame().includes('gene-low'), 'Escape returns to the list');
+    assert.equal(backs, 0);
+
+    screen.output.clearOutput();
+    screen.input.write(ARROW_DOWN);
+    await settle();
+    screen.input.write(ENTER);
+    await settle();
+    assert.ok(screen.frame().includes('97.0%'), 'the arrow keys move the selection');
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('the Proteins tab filters by review reason', async () => {
+  const screen = renderScreen(compatibleResult(), {inputActive: true, readReviewGenes: async () => reviewGenes});
+  try {
+    await proteinsTab(screen);
+    screen.output.clearOutput();
+    screen.input.write('f');
+    await settle();
+    screen.output.clearOutput();
+    screen.input.write('f');
+    await settle();
+    const disrupted = screen.frame();
+    assert.ok(disrupted.includes('gene-frame') && !disrupted.includes('gene-low'));
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('the Proteins tab reports a table it cannot read', async () => {
+  const screen = renderScreen(compatibleResult(), {inputActive: true, readReviewGenes: async () => {
+    throw new Error('table-failure-sentinel');
+  }});
+  try {
+    assert.ok((await proteinsTab(screen)).includes('table-failure-sentinel'));
   } finally {
     screen.unmount();
   }

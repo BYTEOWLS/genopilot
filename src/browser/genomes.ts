@@ -94,7 +94,8 @@ export async function prepareGenome(view: GenomeView, indexes: FastaIndexes, sig
         throw new Error(`Track changed while checking: ${track.file}`);
       }
       tracks.push({...publicTrack, file: register({snapshot}), index: indexSnapshot ? register({snapshot: indexSnapshot}) : undefined,
-        size: snapshot.size, shown: track.shown && !problem && (track.kind !== 'annotation' || snapshot.size <= automaticAnnotationLimit), ...(problem ? {problem} : {})});
+        // An empty file is evidence that there is nothing to draw, so it is listed but never shown.
+        size: snapshot.size, shown: track.shown && !problem && snapshot.size > 0 && (track.kind !== 'annotation' || snapshot.size <= automaticAnnotationLimit), ...(problem ? {problem} : {})});
     } catch (error) {
       signal.throwIfAborted();
       tracks.push({...publicTrack, file: '', index: undefined, shown: false,

@@ -26,6 +26,7 @@ const reports = {
   aggregated_metrics: 'results/metrics.json',
   completion_summary: 'results/summary.json',
   validation: 'results/validation.json',
+  target_unresolved_bed: 'results/target-unresolved.bed',
 };
 
 const evidencePaths = {
@@ -38,6 +39,18 @@ const evidencePaths = {
   unmapped_features: 'results/annotation/lifton_output/stats/unmapped_features.txt',
   extra_copy_features: 'results/annotation/lifton_output/stats/extra_copy_features.txt',
   selected_feature_types: 'results/annotation/lifton_output/intermediate_files/auto_feature_types.txt',
+};
+
+const proteins = {
+  minimum_protein_identity_percent: 99,
+  rated_genes: 2,
+  genes_by_category: {unmapped: 1, lost: 0, disrupted: 1, inframe_indel: 0, substitutions: 0, unchanged: 0},
+  genes_by_review_reason: {unmapped_or_lost: 1, disrupted: 1, below_threshold: 1, unresolved_bases: 0},
+  genes_listed_for_review: 2,
+  genes_by_match: {exact_match: 0, near_match: 0, needs_review: 2},
+  unresolved_target_bases: {n: 5, other: 2},
+  source: 'results/feature-transfer.tsv',
+  unresolved_intervals: 'results/target-unresolved.bed',
 };
 
 function validSummary(): Record<string, unknown> {
@@ -69,6 +82,7 @@ function validSummary(): Record<string, unknown> {
       authoritative_sources: ['results/annotation/lifton_output/run_manifest.json'],
       detail_enrichment_source: 'results/annotation/lifton.raw.gff3',
     },
+    proteins: structuredClone(proteins),
     validation: {status: 'passed', errors: 0, warnings: 1, source: 'results/validation.json', explanation: 'GFF3 validation.'},
   };
   return {
@@ -94,6 +108,7 @@ function validConfiguration(directory: string): Record<string, unknown> {
       target: {source: 'local', fasta: '/data/target.fasta'},
     },
     lifton: {profile: 'same-species'},
+    review: {minimum_protein_identity: 99},
     resources: {cpu_mode: 'automatic', effective_cpus: 4},
     run: {
       output_root: join(directory, '..'),
@@ -275,5 +290,47 @@ test('keeps valid metrics available while reporting each missing artifact separa
     assert.equal(loaded.result.evidence.raw_gff3?.available, true);
     assert.equal(loaded.result.evidence.run_manifest?.available, false);
     assert.equal(loaded.result.reports.validation?.available, false);
+  }
+});
+
+function withProteins(change: (value: typeof proteins) => unknown): Record<string, unknown> {
+  const summary = validSummary();
+  const metrics = summary.metrics as {payload: Record<string, unknown>};
+  metrics.payload.proteins = change(structuredClone(proteins));
+  return summary;
+}
+
+test('reads the protein rating and the unresolved-bases report', async () => {
+  const loaded = await loadWorkflowResult(await prepareRun(), manifest());
+  assert.ok(isAnnotationTransferResult(loaded));
+  assert.equal(loaded.result.proteins?.minimumProteinIdentityPercent, 99);
+  assert.equal(loaded.result.proteins?.genesByCategory.disrupted, 1);
+  assert.equal(loaded.result.proteins?.genesByReviewReason.below_threshold, 1);
+  assert.deepEqual(loaded.result.proteins?.unresolvedTargetBases, {n: 5, other: 2});
+  assert.deepEqual(loaded.result.proteins?.genesByMatch, {exactMatch: 0, nearMatch: 0, needsReview: 2});
+  assert.equal(loaded.result.reports.target_unresolved_bed?.path, 'results/target-unresolved.bed');
+
+  for (const missing of ['proteins', 'report']) {
+    const summary = validSummary();
+    if (missing === 'proteins') {
+      delete (summary.metrics as {payload: Record<string, unknown>}).payload.proteins;
+    } else {
+      delete (summary.generated_reports as Record<string, string>).target_unresolved_bed;
+    }
+    assert.equal((await loadWorkflowResult(await prepareRun(summary), manifest())).kind, 'incompatible', `requires the ${missing}`);
+  }
+});
+
+test('rejects a protein rating whose counts disagree or lack a category', async () => {
+  for (const change of [
+    (value: typeof proteins) => ({...value, rated_genes: 3}),
+    (value: typeof proteins) => ({...value, genes_by_category: {...value.genes_by_category, unchanged: undefined}}),
+    (value: typeof proteins) => ({...value, genes_by_review_reason: {...value.genes_by_review_reason, other: 1}}),
+    (value: typeof proteins) => ({...value, minimum_protein_identity_percent: 101}),
+    (value: typeof proteins) => ({...value, unresolved_target_bases: 7}),
+    (value: typeof proteins) => ({...value, genes_by_match: {exact_match: 1, near_match: 0, needs_review: 1}}),
+  ]) {
+    const loaded = await loadWorkflowResult(await prepareRun(withProteins(change)), manifest());
+    assert.equal(loaded.kind, 'incompatible');
   }
 });
