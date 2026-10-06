@@ -59,6 +59,7 @@ export type CliMetadata = {
   description: string;
   author: string;
   version: string;
+  license: string;
 };
 
 const minimumTerminalWidth = 40;
@@ -381,7 +382,7 @@ export function WelcomeScreen({
           <Text color={mutedColor}> v{metadata.version}</Text>
         </Text>
         <Text color={mutedColor} wrap="wrap">{metadata.description}</Text>
-        <Text>Ⓒ {new Date().getFullYear()} {metadata.author} · https://byteowls.com · MIT License</Text>
+        <Text>Ⓒ {new Date().getFullYear()} {metadata.author} · https://byteowls.com · {metadata.license}</Text>
       </Box>
       {availableUpdateVersion ? (
         <Box marginTop={1}>

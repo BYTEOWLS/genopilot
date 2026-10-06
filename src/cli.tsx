@@ -16,6 +16,7 @@ type PackageJson = {
   version: string;
   description: string;
   author: string | {name: string};
+  license: string;
   bin: Record<string, string>;
 };
 
@@ -40,6 +41,7 @@ const metadata: CliMetadata = {
   description: packageJson.description,
   author: typeof packageJson.author === 'string' ? packageJson.author : packageJson.author.name,
   version: packageJson.version,
+  license: packageJson.license,
 };
 
 /** Runs non-interactive commands before mounting the interactive application. */

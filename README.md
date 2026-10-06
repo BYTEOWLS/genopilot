@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://github.com/BYTEOWLS/genopilot/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/BYTEOWLS/genopilot/ci.yml?branch=main&style=flat-square&label=tests" alt="Test status on main" /></a>
   <img src="https://img.shields.io/maintenance/yes/2026?style=flat-square" alt="Maintained in 2026" />
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue?style=flat-square" alt="AGPL-3.0-or-later license" /></a>
   <a href="https://www.npmjs.com/package/@byteowls/genopilot"><img src="https://img.shields.io/npm/v/@byteowls/genopilot?style=flat-square" alt="npm version" /></a>
 </p>
 
@@ -315,4 +315,8 @@ npm uninstall --global @byteowls/genopilot
 
 ## License
 
-[MIT](LICENSE)
+Copyright (C) 2026 Michael Oberwasserlechner
+
+GenoPilot is free software: you can redistribute it and/or modify it under the terms of the [GNU Affero General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+For use under other terms, such as a commercial license, contact the author.

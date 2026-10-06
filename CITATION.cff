@@ -11,7 +11,7 @@ authors:
     given-names: Michael
 version: 0.0.1
 date-released: 2026-09-30
-license: MIT
+license: AGPL-3.0-or-later
 repository-code: https://github.com/BYTEOWLS/genopilot
 url: https://www.npmjs.com/package/@byteowls/genopilot
 keywords:

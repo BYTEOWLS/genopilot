@@ -32,6 +32,7 @@ const metadata: CliMetadata = {
   commandName: 'genopilot',
   description: 'Run selected genomic workflows.',
   author: 'Test Author',
+  license: 'Test-License',
   version: '0.8.0',
 };
 

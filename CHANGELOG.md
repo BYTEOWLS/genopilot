@@ -6,6 +6,8 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+- License GenoPilot under the GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`) instead of MIT. Versions already published remain available under MIT. Other terms, such as a commercial license, are available from the author.
+
 - Accept several regions separated by spaces in the genome Region field and show them side by side; the field, wheel zoom, clicked positions, panning, and track separators follow each panel, and the zoom buttons zoom all panels. Correct the transfer guide, which promised a search by transcript ID that the Region field does not offer.
 
 - Rename the general genome help to *Using the genome viewer* and list a view's own guide first in the help menu, set apart from the general guide by a divider.
