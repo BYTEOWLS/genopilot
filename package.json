@@ -1,7 +1,7 @@
 {
   "name": "@byteowls/genopilot",
   "label": "GenoPilot",
-  "description": "Guided, reproducible genome workflows for researchers without deep bioinformatics expertise.",
+  "description": "Guided, reproducible genome workflows in your terminal.",
   "author": "Michael Oberwasserlechner",
   "license": "AGPL-3.0-or-later",
   "repository": {

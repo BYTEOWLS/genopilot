@@ -5,7 +5,7 @@
   </picture>
 </p>
 <p align="center"><strong><code>@byteowls/genopilot</code></strong></p>
-<p align="center">Guided, reproducible genome workflows for researchers without deep bioinformatics expertise.</p>
+<p align="center">Guided, reproducible genome workflows in your terminal.</p>
 
 <p align="center">
   <a href="https://github.com/BYTEOWLS/genopilot/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/BYTEOWLS/genopilot/ci.yml?branch=main&style=flat-square&label=tests" alt="Test status on main" /></a>

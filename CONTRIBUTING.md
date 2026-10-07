@@ -18,7 +18,7 @@ Report security vulnerabilities privately, as described in the [security policy]
 
 ## Proposing a workflow
 
-Open a [workflow proposal](https://github.com/BYTEOWLS/genopilot/issues/new/choose). Describe the scientific question, the tools and how they ask to be cited, public example data, and the outputs a researcher expects. A workflow is added only when it can be run reproducibly with pinned tools and documented for researchers without deep bioinformatics expertise.
+Open a [workflow proposal](https://github.com/BYTEOWLS/genopilot/issues/new/choose). Describe the scientific question, the tools and how they ask to be cited, public example data, and the outputs a researcher expects. Great workflows run reproducibly with pinned tools, and their documentation guides researchers from running them to interpreting the results.
 
 ## Pull requests
 

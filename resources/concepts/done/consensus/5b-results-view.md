@@ -37,7 +37,7 @@ Show:
 
 Labels state their counting unit and remain presentation-only. Machine-readable artifacts are authoritative.
 
-The help for scientific terms explains a locus that spans several bases, why overlapping variants of different isolates form one ballot, and every support flag, so the results stay understandable without a bioinformatics background.
+The help for scientific terms explains a locus that spans several bases, why overlapping variants of different isolates form one ballot, and every support flag, so every researcher can follow and interpret the results.
 
 ## Iterations
 

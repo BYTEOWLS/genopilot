@@ -134,7 +134,7 @@ What the genome kind adds to the container's [page](README.md#page):
 - **Presets instead of track menus**: one selector in the header applies a named set of tracks and settings, such as "Votes" (compact variant rows of every isolate), "Reads by allele" (reads grouped by the base they carry at the locus), and "Region" (zoomed out with the loci track). A guide step's `show` button applies a preset, such as reads colored by strand or with low mapping quality emphasized. The track chooser stays for anything else.
 - **Readable tracks**: tracks carry the names the CLI shows, such as an isolate's name with its vote and state, in the view's order, so a review lists the voters by allele and then those that cast no vote.
 - **Less igv.js chrome**: genome selection, loading files from a URL or disk, and other controls that do not apply are hidden, so the page offers only what works.
-- **Legend**: what igv.js draws and never explains: mismatch colors, faded reads for low mapping quality, insertion and deletion marks, coverage, soft clips. Probably the biggest help for researchers new to genome browsers.
+- **Legend**: what igv.js draws and never explains: mismatch colors, faded reads for low mapping quality, insertion and deletion marks, coverage, soft clips. Probably the biggest help for reading the genome view.
 - **States**: loading per track, a missing file with its path, and a track whose sequence names are not in the reference.
 - **Downloads**: the current view as SVG and PNG, through igv.js's own export, with the container's provenance footer.
 

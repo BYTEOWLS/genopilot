@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        A workflow is added only when it runs reproducibly with pinned tools and can be documented for researchers without deep bioinformatics expertise. **Do not attach private research data**; refer to public accessions instead.
+        Great workflows run reproducibly with pinned tools, and their documentation guides researchers from running them to interpreting the results. **Do not attach private research data**; refer to public accessions instead.
   - type: textarea
     id: question
     attributes:

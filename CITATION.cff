@@ -12,11 +12,10 @@ authors:
 repository-code: 'https://github.com/BYTEOWLS/genopilot'
 repository-artifact: 'https://www.npmjs.com/package/@byteowls/genopilot'
 abstract: >-
-  Guided, reproducible genome workflows for researchers
-  without deep bioinformatics expertise. A terminal
-  interface configures and runs packaged, pinned Snakemake
-  workflows, aggregate results and show them structured and
-  appealing in a browser view.
+  Guided, reproducible genome workflows: curated Snakemake
+  pipelines you configure and run from the terminal. Tools
+  are pinned, and results are aggregated and shown in a
+  structured browser view.
 keywords:
   - bioinformatics
   - genomics

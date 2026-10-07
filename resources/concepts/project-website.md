@@ -2,7 +2,7 @@
 
 ## Goal
 
-One public page that shows a researcher without deep bioinformatics expertise what GenoPilot does, what working with it looks like, and how to install it. A few screenshots explain the highlights better than the README, which addresses installers and developers, or `docs/`, which explains usage step by step.
+One public page that shows researchers what GenoPilot does, what working with it looks like, and how to install it. A few screenshots explain the highlights better than the README, which addresses installers and developers, or `docs/`, which explains usage step by step.
 
 The website complements the README and `docs/` and does not replace them: it links to them for everything beyond a short caption.
 
