@@ -6,6 +6,8 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-10-08
+
 ### Provenance
 
 - `pnpm publish` builds the package as a release build and refuses uncommitted changes; only runs of a release build are marked citable.
