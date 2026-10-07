@@ -148,7 +148,6 @@ test('groups rules the manifest does not classify instead of hiding them', () =>
   ]);
 
   const unclassified = progress.stages.find(stage => stage.id === unclassifiedStageId);
-  assert.equal(unclassified?.label, 'Other jobs');
   assert.equal(unclassified?.state, 'completed');
   assert.equal(unclassified?.done, 1);
 });

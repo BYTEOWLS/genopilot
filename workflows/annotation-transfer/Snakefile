@@ -23,6 +23,9 @@ directory, and every step writes its log to logs/):
   6. record_annotation_transfer_provenance       shared/rules/record_provenance.smk
        Checksums, tool versions, and commands of the whole run.
        -> artifacts.yaml, provenance/run.json
+  7. write_citation                              shared/rules/write_citation.smk
+       How to cite the run: tools, references, a draft methods paragraph.
+       -> citation/CITATION.md, citation/references.bib, citation/references.ris
 
 Running without GenoPilot: GenoPilot saves config.yaml into a new run
 directory. The same run can then be started directly with
@@ -61,6 +64,7 @@ include: str(SHARED_DIR / "rules" / "transfer_annotation.smk")
 include: str(SHARED_DIR / "rules" / "validate_annotation.smk")
 include: str(SHARED_DIR / "rules" / "summarize_results.smk")
 include: str(SHARED_DIR / "rules" / "record_provenance.smk")
+include: str(SHARED_DIR / "rules" / "write_citation.smk")
 
 
 # The files a finished run must have. Asking for them makes Snakemake run every step above.
@@ -74,3 +78,4 @@ rule all:
         "results/target-unresolved.bed",
         "artifacts.yaml",
         "provenance/run.json",
+        "citation/CITATION.md",

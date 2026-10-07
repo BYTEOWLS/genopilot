@@ -22,6 +22,10 @@ Review views can also offer a locus selector, Previous/Next (`p`/`n`), recorded 
 
 The genome viewer (IGV) is included in GenoPilot; if it is missing from an installation, the shortcut is marked unavailable rather than claiming the viewer is ready. Scientific exports and decision drafting remain planned.
 
+## Copying a citation
+
+Press `v` on a result page's Citation tab to open the run's citation, or use **Cite this run** in the header of any view opened from a run's results, which shows the citation in a dialog. Both offer a copy button for the whole citation and for each part, such as the methods paragraph, the reference list, BibTeX, and RIS. A button copies plain text without Markdown markup. If the browser refuses the clipboard, the button says so and shows the text selected for copying by hand.
+
 ## Printing
 
 There is no download menu. Use your browser's normal Print command to print or save a PDF. Printing uses a light background and omits navigation and connection controls; the footer identifies GenoPilot and the source documents.

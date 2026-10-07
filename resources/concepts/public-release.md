@@ -12,40 +12,39 @@ Each run says how to cite it, so citing never depends on the researcher reconstr
 
 ### Prerequisite: the GenoPilot version in provenance (done)
 
-Every saved configuration has a required `genopilot` section: the `package.json` version and, when known, the build's commit, its committer date, whether the working tree had uncommitted changes, and whether it is a release build (`released`: built from the unmodified commit tagged `v<version>`; running the sources is never a release). The provenance scripts copy it into `provenance/run.json` and each iteration's provenance, so a direct Snakemake run reports the version that saved its configuration. The result page and the browser's provenance footer show it; a release shows only its version.
+Every saved configuration has a required `genopilot` section: the `package.json` version and, when known, the build's commit, its committer date, whether the working tree had uncommitted changes, and whether it is a release build (`released`: the build `pnpm publish` makes through `prepublishOnly`, which refuses uncommitted changes; a local build or running the sources is never a release, and the tag is not checked). The provenance scripts copy it into `provenance/run.json` and each iteration's provenance, so a direct Snakemake run reports the version that saved its configuration. The result page and the browser's provenance footer show it; a release shows only its version.
 
 Decisions:
 
 - A reference-consensus iteration records the version that saved the configuration, not the one that ran the iteration. Passing the running version as a `--config` override would change the configuration Snakemake sees and make the iteration's dry-run check refuse it; an iteration runs the same workflow version, and the result page already flags a mismatch.
 - The section is required. No runs exist from before it, so there is no fallback for a missing version.
 
-### Citation file per run
+### Citation file per run (done)
 
-Every run writes a `CITATION.md` into its results, and the result page shows it. It contains:
+Every finished run writes `citation/CITATION.md`, with `citation/references.bib` and `citation/references.ris` beside it, from its `provenance/run.json` (the shared rule `write_citation`). It contains:
 
-- the GenoPilot version and its version DOI, and the workflow ID and version;
-- the tools that ran, with the versions the run observed;
-- the references for these tools, and the GenoPilot citation;
-- a draft methods paragraph built from the effective parameters, which the researcher checks and adapts.
+- whether the run is citable: only a run saved by a release build is; a development build is marked as not citable, following [Coordinating with a publication](zenodo-release-archiving.md#coordinating-with-a-publication);
+- the workflow ID and version, and the GenoPilot version;
+- the tools that ran, with the versions the run observed, falling back to the pinned version where the run could not observe one;
+- a draft methods paragraph naming every parameter that changes a result, which the researcher checks and adapts;
+- the GenoPilot citation and the tools' references, written out in full, and the same references as BibTeX and RIS.
 
-The tool references are written out in full rather than linked. Researchers cite what is in front of them; a link to the workflow README alone would leave most papers citing GenoPilot only, and GenoPilot is the wrapper, not the method. The file lists only the tools that ran in this run, for example not the NCBI Datasets CLI when no input was an accession. Each tool is cited the way it asks to be, from its README or `CITATION` file, rather than with a paper we choose. The result page only says to cite GenoPilot and the tools listed in `CITATION.md`, and the full list stays in the file.
+The tool references are written out in full rather than linked. Researchers cite what is in front of them; a link to the workflow README alone would leave most papers citing GenoPilot only, and GenoPilot is the wrapper, not the method. The file lists only the tools that ran in this run, for example not the NCBI Datasets CLI when no input was an accession.
 
-### Viewing and copying the citation
+Each workflow keeps, by convention, `citation/references.json` (its README's references with structured fields, and its `## Tools` rows mapped to them) `citation/methods.txt` (the methods paragraph as a template), and `citation/phrases.json` (the wording of setting values in it, so a value without wording fails rather than appearing raw); `workflows/shared/citation/genopilot.json` holds GenoPilot's own entry. A test keeps the README lists and `CITATION.cff` equal to these files, and the workflow tests fill every template. JSON, because rule scripts use only the standard library.
 
-The result page's documents include the run's `CITATION.md`, so `v` opens it in the [browser view](../../docs/browser-view.md) like the result help. There, each part a researcher pastes elsewhere gets a copy button: the methods paragraph, the reference list, and the whole file. A button copies plain text with the Markdown markup removed, because the text goes into a manuscript, not a Markdown file. The page is served from `127.0.0.1`, which browsers treat as a secure origin, so the clipboard API is available, also through an SSH port forward. If copying fails, the button says so and selects the text for a manual copy.
+The result page has a Citation tab, and the run's files list the file. `v` on the tab opens the citation in the [browser view](../../docs/browser-view.md), and every view opened from the run's results has a **Cite this run** button in its header that shows it in a dialog. There, the whole citation and each `##` section (methods, references, BibTeX, RIS) get a copy button that copies plain text without Markdown markup; if the clipboard is refused, the button says so and shows the text selected. The page is served from `127.0.0.1`, which browsers treat as a secure origin, so the clipboard API is available, also through an SSH port forward. The terminal offers no copy action; terminal clipboard support varies too much to rely on.
 
-The terminal shows the file and its path but offers no copy action; terminal clipboard support varies too much to rely on.
+Decisions:
 
-Open question: should a reference list also be copyable as BibTeX or RIS for reference managers? That needs the workflow reference files to hold structured fields rather than formatted strings.
+- **The version DOI.** A version's DOI exists only after its release is published, so it cannot be compiled into that release. The citation file names the version and, once one exists, the concept DOI, whose Zenodo record lists every version DOI. Looking the version DOI up through Zenodo's records API when the citation is shown is deferred until the first release has a concept DOI, since there is nothing to look up before.
+- **The methods paragraph names every parameter** that changes a result, not only those that differ from the defaults.
 
-The tool references are only prose under `## References` in each workflow README today. To write them into a run, each workflow needs a machine-readable list beside its README, such as `references.yaml` or `references.bib`, and the README's list should be generated from it or checked against it by a test, so the two cannot drift. This file belongs to the workflow and is found by convention. Shared code never names a workflow.
+Open points:
 
-A run produced by a development build, whose version has no DOI, is marked as not citable in its citation file and on its result page, following the rule [Coordinating with a publication](zenodo-release-archiving.md#coordinating-with-a-publication).
-
-Open questions:
-
-- How does a run learn its version DOI? A version's DOI exists only after its release is published, so it cannot be compiled into that release. Options: the citation file names the version and the concept DOI and says how to find the version DOI, or the application looks it up when the page is shown.
-- Should the methods paragraph name every parameter, or only those that differ from the defaults, with the full configuration attached?
+- Check each tool's own README or `CITATION` file for how it asks to be cited; the references follow the workflow READMEs, which were written from the tools' papers.
+- Reference-consensus iterations do not write a citation of their own; the run's citation describes the first cohort.
+- Snakemake's paper is a versioned F1000Research article whose DOIs name a version and which has no version-free DOI, so the references cite its latest version (3). A new paper version is rare and independent of the Snakemake pin; update the reference when one appears.
 
 ## Reproducibility of a cited version
 
@@ -101,7 +100,7 @@ The [bundled package](done/bundled-package.md) is done: it pins the application'
 
 1. The GenoPilot version in provenance (done).
 2. The history audit.
-3. The citation file per run, with machine-readable workflow references.
+3. The citation file per run, with machine-readable workflow references (done).
 4. The environment locks already in `tasks.md`.
 5. The worked examples.
 6. Community files and issue templates (done).

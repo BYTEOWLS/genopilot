@@ -48,6 +48,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lock:runtime": "pixi lock --manifest-path runtime/pixi.toml",
     "pack:local": "pnpm build && pnpm pack --out byteowls-genopilot-local.tgz",
+    "prepublishOnly": "GENOPILOT_RELEASE=1 pnpm build",
     "verify:package": "node scripts/verify-package.mjs",
     "install:global": "pnpm run pack:local && npm install --global ./byteowls-genopilot-local.tgz",
     "reinstall:global": "pnpm run install:global"

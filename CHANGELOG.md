@@ -8,6 +8,8 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ### Provenance
 
+- `pnpm publish` builds the package as a release build and refuses uncommitted changes; only runs of a release build are marked citable.
+- Every finished run writes how to cite it to `citation/CITATION.md`: whether it is citable, the tools that ran with their versions and references, a draft methods paragraph built from the configuration, and the references as BibTeX and RIS. The result page shows it on a Citation tab; in the browser view, `v` on that tab and the **Cite this run** button of every view opened from the run show it with buttons that copy each part as plain text.
 - Every run records the GenoPilot version and build that saved its configuration, in `config.yaml` and `provenance/run.json`; the result page and the browser view show it, and mark runs of a development build.
 
 ### Community

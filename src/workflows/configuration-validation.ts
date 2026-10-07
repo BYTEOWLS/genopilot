@@ -322,7 +322,8 @@ export function validateGenoPilot(
     const build = requireObject(genopilot.build, '$.genopilot.build', issues);
     if (build) {
       rejectUnknownFields(build, ['commit', 'committed_at', 'modified', 'released'], '$.genopilot.build', issues);
-      if (typeof build.commit !== 'string' || !/^[0-9a-f]{40}$/.test(build.commit)) {
+      // SHA-1 or SHA-256, whichever object format the repository uses.
+      if (typeof build.commit !== 'string' || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(build.commit)) {
         issues.push({path: '$.genopilot.build.commit', message: 'must be a full Git commit hash'});
         valid = false;
       }

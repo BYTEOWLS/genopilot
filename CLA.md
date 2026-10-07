@@ -40,4 +40,4 @@ This agreement is governed by Austrian law.
 
 ## How to agree
 
-State in your pull request: "I have read the Contributor License Agreement in `CLA.md` and agree to it." This applies to that pull request and to all your later contributions.
+Tick the box "I have read the Contributor License Agreement in `CLA.md` and agree to it." in the pull request template, or state the same sentence in your pull request. This applies to that pull request and to all your later contributions.

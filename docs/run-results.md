@@ -1,6 +1,12 @@
 # Run results
 
-Every workflow's result page has a **Run Details** tab with the run's technical metadata, and a **Files** tab that starts with the run directory and the run's own files. This page explains those items; each workflow's own results page explains the rest, including what its run status means.
+Every workflow's result page has a **Run Details** tab with the run's technical metadata, a **Files** tab that starts with the run directory and the run's own files, and a **Citation** tab that shows how to cite the run. This page explains those items; each workflow's own results page explains the rest, including what its run status means.
+
+## Citation
+
+The Citation tab shows the run's `citation/CITATION.md`, which the run writes when it finishes: whether the run is citable, the GenoPilot version, the tools that ran with their versions and references, a draft methods paragraph built from the run's configuration, and the references as BibTeX and RIS. Cite GenoPilot and the tools it lists; GenoPilot ran them, but the tools are the method. Check and adapt the methods paragraph before using it. A run saved by a development build is marked as not citable: only a released version has a DOI, so rerun the analysis with a release before citing it.
+
+Press `v` on the tab to open the citation in the browser view, where it can be copied. A run that has not finished yet has no citation.
 
 ## Run details
 
@@ -24,4 +30,5 @@ Every workflow's result page has a **Run Details** tab with the run's technical 
 | Current attempt stderr | Complete standard error of the Snakemake process for the execution that just ended. |
 | Artifact index | Index of the run's files with checksums and whether each was generated, imported, or cached. |
 | Run provenance | Record of the GenoPilot version and build that saved the configuration, commands, tool versions, resources, timestamps, effective configuration, and input checksums. |
+| How to cite this run | The run's citation: the GenoPilot version, the tools that ran with their versions and references, a draft methods paragraph to check and adapt, and the references as BibTeX and RIS. A run of a development build is marked as not citable. The Citation tab shows it, and `v` there opens it in the browser view, where each part can be copied as plain text. |
 | Complete step logs | Directory containing the complete logs of every workflow step. |

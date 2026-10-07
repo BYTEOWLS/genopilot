@@ -233,7 +233,8 @@ test('opens on the overview with the backbone and the active cohort, and keeps r
       assert.ok(frame.includes(expected), `missing ${expected}`);
     }
     assert.doesNotMatch(frame, /formatted:2026-01-02T10:00:00\.000Z/, 'run metadata is not on the overview');
-    const details = await screen.press(SHIFT_TAB);
+    // Run details are the tab before the citation, the last one.
+    const details = await screen.press(SHIFT_TAB, SHIFT_TAB);
     assert.match(details, /formatted:2026-01-02T10:00:00\.000Z/);
     assert.doesNotMatch(details, /GCF_000000001\.1/);
   } finally {
@@ -300,14 +301,14 @@ test('selects an iteration and compares it with the first completed cohort', asy
   }
 });
 
-test('shows the run files on the last tab and returns to the overview', async () => {
+test('shows the run files on their tab and returns to the overview', async () => {
   const screen = renderScreen();
   try {
     await settle();
     let frame = await screen.press(TAB, TAB, TAB, TAB);
     assert.match(frame, /isolates\.yaml/);
     assert.match(frame, /provenance\/backbone\.fasta\.json/);
-    frame = await screen.press(TAB, TAB);
+    frame = await screen.press(TAB, TAB, TAB);
     assert.match(frame, /GCF_000000001\.1/);
   } finally {
     screen.unmount();

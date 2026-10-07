@@ -1,0 +1,373 @@
+{
+  "references": [
+    {
+      "id": "bentley2008",
+      "text": "Bentley DR, et al. Accurate whole human genome sequencing using reversible terminator chemistry. Nature 456:53–59 (2008). https://doi.org/10.1038/nature07517",
+      "authors": [
+        "Bentley DR"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "Accurate whole human genome sequencing using reversible terminator chemistry",
+      "journal": "Nature",
+      "volume": "456",
+      "pages": "53–59",
+      "year": 2008,
+      "doi": "10.1038/nature07517"
+    },
+    {
+      "id": "cock2010",
+      "text": "Cock PJA, Fields CJ, Goto N, Heuer ML, Rice PM. The Sanger FASTQ file format for sequences with quality scores, and the Solexa/Illumina FASTQ variants. Nucleic Acids Res 38:1767–1771 (2010). https://doi.org/10.1093/nar/gkp1137",
+      "authors": [
+        "Cock PJA",
+        "Fields CJ",
+        "Goto N",
+        "Heuer ML",
+        "Rice PM"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "The Sanger FASTQ file format for sequences with quality scores, and the Solexa/Illumina FASTQ variants",
+      "journal": "Nucleic Acids Res",
+      "volume": "38",
+      "pages": "1767–1771",
+      "year": 2010,
+      "doi": "10.1093/nar/gkp1137"
+    },
+    {
+      "id": "ewing1998",
+      "text": "Ewing B, Green P. Base-calling of automated sequencer traces using Phred. II. Error probabilities. Genome Res 8:186–194 (1998). https://doi.org/10.1101/gr.8.3.186",
+      "authors": [
+        "Ewing B",
+        "Green P"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Base-calling of automated sequencer traces using Phred. II. Error probabilities",
+      "journal": "Genome Res",
+      "volume": "8",
+      "pages": "186–194",
+      "year": 1998,
+      "doi": "10.1101/gr.8.3.186"
+    },
+    {
+      "id": "chen2018",
+      "text": "Chen S, Zhou Y, Chen Y, Gu J. fastp: an ultra-fast all-in-one FASTQ preprocessor. Bioinformatics 34:i884–i890 (2018). https://doi.org/10.1093/bioinformatics/bty560",
+      "authors": [
+        "Chen S",
+        "Zhou Y",
+        "Chen Y",
+        "Gu J"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "fastp: an ultra-fast all-in-one FASTQ preprocessor",
+      "journal": "Bioinformatics",
+      "volume": "34",
+      "pages": "i884–i890",
+      "year": 2018,
+      "doi": "10.1093/bioinformatics/bty560"
+    },
+    {
+      "id": "li2009",
+      "text": "Li H, Durbin R. Fast and accurate short read alignment with Burrows–Wheeler transform. Bioinformatics 25:1754–1760 (2009). https://doi.org/10.1093/bioinformatics/btp324",
+      "authors": [
+        "Li H",
+        "Durbin R"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Fast and accurate short read alignment with Burrows–Wheeler transform",
+      "journal": "Bioinformatics",
+      "volume": "25",
+      "pages": "1754–1760",
+      "year": 2009,
+      "doi": "10.1093/bioinformatics/btp324"
+    },
+    {
+      "id": "li2013",
+      "text": "Li H. Aligning sequence reads, clone sequences and assembly contigs with BWA-MEM. https://arxiv.org/abs/1303.3997 (2013).",
+      "type": "preprint",
+      "authors": [
+        "Li H"
+      ],
+      "others": false,
+      "title": "Aligning sequence reads, clone sequences and assembly contigs with BWA-MEM",
+      "repository": "arXiv",
+      "number": "1303.3997",
+      "year": 2013,
+      "url": "https://arxiv.org/abs/1303.3997"
+    },
+    {
+      "id": "li2009b",
+      "text": "Li H, et al. The Sequence Alignment/Map format and SAMtools. Bioinformatics 25:2078–2079 (2009). https://doi.org/10.1093/bioinformatics/btp352",
+      "authors": [
+        "Li H"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "The Sequence Alignment/Map format and SAMtools",
+      "journal": "Bioinformatics",
+      "volume": "25",
+      "pages": "2078–2079",
+      "year": 2009,
+      "doi": "10.1093/bioinformatics/btp352"
+    },
+    {
+      "id": "nurk2022",
+      "text": "Nurk S, et al. The complete sequence of a human genome. Science 376:44–53 (2022). https://doi.org/10.1126/science.abj6987",
+      "authors": [
+        "Nurk S"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "The complete sequence of a human genome",
+      "journal": "Science",
+      "volume": "376",
+      "pages": "44–53",
+      "year": 2022,
+      "doi": "10.1126/science.abj6987"
+    },
+    {
+      "id": "danecek2011",
+      "text": "Danecek P, et al. The variant call format and VCFtools. Bioinformatics 27:2156–2158 (2011). https://doi.org/10.1093/bioinformatics/btr330",
+      "authors": [
+        "Danecek P"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "The variant call format and VCFtools",
+      "journal": "Bioinformatics",
+      "volume": "27",
+      "pages": "2156–2158",
+      "year": 2011,
+      "doi": "10.1093/bioinformatics/btr330"
+    },
+    {
+      "id": "tan2015",
+      "text": "Tan A, Abecasis GR, Kang HM. Unified representation of genetic variants. Bioinformatics 31:2202–2204 (2015). https://doi.org/10.1093/bioinformatics/btv112",
+      "authors": [
+        "Tan A",
+        "Abecasis GR",
+        "Kang HM"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Unified representation of genetic variants",
+      "journal": "Bioinformatics",
+      "volume": "31",
+      "pages": "2202–2204",
+      "year": 2015,
+      "doi": "10.1093/bioinformatics/btv112"
+    },
+    {
+      "id": "danecek2021",
+      "text": "Danecek P, et al. Twelve years of SAMtools and BCFtools. GigaScience 10:giab008 (2021). https://doi.org/10.1093/gigascience/giab008",
+      "authors": [
+        "Danecek P"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "Twelve years of SAMtools and BCFtools",
+      "journal": "GigaScience",
+      "volume": "10",
+      "pages": "giab008",
+      "year": 2021,
+      "doi": "10.1093/gigascience/giab008"
+    },
+    {
+      "id": "ebbert2016",
+      "text": "Ebbert MTW, et al. Evaluating the necessity of PCR duplicate removal from next-generation sequencing data and a comparison of approaches. BMC Bioinformatics 17(Suppl 7):239 (2016). https://doi.org/10.1186/s12859-016-1097-3",
+      "authors": [
+        "Ebbert MTW"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "Evaluating the necessity of PCR duplicate removal from next-generation sequencing data and a comparison of approaches",
+      "journal": "BMC Bioinformatics",
+      "volume": "17",
+      "pages": "239",
+      "year": 2016,
+      "issue": "Suppl 7",
+      "doi": "10.1186/s12859-016-1097-3"
+    },
+    {
+      "id": "li2011",
+      "text": "Li H. A statistical framework for SNP calling, mutation discovery, association mapping and population genetical parameter estimation from sequencing data. Bioinformatics 27:2987–2993 (2011). https://doi.org/10.1093/bioinformatics/btr509",
+      "authors": [
+        "Li H"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "A statistical framework for SNP calling, mutation discovery, association mapping and population genetical parameter estimation from sequencing data",
+      "journal": "Bioinformatics",
+      "volume": "27",
+      "pages": "2987–2993",
+      "year": 2011,
+      "doi": "10.1093/bioinformatics/btr509"
+    },
+    {
+      "id": "gunther2019",
+      "text": "Günther T, Nettelblad C. The presence and impact of reference bias on population genomic studies of prehistoric human populations. PLoS Genet 15:e1008302 (2019). https://doi.org/10.1371/journal.pgen.1008302",
+      "authors": [
+        "Günther T",
+        "Nettelblad C"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "The presence and impact of reference bias on population genomic studies of prehistoric human populations",
+      "journal": "PLoS Genet",
+      "volume": "15",
+      "pages": "e1008302",
+      "year": 2019,
+      "doi": "10.1371/journal.pgen.1008302"
+    },
+    {
+      "id": "eizenga2020",
+      "text": "Eizenga JM, et al. Pangenome graphs. Annu Rev Genomics Hum Genet 21:139–162 (2020). https://doi.org/10.1146/annurev-genom-120219-080406",
+      "authors": [
+        "Eizenga JM"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "Pangenome graphs",
+      "journal": "Annu Rev Genomics Hum Genet",
+      "volume": "21",
+      "pages": "139–162",
+      "year": 2020,
+      "doi": "10.1146/annurev-genom-120219-080406"
+    },
+    {
+      "id": "cornishbowden1985",
+      "text": "Cornish-Bowden A. Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984. Nucleic Acids Res 13:3021–3030 (1985). https://doi.org/10.1093/nar/13.9.3021",
+      "authors": [
+        "Cornish-Bowden A"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984",
+      "journal": "Nucleic Acids Res",
+      "volume": "13",
+      "pages": "3021–3030",
+      "year": 1985,
+      "doi": "10.1093/nar/13.9.3021"
+    },
+    {
+      "id": "molder2025",
+      "text": "Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3",
+      "authors": [
+        "Mölder F",
+        "Jablonski KP",
+        "Letcher B"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]",
+      "journal": "F1000Research",
+      "volume": "10",
+      "pages": "33",
+      "year": 2025,
+      "doi": "10.12688/f1000research.29032.3"
+    },
+    {
+      "id": "li2011b",
+      "text": "Li H. Tabix: fast retrieval of sequence features from generic TAB-delimited files. Bioinformatics 27:718–719 (2011). https://doi.org/10.1093/bioinformatics/btq671",
+      "authors": [
+        "Li H"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Tabix: fast retrieval of sequence features from generic TAB-delimited files",
+      "journal": "Bioinformatics",
+      "volume": "27",
+      "pages": "718–719",
+      "year": 2011,
+      "doi": "10.1093/bioinformatics/btq671"
+    },
+    {
+      "id": "oleary2024",
+      "text": "O'Leary NA, et al. Exploring and retrieving sequence and metadata for species across the tree of life with NCBI Datasets. Sci Data 11:732 (2024). https://doi.org/10.1038/s41597-024-03571-y",
+      "authors": [
+        "O'Leary NA"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "Exploring and retrieving sequence and metadata for species across the tree of life with NCBI Datasets",
+      "journal": "Sci Data",
+      "volume": "11",
+      "pages": "732",
+      "year": 2024,
+      "doi": "10.1038/s41597-024-03571-y"
+    }
+  ],
+  "tools": [
+    {
+      "name": "Snakemake",
+      "versions": [
+        "snakemake"
+      ],
+      "references": [
+        "molder2025"
+      ]
+    },
+    {
+      "name": "NCBI Datasets CLI",
+      "versions": [
+        "ncbi-datasets-cli"
+      ],
+      "input_source": "ncbi",
+      "references": [
+        "oleary2024"
+      ]
+    },
+    {
+      "name": "fastp",
+      "versions": [
+        "fastp"
+      ],
+      "references": [
+        "chen2018"
+      ]
+    },
+    {
+      "name": "bwa mem",
+      "versions": [
+        "bwa"
+      ],
+      "references": [
+        "li2009",
+        "li2013"
+      ]
+    },
+    {
+      "name": "samtools",
+      "versions": [
+        "samtools"
+      ],
+      "references": [
+        "li2009b",
+        "danecek2021"
+      ]
+    },
+    {
+      "name": "bcftools",
+      "versions": [
+        "bcftools"
+      ],
+      "references": [
+        "danecek2021",
+        "li2011"
+      ]
+    },
+    {
+      "name": "htslib (bgzip, tabix)",
+      "versions": [
+        "htslib"
+      ],
+      "references": [
+        "danecek2021",
+        "li2011b"
+      ]
+    }
+  ]
+}

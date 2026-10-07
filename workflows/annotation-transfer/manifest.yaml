@@ -33,6 +33,12 @@ stages:
     label: Record provenance
     description: Checksum produced artifacts and persist workflow execution provenance.
     rules: [record_annotation_transfer_provenance]
+  - id: write-citation
+    label: Write citation
+    description: >
+      How to cite the run: the tools that ran with their versions and references, a draft methods
+      paragraph, and BibTeX and RIS.
+    rules: [write_citation]
 artifacts:
   - id: input-validation
     label: Input validation report

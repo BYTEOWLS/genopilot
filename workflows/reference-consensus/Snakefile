@@ -55,15 +55,19 @@ directory, and every step writes its log to logs/):
  13. record_consensus_provenance         rules/record_provenance.smk
        Checksums, tool versions, and commands of the whole run.
        -> artifacts.yaml, provenance/run.json
+ 14. write_citation                      shared/rules/write_citation.smk
+       How to cite the run: tools, references, a draft methods paragraph.
+       -> citation/CITATION.md, citation/references.bib, citation/references.ris
 
-Every file a run produces is listed in scripts/artifacts.py.
+Every file a run produces up to its provenance is listed in scripts/artifacts.py; the
+citation is written from the provenance afterwards.
 
 Iterations: steps 11 and 12 also run for a saved cohort decision,
 decisions/iteration-<n>.yaml (n from 2 on), which names the voting isolates
 and every cohort setting. Its outputs go to results/cohort/iteration-<n>/,
 beside the untouched initial ones, and
 
- 14. record_iteration_provenance         rules/record_provenance.smk
+ 15. record_iteration_provenance         rules/record_provenance.smk
        The decision, the excluded isolates, checksums, and commands of the
        iteration.
        -> provenance/cohort/iteration-<n>.json
@@ -179,6 +183,7 @@ include: str(RULES_DIR / "build_consensus.smk")
 include: str(RULES_DIR / "aggregate_support.smk")
 include: str(RULES_DIR / "generate_consensus.smk")
 include: str(RULES_DIR / "record_provenance.smk")
+include: str(SHARED_DIR / "rules" / "write_citation.smk")
 
 
 # The files a finished run must have. Asking for them makes Snakemake run every step above.
@@ -187,3 +192,4 @@ rule all:
         DECLARED_ARTIFACTS,
         "artifacts.yaml",
         "provenance/run.json",
+        "citation/CITATION.md",

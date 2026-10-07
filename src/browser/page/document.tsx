@@ -1,5 +1,6 @@
-import React from 'react';
-import {inlineText, type Block, type Inline} from '../../docs/markdown.js';
+import React, {useEffect, useState} from 'react';
+import {Button} from '@mantine/core';
+import {inlineText, markdownSection, plainText, type Block, type Inline} from '../../docs/markdown.js';
 import type {BrowserDocument} from '../contract.js';
 
 export function headingAnchors(blocks: Block[]): Map<number, string> {
@@ -31,17 +32,57 @@ export function InlineContent({spans, document, select}: {spans: Inline[]; docum
     return <React.Fragment key={index}>{content}</React.Fragment>;
   })}</>;
 }
+/**
+ * Copies plain text for pasting into a manuscript. Where the clipboard is refused, it says so and
+ * shows the text selected for a manual copy.
+ */
+function CopyButton({label, text}: {label: string; text: string}): React.JSX.Element {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  // "Copied" confirms one copy and then turns back into the button's label.
+  useEffect(() => {
+    if (state !== 'copied') {
+      return;
+    }
+    const timer = setTimeout(() => setState('idle'), 2000);
+    return () => clearTimeout(timer);
+  }, [state]);
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setState('copied');
+    } catch {
+      setState('failed');
+    }
+  };
+  return <span className="copy-control">
+    <Button variant="default" size="xs" onClick={() => void copy()}>{state === 'copied' ? 'Copied' : label}</Button>
+    {state === 'failed' ? <>
+      <span role="alert" className="document-muted">Copying failed; the text is selected for copying by hand.</span>
+      <textarea className="copy-fallback" readOnly value={text} autoFocus onFocus={event => event.currentTarget.select()} aria-label={label} />
+    </> : null}
+  </span>;
+}
 export function DocumentBody({document, select}: {document: BrowserDocument; select: (id: string, anchor?: string) => void}): React.JSX.Element {
   if (!document.blocks) {
     return <p role="status">No documentation is available for {document.title}.</p>;
   }
   const anchors = headingAnchors(document.blocks);
+  const blocks = document.blocks;
   const inline = (spans: Inline[]) => <InlineContent spans={spans} document={document} select={select} />;
-  return <article className="document">{document.blocks.map((block, index) => {
+  // A copyable document offers itself and each `##` section, without its heading, as plain text.
+  const copy = (index: number) => {
+    const block = blocks[index];
+    if (!document.copyable || block?.kind !== 'heading' || block.level > 2) {
+      return null;
+    }
+    const text = block.level === 1 ? plainText(blocks) : plainText(markdownSection(blocks, index).slice(1));
+    return <CopyButton label={block.level === 1 ? 'Copy all' : `Copy ${inlineText(block.content)}`} text={text} />;
+  };
+  return <article className="document">{blocks.map((block, index) => {
     switch (block.kind) {
       case 'heading': {
         const Heading = `h${block.level}` as 'h1' | 'h2' | 'h3';
-        return <Heading id={anchors.get(index)} key={index}>{inline(block.content)}</Heading>;
+        return <React.Fragment key={index}><Heading id={anchors.get(index)}>{inline(block.content)}</Heading>{copy(index)}</React.Fragment>;
       }
       case 'paragraph': return <p key={index}>{inline(block.content)}</p>;
       case 'code': return <pre key={index}><code>{block.text}</code></pre>;

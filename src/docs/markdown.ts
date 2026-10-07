@@ -72,6 +72,23 @@ export function inlineText(spans: readonly Inline[]): string {
   return spans.map(span => span.text).join('');
 }
 
+/**
+ * Blocks as plain text without Markdown markup, for pasting into a manuscript: links keep their
+ * text, lists their numbers or bullets, tables become tab-separated rows, and code its text.
+ */
+export function plainText(blocks: readonly Block[]): string {
+  return blocks.map(block => {
+    switch (block.kind) {
+      case 'heading':
+      case 'paragraph': return inlineText(block.content);
+      case 'list': return block.items.map((item, index) => `${block.ordered ? `${index + 1}.` : '-'} ${inlineText(item)}`).join('\n');
+      case 'table': return [block.header, ...block.rows].map(row => row.map(inlineText).join('\t')).join('\n');
+      case 'code': return block.text;
+      case 'alert': return block.paragraphs.map(inlineText).join('\n\n');
+    }
+  }).join('\n\n');
+}
+
 /** A heading and its content, ending before the next heading at the same or a higher level. */
 export function markdownSection(blocks: readonly Block[], start: number): Block[] {
   const heading = blocks[start];

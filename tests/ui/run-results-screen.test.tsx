@@ -18,6 +18,11 @@ import type {DocumentsLoader} from '../../src/docs/documents.js';
 import {parseMarkdown} from '../../src/docs/markdown.js';
 import type {ReviewGene} from '../../src/workflows/annotation-transfer/proteins.js';
 import {genoPilotSummary} from '../../src/browser/contract.js';
+import {withRunCitation} from '../../src/browser/use-genome-session.js';
+import {readRunCitation, type Document} from '../../src/docs/documents.js';
+import {mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -177,6 +182,7 @@ function renderScreen(
     formatDateTime?: (value: string) => string;
     loadHelp?: DocumentsLoader;
     readReviewGenes?: (options: {path: string; signal?: AbortSignal}) => Promise<ReviewGene[]>;
+    readCitation?: (runDirectory: string) => Promise<Document | undefined>;
   } = {},
 ): {input: TestInput; output: TestOutput; frame: () => string; unmount: () => void} {
   const input = new TestInput();
@@ -193,6 +199,7 @@ function renderScreen(
       formatDateTime={options.formatDateTime ?? (value => `formatted:${value}`)}
       loadHelp={options.loadHelp ?? helpDocuments}
       readReviewGenes={options.readReviewGenes}
+      readCitation={options.readCitation ?? (async () => undefined)}
     />,
     {
       exitOnCtrlC: false,
@@ -313,7 +320,9 @@ test('scrolls result content in a short terminal', async () => {
     screen.output.clearOutput();
     screen.output.emit('resize');
     await new Promise<void>(resolve => setTimeout(resolve, 20));
-    // The run files are on the Files tab, the one before the last.
+    // The run files are on the Files tab, the third from the end.
+    screen.input.write(SHIFT_TAB);
+    await new Promise<void>(resolve => setTimeout(resolve, 20));
     screen.input.write(SHIFT_TAB);
     await new Promise<void>(resolve => setTimeout(resolve, 20));
     screen.input.write(SHIFT_TAB);
@@ -557,4 +566,46 @@ test('names a release run by its version and marks a development build', () => {
   assert.ok(modified.startsWith(development) && modified.length > development.length);
   // A build of unknown commit is never presented as a release.
   assert.notEqual(genoPilotSummary({version: '1.2.3'}), 'v1.2.3');
+});
+
+const citationDocument: Document = {
+  id: 'CITATION',
+  title: 'Citing this run',
+  blocks: parseMarkdown('# Citing this run\n\n## Methods\n\nReads were aligned with a synthetic aligner.\n'),
+  copyable: true,
+};
+
+test('shows the run\'s citation on its own tab, or that the run has none yet', async () => {
+  for (const [citation, expected] of [[citationDocument, 'synthetic aligner'], [undefined, 'citation/CITATION.md']] as const) {
+    const screen = renderScreen(compatibleResult(), {inputActive: true, readCitation: async () => citation});
+    try {
+      const frames = await tabFrames(screen, 7);
+      assert.ok(frames.at(-1)!.includes(expected), `missing ${expected}`);
+      assert.ok(frames.slice(0, -1).every(frame => !frame.includes('synthetic aligner')));
+    } finally {
+      screen.unmount();
+    }
+  }
+});
+
+test('reads a run\'s citation as a copyable document once the run wrote it', async context => {
+  const runDirectory = await mkdtemp(join(tmpdir(), 'genopilot-citation-'));
+  context.after(() => rm(runDirectory, {recursive: true, force: true}));
+  assert.equal(await readRunCitation(runDirectory), undefined);
+  assert.equal(runSupportPaths(runDirectory, () => false).find(path => path.id === 'run.citation')?.available, false);
+  await mkdir(join(runDirectory, 'citation'));
+  await writeFile(join(runDirectory, 'citation', 'CITATION.md'), '# Citing this run\n\nDraft.\n', 'utf8');
+  const citation = await readRunCitation(runDirectory);
+  assert.equal(citation?.copyable, true);
+  assert.ok(citation?.blocks?.length);
+});
+
+test('views opened from a run carry its citation, other views do not', () => {
+  const run = {id: 'run-1', workflow: {id: 'annotation-transfer', version: 1}, genopilot: {version: '1.2.3'}};
+  const view = {id: 'view', title: 'Genome', provenance: {application: {name: 'GenoPilot', version: '1.2.3'}, run, sources: []},
+    content: {kind: 'genome', reference: {name: 'ref', fasta: '/ref.fa', snapshot: {size: 1, mtimeMs: 1}}, tracks: []}} as unknown as Parameters<typeof withRunCitation>[0];
+  assert.equal(withRunCitation(view, citationDocument).provenance.run?.citation?.copyable, true);
+  assert.equal(withRunCitation(view, undefined).provenance.run?.citation, undefined);
+  const accession = {...view, provenance: {...view.provenance, run: undefined}};
+  assert.equal(withRunCitation(accession, citationDocument).provenance.run, undefined);
 });

@@ -25,7 +25,7 @@ import {Table} from '../components/table.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 
-export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files' | 'run';
+export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files' | 'run' | 'citation';
 
 export const consensusTabs: readonly TabDefinition<ConsensusTabId>[] = [
   {id: 'overview', label: 'Overview'},
@@ -34,6 +34,7 @@ export const consensusTabs: readonly TabDefinition<ConsensusTabId>[] = [
   {id: 'sites', label: 'Sites'},
   {id: 'files', label: 'Files'},
   {id: 'run', label: 'Run Details'},
+  {id: 'citation', label: 'Citation'},
 ];
 
 /** What the result page shows of a reference-consensus run; the shell owns it with its input. */
@@ -622,6 +623,7 @@ export function ReferenceConsensusResults({
   overviewHeader,
   filesHeader,
   runDetails,
+  citation,
   sites,
   visibleRows = 20,
 }: {
@@ -638,6 +640,8 @@ export function ReferenceConsensusResults({
   filesHeader: React.ReactNode;
   /** The run's technical metadata, on a tab of its own. */
   runDetails: React.ReactNode;
+  /** How to cite the run, on a tab of its own. */
+  citation: React.ReactNode;
 }): React.JSX.Element {
   switch (view.tab) {
     case 'overview':
@@ -714,5 +718,7 @@ export function ReferenceConsensusResults({
       );
     case 'run':
       return <Box flexDirection="column">{runDetails}</Box>;
+    case 'citation':
+      return <Box flexDirection="column">{citation}</Box>;
   }
 }

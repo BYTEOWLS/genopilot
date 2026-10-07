@@ -17,8 +17,13 @@ function git(...arguments_) {
 }
 const [commit, committedAt] = git('log', '-1', '--format=%H%n%cI')?.split('\n') ?? [];
 const status = git('status', '--porcelain');
-// A release build comes from the unmodified commit tagged with the package version.
-const released = status === '' && (git('tag', '--points-at', 'HEAD')?.split('\n') ?? []).includes(`v${packageMetadata.version}`);
+// A release build is the one `pnpm publish` makes (`prepublishOnly`); it must come from a commit
+// without uncommitted changes, so a published version always names exactly what it was built from.
+const released = process.env.GENOPILOT_RELEASE === '1';
+if (released && status !== '') {
+  console.error('A release build needs a working tree without uncommitted changes. Commit or stash them first.');
+  process.exit(1);
+}
 const buildInfo = commit && committedAt && status !== undefined ? {commit, committedAt, modified: status.length > 0, released} : null;
 
 // The CLI and everything it imports, so an installation runs exactly the locked dependencies.

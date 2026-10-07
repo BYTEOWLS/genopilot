@@ -43,8 +43,10 @@ import {
 import {CohortReviewScreen} from './cohort-review.js';
 import {Page} from '../components/page.js';
 import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
+import {Markdown} from '../components/markdown.js';
+import {mutedColor} from '../theme.js';
 import {TabBar} from '../components/tabs.js';
-import {readGeneralDocuments, readWorkflowDocumentsById, type DocumentsLoader} from '../../docs/documents.js';
+import {readGeneralDocuments, readRunCitation, readWorkflowDocumentsById, runCitationPath, type Document, type DocumentsLoader} from '../../docs/documents.js';
 import {
   WorkflowExecutionScreen,
   type WorkflowExecutionOutcome,
@@ -54,7 +56,7 @@ import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
 import {formatLocalDateTime} from "../utils.js";
 import {SectionList, type SectionListItem} from "./section-list.js";
 import {useGenomeSession} from '../../browser/use-genome-session.js';
-import {browserViewShortcut, genoPilotSummary} from '../../browser/contract.js';
+import {browserViewShortcut, genoPilotSummary, runViewTitle} from '../../browser/contract.js';
 import {documentView} from '../../browser/documents.js';
 import {useTransferGenomeViews} from './transfer-genome-views.js';
 import {useProteinReview} from './protein-review.js';
@@ -70,6 +72,7 @@ export function runSupportPaths(runDirectory: string, pathExists: (path: string)
     {id: 'run.directory', label: 'Run directory', absolutePath: directory},
     {id: 'run.artifacts', label: 'Artifact index', absolutePath: resolve(directory, 'artifacts.yaml')},
     {id: 'run.provenance', label: 'Run provenance', absolutePath: resolve(directory, 'provenance/run.json')},
+    {id: 'run.citation', label: 'How to cite this run', absolutePath: resolve(directory, runCitationPath)},
     {id: 'run.logs', label: 'Complete step logs', absolutePath: resolve(directory, 'logs')},
   ].map(value => ({
     ...value,
@@ -129,6 +132,7 @@ export function RunResultsScreen({
   readSites = readCohortSites,
   readReviewGenes = defaultReadReviewGenes,
   loadHelp = () => loadResultHelp(manifest.id),
+  readCitation = readRunCitation,
 }: {
   runDirectory: string;
   manifest: WorkflowManifest;
@@ -145,6 +149,8 @@ export function RunResultsScreen({
   readReviewGenes?: typeof defaultReadReviewGenes;
   /** The documents result help shows; the workflow's results page and the general run results. */
   loadHelp?: DocumentsLoader;
+  /** Reads the run's citation, which the run writes when it finishes. */
+  readCitation?: (runDirectory: string) => Promise<Document | undefined>;
 }): React.JSX.Element {
   const {columns, rows} = useWindowSize();
   const contentRef = useRef<DOMElement>(null);
@@ -154,6 +160,20 @@ export function RunResultsScreen({
   // Reloaded from disk after a cohort iteration ran from this screen.
   const [loaded, setLoaded] = useState(initiallyLoaded);
   const [mode, setMode] = useState<ScreenMode>({kind: 'results'});
+  // The run's citation: undefined while it is read, null when the run has none.
+  const [citation, setCitation] = useState<Document | null>();
+  useEffect(() => {
+    let active = true;
+    readCitation(runDirectory).then(document => document ?? null, () => null).then(document => {
+      if (active) {
+        setCitation(document);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [readCitation, runDirectory]);
+  const citationOwner = useRef({});
   const consensus = isReferenceConsensusResult(loaded) ? loaded.result : undefined;
   const annotationTransfer = isAnnotationTransferResult(loaded) ? loaded.result : undefined;
   const [consensusView, setConsensusView] = useState<ConsensusView | undefined>(
@@ -172,8 +192,14 @@ export function RunResultsScreen({
   const selectedIsolate = consensusView?.tab === 'isolates' && consensusView.isolateDetail ? consensus?.isolates[consensusView.isolateIndex] : undefined;
   const selectedConsensus = consensusView?.tab === 'cohorts' ? consensus?.cohorts[consensusView.cohortIndex] : undefined;
   const genome = useGenomeSession(JSON.stringify([inputActive, mode.kind, view, consensusView?.tab, consensusView?.isolateDetail,
-    selectedIsolate?.id, selectedConsensus?.id, sitesCohortId, consensusView?.siteFilter]));
+    selectedIsolate?.id, selectedConsensus?.id, sitesCohortId, consensusView?.siteFilter]), citation ?? undefined);
   const browser = genome.browser;
+  const browserRef = useRef(browser);
+  browserRef.current = browser;
+  useEffect(() => {
+    const owner = citationOwner.current;
+    return () => browserRef.current?.detach(owner);
+  }, []);
   const backboneAvailable = !!(consensus?.backbone.paths.fasta.available && consensus.backbone.sha256 && consensus.backbone.issues.length === 0);
   const genomeSourceAvailable = !!((selectedSite || selectedIsolate) && backboneAvailable) ||
     !!(selectedConsensus?.state === 'completed' && selectedConsensus.paths['consensus-fasta']?.available && selectedConsensus.paths['consensus-summary']?.available);
@@ -221,7 +247,14 @@ export function RunResultsScreen({
     manifest, loadHelp, scope: JSON.stringify([inputActive, mode.kind, view, proteinReview.filter]),
     review: {available: proteinReview.state?.state === 'ready' && proteinReview.listed.length > 0, listed: proteinReview.listed,
       selected: proteinReview.selected, select: proteinReview.select},
-    onProteinsTab: !!annotationTransfer && annotationTab === 'proteins'});
+    onProteinsTab: !!annotationTransfer && annotationTab === 'proteins', citation: citation ?? undefined});
+  const citationTab = consensusView?.tab === 'citation' || (!!annotationTransfer && annotationTab === 'citation');
+  const openCitation = (): void => {
+    if (browser && citation) {
+      browser.show({owner: citationOwner.current, title: runViewTitle(manifest, {id: metadata?.id ?? basename(resolve(runDirectory)), name: metadata?.name}, 'Citation'),
+        documents: [citation], selectedId: citation.id, select: () => {}});
+    }
+  };
 
   // The Sites tab reads the selected cohort's tables once, when it is first shown; leaving the tab
   // or choosing another cohort before they are read cancels the reading.
@@ -254,7 +287,7 @@ export function RunResultsScreen({
     if (contentRef.current) {
       setContentHeight(measureElement(contentRef.current).height);
     }
-  }, [columns, rows, loaded, view, consensusView, annotationTab, sites, proteinReview.state, proteinReview.listing]);
+  }, [columns, rows, loaded, view, consensusView, annotationTab, sites, proteinReview.state, proteinReview.listing, citation]);
 
   const scrollBy = (delta: number): void => {
     setScrollOffsets(current => ({
@@ -382,6 +415,10 @@ export function RunResultsScreen({
 
   useInput((input, key) => {
     if (!inputActive || mode.kind !== 'results' || view === 'help') {
+      return;
+    }
+    if (input === 'v' && citationTab) {
+      openCitation();
       return;
     }
     if (input === 'v' && canViewGenome) {
@@ -529,6 +566,16 @@ export function RunResultsScreen({
     </Box>
   );
   const runFilesSection = <SectionList title="Run Files" description="" items={runFileItems} />;
+  const citationSection = citation === undefined ? <Text>Reading the citation…</Text> : citation === null ? (
+    <Text wrap="wrap">
+      This run has no citation yet. A run writes {runCitationPath} when it finishes.
+    </Text>
+  ) : (
+    <Box flexDirection="column">
+      <Text wrap="truncate-start" color={mutedColor}>{resolve(runDirectory, runCitationPath)}</Text>
+      <Markdown blocks={citation.blocks ?? []} />
+    </Box>
+  );
 
   if (mode.kind === 'review' && consensus && cohortRerun && isReferenceConsensusResult(loaded)) {
     const save = cohortRerun.saveDecision ?? saveNextCohortDecision;
@@ -601,8 +648,9 @@ export function RunResultsScreen({
     cohortRerun && consensusView?.tab === 'cohorts' && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending'
       ? 'c — Continue iteration'
       : '',
-    canViewGenome ? browserViewShortcut : '',
-    ...transferViews.shortcuts,
+    citationTab && browser && citation ? browserViewShortcut : '',
+    !citationTab && canViewGenome ? browserViewShortcut : '',
+    ...(citationTab ? [] : transferViews.shortcuts),
     genomeSourceAvailable && browser && !browser.genomeAvailable ? `${browserViewShortcut} (unavailable: release bundling pending)` : '',
     '? — Help',
   ];
@@ -664,6 +712,7 @@ export function RunResultsScreen({
               overviewHeader={<>{outcomeSection}{statusSection}</>}
               filesHeader={<>{runDirectorySection}{runFilesSection}</>}
               runDetails={metadataSection}
+              citation={citationSection}
               sites={sites}
               visibleRows={visibleRows}
             />
@@ -675,6 +724,7 @@ export function RunResultsScreen({
               filesHeader={runDirectorySection}
               filesFooter={runFilesSection}
               runDetails={metadataSection}
+              citation={citationSection}
               proteins={proteinReview.element(visibleRows)}
             />
           ) : <>

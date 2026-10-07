@@ -80,7 +80,7 @@ Once every isolate is processed:
 14. **Aggregate support**: count the backbone's and the callable isolates' votes at every backbone position (see *Cohort support*).
 15. **Generate consensus**: pick the winning allele at every position with the voting method, and record every selected and unresolved site (see *Cohort consensus*).
 
-Finally, **record provenance** writes the run's artifact index and provenance record.
+Finally, **record provenance** writes the run's artifact index and provenance record, and **write citation** writes from it how to cite the run: the tools that ran with their versions and references, a draft methods paragraph, and BibTeX and RIS.
 
 Isolates are processed independently and in parallel. A failing isolate is reported as a failed job while the others finish. The cohort steps then do not run, so an isolate never drops out of the vote unnoticed; leaving it out is a separate, reviewed decision.
 
@@ -294,6 +294,7 @@ Paths are inside the run directory. Positions in the support tables are 1-based 
 | `provenance/cohort/iteration-<n>.json` | the GenoPilot that saved the configuration, the decision's checksum, the voting isolates with the checksums of what they voted with, every excluded isolate as `completed` or `incomplete`, whether the first cohort was aggregated, the iteration's checksummed outputs, and its commands |
 | `artifacts.yaml` | every artifact of the run with its checksum and origin |
 | `provenance/run.json` | the GenoPilot version and build that saved the configuration, configuration, inputs, tool versions, and commands of the whole run; with `artifacts.yaml`, the record of the first cohort |
+| `citation/` | how to cite the run: `CITATION.md` with the GenoPilot version, the tools that ran with their versions and references, a draft methods paragraph built from the configuration of the first cohort, and the references as BibTeX and RIS, also as `references.bib` and `references.ris` |
 | `logs/` | the log and benchmark of every step |
 
 Existing alignments, indexed variants, and masks can be inspected against the backbone in a read-only local browser view. A cohort consensus is inspected as its own reference, never with evidence in backbone coordinates. No visualization-only outputs or conversions are created; the [results guide](results.md) explains opening and interpreting these views.
@@ -307,7 +308,7 @@ Every scientific step runs in one pinned environment; Snakemake schedules the st
 | Tool | Role | Pinned in | Reference |
 |---|---|---|---|
 | Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`pixi.toml`](../../runtime/pixi.toml)) | [17] |
-| NCBI Datasets CLI | downloading an NCBI backbone | [`ncbi-datasets-cli`](../shared/envs/ncbi-datasets-cli/environment.yaml) | |
+| NCBI Datasets CLI | downloading an NCBI backbone | [`ncbi-datasets-cli`](../shared/envs/ncbi-datasets-cli/environment.yaml) | [19] |
 | fastp | read QC and light adapter trimming | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [4] |
 | bwa mem | read alignment | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [5, 6] |
 | samtools | sorting, duplicate marking, alignment statistics, FASTA indexes | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [7, 11] |
@@ -316,7 +317,7 @@ Every scientific step runs in one pinned environment; Snakemake schedules the st
 
 Callability, cohort support, and consensus generation are small scripts that read these tools' outputs. Scripts of steps without their own environment run on the Python pinned with Snakemake in the GenoPilot runtime, and each run records its version.
 
-Publications that use this workflow's results should cite the tools above, next to the GenoPilot version that produced them.
+Publications that use this workflow's results should cite the tools above, next to the GenoPilot version that produced them. Every run lists the tools it ran, with their versions and references, in `citation/CITATION.md`; the references are also kept machine-readable in [`citation/references.json`](citation/references.json), which must match the lists here.
 
 Every option that changes a result is set explicitly rather than left to a tool default:
 
@@ -345,5 +346,6 @@ Trimmed input runs through the same steps, which then change little. Untrimmed i
 14. Günther T, Nettelblad C. The presence and impact of reference bias on population genomic studies of prehistoric human populations. PLoS Genet 15:e1008302 (2019). https://doi.org/10.1371/journal.pgen.1008302
 15. Eizenga JM, et al. Pangenome graphs. Annu Rev Genomics Hum Genet 21:139–162 (2020). https://doi.org/10.1146/annurev-genom-120219-080406
 16. Cornish-Bowden A. Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984. Nucleic Acids Res 13:3021–3030 (1985). https://doi.org/10.1093/nar/13.9.3021
-17. Mölder F, et al. Sustainable data analysis with Snakemake. F1000Research 10:33 (2021). https://doi.org/10.12688/f1000research.29032.2
+17. Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3
 18. Li H. Tabix: fast retrieval of sequence features from generic TAB-delimited files. Bioinformatics 27:718–719 (2011). https://doi.org/10.1093/bioinformatics/btq671
+19. O'Leary NA, et al. Exploring and retrieving sequence and metadata for species across the tree of life with NCBI Datasets. Sci Data 11:732 (2024). https://doi.org/10.1038/s41597-024-03571-y

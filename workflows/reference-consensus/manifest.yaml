@@ -64,6 +64,12 @@ stages:
       Checksums, tool versions, and commands of the whole run, or of one iteration of a saved
       cohort decision.
     rules: [record_consensus_provenance, record_iteration_provenance]
+  - id: write-citation
+    label: Write citation
+    description: >
+      How to cite the run: the tools that ran with their versions and references, a draft methods
+      paragraph, and BibTeX and RIS.
+    rules: [write_citation]
 artifacts:
   - id: resolved-backbone
     label: Resolved backbone FASTA

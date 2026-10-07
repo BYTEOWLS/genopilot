@@ -35,6 +35,7 @@ test('ships a valid annotation-transfer manifest with the planned workflow ident
       'validate-annotation',
       'summarize-results',
       'record-provenance',
+      'write-citation',
     ],
   );
   // Every implemented Snakemake rule is grouped by exactly one stage, so run progress can
@@ -49,10 +50,11 @@ test('ships a valid annotation-transfer manifest with the planned workflow ident
       'validate_annotation',
       'summarize_annotation_transfer',
       'record_annotation_transfer_provenance',
+      'write_citation',
     ],
   );
   assert.deepEqual(manifest.stages.at(-1)?.rules, [
-    'record_annotation_transfer_provenance',
+    'write_citation',
   ]);
 });
 

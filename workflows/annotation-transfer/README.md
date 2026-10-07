@@ -66,6 +66,7 @@ The rating ranks genes for a closer look; it does not predict their effect. Iden
 4. **Validate annotation**: check the structure of LiftOn's GFF3: the version header, coordinates, strand, CDS phase, identifiers, and parent relationships. A failed check is kept as a scientific result for review, not treated as a failed run.
 5. **Summarize results**: the per-feature transfer table with the protein rating, the metrics, the target's unresolved bases, and the completion summary with the run status.
 6. **Record provenance**: the run's artifact index and provenance record.
+7. **Write citation**: how to cite the run, from its provenance: the tools that ran with their versions and references, a draft methods paragraph, and BibTeX and RIS.
 
 ## Outputs
 
@@ -84,6 +85,7 @@ Paths are inside the run directory.
 | `results/summary.json` | the run status, the metrics, and links to every report |
 | `artifacts.yaml` | every file's checksum and whether it was generated or imported |
 | `provenance/run.json` | the GenoPilot version and build that saved the configuration, the effective configuration, commands, tool versions, resources, and input checksums |
+| `citation/` | how to cite the run: `CITATION.md` with the GenoPilot version, the tools that ran with their versions and references, a draft methods paragraph built from the configuration, and the references as BibTeX and RIS, also as `references.bib` and `references.ris` |
 | `logs/` | the log and benchmark of every step |
 
 ## Tools
@@ -101,7 +103,7 @@ The versions are pinned only in the files linked below and recorded in every run
 
 LiftOn drives minimap2, miniprot, and parasail itself, so they are pinned together in one environment. Input checks, validation, and the summaries are small scripts that read the tools' outputs. Scripts of steps without their own environment run on the Python pinned with Snakemake in the GenoPilot runtime, and each run records its version.
 
-Publications that use this workflow's results should cite the tools above, next to the GenoPilot version that produced them.
+Publications that use this workflow's results should cite the tools above, next to the GenoPilot version that produced them. Every run lists the tools it ran, with their versions and references, in `citation/CITATION.md`; the references are also kept machine-readable in [`citation/references.json`](citation/references.json), which must match the lists here.
 
 ## References
 
@@ -111,5 +113,5 @@ Publications that use this workflow's results should cite the tools above, next 
 4. Li H. Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics 34:3094–3100 (2018). https://doi.org/10.1093/bioinformatics/bty191
 5. Li H. Protein-to-genome alignment with miniprot. Bioinformatics 39:btad014 (2023). https://doi.org/10.1093/bioinformatics/btad014
 6. Daily J. Parasail: SIMD C library for global, semi-global, and local pairwise sequence alignments. BMC Bioinformatics 17:81 (2016). https://doi.org/10.1186/s12859-016-0930-z
-7. Mölder F, et al. Sustainable data analysis with Snakemake. F1000Research 10:33 (2021). https://doi.org/10.12688/f1000research.29032.2
+7. Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3
 8. O'Leary NA, et al. Exploring and retrieving sequence and metadata for species across the tree of life with NCBI Datasets. Sci Data 11:732 (2024). https://doi.org/10.1038/s41597-024-03571-y

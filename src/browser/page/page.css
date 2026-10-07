@@ -31,6 +31,8 @@ body { margin: 0; }
 .document th { background: var(--muted); font-weight: 600; }
 .alert { background: var(--muted); border-left: 4px solid var(--primary); padding: 1rem; border-radius: .25rem; }
 .alert p:last-child { margin-bottom: 0; }
+.copy-control { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0 0 1rem; }
+.copy-fallback { width: 100%; min-height: 8rem; font-family: ui-monospace, monospace; font-size: .85rem; color: var(--foreground); background: var(--background); border: 1px solid var(--border); border-radius: .5rem; padding: .5rem; }
 .notice { margin: 1rem 1.5rem; }
 .provenance { overflow-wrap: anywhere; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: .8rem; color: var(--muted-foreground); }
 @media (max-width: 900px) { .with-sidebar { grid-template-columns: 12rem minmax(0, 1fr); } .contents { padding: 1rem; } .document-area { padding: 1.5rem; } .frame-header { gap: .5rem; } }
@@ -96,7 +98,7 @@ body { margin: 0; }
 .genome-item-card dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media print {
   :root, :root[data-mantine-color-scheme='dark'] { color-scheme: light; --background: #fff; --foreground: #000; --primary: #185d75; --muted: #f1f5f7; --muted-foreground: #333; --border: #bbb; }
-  .frame-header, .contents, .notice, .document-navigation, .skip-link { display: none; }
+  .frame-header, .contents, .notice, .document-navigation, .skip-link, .copy-control { display: none; }
   .with-sidebar { display: block; }
   .document-area { padding: 0; }
   .table-scroll, .document pre { overflow: visible; }

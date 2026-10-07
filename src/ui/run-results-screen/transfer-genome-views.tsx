@@ -4,7 +4,7 @@ import {Box, Text} from 'ink';
 import {browserViewShortcut} from '../../browser/contract.js';
 import {documentView} from '../../browser/documents.js';
 import {useGenomeSession} from '../../browser/use-genome-session.js';
-import type {DocumentsLoader} from '../../docs/documents.js';
+import type {Document, DocumentsLoader} from '../../docs/documents.js';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
 import type {CompatibleAnnotationTransferResult} from '../../workflows/results.js';
 import type {ReviewGene} from '../../workflows/annotation-transfer/proteins.js';
@@ -37,7 +37,7 @@ const choiceRows = choices.length + 3;
  * view. The result screen routes keys here first, shows `status` above its results and `choice`
  * below them, and gives the results `choiceRows` fewer rows while the choice is open.
  */
-export function useTransferGenomeViews({loaded, runDirectory, manifest, loadHelp, scope, review, onProteinsTab}: {
+export function useTransferGenomeViews({loaded, runDirectory, manifest, loadHelp, scope, review, onProteinsTab, citation}: {
   loaded?: CompatibleAnnotationTransferResult;
   runDirectory: string;
   manifest: WorkflowManifest;
@@ -47,8 +47,10 @@ export function useTransferGenomeViews({loaded, runDirectory, manifest, loadHelp
   review: ReviewList;
   /** Whether the Proteins tab is shown, where `v` opens the selected gene without the choice. */
   onProteinsTab: boolean;
+  /** The run's citation, which the opened views offer. */
+  citation?: Document;
 }) {
-  const genome = useGenomeSession(scope);
+  const genome = useGenomeSession(scope, citation);
   const browser = genome.browser;
   const [choice, setChoice] = useState<number>();
   const [notice, setNotice] = useState<string>();

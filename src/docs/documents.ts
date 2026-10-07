@@ -1,6 +1,6 @@
 import {readFile} from 'node:fs/promises';
-import {basename} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {basename, resolve} from 'node:path';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {packagedUrl} from '../package-root.js';
 import {discoverPackagedWorkflows, type DiscoveredWorkflow} from '../workflows/discovery.js';
 import {documentTitle, parseMarkdown, type Block} from './markdown.js';
@@ -17,6 +17,8 @@ export type Document = {
   blocks?: Block[];
   /** Server-side location for resolving links; never sent to the browser. */
   sourceUrl?: string;
+  /** Whether the browser view offers its `##` sections, and the whole document, for copying as plain text. */
+  copyable?: boolean;
 };
 
 /** Loads the documents one page shows as tabs, in tab order. */
@@ -41,6 +43,15 @@ export async function readDocument(url: URL, read: ReadText = readText): Promise
   }
   const blocks = parseMarkdown(source);
   return {id, title: documentTitle(blocks) ?? fileName, blocks, sourceUrl: url.href};
+}
+
+/** Every finished run writes how to cite it here, relative to its run directory. */
+export const runCitationPath = 'citation/CITATION.md';
+
+/** A run's citation, copyable as plain text, or none before the run wrote it. */
+export async function readRunCitation(runDirectory: string, read: ReadText = readText): Promise<Document | undefined> {
+  const citation = await readDocument(pathToFileURL(resolve(runDirectory, runCitationPath)), read);
+  return citation.blocks ? {...citation, copyable: true} : undefined;
 }
 
 /** The general documents in `docs/` the application shows, in tab order. */

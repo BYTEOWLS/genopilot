@@ -15,6 +15,7 @@ export type BrowserDocument = {
   title: string;
   blocks?: Block[];
   links: Record<string, {documentId: string; anchor: string}>;
+  copyable?: boolean;
 };
 /** The GenoPilot that saved a run's configuration, as the configuration records it. */
 export type RunGenoPilot = {
@@ -34,7 +35,8 @@ export function genoPilotSummary(genopilot: RunGenoPilot): string {
 }
 export type ViewProvenance = {
   application: {name: string; version: string};
-  run?: {id: string; name?: string; workflow: {id: string; version: number}; genopilot: RunGenoPilot};
+  /** A view opened from a run's results; its citation, once the run wrote it, opens from the view's header. */
+  run?: {id: string; name?: string; workflow: {id: string; version: number}; genopilot: RunGenoPilot; citation?: BrowserDocument};
   sources: {label: string; path: string; sha256?: string}[];
 };
 export type DocumentView = {

@@ -1,0 +1,187 @@
+{
+  "references": [
+    {
+      "id": "chao2025",
+      "text": "Chao KH, Heinz JM, Hoh C, Mao A, Shumate A, Pertea M, Salzberg SL. Combining DNA and protein alignments to improve genome annotation with LiftOn. Genome Res 35:311–325 (2025). https://doi.org/10.1101/gr.279620.124",
+      "authors": [
+        "Chao KH",
+        "Heinz JM",
+        "Hoh C",
+        "Mao A",
+        "Shumate A",
+        "Pertea M",
+        "Salzberg SL"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Combining DNA and protein alignments to improve genome annotation with LiftOn",
+      "journal": "Genome Res",
+      "volume": "35",
+      "pages": "311–325",
+      "year": 2025,
+      "doi": "10.1101/gr.279620.124"
+    },
+    {
+      "id": "sequenceontology-gff3",
+      "text": "The Sequence Ontology. Generic Feature Format Version 3 (GFF3), specification 1.26. https://github.com/The-Sequence-Ontology/Specifications/blob/master/gff3.md",
+      "type": "specification",
+      "authors": [
+        "The Sequence Ontology"
+      ],
+      "others": false,
+      "title": "Generic Feature Format Version 3 (GFF3), specification 1.26",
+      "url": "https://github.com/The-Sequence-Ontology/Specifications/blob/master/gff3.md"
+    },
+    {
+      "id": "shumate2021",
+      "text": "Shumate A, Salzberg SL. Liftoff: accurate mapping of gene annotations. Bioinformatics 37:1639–1643 (2021). https://doi.org/10.1093/bioinformatics/btaa1016",
+      "authors": [
+        "Shumate A",
+        "Salzberg SL"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Liftoff: accurate mapping of gene annotations",
+      "journal": "Bioinformatics",
+      "volume": "37",
+      "pages": "1639–1643",
+      "year": 2021,
+      "doi": "10.1093/bioinformatics/btaa1016"
+    },
+    {
+      "id": "li2018",
+      "text": "Li H. Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics 34:3094–3100 (2018). https://doi.org/10.1093/bioinformatics/bty191",
+      "authors": [
+        "Li H"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Minimap2: pairwise alignment for nucleotide sequences",
+      "journal": "Bioinformatics",
+      "volume": "34",
+      "pages": "3094–3100",
+      "year": 2018,
+      "doi": "10.1093/bioinformatics/bty191"
+    },
+    {
+      "id": "li2023",
+      "text": "Li H. Protein-to-genome alignment with miniprot. Bioinformatics 39:btad014 (2023). https://doi.org/10.1093/bioinformatics/btad014",
+      "authors": [
+        "Li H"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Protein-to-genome alignment with miniprot",
+      "journal": "Bioinformatics",
+      "volume": "39",
+      "pages": "btad014",
+      "year": 2023,
+      "doi": "10.1093/bioinformatics/btad014"
+    },
+    {
+      "id": "daily2016",
+      "text": "Daily J. Parasail: SIMD C library for global, semi-global, and local pairwise sequence alignments. BMC Bioinformatics 17:81 (2016). https://doi.org/10.1186/s12859-016-0930-z",
+      "authors": [
+        "Daily J"
+      ],
+      "others": false,
+      "type": "article",
+      "title": "Parasail: SIMD C library for global, semi-global, and local pairwise sequence alignments",
+      "journal": "BMC Bioinformatics",
+      "volume": "17",
+      "pages": "81",
+      "year": 2016,
+      "doi": "10.1186/s12859-016-0930-z"
+    },
+    {
+      "id": "molder2025",
+      "text": "Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3",
+      "authors": [
+        "Mölder F",
+        "Jablonski KP",
+        "Letcher B"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]",
+      "journal": "F1000Research",
+      "volume": "10",
+      "pages": "33",
+      "year": 2025,
+      "doi": "10.12688/f1000research.29032.3"
+    },
+    {
+      "id": "oleary2024",
+      "text": "O'Leary NA, et al. Exploring and retrieving sequence and metadata for species across the tree of life with NCBI Datasets. Sci Data 11:732 (2024). https://doi.org/10.1038/s41597-024-03571-y",
+      "authors": [
+        "O'Leary NA"
+      ],
+      "others": true,
+      "type": "article",
+      "title": "Exploring and retrieving sequence and metadata for species across the tree of life with NCBI Datasets",
+      "journal": "Sci Data",
+      "volume": "11",
+      "pages": "732",
+      "year": 2024,
+      "doi": "10.1038/s41597-024-03571-y"
+    }
+  ],
+  "tools": [
+    {
+      "name": "Snakemake",
+      "versions": [
+        "snakemake"
+      ],
+      "references": [
+        "molder2025"
+      ]
+    },
+    {
+      "name": "NCBI Datasets CLI",
+      "versions": [
+        "ncbi-datasets-cli"
+      ],
+      "input_source": "ncbi",
+      "references": [
+        "oleary2024"
+      ]
+    },
+    {
+      "name": "LiftOn",
+      "versions": [
+        "lifton"
+      ],
+      "references": [
+        "chao2025"
+      ]
+    },
+    {
+      "name": "minimap2",
+      "versions": [
+        "minimap2"
+      ],
+      "references": [
+        "li2018"
+      ]
+    },
+    {
+      "name": "miniprot",
+      "versions": [
+        "miniprot"
+      ],
+      "references": [
+        "li2023"
+      ]
+    },
+    {
+      "name": "parasail",
+      "versions": [
+        "parasail",
+        "parasail-python"
+      ],
+      "references": [
+        "daily2016"
+      ]
+    }
+  ]
+}

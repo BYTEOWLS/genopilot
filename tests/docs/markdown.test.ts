@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {documentTitle, inlineText, markdownSection, parseInline, parseMarkdown, unsupportedMarkdown} from '../../src/docs/markdown.js';
+import {documentTitle, inlineText, markdownSection, parseInline, parseMarkdown, plainText, unsupportedMarkdown} from '../../src/docs/markdown.js';
 
 test('parses every supported block', () => {
   const blocks = parseMarkdown([
@@ -130,4 +130,31 @@ test('does not treat missing headings or body blocks as sections', () => {
 
 test('accepts the documented subset without problems', () => {
   assert.deepEqual(unsupportedMarkdown('# T\n\n`<tag>` in code\n\n> [!NOTE]\n> Fine.\n'), []);
+});
+
+test('turns blocks into plain text without Markdown markup', () => {
+  const blocks = parseMarkdown([
+    '## Methods',
+    '',
+    'Reads were aligned with **bwa mem** `0.7.19` ([details](README.md)).',
+    '',
+    '1. First reference.',
+    '2. Second reference.',
+    '',
+    '| Tool | Version |',
+    '|---|---|',
+    '| fastp | 1.3.7 |',
+    '',
+    '```bibtex',
+    '@article{x,',
+    '}',
+    '```',
+  ].join('\n'));
+  assert.equal(plainText(blocks), [
+    'Methods',
+    'Reads were aligned with bwa mem 0.7.19 (details).',
+    '1. First reference.\n2. Second reference.',
+    'Tool\tVersion\nfastp\t1.3.7',
+    '@article{x,\n}',
+  ].join('\n\n'));
 });

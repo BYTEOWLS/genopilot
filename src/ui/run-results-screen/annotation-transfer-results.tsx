@@ -5,7 +5,7 @@ import type {TabDefinition} from '../components/tabs.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {SectionList, type SectionListItem} from './section-list.js';
 
-export type AnnotationTransferTabId = 'overview' | 'transfer' | 'evidence' | 'proteins' | 'files' | 'run';
+export type AnnotationTransferTabId = 'overview' | 'transfer' | 'evidence' | 'proteins' | 'files' | 'run' | 'citation';
 
 export const annotationTransferTabs: readonly TabDefinition<AnnotationTransferTabId>[] = [
   {id: 'overview', label: 'Overview'},
@@ -14,6 +14,7 @@ export const annotationTransferTabs: readonly TabDefinition<AnnotationTransferTa
   {id: 'proteins', label: 'Proteins'},
   {id: 'files', label: 'Files'},
   {id: 'run', label: 'Run Details'},
+  {id: 'citation', label: 'Citation'},
 ];
 
 export type ResultSection = {id: string; tab: AnnotationTransferTabId; title: string; items: SectionListItem[]};
@@ -159,6 +160,7 @@ export function AnnotationTransferResults({
   filesHeader,
   filesFooter,
   runDetails,
+  citation,
   proteins,
 }: {
   result: AnnotationTransferResult;
@@ -171,6 +173,8 @@ export function AnnotationTransferResults({
   filesFooter: React.ReactNode;
   /** The run's technical metadata, on a tab of its own. */
   runDetails: React.ReactNode;
+  /** How to cite the run, on a tab of its own. */
+  citation: React.ReactNode;
   /** The Proteins tab's rating and review list, owned by `useProteinReview`. */
   proteins: React.ReactNode;
 }): React.JSX.Element {
@@ -184,6 +188,7 @@ export function AnnotationTransferResults({
       {tab === 'files' ? filesFooter : null}
       {tab === 'proteins' ? proteins : null}
       {tab === 'run' ? runDetails : null}
+      {tab === 'citation' ? citation : null}
     </Box>
   );
 }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readdir, readFile} from 'node:fs/promises';
 import test from 'node:test';
+import {parse} from 'yaml';
 import {generalDocumentNames, packagedDocsDirectory, readGeneralDocuments, readWorkflowDocuments} from '../../src/docs/documents.js';
 import {parseMarkdown, unsupportedMarkdown} from '../../src/docs/markdown.js';
 import {discoverPackagedWorkflows} from '../../src/workflows/discovery.js';
@@ -74,4 +75,54 @@ test('the repository README lists exactly the packaged workflows', async () => {
   const packaged = (await discoverPackagedWorkflows()).map(workflow => workflow.manifest.id).sort();
   assert.deepEqual(linked, packaged);
   assert.ok(parseMarkdown(section).length > 0);
+});
+
+type CitationReference = {id: string; text: string; doi?: string; url?: string};
+type CitationTool = {name: string; versions: string[]; references: string[]; input_source?: string};
+
+/** The text of a `## <title>` section, up to the next `##` heading. */
+function section(source: string, title: string): string {
+  return new RegExp(`^## ${title}\\n([\\s\\S]*?)(?=^## |(?![\\s\\S]))`, 'm').exec(source)?.[1] ?? '';
+}
+
+test('each workflow lists exactly its machine-readable references and tools in its README', async () => {
+  for (const workflow of await discoverPackagedWorkflows()) {
+    const id = workflow.manifest.id;
+    const readme = await readFile(new URL('README.md', workflow.directoryUrl), 'utf8');
+    const citation = JSON.parse(await readFile(new URL('citation/references.json', workflow.directoryUrl), 'utf8')) as
+      {references: CitationReference[]; tools: CitationTool[]};
+    const listed = [...section(readme, 'References').matchAll(/^\d+\. (.+)$/gm)].map(match => match[1]);
+    assert.deepEqual(citation.references.map(reference => reference.text), listed, `${id}: README references`);
+    for (const reference of citation.references) {
+      assert.ok(reference.doi || reference.url, `${id}: ${reference.id} has neither DOI nor URL`);
+      if (reference.doi) {
+        assert.ok(reference.text.includes(`https://doi.org/${reference.doi}`), `${id}: ${reference.id} DOI`);
+      }
+    }
+    // Each `## Tools` row names its references by their number in the README list.
+    const rows = section(readme, 'Tools').split('\n')
+      .filter(line => line.startsWith('| ') && !line.startsWith('| Tool |'))
+      .map(line => line.split('|').map(cell => cell.trim()));
+    assert.deepEqual(citation.tools.map(tool => tool.name), rows.map(cells => cells[1]), `${id}: tools`);
+    for (const [index, tool] of citation.tools.entries()) {
+      const numbers = [...(rows[index]?.[4] ?? '').matchAll(/\d+/g)].map(match => Number(match[0]));
+      assert.deepEqual(tool.references, numbers.map(number => citation.references[number - 1]?.id), `${id}: ${tool.name}`);
+    }
+    // The methods template and its wording exist; the workflow tests fill them.
+    assert.ok((await readFile(new URL('citation/methods.txt', workflow.directoryUrl), 'utf8')).trim().length > 0);
+    assert.equal(typeof JSON.parse(await readFile(new URL('citation/phrases.json', workflow.directoryUrl), 'utf8')), 'object');
+  }
+});
+
+test('GenoPilot is cited as CITATION.cff describes it', async () => {
+  const cff = parse(await readFile(new URL('../../CITATION.cff', import.meta.url), 'utf8')) as
+    {title: string; authors: {'family-names': string; 'given-names': string}[]; 'repository-code': string; doi?: string; 'date-released': string};
+  const citation = JSON.parse(await readFile(new URL('../../workflows/shared/citation/genopilot.json', import.meta.url), 'utf8')) as
+    {title: string; authors: string[]; repository: string; concept_doi: string | null; date_released: string};
+  assert.equal(citation.title, cff.title);
+  assert.deepEqual(citation.authors, cff.authors.map(author =>
+    `${author['family-names']} ${author['given-names'].split(/\s+/).map(name => name[0]).join('')}`));
+  assert.equal(citation.repository, cff['repository-code']);
+  assert.equal(citation.concept_doi, cff.doi ?? null);
+  assert.equal(citation.date_released, String(cff['date-released']));
 });

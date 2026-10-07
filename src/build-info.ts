@@ -9,8 +9,8 @@ export type BuildInfo = {
   /** Whether the working tree differed from the commit. */
   modified: boolean;
   /**
-   * Whether this is a release build: built from the unmodified commit tagged `v<version>`. Only
-   * runs of a release build are citable, because only releases get a DOI.
+   * Whether this is a release build: the one `pnpm publish` makes, which refuses uncommitted
+   * changes. Only runs of a release build are citable, because only releases get a DOI.
    */
   released: boolean;
 };

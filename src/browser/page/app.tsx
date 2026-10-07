@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {Alert, Badge, Button, Group, NavLink, Stack, Text, Title} from '@mantine/core';
+import {Alert, Badge, Button, Group, Modal, NavLink, Stack, Text, Title} from '@mantine/core';
 import {inlineText} from '../../docs/markdown.js';
 import type {BrowserState, GenomeView} from '../contract.js';
 import {GenomePanel, type GenomeLibraryLoader} from './genome.js';
@@ -12,6 +12,7 @@ export function BrowserApp({loadGenomeLibrary}: {loadGenomeLibrary?: GenomeLibra
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string>();
   const [sidebar, setSidebar] = useState(true);
+  const [citationOpen, setCitationOpen] = useState(false);
   const [localId, setLocalId] = useState<string>();
   const [anchor, setAnchor] = useState<{viewId?: string; documentId: string; id: string}>();
   useEffect(() => {
@@ -31,6 +32,7 @@ export function BrowserApp({loadGenomeLibrary}: {loadGenomeLibrary?: GenomeLibra
   }, []);
   const view = state?.view;
   const content = view?.content;
+  const citation = view?.provenance.run?.citation;
   const documents = content?.kind === 'document' ? content.documents : [];
   const openId = localId ?? (content?.kind === 'document' ? content.openId : undefined);
   const openDocument = documents.find(candidate => candidate.id === openId) ?? documents[0];
@@ -104,9 +106,14 @@ export function BrowserApp({loadGenomeLibrary}: {loadGenomeLibrary?: GenomeLibra
       <Group gap="sm" wrap="wrap">
         <Badge variant="light" color={connected ? 'teal' : 'gray'} role="status">{connected ? 'Connected' : state ? 'CLI disconnected' : 'Waiting for CLI'}</Badge>
         {content?.kind === 'document' ? <Button variant="default" onClick={() => setSidebar(current => !current)} aria-expanded={sidebar} aria-controls="contents">Contents</Button> : null}
+        {citation ? <Button variant="default" onClick={() => setCitationOpen(true)} aria-haspopup="dialog">Cite this run</Button> : null}
         <ThemeControl />
       </Group>
     </header>
+    {/* A run view's citation, with copy buttons for the whole citation and each of its parts. */}
+    <Modal opened={citationOpen && citation !== undefined} onClose={() => setCitationOpen(false)} title={citation?.title} size="xl">
+      {citation ? <DocumentBody document={citation} select={() => {}} /> : null}
+    </Modal>
     {error ? <Alert color="red" role="alert" className="notice">{error}</Alert> : null}
     {state && content?.kind === 'document' && !state.navigationAvailable ? <Alert color="gray" className="notice">The CLI document page is not open. Navigation here no longer changes the CLI.</Alert> : null}
     <div className={content?.kind === 'genome' ? 'workspace genome-workspace' : sidebar && content?.kind === 'document' ? 'workspace with-sidebar' : 'workspace'}>

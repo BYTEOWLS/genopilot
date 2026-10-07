@@ -232,7 +232,7 @@ export function applyRunEvent(
       ? progress.stages
       : [
           ...progress.stages,
-          {id, label: 'Other jobs', state: 'pending' as StageState, done: 0, total: 0},
+          {id, label: 'Remaining steps', state: 'pending' as StageState, done: 0, total: 0},
         ];
     return stagesWithUnclassified.map(stage => (stage.id === id ? change(stage) : stage));
   };
@@ -257,7 +257,7 @@ export function applyRunEvent(
           ...stagesWithTotals,
           {
             id: unclassifiedStageId,
-            label: 'Other jobs',
+            label: 'Remaining steps',
             state: 'pending',
             done: 0,
             total: unclassifiedTotal,

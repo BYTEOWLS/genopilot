@@ -1,13 +1,28 @@
 import {useEffect, useRef, useState} from 'react';
+import type {Document} from '../docs/documents.js';
 import type {GenomeView} from './contract.js';
 import {useBrowserView} from './provider.js';
 
-/** Own checksum preparation and a browser view for the lifetime of its opening CLI context. */
-export function useGenomeSession(scope: string) {
+/** A run view with the run's citation, which the browser opens from the view's header. */
+export function withRunCitation(view: GenomeView, citation: Document | undefined): GenomeView {
+  if (!citation || !view.provenance.run) {
+    return view;
+  }
+  return {...view, provenance: {...view.provenance, run: {...view.provenance.run,
+    citation: {id: citation.id, title: citation.title, blocks: citation.blocks, links: {}, copyable: true}}}};
+}
+
+/**
+ * Own checksum preparation and a browser view for the lifetime of its opening CLI context. Views
+ * opened from a run carry `citation`, the run's citation, once the run wrote it.
+ */
+export function useGenomeSession(scope: string, citation?: Document) {
   const browser = useBrowserView();
   const browserRef = useRef(browser);
   browserRef.current = browser;
   const owner = useRef({});
+  const citationRef = useRef(citation);
+  citationRef.current = citation;
   const request = useRef<AbortController | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -37,7 +52,7 @@ export function useGenomeSession(scope: string) {
       return build(controller.signal);
     }).then(genome => {
       if (request.current === controller && !controller.signal.aborted) {
-        browserRef.current?.show({owner: owner.current, view: genome, select});
+        browserRef.current?.show({owner: owner.current, view: withRunCitation(genome, citationRef.current), select});
       }
     }).catch(cause => {
       if (request.current === controller && !controller.signal.aborted) {

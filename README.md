@@ -93,6 +93,7 @@ workflows/
 │   ├── manifest.parameters.yaml
 │   ├── README.md            Its science, inputs, parameters, steps, outputs, and tools
 │   ├── results.md           Its result page, explained
+│   ├── citation/            Its references, methods template, and phrases, for each run's citation
 │   ├── development.md       Optional maintainer notes, not packaged
 │   ├── rules/               Optional: its own rules
 │   ├── scripts/             Their standard-library scripts
@@ -147,10 +148,10 @@ pnpm start
 
 `CHANGELOG.md` holds the highlights of each version and is the source of the GitHub release notes.
 
-1. On `main`, set the version in `package.json`, the version and `date-released` in `CITATION.cff`, and move the *Unreleased* entries into a `## [X.Y.Z] - YYYY-MM-DD` section.
+1. On `main`, set the version in `package.json`, the version and `date-released` in `CITATION.cff` and the same date in `workflows/shared/citation/genopilot.json`, and move the *Unreleased* entries into a `## [X.Y.Z] - YYYY-MM-DD` section.
 2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. The release workflow checks the tag against `package.json` and creates the GitHub release from the version's CHANGELOG section, followed by GitHub's generated list of merged pull requests.
-4. Publish to npm from the tagged commit, after the release workflow succeeded: `pnpm build && pnpm publish`. Published versions are immutable.
+4. Publish to npm from the tagged commit, after the release workflow succeeded: `pnpm publish`. Its `prepublishOnly` step builds the package as a release build, which refuses uncommitted changes; only runs of a release build are marked citable. Published versions are immutable.
 
 ## Tooling policy
 

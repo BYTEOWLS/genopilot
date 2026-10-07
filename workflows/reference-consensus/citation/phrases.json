@@ -1,0 +1,18 @@
+{
+  "config.consensus.voting_method": {
+    "strict-majority": "strict majority, which needs more than half of the votes cast",
+    "plurality": "plurality, which needs the unique highest vote count"
+  },
+  "config.consensus.include_backbone_vote": {
+    "yes": "the backbone cast one vote next to them",
+    "no": "the backbone did not vote"
+  },
+  "config.consensus.min_callable_isolates": {
+    "0": "",
+    "*": " Positions with fewer than {} callable isolates were written as N."
+  },
+  "config.consensus.unresolved_snp": {
+    "n": "written as N",
+    "iupac": "written as the IUPAC code of the alleles that received votes"
+  }
+}

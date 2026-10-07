@@ -34,6 +34,7 @@ test('saves the version and the build with its commit date in UTC', () => {
 
 test('accepts the GenoPilot section with and without a build', () => {
   assert.deepEqual(issuePaths({version: '1.2.3', build}), []);
+  assert.deepEqual(issuePaths({version: '1.2.3', build: {...build, commit: 'a'.repeat(64)}}), []);
   assert.deepEqual(issuePaths({version: '1.2.3'}), []);
 });
 

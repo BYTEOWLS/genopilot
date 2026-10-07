@@ -40,7 +40,7 @@ export function documentView(title: string, documents: Document[], openId: strin
             }
           }
         }
-        return {id: document.id, title: document.title, blocks: document.blocks, links};
+        return {id: document.id, title: document.title, blocks: document.blocks, links, ...(document.copyable ? {copyable: true} : {})};
       }),
     },
   };

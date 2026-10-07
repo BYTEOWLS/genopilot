@@ -163,6 +163,14 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
         self.assertTrue(observed["bwa"]["version"].startswith(configured["bwa"]))
         self.assertEqual(sorted(provenance["inputs"]["read_pairs"]), ["iso-a", "iso-b", "iso-c"])
 
+    def test_the_run_writes_its_citation(self) -> None:
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+        citation = (self.run_dir / "citation" / "CITATION.md").read_text(encoding="utf-8")
+        provenance = json.loads((self.run_dir / "provenance" / "run.json").read_text(encoding="utf-8"))
+        self.assertIn(f"| bcftools | {provenance['tool_versions']['observed']['bcftools']['version']} |", citation)
+        self.assertNotIn("$", citation.split("## Methods", 1)[1].split("## References", 1)[0])
+        self.assertTrue((self.run_dir / "citation" / "references.bib").read_text(encoding="utf-8").startswith("@misc{genopilot,"))
+
     def test_a_threshold_change_reruns_calling_but_not_alignment(self) -> None:
         self.assertEqual(self.result.returncode, 0, self.result.stderr)
         config_path = self.run_dir / "config.yaml"
