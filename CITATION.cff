@@ -8,6 +8,7 @@ authors:
   - family-names: Oberwasserlechner
     given-names: Michael
     orcid: 'https://orcid.org/0009-0009-4799-0666'
+    affiliation: BYTEOWLS Software & Consulting
     email: m.oberwasserlechner@byteowls.com
 repository-code: 'https://github.com/BYTEOWLS/genopilot'
 repository-artifact: 'https://www.npmjs.com/package/@byteowls/genopilot'

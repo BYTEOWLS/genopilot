@@ -531,3 +531,21 @@ The first comparison remains intentionally small. Possible later analyses includ
 - BRAKER-based de novo gene-model confirmation when justified by suitable evidence.
 
 Short Illumina reads provide limited evidence in repetitive regions and for large novel insertions. Candidate structural differences should not be described as confirmed without suitable evidence or isolate assemblies.
+
+## JOSS paper
+
+A paper in the [Journal of Open Source Software](https://joss.theoj.org) would be a citable description of GenoPilot next to the version DOIs. GenoPilot becomes eligible only when:
+
+- the repository has been public for more than six months, with development spread over that time; reviewers check for sustained development rather than a short burst of generated code;
+- a published paper or preprint, or another research group, shows GenoPilot in research use; JOSS does not publish papers for software that is not yet used.
+
+Already in place: the OSI license, tests and CI, a tagged release and changelog, `CONTRIBUTING.md` and a code of conduct, installation and usage documentation, and the author's ORCID and affiliation. Still needed then:
+
+- `paper.md` and `paper.bib` with a summary, statement of need, state of the field (compared with nf-core, Galaxy, the Snakemake workflow catalog, and similar), software design and its trade-offs, a research impact statement, and references;
+- an AI usage disclosure naming the tools and models with versions, where they were used, and that the author reviewed and validated their output;
+- a statement of need and the target audience in the README;
+- usage examples on real data: the [worked examples](concepts/project-website.md#worked-examples-on-public-data);
+- where to ask questions, for example GitHub Discussions, next to reporting problems in `CONTRIBUTING.md`;
+- at acceptance, a tagged release archived on Zenodo with a DOI ([Zenodo release archiving](concepts/zenodo-release-archiving.md)).
+
+Check the [submission requirements](https://joss.readthedocs.io/en/latest/submitting.html) and the [review checklist](https://joss.readthedocs.io/en/latest/review_checklist.html) again before starting; they change.

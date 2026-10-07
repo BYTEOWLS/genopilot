@@ -22,11 +22,12 @@ Every task includes proportionate unit tests in the same change. A task is not c
 - [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](later.md#workflow-cancellation).
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
 - [ ] Separate workflow-specific UI and result code from the shared screens, so each workflow plugs in through one module ([concept](concepts/workflow-modules.md)).
+- [ ] Export a run's evidence without its large files, for supplementary material and bug reports ([concept](concepts/run-export.md)).
 
 ## Integration and packaging
 
 - [ ] Add a direct-Snakemake cancellation test that checks cleanup and complete logs; success, failure, and resume are covered, and cancellation is covered only with an injected process.
-- [ ] Prepare the public release: the rule-environment locks (the *Before 0.1.0* tooling tasks) and the checks before switching to public ([concept](concepts/public-release.md)).
+- [ ] Prepare the public release: lock the rule environments as the *Before 0.1.0* tooling tasks describe ([concept](concepts/public-release.md)).
 - [ ] Run workflows on clusters and cloud services such as SLURM and AWS ([concept](concepts/remote-execution.md)).
 - [ ] Project website on GitHub Pages with worked examples on public data and reproducible screenshots of the highlights ([concept](concepts/project-website.md)).
 

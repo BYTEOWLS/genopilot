@@ -25,7 +25,7 @@ A consensus-genome publication built on GenoPilot output is the first concrete u
 2. [x] Sign in to Zenodo with GitHub and link an ORCID to the Zenodo account.
 3. [ ] Grant the Zenodo GitHub app access to the `BYTEOWLS` organization. An organization owner must approve it.
 4. [ ] Enable `BYTEOWLS/genopilot` on Zenodo's GitHub page. Repeat on the sandbox for the trial release.
-5. [ ] Add the author's ORCID (`orcid:`) and affiliation to `CITATION.cff`.
+5. [x] Add the author's ORCID (`orcid:`) and affiliation to `CITATION.cff`.
 
 ## Release flow
 
