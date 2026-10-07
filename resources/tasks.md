@@ -25,7 +25,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 ## Integration and packaging
 
 - [ ] Add a direct-Snakemake cancellation test that checks cleanup and complete logs; success, failure, and resume are covered, and cancellation is covered only with an injected process.
-- [ ] Prepare the public release: GenoPilot version in provenance, a citation file per run, worked examples on public data, and community files ([concept](concepts/public-release.md)).
+- [ ] Prepare the public release: GenoPilot version in provenance, a citation file per run, and worked examples on public data ([concept](concepts/public-release.md)).
 - [ ] Run workflows on clusters and cloud services such as SLURM and AWS ([concept](concepts/remote-execution.md)).
 - [ ] Project website on GitHub Pages with reproducible screenshots of the highlights ([concept](concepts/project-website.md)).
 

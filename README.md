@@ -319,6 +319,10 @@ Remove the global test installation:
 npm uninstall --global @byteowls/genopilot
 ```
 
+## Contributing and security
+
+Report problems and propose workflows through issues, as described in [`CONTRIBUTING.md`](CONTRIBUTING.md); pull requests are accepted on invitation. Report vulnerabilities privately, following [`SECURITY.md`](SECURITY.md). Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 Copyright (C) 2026 Michael Oberwasserlechner

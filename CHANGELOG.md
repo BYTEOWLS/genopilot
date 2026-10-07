@@ -6,6 +6,10 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+### Community
+
+- A contributing guide, a security policy, a code of conduct, and issue forms for bug reports and workflow proposals.
+
 ### License
 
 - GenoPilot is licensed under the GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`) instead of MIT. Versions already published remain available under MIT. Other terms, such as a commercial license, are available from the author.

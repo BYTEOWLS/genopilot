@@ -1,0 +1,32 @@
+name: Workflow proposal
+description: Propose a new workflow or a scientific change to an existing one.
+labels: [workflow-proposal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A workflow is added only when it runs reproducibly with pinned tools and can be documented for researchers without deep bioinformatics expertise. **Do not attach private research data**; refer to public accessions instead.
+  - type: textarea
+    id: question
+    attributes:
+      label: Scientific question
+      description: What should the workflow answer, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: tools
+    attributes:
+      label: Tools and how to cite them
+      description: The tools the workflow would run, where they are distributed (for example Bioconda), and the reference each tool asks to be cited with.
+    validations:
+      required: true
+  - type: textarea
+    id: example-data
+    attributes:
+      label: Public example data
+      description: Public accessions or reads, small enough to run on a laptop, and any published result to compare with.
+  - type: textarea
+    id: outputs
+    attributes:
+      label: Expected outputs
+      description: The results a researcher needs and the decisions they would make along the way.

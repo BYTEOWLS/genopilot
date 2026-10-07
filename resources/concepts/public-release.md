@@ -83,10 +83,12 @@ The example belongs to the workflow (`workflows/<id>/`), not to `docs/`. A test 
 
 ## Community files
 
-- `CONTRIBUTING.md`: how to report problems, propose workflows, and run the verification steps.
-- `SECURITY.md`: where to report a vulnerability without a public issue.
-- A code of conduct.
-- Issue templates. The bug template asks for the GenoPilot version, the workflow version, and the run's provenance and logs, and warns against attaching reads, unpublished assemblies, or collaborator data.
+Done:
+
+- [`CONTRIBUTING.md`](../../CONTRIBUTING.md): problems and workflow proposals go through issues; pull requests are accepted on invitation only while the contracts are unstable; before merging, a contributor agrees to the [Contributor License Agreement](../../CLA.md) in the pull request (`.github/pull_request_template.md`). It grants the project owner a non-exclusive, sublicensable right to license the contribution under any terms, so GenoPilot can still be offered under other terms than the AGPL; Austrian copyright cannot be transferred, so the contributor remains its author.
+- [`SECURITY.md`](../../SECURITY.md): private reports through GitHub's private vulnerability reporting, which is enabled when the repository goes public, or by email.
+- [`CODE_OF_CONDUCT.md`](../../CODE_OF_CONDUCT.md): the Contributor Covenant 2.1.
+- Issue forms in `.github/ISSUE_TEMPLATE/`: a bug report that asks for the GenoPilot version and build, the workflow ID and version, and the run's provenance and logs, and warns against attaching reads, unpublished assemblies, or collaborator data; a workflow proposal; blank issues disabled, with a link for security reports.
 
 ## Sharing a run
 
@@ -102,6 +104,7 @@ Going public publishes the full Git history, not only the current tree, and Zeno
 
 - Audit the history for private material. A search of `git log -p` for accessions and paths found only public or placeholder accessions (for example `GCF_000149205`, `SRR1234567`) and test paths (`/Users/researcher`). Still check the design notes for collaborator names, unpublished findings, and personal notes, as was done for the Zenodo concept.
 - Check that `CITATION.cff` has the author's ORCID and affiliation (see the Zenodo concept).
+- Have a lawyer review `CLA.md` before the first external contribution is merged.
 - Prepare the [project website](project-website.md), which goes live with the public repository.
 - Consider the [Journal of Open Source Software](https://joss.theoj.org) review checklist. It asks for an OSI license, tests, documentation, community guidelines, and a statement of need, which this concept mostly covers, and a JOSS paper is a citable description of GenoPilot next to the version DOIs.
 
@@ -114,5 +117,5 @@ The [bundled package](done/bundled-package.md) is done: it pins the application'
 3. The citation file per run, with machine-readable workflow references.
 4. The environment locks already in `tasks.md`.
 5. The worked examples.
-6. Community files and issue templates.
+6. Community files and issue templates (done).
 7. Run export, which can follow the first public release.

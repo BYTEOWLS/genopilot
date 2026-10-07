@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in GenoPilot or one of its workflows does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not attach private research data.** No raw sequencing reads, unpublished assemblies, restricted workbooks, credentials, or collaborator data. Reduce the problem to public accessions or a small synthetic example, or describe it and ask how to share more.
+
+        Report security vulnerabilities privately as described in [SECURITY.md](https://github.com/BYTEOWLS/genopilot/blob/main/SECURITY.md).
+  - type: input
+    id: genopilot-version
+    attributes:
+      label: GenoPilot version and build
+      description: Shown on the tooling page, and recorded under `genopilot` in a run's `provenance/run.json`.
+      placeholder: v0.x.y, commit 0123456789ab
+    validations:
+      required: true
+  - type: input
+    id: workflow
+    attributes:
+      label: Workflow ID and version
+      description: Leave empty if the problem is not about a workflow.
+      placeholder: workflow-id@1
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: macOS 15 on arm64, Ubuntu 24.04 on x86_64
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the exact command GenoPilot showed, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Provenance and logs
+      description: |
+        For a run, attach its `provenance/run.json` and the logs under `logs/`. Check them first: they contain your file paths and accessions. Do not attach reads, alignments, or assemblies.
