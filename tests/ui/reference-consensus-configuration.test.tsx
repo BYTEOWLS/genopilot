@@ -4,6 +4,7 @@ import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
+import {packagedPath} from '../../src/package-root.js';
 import type {Isolate, IsolateCatalog} from '../../src/isolates/catalog.js';
 import {ReferenceConsensusConfigurationScreen} from '../../src/ui/new-run-screen/reference-consensus-configuration.js';
 import type {executeSnakemakeRun} from '../../src/workflows/execution.js';
@@ -193,6 +194,7 @@ function renderScreen(
       onBack={() => {}}
       inputActive
       availableCpus={4}
+      snakefilePath={packagedPath('workflows/reference-consensus/Snakefile')}
       parameterDefinitions={packagedParameterDefinitions}
       stages={packagedStages}
       loadIsolateCatalogSnapshot={async () => {

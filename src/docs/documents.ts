@@ -1,11 +1,12 @@
 import {readFile} from 'node:fs/promises';
 import {basename} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {packagedUrl} from '../package-root.js';
 import {discoverPackagedWorkflows, type DiscoveredWorkflow} from '../workflows/discovery.js';
 import {documentTitle, parseMarkdown, type Block} from './markdown.js';
 
 /** The packaged general documentation, resolved next to the installed application. */
-export const packagedDocsDirectory = new URL('../../docs/', import.meta.url);
+export const packagedDocsDirectory = packagedUrl('docs/');
 
 /** A document to show: its blocks, or none when the file does not exist. */
 export type Document = {

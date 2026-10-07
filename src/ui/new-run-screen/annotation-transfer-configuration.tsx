@@ -1,4 +1,3 @@
-import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import React, {useEffect, useState} from 'react';
 import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
@@ -42,10 +41,6 @@ export type NcbiCacheEntryFinder = (
 ) => Promise<readonly NcbiCacheEntry[]>;
 /** Records the NCBI caches under a finished run's output root in the accession catalog. */
 export type AccessionCacheRegistration = (outputRoot: string, currentDirectory: string) => Promise<string>;
-
-const packagedSnakefilePath = fileURLToPath(
-  new URL('../../../workflows/annotation-transfer/Snakefile', import.meta.url),
-);
 
 async function defaultNcbiApiKeyCheck(): Promise<boolean> {
   return isNcbiApiKeyConfigured(resolveToolingPaths().ncbiApiKeyPath);
@@ -180,7 +175,7 @@ export function AnnotationTransferConfigurationScreen({
   checkNcbiApiKey = defaultNcbiApiKeyCheck,
   discoverPreviousRuns = defaultDiscoverPreviousRuns,
   findCacheEntries = findNcbiCacheEntries,
-  snakefilePath = packagedSnakefilePath,
+  snakefilePath,
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
   registerAccessionCaches = defaultRegisterAccessionCaches,
@@ -197,7 +192,8 @@ export function AnnotationTransferConfigurationScreen({
   checkNcbiApiKey?: NcbiApiKeyCheck;
   discoverPreviousRuns?: PreviousRunsLoader;
   findCacheEntries?: NcbiCacheEntryFinder;
-  snakefilePath?: string;
+  /** The workflow's entry Snakefile, from its discovered directory. */
+  snakefilePath: string;
   prepareSnakemakeRun?: typeof defaultPrepareSnakemakeRun;
   executeSnakemakeRun?: typeof defaultExecuteSnakemakeRun;
   registerAccessionCaches?: AccessionCacheRegistration;

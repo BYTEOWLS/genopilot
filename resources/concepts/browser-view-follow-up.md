@@ -20,4 +20,4 @@ The current browser view is sufficient for the next release. Further browser wor
 - [ ] Design chart and table kinds when a researcher-facing screen needs them.
 - [ ] Update researcher documentation, legends, workflow result guides, and the changelog alongside any implemented follow-up.
 
-Release bundling, browser asset inclusion, and dependency license notices remain separate in the [bundled-package concept](bundled-package.md) and the active [packaging tasks](../tasks.md#integration-and-packaging).
+Release bundling, browser asset inclusion, and dependency license notices are implemented as described in the [bundled-package concept](done/bundled-package.md).

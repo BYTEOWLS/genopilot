@@ -7,14 +7,6 @@ import {prepareGenome, type BrowserResource} from './genomes.js';
 
 const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
 
-export function resolveGenomeModule(): URL | undefined {
-  try {
-    return new URL(import.meta.resolve('igv'));
-  } catch {
-    return undefined;
-  }
-}
-
 export async function startBrowserServer({assets, onConnection = () => {}}: {
   assets: URL;
   onConnection?: (connected: boolean) => void;
@@ -229,17 +221,12 @@ export async function startBrowserServer({assets, onConnection = () => {}}: {
       let nextResources = new Map<string, BrowserResource>();
       if (view.content.kind === 'genome') {
         if (!igvModule) {
+          const url = new URL('igv.js', assets);
           try {
-            // Development uses the full installed package. Release bundling is a separate task;
-            // do not extract or copy IGV's published minified distribution here.
-            const module = resolveGenomeModule();
-            if (!module) {
-              throw new Error('IGV is not installed.');
-            }
-            igvModule = await readFile(module, {signal: controller.signal});
+            igvModule = await readFile(url, {signal: controller.signal});
           } catch (error) {
             controller.signal.throwIfAborted();
-            throw new Error('Genome views require the installed IGV development dependency until browser release bundling is implemented.', {cause: error});
+            throw new Error(`Cannot read browser asset ${url.pathname}. Rebuild with pnpm build in a source checkout, or reinstall the package.`, {cause: error});
           }
         }
         const prepared = await prepareGenome(view as import('./contract.js').GenomeView, indexes, controller.signal);

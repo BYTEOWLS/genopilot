@@ -1,6 +1,7 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {Alert} from '@inkjs/ui';
 import {Box, Text, useApp, useInput, useWindowSize} from 'ink';
+import type {BuildInfo} from '../../build-info.js';
 import type {ToolingStatus} from '../../tooling/check.js';
 import {checkTooling} from '../../tooling/check.js';
 import {
@@ -60,6 +61,8 @@ export type CliMetadata = {
   author: string;
   version: string;
   license: string;
+  /** The commit this build comes from, when known. */
+  build?: BuildInfo;
 };
 
 const minimumTerminalWidth = 40;
@@ -346,6 +349,7 @@ export function WelcomeScreen({
       case 'check-tooling':
         return (
           <ToolingScreen
+            metadata={metadata}
             status={tooling.status}
             message={tooling.checkMessage}
             onCheck={() => tooling.runCheck(true)}

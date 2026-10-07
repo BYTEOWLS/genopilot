@@ -141,7 +141,7 @@ Potential controls include minimum alignment coverage, minimum sequence identity
 
 ## Genome-view controls and teaching aids
 
-Follow-ups to the read-only [genome view](concepts/done/browser-view/genome.md), deferred from the current development preview:
+Follow-ups to the read-only [genome view](concepts/done/browser-view/genome.md), deferred from its first release:
 
 - [ ] **Codon wheel.** Amino-acid names/abbreviations and translation caveats are implemented in genome help. Add a codon wheel (the “coding sun”), identifying the genetic code it represents and its relationship to the viewer's translation; do not imply one code applies to every organism.
 - [ ] **IGV upgrade verification.** Before upgrading IGV, recheck the [documented canvas paint rules and geometry assumptions](concepts/done/browser-view/canvas-colors.md), discover additional paints with the opt-in local diagnostics, and visually verify nucleotide/quality cues and translation markers. Palette, glyph, geometry, and lifecycle separation is implemented; browser tests remain parked.

@@ -6,14 +6,35 @@ import {sanitizeTerminalText} from '../sanitize.js';
 import {ToolingList} from '../welcome-screen/tooling/section.js';
 import {mutedColor} from '../theme.js';
 import {Page} from '../components/page.js';
+import {ParameterList, type ParameterRow} from '../components/parameter-list.js';
+import {formatLocalDateTime} from '../utils.js';
+import type {CliMetadata} from '../welcome-screen/screen.js';
+
+/** The application's own version and, when known, the commit it was built from. */
+export function applicationRows(metadata: Pick<CliMetadata, 'version' | 'build'>): ParameterRow[] {
+  const rows: ParameterRow[] = [{id: 'version', label: 'Version', value: `v${metadata.version}`}];
+  if (metadata.build) {
+    rows.push(
+      {
+        id: 'commit',
+        label: 'Commit',
+        value: metadata.build.commit.slice(0, 12) + (metadata.build.modified ? ' with uncommitted changes' : ''),
+      },
+      {id: 'committed-at', label: 'Commit date', value: formatLocalDateTime(metadata.build.committedAt)},
+    );
+  }
+  return rows;
+}
 
 export function ToolingScreen({
+  metadata,
   status,
   message,
   onCheck,
   onBack,
   inputActive,
 }: {
+  metadata: Pick<CliMetadata, 'label' | 'version' | 'build'>;
   status: ToolingStatus;
   message?: string;
   onCheck: () => void;
@@ -47,6 +68,10 @@ export function ToolingScreen({
       ) : (
         <ToolingList status={status} />
       )}
+      <Box marginTop={1} flexDirection="column">
+        <Text bold>{sanitizeTerminalText(metadata.label)}</Text>
+        <ParameterList rows={applicationRows(metadata)} inputActive={false} />
+      </Box>
       {message ? (
         <Box marginTop={1}>
           <Alert variant={status.state === 'ready' ? 'success' : 'warning'}>

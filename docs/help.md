@@ -21,6 +21,8 @@ Catalogs keep paths on this machine, so they stay private to your user and never
 
 GenoPilot checks its runtime after launch: Pixi, Conda, Snakemake, and the Python that Snakemake runs on, at the pinned versions. With your consent it installs them into its own data directory, without administrator rights. Snakemake then provisions a pinned environment for each workflow step the first time it is needed.
 
+The tooling page also shows GenoPilot's own version and, when known, the Git commit it was built from and that commit's date, marked when the build included uncommitted changes. Many development builds share one version number, so the commit tells them apart; a released version is identified by its version alone.
+
 ## Keys
 
 | Key | Action |

@@ -9,7 +9,7 @@ Publish GenoPilot as a small npm package whose code is exactly what was built an
 Today `dist/` is the TypeScript output file by file, and `ink`, `@inkjs/ui`, `react`, and `yaml` are runtime dependencies. A user's npm install resolves them anew:
 
 - **Unpinned transitive versions.** `package.json` pins only the direct dependencies, and npm does not read `pnpm-lock.yaml`. The 40 transitive packages, such as `es-toolkit` and `ws`, resolve to whatever matches at install time, so two users can run different code under Ink. The scientific results are unaffected, because workflows run in pinned environments, but the application itself is not reproducible.
-- **Size.** The production dependencies take about 25 MB in 44 packages, 18 MB of it `es-toolkit`, of which Ink uses a few functions. The [genome view](done/browser-view/genome.md)'s full IGV development package is about 19 MB, but a trial browser bundle of its ESM entry is about 1.5 MB. Keep the full development package and let release bundling include the imported code rather than installing or copying the entire distribution.
+- **Size.** The production dependencies take about 25 MB in 44 packages, 18 MB of it `es-toolkit`, of which Ink uses a few functions. The [genome view](browser-view/genome.md)'s full IGV development package is about 19 MB, but a trial browser bundle of its ESM entry is about 1.5 MB. Keep the full development package and let release bundling include the imported code rather than installing or copying the entire distribution.
 
 Large Ink applications publish a bundle for the same reasons: the Gemini CLI publishes `bundle/gemini.js` without runtime dependencies, and Claude Code published one `cli.js` with none.
 
@@ -22,8 +22,8 @@ esbuild bundles `src/cli.tsx` and everything it imports into one ES module, `dis
 The package contains:
 
 - `dist/cli.js`, the bundle, keeping the entry's `#!/usr/bin/env node`;
-- locally bundled [browser view](done/browser-view/README.md) assets, including IGV loaded only for genome views, and `dist/vendor/` only for any files that genuinely need serving unchanged;
-- `THIRD-PARTY-LICENSES.md`, see below;
+- locally bundled [browser view](browser-view/README.md) assets in `dist/browser/assets/`, including IGV (`igv.js`) loaded only for genome views; no files are copied unchanged;
+- `dist/THIRD-PARTY-LICENSES.md`, see below;
 - `workflows/`, `docs/`, `runtime/pixi.toml`, `runtime/pixi.lock`, `CHANGELOG.md`, and `README.md`, as today.
 
 ### Build
@@ -37,17 +37,17 @@ The package contains:
    - a banner defining `require` through `createRequire(import.meta.url)`, for bundled CommonJS code that requires Node built-ins from an ES module;
    - a metafile, which the next step reads.
 3. The browser build bundles its imports and their used transitive code into local assets, with IGV loaded separately for genome views. Prefer IGV's ESM `module` entry over its non-ESM `browser` entry (`mainFields: ['module', 'browser', 'main']` was verified). No special extraction of its published minified file is needed.
-4. A small Node script that copies any necessary unchanged vendor files and writes `THIRD-PARTY-LICENSES.md` from both build metafiles.
+4. The same script (`scripts/build.mjs`) writes `dist/THIRD-PARTY-LICENSES.md` from the CLI, page, and IGV build metafiles.
 
 One npm package delivers both the CLI bundle and browser assets; Node and browser code cannot share one executable bundle. Shrinking means excluding unused distribution files and bundling the imported code, not assuming every library's internal features can be tree-shaken away.
 
-The bundle is not minified: about 1.8 MB instead of 0.8 MB, in exchange for stack traces with real function names in bug reports.
+The bundle is minified without renaming identifiers (esbuild's `minifyWhitespace` and `minifySyntax`, not `minifyIdentifiers`): about 1.4 MB, measured, instead of 2.0 MB unminified or 0.9 MB fully minified, while stack traces in bug reports keep real function names. Source maps are not shipped; development runs the sources.
 
 Tests keep running on the sources with `tsx`, so the bundle changes nothing for them. `pnpm dev` and `pnpm dev:watch` stay as they are.
 
 ### Packaged resources
 
-Seven modules find packaged files relative to their own position in `dist/`, such as `new URL('../../runtime/', import.meta.url)`. In the bundle every module is `dist/cli.js`, so these paths point outside the package. A trial bundle showed this: `genopilot update` worked, Ink rendered, and the welcome screen then failed to read `runtime/pixi.lock`.
+Eight places find packaged files relative to their own position in `dist/`, such as `new URL('../../runtime/', import.meta.url)`. In the bundle every module is `dist/cli.js`, so these paths point outside the package. A trial bundle showed this: `genopilot update` worked, Ink rendered, and the welcome screen then failed to read `runtime/pixi.lock`.
 
 One module resolves the package root once, from its own location, and the others ask it for the packaged directory they need:
 
@@ -56,13 +56,16 @@ One module resolves the package root once, from its own location, and the others
 - `src/workflows/discovery.ts` (`workflows/`);
 - `src/workflows/execution.ts` (`workflows/shared/logging`);
 - `src/docs/documents.ts` (`docs/`);
+- `src/browser/provider.tsx` (the built browser assets, `dist/browser/assets/`);
 - the two run-configuration screens (each workflow's Snakefile), which should come from the discovered manifest's directory instead.
 
 The root is the same in the sources (`src/` run through `tsx`) and in the bundle (`dist/cli.js`): one directory up from the module. This is also what the rule to resolve packaged resources relative to the installed application asks for. The other modules then need only that one helper.
 
+IGV is built into `dist/browser/assets/igv.js` and served from there. Before, the server resolved it at runtime from the installed `igv` package, a development dependency, so genome views worked only in a source checkout. In development, genome views now need `pnpm build` once, like the browser page itself.
+
 ### Licenses
 
-Bundling copies third-party code into GenoPilot's own file, so the package must carry the dependencies' license notices itself; the dependency packages and their `LICENSE` files are no longer installed. esbuild's own collection (`--legal-comments`) finds only code with `@license` comments, which most MIT packages lack. The build script therefore lists every package in the metafile's inputs and writes each one's name, version, license, and `LICENSE` file into `THIRD-PARTY-LICENSES.md`. A package without a license file, or with a license other than an allowed permissive one (MIT, ISC, BSD, Apache-2.0), fails the build.
+Bundling copies third-party code into GenoPilot's own file, so the package must carry the dependencies' license notices itself; the dependency packages and their `LICENSE` files are no longer installed. esbuild's own collection (`--legal-comments`) finds only code with `@license` comments, which most MIT packages lack. The build script therefore lists every package in the metafile's inputs and writes each one's name, version, license, and `LICENSE` file into `THIRD-PARTY-LICENSES.md`. A package without a license file, or with a license other than an allowed permissive one (MIT, ISC, BSD-2-Clause, BSD-3-Clause, 0BSD, Apache-2.0), fails the build.
 
 ### Verification
 
@@ -72,12 +75,21 @@ Bundling copies third-party code into GenoPilot's own file, so the package must 
 
 ## Out of scope
 
-- Native binaries or single-executable applications: users install Node anyway.
+- Native binaries or single-executable applications. They would save users only the Node installation, while Pixi, Snakemake, and Conda remain. In exchange they cost about 1–2 weeks: unpacking the packaged files to a cache directory for Snakemake, a CI build per platform, macOS signing and notarization, and a self-update outside npm. They also make each release about 120 MB per platform and need a rebuild for every Node security fix.
 - Bundling the workflows' Python or the Pixi runtime; they stay packaged files.
+
+## Implementation
+
+Implemented as follows; the steps below are kept as the record of what the work covered.
+
+- `src/package-root.ts` resolves the package root; the run-configuration screens receive each workflow's entry Snakefile from the new-run screen, from the discovered manifest's `entry_snakefile`.
+- `scripts/build.mjs` runs the three esbuild builds and the license collection. `yoga-layout`, Ink's layout engine, ships without a license file, so its reviewed upstream license is in `resources/licenses/`.
+- `tests/package.test.ts` rejects runtime dependencies. `pnpm verify:package` (`scripts/verify-package.mjs`) installs the packed tarball into a clean temporary prefix, checks the packaged files and the absence of `node_modules`, and starts the installed CLI; CI runs it after `pnpm pack:local`.
+- The packed tarball is about 1.2 MB; `dist/cli.js` is about 1.4 MB.
 
 ## Work
 
-1. One package-root helper replaces the seven module-relative paths, with tests in the sources.
+1. One package-root helper replaces the module-relative paths, with tests in the sources.
 2. The CLI and browser esbuild builds, any necessary vendor copy, and `THIRD-PARTY-LICENSES.md`; dependencies move to `devDependencies`; `package.json` `files` updated. Verify the packed browser uses only the needed IGV bundle and includes its license, not its full development distribution.
 3. The no-dependencies test and the clean-installation check of the packed CLI.
 4. `README.md` (build and packaging) and `CHANGELOG.md`.

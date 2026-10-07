@@ -54,7 +54,7 @@ Track grouping and strand coloring were configured during successful rendering. 
 
 A throwaway esbuild check imported `igv` normally with `mainFields: ['module', 'browser', 'main']`. The metafile showed that only IGV's published ESM entry was used, producing approximately 1.52 MB minified (about 444 KB gzip). The published minified module is approximately 1.50 MB; copying it separately is therefore not needed to avoid the full roughly 19 MB npm distribution.
 
-The default browser resolver selected IGV's non-ESM `browser` entry and failed to find a default export. Prefer its `module` entry during release bundling. Keep the full latest evaluated package installed for development; the release build and transitive license collection belong to [Bundled package](../../bundled-package.md).
+The default browser resolver selected IGV's non-ESM `browser` entry and failed to find a default export. Prefer its `module` entry during release bundling. Keep the full latest evaluated package installed for development; the release build and transitive license collection belong to [Bundled package](../bundled-package.md).
 
 ## Verification boundary
 
@@ -82,7 +82,7 @@ The general genome help contains the paired-read legend and links to [IGV Deskto
 
 Browser tests are temporarily parked in the Git-ignored `.parked-tests/browser/` folder while the UI changes rapidly. The archive includes `tests/browser/`, accession-view tests, and the original mixed CLI/browser UI test files. Its README explains restoration; merge only browser cases from the mixed files so later CLI changes are not overwritten. The remaining CLI tests stay active. The archive is excluded from test discovery, CI, and packaged artifacts, and is not backed up by Git. Restore and update this coverage after the UI settles, before considering browser integration verified again.
 
-The full development dependency is served locally without special extraction. Release bundling and license collection remain in [Bundled package](../../bundled-package.md); installations lacking IGV visibly mark the genome shortcut unavailable. The blocked failure-time remote mapping attempt remains a library limitation. Run-result evidence and Sites locus navigation/presets are now implemented as development previews, pending visual review. Decisions, exports, representative-cohort budgets, and packed genome serving remain subsequent work.
+IGV is bundled from its ESM entry and served locally, with its license collected, as the [bundled package](../bundled-package.md) describes; installations lacking IGV visibly mark the genome shortcut unavailable. The blocked failure-time remote mapping attempt remains a library limitation. Run-result evidence and Sites locus navigation/presets are implemented. Decisions, exports, and representative-cohort budgets remain subsequent work.
 
 ### Sites preview awaiting visual review
 

@@ -34,14 +34,13 @@
     "runtime/pixi.toml",
     "runtime/pixi.lock",
     "CHANGELOG.md",
-    "README.md",
-    "THIRD-PARTY-LICENSES.md"
+    "README.md"
   ],
   "scripts": {
     "dev": "tsx src/cli.tsx",
     "dev:watch": "node --watch-path=src --watch-preserve-output --import tsx src/cli.tsx",
     "clean": "node --eval \"require('node:fs').rmSync('dist', {recursive: true, force: true})\"",
-    "build": "pnpm clean && tsc -p tsconfig.json && node scripts/build-browser.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json --noEmit && node scripts/build.mjs",
     "start": "node dist/cli.js",
     "test": "tsc -p tsconfig.test.json && tsx --import ./tests/setup.ts --test $(find tests -type f \\( -name '*.test.ts' -o -name '*.test.tsx' \\) -print | sort)",
     "test:python": "python3 -m unittest discover -s tests -p 'test_*.py'",
@@ -49,16 +48,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lock:runtime": "pixi lock --manifest-path runtime/pixi.toml",
     "pack:local": "pnpm build && pnpm pack --out byteowls-genopilot-local.tgz",
+    "verify:package": "node scripts/verify-package.mjs",
     "install:global": "pnpm run pack:local && npm install --global ./byteowls-genopilot-local.tgz",
     "reinstall:global": "pnpm run install:global"
   },
-  "dependencies": {
-    "@inkjs/ui": "2.0.0",
-    "ink": "7.1.1",
-    "react": "19.3.0",
-    "yaml": "2.9.1"
-  },
   "devDependencies": {
+    "@inkjs/ui": "2.0.0",
     "@mantine/core": "9.6.3",
     "@mantine/hooks": "9.6.3",
     "@types/jsdom": "30.0.0",
@@ -67,9 +62,12 @@
     "@types/react-dom": "19.3.0",
     "esbuild": "0.28.2",
     "igv": "3.8.9",
+    "ink": "7.1.1",
     "jsdom": "30.1.1",
+    "react": "19.3.0",
     "react-dom": "19.3.0",
     "tsx": "4.23.15",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "yaml": "2.9.1"
   }
 }

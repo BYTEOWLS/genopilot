@@ -9,7 +9,7 @@ The container knows no workflow and no kind of content in particular. It provide
 | Kind | Library | Concept | State |
 |---|---|---|---|
 | `document` | none; the existing Markdown parser | [document.md](document.md) | first; the help documents, and the kind the container is built with |
-| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | accession catalog development preview implemented; next the review of unresolved consensus loci, then the [annotation review](../annotation-review.md) |
+| `genome` | [igv.js](https://github.com/igvteam/igv.js) | [genome.md](genome.md) | implemented for the accession catalog, reference consensus results, and annotation transfer results, including their review views; the [annotation review](../annotation-review.md) builds on it |
 | `chart` | [Mantine charts](https://mantine.dev/charts/getting-started/) with [Recharts](https://recharts.org/) | sketched below | later; run metrics, durations, LiftOn summaries |
 | `table` | none | sketched below | later; tables too large or wide for the terminal |
 
@@ -133,7 +133,7 @@ The page is GenoPilot's own frame around the kind's main area. Libraries such as
 - **Keys**: `n` and `p` for the next and previous item, `?` for the legend, matching the CLI where it has the same action.
 - **Usable without color** for the frame, as in the terminal; a kind's own color encoding, such as nucleotides or chart series, is explained in its legend.
 
-The page is a small React application under `src/browser/page/`, built for the browser by the same esbuild step as the [bundled package](../../bundled-package.md) into `dist/vendor/browser/`. Each kind is a component of its own, loaded only when a view of that kind is shown.
+The page is a small React application under `src/browser/page/`, built for the browser by the same esbuild step as the [bundled package](../bundled-package.md) into `dist/browser/assets/`. Each kind is a component of its own, loaded only when a view of that kind is shown.
 
 ### Design and themes
 
@@ -175,8 +175,8 @@ The page's libraries are exact-version development dependencies; nothing is adde
 
 - React, `react-dom`, Mantine core and hooks, Mantine charts with Recharts, and ExcelJS are bundled into the page by esbuild; chart code is loaded with its kind and ExcelJS as a separate file loaded on demand. Mantine styles and the page's CSS are bundled into a local CSS asset; no CDN or runtime styling service is used.
 - Import only the Mantine components the current view needs. Add Mantine charts and Recharts with the first chart kind, not with the initial document view. Dependencies are pinned exactly, and bundled packages' license texts are included in the package.
-- igv.js uses the full npm development package during integration; no minified-file extraction is needed. Its release browser bundle and license collection belong to [Bundled package](../../bundled-package.md); see [genome.md](genome.md#packaging).
-- Every bundled or copied library is listed in `THIRD-PARTY-LICENSES.md`, as the [bundled package](../../bundled-package.md) describes.
+- igv.js is bundled from its ESM entry into `dist/browser/assets/igv.js`, with its license collected, as the [bundled package](../bundled-package.md) describes; see [genome.md](genome.md#packaging).
+- Every bundled or copied library is listed in `THIRD-PARTY-LICENSES.md`, as the [bundled package](../bundled-package.md) describes.
 
 Until the bundled package exists, retain the current page build beside the TypeScript output. Development integration may use installed development dependencies; do not add library-specific release-copy steps ahead of the packaging task.
 

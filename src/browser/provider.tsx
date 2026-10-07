@@ -4,7 +4,8 @@ import {existsSync} from 'node:fs';
 import type {Document} from '../docs/documents.js';
 import {documentView} from './documents.js';
 import type {GenomeView} from './contract.js';
-import {resolveGenomeModule, startBrowserServer, type BrowserServer} from './server.js';
+import {packagedUrl} from '../package-root.js';
+import {startBrowserServer, type BrowserServer} from './server.js';
 
 export function openBrowser(url: string): Promise<void> {
   const command = process.platform === 'darwin' ? 'open' : 'xdg-open';
@@ -21,8 +22,8 @@ export function openBrowser(url: string): Promise<void> {
   });
 }
 
-const compiledAssets = new URL('./assets/', import.meta.url);
-const defaultAssetsDirectory = existsSync(compiledAssets) ? compiledAssets : new URL('../../dist/browser/assets/', import.meta.url);
+// The built page and IGV; a source checkout serves them after `pnpm build`.
+const defaultAssetsDirectory = packagedUrl('dist/browser/assets/');
 
 type DocumentSession = {owner: object; title: string; documents: Document[]; selectedId: string; select: (id: string) => void};
 type Session = DocumentSession | {owner: object; view: GenomeView; select?: (id: string) => void};
@@ -46,8 +47,7 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
   assetsDirectory?: URL;
 }): React.JSX.Element {
   const [status, setStatus] = useState<string>();
-  const module = resolveGenomeModule();
-  const genomeAvailable = module !== undefined && existsSync(module);
+  const genomeAvailable = existsSync(new URL('igv.js', assetsDirectory));
   const server = useRef<Promise<BrowserServer> | undefined>(undefined);
   const opening = useRef<Promise<void> | undefined>(undefined);
   const current = useRef<Session | undefined>(undefined);

@@ -1,12 +1,13 @@
 import type {Dirent} from 'node:fs';
 import {readdir, readFile} from 'node:fs/promises';
+import {packagedUrl} from '../package-root.js';
 import {parseWorkflowManifest, type WorkflowManifest} from './manifest.js';
 import {
   parseParameterDefinitions,
   type WorkflowParameterDefinition,
 } from './parameter-definitions.js';
 
-export const packagedWorkflowsDirectory = new URL('../../workflows/', import.meta.url);
+export const packagedWorkflowsDirectory = packagedUrl('workflows/');
 
 export type DiscoveredWorkflow = {
   manifest: WorkflowManifest;

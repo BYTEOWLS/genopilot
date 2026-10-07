@@ -111,7 +111,7 @@ Install dependencies:
 pnpm install
 ```
 
-The build also bundles the local browser page and its styles with esbuild, and collects its dependency licenses. Run `pnpm build` before opening browser documents from the source CLI; rebuild after changing browser code or styles.
+`pnpm build` type-checks the sources and then bundles them with esbuild (`scripts/build.mjs`): the CLI with every dependency into one `dist/cli.js`, and the browser page and IGV into `dist/browser/assets/`. The package therefore has no runtime dependencies: an installation runs exactly the versions `pnpm-lock.yaml` pins, and dependencies are added as `devDependencies`. The build writes every bundled package's license into `dist/THIRD-PARTY-LICENSES.md` and fails for a license outside the permitted list or a package without a license file; such a package's reviewed upstream license goes into `resources/licenses/`. The bundle also embeds the commit it was built from, its date, and whether the working tree had uncommitted changes, which the tooling page shows; `pnpm dev` reads them from Git instead. Run `pnpm build` before opening browser documents or genome views from the source CLI; rebuild after changing browser code or styles.
 
 Run the CLI from source:
 
@@ -305,6 +305,12 @@ Create `byteowls-genopilot-local.tgz` without installing it:
 
 ```bash
 pnpm pack:local
+```
+
+Install that tarball into a clean temporary prefix and check that the bundled CLI starts without any `node_modules`, as CI does:
+
+```bash
+pnpm verify:package
 ```
 
 Remove the global test installation:

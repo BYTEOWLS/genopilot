@@ -2,12 +2,12 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
-import {fileURLToPath} from 'node:url';
 import {
   toolingPolicy,
   type SupportedArchitecture,
   type SupportedPlatform,
 } from './policy.js';
+import {packagedPath} from '../package-root.js';
 
 export type ToolingPaths = {
   platform: SupportedPlatform;
@@ -34,7 +34,7 @@ export type ToolingPaths = {
 };
 
 /** The packaged Pixi workspace (`pixi.toml` and `pixi.lock`) that setup installs. */
-const packagedRuntimeDirectory = fileURLToPath(new URL('../../runtime/', import.meta.url));
+const packagedRuntimeDirectory = packagedPath('runtime/');
 
 let packagedLockChecksum: string | undefined;
 

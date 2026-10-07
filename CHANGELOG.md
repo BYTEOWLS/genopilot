@@ -10,6 +10,10 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 - GenoPilot is licensed under the GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`) instead of MIT. Versions already published remain available under MIT. Other terms, such as a commercial license, are available from the author.
 
+### Packaging
+
+- The package is one bundled `dist/cli.js` without runtime dependencies, so every installation runs exactly the dependency versions the release was built and tested with. It is also much smaller to install. The bundled packages' licenses are in `dist/THIRD-PARTY-LICENSES.md`.
+
 ### Browser view
 
 - `v` opens documentation and genomes in a local browser, kept in step with the CLI. Everything it needs, including its dependencies' license notices, is packaged; the theme follows the system or can be set to light or dark.
@@ -22,7 +26,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
   - Help: a `?` menu with the view's own guide, the general *Using the genome viewer* guide, and the sources with their provenance.
   - Review views step through a list the CLI leads, with presets, an item card, markers that show an item's facts when clicked, and track choices that last from one item to the next.
 - Genomes open from the accession catalog, from reference consensus results, and from annotation transfer results; each headline names where a view was opened from.
-- The genome viewer is not yet bundled into the published package; an installation without it marks genome views unavailable.
+- The genome viewer is bundled into the published package, so genome views also work from an npm installation.
 
 ### Workflows
 
@@ -33,6 +37,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 ### Application
 
 - Informational alerts use a lighter blue that stays readable on dark terminals.
+- The tooling page shows GenoPilot's version, the Git commit it was built from, and the commit date, so development builds that share a version can be told apart.
 
 ## [0.0.1] - 2026-09-30
 

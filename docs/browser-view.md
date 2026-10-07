@@ -10,9 +10,9 @@ Contents collapses the sidebar to leave more reading space on a smaller laptop s
 
 Opening another document page with `v` replaces the browser's view. Closing the tab is harmless; pressing `v` again reopens it. After leaving the terminal's document page, browser navigation no longer changes the terminal. The browser keeps the documents readable after GenoPilot exits.
 
-## Genome views: development preview
+## Genome views
 
-In a development checkout with dependencies installed, select a verified cached accession under Manage NCBI accessions and press `v` to view its sequence and available annotation. GenoPilot checks the recorded checksums again before opening; conflicting or damaged copies cannot be viewed. It does not download an accession just to display it.
+Select a verified cached accession under Manage NCBI accessions and press `v` to view its sequence and available annotation. GenoPilot checks the recorded checksums again before opening; conflicting or damaged copies cannot be viewed. It does not download an accession just to display it.
 
 Run-result screens can also offer genome views through the same `v` shortcut when their reference and provenance are available; each workflow's result help explains its entry points and coordinate system.
 
@@ -20,7 +20,7 @@ The genome view offers a chromosome/contig selector and overview, local region n
 
 Review views can also offer a locus selector, Previous/Next (`p`/`n`), recorded item details, an evidence preset selector, and a review guide in the `?` help menu. Locus selection follows the opening CLI screen in both directions; panning is local and does not select a CLI item. Leaving that review disables browser item navigation. Choosing another locus or preset intentionally reapplies its evidence tracks and zoom; workflow result help explains the choices.
 
-Genome views currently require the full IGV development dependency. Release bundling is not yet implemented; installations without it mark the shortcut unavailable rather than claiming the viewer is ready. Scientific exports and decision drafting remain planned.
+The genome viewer (IGV) is included in GenoPilot; if it is missing from an installation, the shortcut is marked unavailable rather than claiming the viewer is ready. Scientific exports and decision drafting remain planned.
 
 ## Printing
 
@@ -28,7 +28,7 @@ There is no download menu. Use your browser's normal Print command to print or s
 
 ## Local connection
 
-GenoPilot serves the page only on `127.0.0.1`, with a randomly chosen port and a secret path in the URL. The document page's libraries and styles are included in the installed package. The genome development preview serves IGV from the installed development dependency and reads local files; nothing is uploaded. Default public-genome loading is disabled. IGV may attempt a remote fallback lookup after some loading errors; Content Security Policy blocks it, and external origins are never permitted. External reference links open a separate tab only when you choose them.
+GenoPilot serves the page only on `127.0.0.1`, with a randomly chosen port and a secret path in the URL. The page's libraries, styles, and IGV are included in the installed package. Genome views read local files; nothing is uploaded. Default public-genome loading is disabled. IGV may attempt a remote fallback lookup after some loading errors; Content Security Policy blocks it, and external origins are never permitted. External reference links open a separate tab only when you choose them.
 
 > [!WARNING]
 > Treat the complete URL as private: its secret path grants access to the current view and any registered genome files. The server stops when GenoPilot exits. Do not expose the port on a public network.

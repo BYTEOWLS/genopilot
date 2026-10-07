@@ -1,19 +1,22 @@
 cff-version: 1.2.0
-message: If you use GenoPilot in your research, please cite the exact version you used.
-type: software
 title: GenoPilot
-abstract: >-
-  Guided, reproducible genome workflows for researchers without deep
-  bioinformatics expertise. A terminal interface configures and runs packaged,
-  pinned Snakemake workflows that remain runnable directly through Snakemake.
+message: >-
+  If you use GenoPilot in your research, please cite the
+  exact version you used.
+type: software
 authors:
   - family-names: Oberwasserlechner
     given-names: Michael
-version: 0.0.1
-date-released: 2026-09-30
-license: AGPL-3.0-or-later
-repository-code: https://github.com/BYTEOWLS/genopilot
-url: https://www.npmjs.com/package/@byteowls/genopilot
+    orcid: 'https://orcid.org/0009-0009-4799-0666'
+    email: m.oberwasserlechner@byteowls.com
+repository-code: 'https://github.com/BYTEOWLS/genopilot'
+repository-artifact: 'https://www.npmjs.com/package/@byteowls/genopilot'
+abstract: >-
+  Guided, reproducible genome workflows for researchers
+  without deep bioinformatics expertise. A terminal
+  interface configures and runs packaged, pinned Snakemake
+  workflows, aggregate results and show them structured and
+  appealing in a browser view.
 keywords:
   - bioinformatics
   - genomics
@@ -22,3 +25,6 @@ keywords:
   - consensus genome
   - annotation transfer
   - terminal user interface
+license: AGPL-3.0-or-later
+version: 0.0.1
+date-released: '2026-09-30'

@@ -1,4 +1,3 @@
-import {fileURLToPath} from 'node:url';
 import {basename, resolve} from 'node:path';
 import React, {useEffect, useState} from 'react';
 import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
@@ -47,10 +46,6 @@ export type IsolateCatalogSnapshotLoader = () => Promise<IsolateCatalog>;
 export type ReferenceConsensusRunInspector = (prepared: PreparedReferenceConsensusRun) => Promise<RunInspection>;
 export type ReferenceConsensusRunSaver = (prepared: PreparedReferenceConsensusRun) => Promise<string>;
 export type BackboneCacheCheck = (prepared: PreparedReferenceConsensusRun) => Promise<boolean>;
-
-const packagedSnakefilePath = fileURLToPath(
-  new URL('../../../workflows/reference-consensus/Snakefile', import.meta.url),
-);
 
 async function defaultLoadIsolateCatalog(): Promise<IsolateCatalog> {
   return (await loadIsolateCatalog(resolveToolingPaths().isolateCatalogPath)).catalog;
@@ -289,7 +284,7 @@ export function ReferenceConsensusConfigurationScreen({
   checkBackboneCache = prepared => hasBackboneCacheEntry(prepared),
   checkNcbiApiKey = defaultNcbiApiKeyCheck,
   discoverPreviousRuns = defaultDiscoverPreviousRuns,
-  snakefilePath = packagedSnakefilePath,
+  snakefilePath,
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
   registerAccessionCaches = defaultRegisterAccessionCaches,
@@ -310,7 +305,8 @@ export function ReferenceConsensusConfigurationScreen({
   checkBackboneCache?: BackboneCacheCheck;
   checkNcbiApiKey?: NcbiApiKeyCheck;
   discoverPreviousRuns?: PreviousRunsLoader;
-  snakefilePath?: string;
+  /** The workflow's entry Snakefile, from its discovered directory. */
+  snakefilePath: string;
   prepareSnakemakeRun?: typeof defaultPrepareSnakemakeRun;
   executeSnakemakeRun?: typeof defaultExecuteSnakemakeRun;
   registerAccessionCaches?: AccessionCacheRegistration;

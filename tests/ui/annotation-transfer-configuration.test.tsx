@@ -7,6 +7,7 @@ import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
+import {packagedPath} from '../../src/package-root.js';
 import {
   AnnotationTransferConfigurationScreen,
   previousRunLabel,
@@ -203,6 +204,7 @@ function renderConfiguration(
       onBack={options.onBack ?? (() => {})}
       inputActive
       availableCpus={4}
+      snakefilePath={packagedPath('workflows/annotation-transfer/Snakefile')}
       validatePreparedRun={options.validatePreparedRun}
       saveRun={options.saveRun}
       parameterDefinitions={options.parameterDefinitions ?? packagedParameterDefinitions}

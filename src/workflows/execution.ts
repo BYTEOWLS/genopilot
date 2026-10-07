@@ -1,8 +1,8 @@
 import {spawn, type ChildProcessWithoutNullStreams} from 'node:child_process';
 import {mkdir, open} from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
 import {dirname, delimiter, join, resolve} from 'node:path';
 import {finished} from 'node:stream/promises';
+import {packagedPath} from '../package-root.js';
 import {readNcbiApiKey} from '../tooling/ncbi-api-key.js';
 import {resolveToolingPaths, type ToolingPaths} from '../tooling/paths.js';
 import {formatCompactUtcTimestamp} from './timestamps.js';
@@ -41,9 +41,7 @@ export type SnakemakeRun = {
  * plugin_*` packages, so this directory is exported as `PYTHONPATH`; it holds nothing else and
  * therefore cannot shadow a module in the Conda environments Snakemake provisions for rules.
  */
-export const packagedLoggerDirectory = fileURLToPath(
-  new URL('../../workflows/shared/logging', import.meta.url),
-);
+export const packagedLoggerDirectory = packagedPath('workflows/shared/logging');
 
 const runEventsLoggerName = 'genopilot-run-events';
 

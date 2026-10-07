@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import React, {useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {
@@ -22,6 +23,10 @@ type ConfigurationScreenProps = {
   workflow: DiscoveredWorkflow;
 };
 
+function entrySnakefilePath(workflow: DiscoveredWorkflow): string {
+  return fileURLToPath(new URL(workflow.manifest.entry_snakefile, workflow.directoryUrl));
+}
+
 /** The configuration screen of each workflow this build can configure, by stable workflow ID. */
 const configurationScreens: Record<string, (props: ConfigurationScreenProps) => React.JSX.Element> = {
   'annotation-transfer': ({workflow, ...props}) => (
@@ -30,6 +35,7 @@ const configurationScreens: Record<string, (props: ConfigurationScreenProps) => 
       parameterDefinitions={workflow.parameterDefinitions}
       stages={workflow.manifest.stages}
       manifest={workflow.manifest}
+      snakefilePath={entrySnakefilePath(workflow)}
     />
   ),
   'reference-consensus': ({workflow, ...props}) => (
@@ -38,6 +44,7 @@ const configurationScreens: Record<string, (props: ConfigurationScreenProps) => 
       parameterDefinitions={workflow.parameterDefinitions}
       stages={workflow.manifest.stages}
       manifest={workflow.manifest}
+      snakefilePath={entrySnakefilePath(workflow)}
     />
   ),
 };

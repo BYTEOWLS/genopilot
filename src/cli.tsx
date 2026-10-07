@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
-import {createRequire} from 'node:module';
+import {readFileSync} from 'node:fs';
 import React from 'react';
 import {render} from 'ink';
 import {ThemeProvider} from '@inkjs/ui';
+import {readBuildInfo} from './build-info.js';
+import {packagedPath} from './package-root.js';
 import {selfUpdate} from './self-update.js';
 import {BrowserViewProvider} from './browser/provider.js';
 import {createTerminalTitleWriter} from './terminal-title.js';
@@ -22,10 +24,7 @@ type PackageJson = {
   bin: Record<string, string>;
 };
 
-// ESM cannot import JSON portably without import attributes, so create a local
-// CommonJS-style require function anchored to this compiled module's location.
-const require = createRequire(import.meta.url);
-const packageJson = require('../package.json') as PackageJson;
+const packageJson = JSON.parse(readFileSync(packagedPath('package.json'), 'utf8')) as PackageJson;
 const commandName = Object.keys(packageJson.bin)[0];
 
 if (!commandName) {
@@ -44,6 +43,7 @@ const metadata: CliMetadata = {
   author: typeof packageJson.author === 'string' ? packageJson.author : packageJson.author.name,
   version: packageJson.version,
   license: packageJson.license,
+  build: readBuildInfo(),
 };
 
 /** Runs non-interactive commands before mounting the interactive application. */
