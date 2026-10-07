@@ -9,6 +9,7 @@ import {lineage, trimmedStatus} from '../../isolates/presentation.js';
 import {loadIsolateCatalog} from '../../isolates/store.js';
 import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
+import type {GenoPilotDetails} from '../../workflows/configuration-validation.js';
 import {
   executeSnakemakeRun as defaultExecuteSnakemakeRun,
   prepareSnakemakeRun as defaultPrepareSnakemakeRun,
@@ -273,6 +274,7 @@ export function ReferenceConsensusConfigurationScreen({
   currentDirectory,
   onBack,
   inputActive,
+  genopilot,
   availableCpus,
   parameterDefinitions = [],
   stages = [],
@@ -292,6 +294,8 @@ export function ReferenceConsensusConfigurationScreen({
   currentDirectory: string;
   onBack: () => void;
   inputActive: boolean;
+  /** The running GenoPilot, saved in every configuration this screen writes. */
+  genopilot: GenoPilotDetails;
   availableCpus?: number;
   parameterDefinitions?: readonly WorkflowParameterDefinition[];
   stages?: readonly WorkflowStage[];
@@ -349,6 +353,7 @@ export function ReferenceConsensusConfigurationScreen({
       draftFromValues(values, currentDirectory),
       catalog,
       currentDirectory,
+      genopilot,
       availableCpus,
     );
     const inspection = await inspectRun(prepared);

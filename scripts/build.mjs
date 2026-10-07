@@ -17,7 +17,9 @@ function git(...arguments_) {
 }
 const [commit, committedAt] = git('log', '-1', '--format=%H%n%cI')?.split('\n') ?? [];
 const status = git('status', '--porcelain');
-const buildInfo = commit && committedAt && status !== undefined ? {commit, committedAt, modified: status.length > 0} : null;
+// A release build comes from the unmodified commit tagged with the package version.
+const released = status === '' && (git('tag', '--points-at', 'HEAD')?.split('\n') ?? []).includes(`v${packageMetadata.version}`);
+const buildInfo = commit && committedAt && status !== undefined ? {commit, committedAt, modified: status.length > 0, released} : null;
 
 // The CLI and everything it imports, so an installation runs exactly the locked dependencies.
 const cli = await build({

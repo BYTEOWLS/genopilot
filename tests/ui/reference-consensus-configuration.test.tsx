@@ -193,6 +193,7 @@ function renderScreen(
       currentDirectory="/research"
       onBack={() => {}}
       inputActive
+      genopilot={{version: '1.2.3'}}
       availableCpus={4}
       snakefilePath={packagedPath('workflows/reference-consensus/Snakefile')}
       parameterDefinitions={packagedParameterDefinitions}

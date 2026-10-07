@@ -1,5 +1,6 @@
 import {isAbsolute} from 'node:path';
 import {isVersionedAssemblyAccession, ncbiAccessionFormatMessage} from '../accessions/accession.js';
+import type {BuildInfo} from '../build-info.js';
 
 /** Validation helpers and sections shared by every workflow's run configuration. */
 
@@ -24,6 +25,34 @@ export type RunDetails = {
   created_at: string;
   description?: string;
 };
+
+/** The GenoPilot that saved a configuration; its provenance copies it, so a run can be cited. */
+export type GenoPilotDetails = {
+  version: string;
+  /** Omitted when the build's commit is unknown, such as a build outside a Git checkout. */
+  build?: {
+    commit: string;
+    committed_at: string;
+    modified: boolean;
+    released: boolean;
+  };
+};
+
+/** The saved form of the running application's version and build. */
+export function genoPilotDetails(version: string, build: BuildInfo | undefined): GenoPilotDetails {
+  return {
+    version,
+    ...(build
+      ? {build: {
+          commit: build.commit,
+          // Git's committer date carries its own offset; a configuration stores UTC timestamps.
+          committed_at: new Date(build.committedAt).toISOString(),
+          modified: build.modified,
+          released: build.released,
+        }}
+      : {}),
+  };
+}
 
 export type RecordValue = Record<string, unknown>;
 
@@ -277,6 +306,38 @@ export function validateRun(
     return undefined;
   }
   return run as RunDetails;
+}
+
+export function validateGenoPilot(
+  value: unknown,
+  issues: ConfigurationValidationIssue[],
+): GenoPilotDetails | undefined {
+  const genopilot = requireObject(value, '$.genopilot', issues);
+  if (!genopilot) {
+    return undefined;
+  }
+  rejectUnknownFields(genopilot, ['version', 'build'], '$.genopilot', issues);
+  let valid = requireNonEmptyString(genopilot.version, '$.genopilot.version', issues);
+  if ('build' in genopilot) {
+    const build = requireObject(genopilot.build, '$.genopilot.build', issues);
+    if (build) {
+      rejectUnknownFields(build, ['commit', 'committed_at', 'modified', 'released'], '$.genopilot.build', issues);
+      if (typeof build.commit !== 'string' || !/^[0-9a-f]{40}$/.test(build.commit)) {
+        issues.push({path: '$.genopilot.build.commit', message: 'must be a full Git commit hash'});
+        valid = false;
+      }
+      valid = validateTimestamp(build.committed_at, '$.genopilot.build.committed_at', issues) && valid;
+      for (const field of ['modified', 'released'] as const) {
+        if (typeof build[field] !== 'boolean') {
+          issues.push({path: `$.genopilot.build.${field}`, message: 'must be true or false'});
+          valid = false;
+        }
+      }
+    } else {
+      valid = false;
+    }
+  }
+  return valid ? (genopilot as GenoPilotDetails) : undefined;
 }
 
 /** Checks the fixed identity fields every configuration starts with. */

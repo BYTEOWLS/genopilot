@@ -44,6 +44,7 @@ test('discovers run metadata and result states newest first', async () => {
   await addRun(tempDir, 'older-directory', {
     workflow_id: 'annotation-transfer',
     workflow_version: 1,
+    genopilot: {version: '1.2.3', build: {commit: '0123456789abcdef0123456789abcdef01234567', committed_at: '2026-01-01T00:00:00.000Z', modified: false, released: true}},
     run: {
       id: 'older-run',
       name: 'Older name',
@@ -78,6 +79,8 @@ test('discovers run metadata and result states newest first', async () => {
   assert.equal(runs[0]?.status, 'corrupt');
   assert.equal(runs[1]?.metadata.name, 'Older name');
   assert.equal(runs[1]?.metadata.description, 'Saved description');
+  assert.equal(runs[1]?.metadata.genopilot?.version, '1.2.3');
+  assert.equal(runs[0]?.metadata.genopilot, undefined);
   assert.equal(runs[1]?.status, 'incomplete');
   assert.equal(runs[2]?.status, 'corrupt');
 });

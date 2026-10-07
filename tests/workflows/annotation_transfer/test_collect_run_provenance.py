@@ -22,6 +22,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
             "schema_version": 1,
             "workflow_id": "annotation-transfer",
             "workflow_version": 1,
+            "genopilot": {"version": "1.2.3"},
             "inputs": {
                 "reference": {"source": "local", "fasta": "/inputs/reference.fasta", "gff3": "/inputs/reference.gff3"},
                 "target": {"source": "local", "fasta": "/inputs/target.fasta"},
@@ -118,6 +119,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
         artifacts, provenance = self._run()
         records = {record["id"]: record for record in artifacts["artifacts"]}
 
+        self.assertEqual(provenance["genopilot"], {"version": "1.2.3"})
         raw = records["raw-gff3"]
         self.assertEqual(raw["origin"], "generated")
         self.assertEqual(raw["producer"]["workflow"], {"id": "annotation-transfer", "version": 1})

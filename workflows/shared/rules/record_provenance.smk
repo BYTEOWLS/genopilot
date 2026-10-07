@@ -6,7 +6,8 @@ What it does
   Writes: artifacts.yaml      - every input, result, and log with its SHA-256 checksum, the
                                 step that produced it, and whether it was generated or
                                 imported
-          provenance/run.json - the effective configuration, workflow and manifest versions
+          provenance/run.json - the GenoPilot version and build that saved the configuration,
+                                the effective configuration, workflow and manifest versions
                                 (with the manifest's checksum), the Snakemake version,
                                 pinned and observed tool versions, the command each step
                                 ran, and the effective resources

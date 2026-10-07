@@ -83,7 +83,7 @@ Paths are inside the run directory.
 | `results/metrics.json` | the transfer metrics and the counts of the protein rating, with their one-line definitions |
 | `results/summary.json` | the run status, the metrics, and links to every report |
 | `artifacts.yaml` | every file's checksum and whether it was generated or imported |
-| `provenance/run.json` | the effective configuration, commands, tool versions, resources, and input checksums |
+| `provenance/run.json` | the GenoPilot version and build that saved the configuration, the effective configuration, commands, tool versions, resources, and input checksums |
 | `logs/` | the log and benchmark of every step |
 
 ## Tools

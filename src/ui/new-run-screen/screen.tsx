@@ -15,11 +15,13 @@ import {
 import {AnnotationTransferConfigurationScreen} from './annotation-transfer-configuration.js';
 import {ReferenceConsensusConfigurationScreen} from './reference-consensus-configuration.js';
 import {useTerminalTitle} from '../terminal-title.js';
+import type {GenoPilotDetails} from '../../workflows/configuration-validation.js';
 
 type ConfigurationScreenProps = {
   currentDirectory: string;
   onBack: () => void;
   inputActive: boolean;
+  genopilot: GenoPilotDetails;
   workflow: DiscoveredWorkflow;
 };
 
@@ -57,6 +59,7 @@ export function NewRunScreen({
   discoverWorkflows = discoverPackagedWorkflows,
   inputActive = true,
   currentDirectory,
+  genopilot,
 }: {
   onBack: () => void;
   selectedWorkflowId?: string;
@@ -64,6 +67,7 @@ export function NewRunScreen({
   discoverWorkflows?: WorkflowDiscovery;
   inputActive?: boolean;
   currentDirectory: string;
+  genopilot: GenoPilotDetails;
 }): React.JSX.Element {
   const selection = useWorkflowSelection(discoverWorkflows, selectedWorkflowId);
   const [confirmedWorkflow, setConfirmedWorkflow] = useState<DiscoveredWorkflow>();
@@ -94,6 +98,7 @@ export function NewRunScreen({
         currentDirectory={currentDirectory}
         onBack={() => setConfirmedWorkflow(undefined)}
         inputActive={inputActive}
+        genopilot={genopilot}
       />
     );
   }

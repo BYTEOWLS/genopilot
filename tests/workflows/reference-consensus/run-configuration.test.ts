@@ -23,6 +23,7 @@ import {parseIsolateSnapshot} from '../../../src/workflows/reference-consensus/s
 import {createRunWorkspace} from '../../../src/workflows/run-preparation.js';
 
 const now = new Date('2026-09-25T10:00:00.000Z');
+const genopilot = {version: '1.2.3'};
 const fastq = '@read1\nACGT\n+\nIIII\n';
 
 async function createTempDir(context: TestContext): Promise<string> {
@@ -93,7 +94,7 @@ const noAccessions = async (): Promise<readonly AccessionEntry[]> => [];
 
 test('snapshots every selected isolate with all read pairs in selection order', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
-  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, 8, now);
+  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, genopilot, 8, now);
 
   const {configuration, snapshot} = prepared;
   assert.deepEqual(configuration.inputs.selected_isolates, ['isolate-b', 'isolate-a']);
@@ -105,6 +106,7 @@ test('snapshots every selected isolate with all read pairs in selection order', 
     include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 1, unresolved_snp: 'iupac',
   });
   assert.deepEqual(configuration.resources, {cpu_mode: 'manual', manual_limit: 2, effective_cpus: 2});
+  assert.deepEqual(configuration.genopilot, genopilot);
   assert.equal(configuration.run.id, '2026-09-25_100000000_Cohort-one');
   assert.equal(prepared.outputDirectory, join(tempDir, 'runs', 'reference-consensus', configuration.run.id));
   assert.deepEqual(snapshot.isolates.map(isolate => isolate.id), ['isolate-b', 'isolate-a']);
@@ -118,25 +120,25 @@ test('snapshots every selected isolate with all read pairs in selection order', 
 test('refuses a selected isolate that is no longer cataloged and an empty or invalid threshold', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
   assert.throws(
-    () => buildReferenceConsensusRun({...draft, isolateIds: ['isolate-a', 'gone']}, catalog, tempDir, 8, now),
+    () => buildReferenceConsensusRun({...draft, isolateIds: ['isolate-a', 'gone']}, catalog, tempDir, genopilot, 8, now),
     error => issuesOf(error).some(issue => issue.path === '$.inputs.selected_isolates[1]'),
   );
   assert.throws(
-    () => buildReferenceConsensusRun({...draft, isolateIds: []}, catalog, tempDir, 8, now),
+    () => buildReferenceConsensusRun({...draft, isolateIds: []}, catalog, tempDir, genopilot, 8, now),
     error => issuesOf(error).some(issue => issue.path === '$.inputs.selected_isolates'),
   );
   assert.throws(
-    () => buildReferenceConsensusRun({...draft, minMappingQuality: ''}, catalog, tempDir, 8, now),
+    () => buildReferenceConsensusRun({...draft, minMappingQuality: ''}, catalog, tempDir, genopilot, 8, now),
     error => issuesOf(error).some(issue => issue.path === '$.calling.min_mapping_quality'),
   );
   assert.throws(
-    () => buildReferenceConsensusRun({...draft, minAlleleFraction: '0.4'}, catalog, tempDir, 8, now),
+    () => buildReferenceConsensusRun({...draft, minAlleleFraction: '0.4'}, catalog, tempDir, genopilot, 8, now),
     error => issuesOf(error).some(issue => issue.path === '$.calling.min_allele_fraction'),
   );
   // An empty minimum is not silently read as zero, and it cannot exceed the two selected isolates.
   for (const minCallableIsolates of ['', '3']) {
     assert.throws(
-      () => buildReferenceConsensusRun({...draft, minCallableIsolates}, catalog, tempDir, 8, now),
+      () => buildReferenceConsensusRun({...draft, minCallableIsolates}, catalog, tempDir, genopilot, 8, now),
       error => issuesOf(error).some(issue => issue.path === '$.consensus.min_callable_isolates'),
     );
   }
@@ -144,7 +146,7 @@ test('refuses a selected isolate that is no longer cataloged and an empty or inv
 
 test('blocks a missing read file and an unreadable backbone before review', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
-  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, 8, now);
+  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, genopilot, 8, now);
   await rm(catalog.isolates[0]!.read_pairs[1]!.r2);
   await rm(join(tempDir, 'backbone.fa'));
   await assert.rejects(inspectPreparedRun(prepared, {readAccessions: noAccessions}), error => {
@@ -161,6 +163,7 @@ test('refuses a backbone accession whose cataloged copies conflict', async conte
     {...draft, backboneSource: 'ncbi', backboneAccession: 'gcf_000149205.2'},
     catalog,
     tempDir,
+    genopilot,
     8,
     now,
   );
@@ -185,7 +188,7 @@ test('refuses a backbone accession whose cataloged copies conflict', async conte
 
 test('warns about linked read files, a possible backbone sample, and mixed trimming', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
-  const clean = buildReferenceConsensusRun(draft, catalog, tempDir, 8, now);
+  const clean = buildReferenceConsensusRun(draft, catalog, tempDir, genopilot, 8, now);
   assert.deepEqual(reviewWarnings(clean, await inspectPreparedRun(clean, {readAccessions: noAccessions})), []);
 
   // Isolate B's R2 becomes a hard link to isolate A's first R1, and one of A's pairs is trimmed.
@@ -202,6 +205,7 @@ test('warns about linked read files, a possible backbone sample, and mixed trimm
     {...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000149205.2'},
     catalog,
     tempDir,
+    genopilot,
     8,
     now,
   );
@@ -214,7 +218,7 @@ test('warns about linked read files, a possible backbone sample, and mixed trimm
 
 test('saves the snapshot and configuration together and never overwrites a run', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
-  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, 8, now);
+  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, genopilot, 8, now);
   const configurationPath = await savePreparedRun(prepared, {readAccessions: noAccessions});
 
   assert.equal(configurationPath, join(prepared.outputDirectory, 'config.yaml'));
@@ -251,6 +255,7 @@ test('asks about an existing backbone cache entry and saves the decision', async
     {...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000149205.2'},
     catalog,
     tempDir,
+    genopilot,
     8,
     now,
   );
@@ -276,6 +281,7 @@ test('does not take an isolate named after the backbone strain for the backbone 
     {...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000149205.2'},
     catalog,
     tempDir,
+    genopilot,
     8,
     now,
   );
@@ -291,7 +297,7 @@ test('refuses input paths Snakemake cannot declare', async context => {
   const pair = catalog.isolates[1]!.read_pairs[0]!;
   pair.r1 = join(braced, 'b_R1.fastq');
   await writeFile(pair.r1, fastq);
-  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, 8, now);
+  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, genopilot, 8, now);
   await assert.rejects(
     inspectPreparedRun(prepared, {readAccessions: noAccessions}),
     error => issuesOf(error).some(issue => issue.path.includes("'isolate-b' pair 1 R1") && issue.message.includes('{')),

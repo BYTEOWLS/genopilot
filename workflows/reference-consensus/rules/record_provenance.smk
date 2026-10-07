@@ -5,7 +5,8 @@ What it does
 
   Writes: artifacts.yaml      - every artifact of the run with its SHA-256 checksum, stage,
                                 and whether it was generated or imported
-          provenance/run.json - the effective configuration, workflow and manifest versions
+          provenance/run.json - the GenoPilot version and build that saved the configuration,
+                                the effective configuration, workflow and manifest versions
                                 (with the manifest's checksum), the isolate snapshot's
                                 checksum, the backbone and read-file origins, pinned and
                                 observed tool versions, the Snakemake version, and the
@@ -17,7 +18,8 @@ What it does
   record_iteration_provenance runs last in an iteration of a saved decision
   instead, and never touches the two files above:
 
-  Writes: provenance/cohort/iteration-<n>.json - the decision's checksum, the
+  Writes: provenance/cohort/iteration-<n>.json - the GenoPilot that saved the
+                                configuration, the decision's checksum, the
                                 voters with the checksums of what they voted
                                 with, every excluded isolate as `completed`
                                 or `incomplete`, whether the initial cohort

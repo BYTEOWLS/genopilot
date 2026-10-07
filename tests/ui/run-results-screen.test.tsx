@@ -17,6 +17,7 @@ import {
 import type {DocumentsLoader} from '../../src/docs/documents.js';
 import {parseMarkdown} from '../../src/docs/markdown.js';
 import type {ReviewGene} from '../../src/workflows/annotation-transfer/proteins.js';
+import {genoPilotSummary} from '../../src/browser/contract.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -73,6 +74,7 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
       schema_version: 1,
       workflow_id: 'annotation-transfer',
       workflow_version: 1,
+      genopilot: {version: '1.2.3'},
       inputs: {
         reference: {source: 'local', fasta: '/data/reference.fa', gff3: '/data/reference.gff3'},
         target: {source: 'local', fasta: '/data/target.fa'},
@@ -225,6 +227,8 @@ test('presents compatible run metadata, scientific metrics, and direct result pa
     assert.ok(!overview!.includes('annotation-transfer@1') && !overview!.includes('131'));
     assert.ok(transfer!.includes('131') && !transfer!.includes('annotation-transfer@1'));
     assert.ok(details!.includes('annotation-transfer@1') && !details!.includes('131'));
+    // The GenoPilot that saved the configuration is a run detail.
+    assert.ok(details!.includes('v1.2.3'));
     // The run directory is listed once, in its own section, not again as a run file shown as ".".
     assert.doesNotMatch(files!, /\s\.\s*$/m);
     const frame = frames.join('\n');
@@ -542,4 +546,15 @@ test('the Proteins tab reports a table it cannot read', async () => {
   } finally {
     screen.unmount();
   }
+});
+
+test('names a release run by its version and marks a development build', () => {
+  const commit = '0123456789abcdef0123456789abcdef01234567';
+  assert.equal(genoPilotSummary({version: '1.2.3', build: {commit, modified: false, released: true}}), 'v1.2.3');
+  const development = genoPilotSummary({version: '1.2.3', build: {commit, modified: false, released: false}});
+  const modified = genoPilotSummary({version: '1.2.3', build: {commit, modified: true, released: false}});
+  assert.ok(development.includes(commit.slice(0, 12)) && development !== 'v1.2.3');
+  assert.ok(modified.startsWith(development) && modified.length > development.length);
+  // A build of unknown commit is never presented as a release.
+  assert.notEqual(genoPilotSummary({version: '1.2.3'}), 'v1.2.3');
 });

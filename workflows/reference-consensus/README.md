@@ -291,9 +291,9 @@ Paths are inside the run directory. Positions in the support tables are 1-based 
 | `results/cohort/initial/consensus-summary.json` | the voting method, the minimum, the SNP representation, voters, checksums of the inputs and the FASTA, sequence lengths, loci by decision and reason (also per support flag and by total votes), and bases written from the backbone alone, as IUPAC codes, and as `N` per reason |
 | `decisions/iteration-<n>.yaml` | a saved cohort decision (see *Iterations*) |
 | `results/cohort/iteration-<n>/` | the support tables, consensus, and summaries of iteration `n`, with the same files as `results/cohort/initial/` |
-| `provenance/cohort/iteration-<n>.json` | the decision's checksum, the voting isolates with the checksums of what they voted with, every excluded isolate as `completed` or `incomplete`, whether the first cohort was aggregated, the iteration's checksummed outputs, and its commands |
+| `provenance/cohort/iteration-<n>.json` | the GenoPilot that saved the configuration, the decision's checksum, the voting isolates with the checksums of what they voted with, every excluded isolate as `completed` or `incomplete`, whether the first cohort was aggregated, the iteration's checksummed outputs, and its commands |
 | `artifacts.yaml` | every artifact of the run with its checksum and origin |
-| `provenance/run.json` | configuration, inputs, tool versions, and commands of the whole run; with `artifacts.yaml`, the record of the first cohort |
+| `provenance/run.json` | the GenoPilot version and build that saved the configuration, configuration, inputs, tool versions, and commands of the whole run; with `artifacts.yaml`, the record of the first cohort |
 | `logs/` | the log and benchmark of every step |
 
 Existing alignments, indexed variants, and masks can be inspected against the backbone in a read-only local browser view. A cohort consensus is inspected as its own reference, never with evidence in backbone coordinates. No visualization-only outputs or conversions are created; the [results guide](results.md) explains opening and interpreting these views.

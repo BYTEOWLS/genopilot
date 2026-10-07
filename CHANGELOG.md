@@ -6,6 +6,10 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+### Provenance
+
+- Every run records the GenoPilot version and build that saved its configuration, in `config.yaml` and `provenance/run.json`; the result page and the browser view show it, and mark runs of a development build.
+
 ### Community
 
 - A contributing guide, a security policy, a code of conduct, and issue forms for bug reports and workflow proposals.

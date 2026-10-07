@@ -162,6 +162,7 @@ test('adds the selected workflow label to the title until the selection is left'
       onSelectedWorkflowIdChange={() => {}}
       discoverWorkflows={async () => [discoveredWorkflow('placeholder-workflow', 'Workflow label')]}
       currentDirectory="/research"
+      genopilot={{version: '1.2.3'}}
     />,
   );
   await waitUntil(() => view.output.output.includes('Description of placeholder-workflow.'), 'workflows are listed');

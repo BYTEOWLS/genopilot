@@ -87,6 +87,7 @@ class IterationProvenanceTests(unittest.TestCase):
         config = {
             "workflow_id": "reference-consensus",
             "workflow_version": 1,
+            "genopilot": {"version": "1.2.3"},
             "inputs": {"selected_isolates": ["iso-a", "iso-b", "iso-c"]},
             "run": {"id": "run-a", "created_at": "2026-09-25T10:00:00.000Z"},
         }
@@ -117,6 +118,8 @@ class IterationProvenanceTests(unittest.TestCase):
         ])
 
         record = json.loads(Path("provenance/cohort/iteration-2.json").read_text(encoding="utf-8"))
+        # An iteration records the GenoPilot that saved the configuration, not the one running it.
+        self.assertEqual(record["genopilot"], {"version": "1.2.3"})
         self.assertEqual(record["consensus"], settings)
         self.assertEqual(sorted(record["voting_isolates"]), ["iso-a"])
         self.assertTrue(all("checksum" in entry for entry in record["voting_isolates"]["iso-a"]["inputs"]))

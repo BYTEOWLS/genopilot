@@ -423,6 +423,8 @@ def main(argv: list[str] | None = None) -> int:
         "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at,
         "workflow": workflow,
+        # The GenoPilot that saved the configuration, so the run can be traced to a release.
+        "genopilot": config["genopilot"],
         "run": config["run"],
         "effective_configuration": config,
         "resources": {

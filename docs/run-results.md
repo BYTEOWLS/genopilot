@@ -10,6 +10,7 @@ Every workflow's result page has a **Run Details** tab with the run's technical 
 | Name | Optional label entered when the run was created. It does not need to be unique. |
 | Description | Optional free-text description entered when the run was created. |
 | Workflow | Workflow label with its stable identifier and version. Results are interpreted by identifier and version, so a changed label does not affect loading. |
+| GenoPilot | The GenoPilot version that saved the run's configuration. A release shows only its version; a development build also shows its commit, and whether it had uncommitted changes. Only a run saved by a release can be cited by that release's DOI. Later steps of the run, such as one started from a saved decision, keep this version. |
 | Created | Time the run workspace was created, shown in local time. |
 | Results written | Time the workflow wrote the results shown, in local time: the completion summary, or the provenance of the active cohort. A later rerun of that stage updates it. |
 | Effective CPUs | Number of CPUs the workflow was allowed to use after applying the selected CPU mode. |
@@ -22,5 +23,5 @@ Every workflow's result page has a **Run Details** tab with the run's technical 
 | Current attempt stdout | Complete standard output of the Snakemake process for the execution that just ended. |
 | Current attempt stderr | Complete standard error of the Snakemake process for the execution that just ended. |
 | Artifact index | Index of the run's files with checksums and whether each was generated, imported, or cached. |
-| Run provenance | Record of commands, tool versions, resources, timestamps, effective configuration, and input checksums. |
+| Run provenance | Record of the GenoPilot version and build that saved the configuration, commands, tool versions, resources, timestamps, effective configuration, and input checksums. |
 | Complete step logs | Directory containing the complete logs of every workflow step. |

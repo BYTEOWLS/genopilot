@@ -80,7 +80,7 @@ function view(context: TransferViewContext, side: 'reference' | 'target', fasta:
   return {
     id: createHash('sha256').update(JSON.stringify([resolve(context.runDirectory), side])).digest('hex'),
     title: runViewTitle(workflow, configuration.run, name === label ? label : `${label} · ${name}`),
-    provenance: {application, run: {id: configuration.run.id, name: configuration.run.name, workflow: {id: workflow.id, version: workflow.version}}, sources: [
+    provenance: {application, run: {id: configuration.run.id, name: configuration.run.name, workflow: {id: workflow.id, version: workflow.version}, genopilot: configuration.genopilot}, sources: [
       {label: `Verified ${fasta.artifact.origin} ${side} FASTA`, path: fasta.path, sha256: fasta.artifact.sha256},
       ...sources,
     ]},

@@ -1,6 +1,7 @@
 import {readdir, readFile, realpath, rm} from 'node:fs/promises';
 import {basename, dirname, resolve} from 'node:path';
 import {parse} from 'yaml';
+import {validateGenoPilot, type GenoPilotDetails} from './configuration-validation.js';
 import type {WorkflowManifest} from './manifest.js';
 import {loadWorkflowResult, type LoadedWorkflowResult} from './results.js';
 
@@ -11,6 +12,8 @@ export type ExistingRunMetadata = {
   workflowId: string;
   workflowVersion: number;
   createdAt?: string;
+  /** The GenoPilot that saved the run's configuration. */
+  genopilot?: GenoPilotDetails;
 };
 
 export type ExistingRunStatus =
@@ -55,6 +58,8 @@ function metadataFromConfiguration(
 ): ExistingRunMetadata {
   const configuration = isRecord(value) ? value : {};
   const run = isRecord(configuration.run) ? configuration.run : {};
+  // Read leniently like the other fields: a corrupt run still lists, without what it lacks.
+  const genopilot = validateGenoPilot(configuration.genopilot, []);
   return {
     id: stringField(run.id) ?? basename(directory),
     ...(stringField(run.name) ? {name: stringField(run.name)} : {}),
@@ -62,6 +67,7 @@ function metadataFromConfiguration(
     workflowId: stringField(configuration.workflow_id) ?? manifest.id,
     workflowVersion: positiveInteger(configuration.workflow_version) ?? manifest.workflow_version,
     ...(stringField(run.created_at) ? {createdAt: stringField(run.created_at)} : {}),
+    ...(genopilot ? {genopilot} : {}),
   };
 }
 

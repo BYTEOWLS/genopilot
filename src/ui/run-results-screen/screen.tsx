@@ -54,7 +54,7 @@ import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
 import {formatLocalDateTime} from "../utils.js";
 import {SectionList, type SectionListItem} from "./section-list.js";
 import {useGenomeSession} from '../../browser/use-genome-session.js';
-import {browserViewShortcut} from '../../browser/contract.js';
+import {browserViewShortcut, genoPilotSummary} from '../../browser/contract.js';
 import {documentView} from '../../browser/documents.js';
 import {useTransferGenomeViews} from './transfer-genome-views.js';
 import {useProteinReview} from './protein-review.js';
@@ -420,6 +420,7 @@ export function RunResultsScreen({
     name: configuration.run.name,
     description: configuration.run.description,
     createdAt: configuration.run.created_at,
+    genopilot: configuration.genopilot,
   } : runMetadata;
 
   const supportPaths = runSupportPaths(runDirectory, pathExists);
@@ -461,6 +462,9 @@ export function RunResultsScreen({
     label: 'Workflow',
     value: `${sanitizeTerminalText(manifest.label)} (${sanitizeTerminalText(manifest.id)}@${String(manifest.workflow_version)})`,
   });
+  if (metadata?.genopilot) {
+    metadataItems.push({id: 'run.genopilot', label: 'GenoPilot', value: sanitizeTerminalText(genoPilotSummary(metadata.genopilot))});
+  }
   if (metadata?.createdAt) {
     metadataItems.push({id: 'run.created', label: 'Created', value: formatDateTime(metadata.createdAt)});
   }

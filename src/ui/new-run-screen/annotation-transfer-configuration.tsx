@@ -5,6 +5,7 @@ import {refreshAccessionCaches} from '../../accessions/registration.js';
 import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
 import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
+import type {GenoPilotDetails} from '../../workflows/configuration-validation.js';
 import type {AnnotationTransferConfiguration} from '../../workflows/annotation-transfer/configuration.js';
 import type {RunDetails} from '../../workflows/configuration-validation.js';
 import type {WorkflowParameterDefinition} from '../../workflows/parameter-definitions.js';
@@ -167,6 +168,7 @@ export function AnnotationTransferConfigurationScreen({
   currentDirectory,
   onBack,
   inputActive,
+  genopilot,
   availableCpus,
   validatePreparedRun = validatePreparedRunPaths,
   saveRun = savePreparedRun,
@@ -184,6 +186,8 @@ export function AnnotationTransferConfigurationScreen({
   currentDirectory: string;
   onBack: () => void;
   inputActive: boolean;
+  /** The running GenoPilot, saved in every configuration this screen writes. */
+  genopilot: GenoPilotDetails;
   availableCpus?: number;
   validatePreparedRun?: PreparedRunValidator;
   saveRun?: PreparedRunSaver;
@@ -226,6 +230,7 @@ export function AnnotationTransferConfigurationScreen({
     const prepared = buildAnnotationTransferConfiguration(
       annotationTransferDraft(values, currentDirectory),
       currentDirectory,
+      genopilot,
       availableCpus,
     );
     await validatePreparedRun(prepared);

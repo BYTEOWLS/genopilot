@@ -55,4 +55,4 @@ GenoPilot is planned to appear in two papers, one with the GenoPilot author as f
 
 ## Open questions
 
-- Run provenance records the workflow ID and workflow version, but not the GenoPilot package version that produced the run. A reader of a run should be able to map it to the version DOI. Record the package version in run provenance before the first cited release.
+- Resolved: run provenance records the GenoPilot version and build that saved the configuration, so a reader can map a run to its version DOI ([public release](public-release.md#prerequisite-the-genopilot-version-in-provenance-done)).

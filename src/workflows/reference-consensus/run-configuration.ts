@@ -10,7 +10,7 @@ import {
 import {readCatalogedAccessions, type AccessionCatalogReader} from '../../accessions/store.js';
 import type {Isolate, IsolateCatalog} from '../../isolates/catalog.js';
 import {checkReadPairs, type ReadPairsChecker} from '../../isolates/reads.js';
-import type {ConfigurationValidationIssue, CpuMode, NcbiCacheMode} from '../configuration-validation.js';
+import type {ConfigurationValidationIssue, CpuMode, GenoPilotDetails, NcbiCacheMode} from '../configuration-validation.js';
 import {
   buildRunId,
   checkReadableFile,
@@ -78,6 +78,7 @@ export function buildReferenceConsensusRun(
   draft: ReferenceConsensusDraft,
   catalog: IsolateCatalog,
   currentDirectory: string,
+  genopilot: GenoPilotDetails,
   availableCpus: number = availableParallelism(),
   now: Date = new Date(),
 ): PreparedReferenceConsensusRun {
@@ -107,6 +108,7 @@ export function buildReferenceConsensusRun(
     schema_version: REFERENCE_CONSENSUS_CONFIGURATION_SCHEMA_VERSION,
     workflow_id: REFERENCE_CONSENSUS_WORKFLOW_ID,
     workflow_version: REFERENCE_CONSENSUS_WORKFLOW_VERSION,
+    genopilot,
     inputs: {
       backbone: draft.backboneSource === 'ncbi'
         ? {source: 'ncbi', accession: normalizeAccession(draft.backboneAccession), ncbi_cache_mode: 'reuse'}

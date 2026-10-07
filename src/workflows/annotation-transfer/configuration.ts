@@ -5,6 +5,7 @@ import {
   requireObject,
   validateAbsolutePath,
   validateAccession,
+  validateGenoPilot,
   validateInputSource,
   validateNcbiCacheMode,
   validateResources,
@@ -12,6 +13,7 @@ import {
   validateWorkflowIdentity,
   type ConfigurationValidationIssue,
   type CpuMode,
+  type GenoPilotDetails,
   type NcbiCacheMode,
   type ResourceSettings,
   type RunDetails,
@@ -35,6 +37,7 @@ export type AnnotationTransferConfiguration = {
   schema_version: typeof ANNOTATION_TRANSFER_CONFIGURATION_SCHEMA_VERSION;
   workflow_id: typeof ANNOTATION_TRANSFER_WORKFLOW_ID;
   workflow_version: typeof ANNOTATION_TRANSFER_WORKFLOW_VERSION;
+  genopilot: GenoPilotDetails;
   inputs: {
     reference: ReferenceInput;
     target: TargetInput;
@@ -181,6 +184,7 @@ export function validateAnnotationTransferConfiguration(
       'schema_version',
       'workflow_id',
       'workflow_version',
+      'genopilot',
       'inputs',
       'lifton',
       'review',
@@ -196,6 +200,7 @@ export function validateAnnotationTransferConfiguration(
     workflowVersion: ANNOTATION_TRANSFER_WORKFLOW_VERSION,
   }, issues);
 
+  const genopilot = validateGenoPilot(value.genopilot, issues);
   const inputs = validateInputs(value.inputs, issues);
   const lifton = validateLifton(value.lifton, issues);
   const review = validateReview(value.review, issues);
@@ -210,6 +215,7 @@ export function validateAnnotationTransferConfiguration(
     schema_version: ANNOTATION_TRANSFER_CONFIGURATION_SCHEMA_VERSION,
     workflow_id: ANNOTATION_TRANSFER_WORKFLOW_ID,
     workflow_version: ANNOTATION_TRANSFER_WORKFLOW_VERSION,
+    genopilot: genopilot as AnnotationTransferConfiguration['genopilot'],
     inputs: inputs as AnnotationTransferConfiguration['inputs'],
     lifton: lifton as AnnotationTransferConfiguration['lifton'],
     review: review as AnnotationTransferConfiguration['review'],

@@ -73,7 +73,7 @@ function base(context: Context, suffix: string, title: string, reference: Genome
   const {configuration, application, workflow} = context;
   return {id: createHash('sha256').update(JSON.stringify([context.result.runFiles.configuration.absolutePath, suffix])).digest('hex'),
     title: runViewTitle(workflow, configuration.run, title),
-    provenance: {application, run: {id: configuration.run.id, name: configuration.run.name, workflow: {id: workflow.id, version: workflow.version}}, sources: [
+    provenance: {application, run: {id: configuration.run.id, name: configuration.run.name, workflow: {id: workflow.id, version: workflow.version}, genopilot: configuration.genopilot}, sources: [
       {label: 'Reference', path: reference.fasta, ...(reference.fasta === context.result.backbone.paths.fasta.absolutePath && context.result.backbone.sha256 ? {sha256: context.result.backbone.sha256} : {})},
       ...tracks.flatMap(track => [{label: track.name, path: track.file}, ...(track.index ? [{label: `${track.name} index`, path: track.index}] : [])]),
     ]}, content: {kind: 'genome', reference, tracks}};

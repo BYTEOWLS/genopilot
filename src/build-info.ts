@@ -8,6 +8,11 @@ export type BuildInfo = {
   committedAt: string;
   /** Whether the working tree differed from the commit. */
   modified: boolean;
+  /**
+   * Whether this is a release build: built from the unmodified commit tagged `v<version>`. Only
+   * runs of a release build are citable, because only releases get a DOI.
+   */
+  released: boolean;
 };
 
 // Defined by the build (scripts/build.mjs); absent when the sources run through tsx.
@@ -27,7 +32,8 @@ export function gitBuildInfo(git: GitRunner = runGit): BuildInfo | undefined {
   if (!commit || !committedAt || status === undefined) {
     return undefined;
   }
-  return {commit, committedAt, modified: status.trim().length > 0};
+  // Running the sources is never a release, even from a tagged commit.
+  return {commit, committedAt, modified: status.trim().length > 0, released: false};
 }
 
 /** The build's commit, embedded by the build or, when running the sources, read from Git. */

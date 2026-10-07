@@ -60,6 +60,7 @@ def write_run(
         "schema_version": 1,
         "workflow_id": "reference-consensus",
         "workflow_version": 1,
+        "genopilot": {"version": "1.2.3"},
         "inputs": {
             "backbone": {"source": "local", "fasta": str(FIXTURES_DIR / "backbone.fasta")},
             "isolates_file": "isolates.yaml",

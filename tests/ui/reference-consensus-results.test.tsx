@@ -74,6 +74,7 @@ const configuration = validateReferenceConsensusConfiguration({
   schema_version: 1,
   workflow_id: 'reference-consensus',
   workflow_version: 1,
+  genopilot: {version: '1.2.3'},
   inputs: {
     backbone: {source: 'ncbi', accession: 'GCF_000000001.1'},
     isolates_file: 'isolates.yaml',

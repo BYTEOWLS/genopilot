@@ -28,6 +28,7 @@ import {
   type NcbiCacheMode,
   validateAnnotationTransferConfiguration,
 } from './configuration.js';
+import type {GenoPilotDetails} from '../configuration-validation.js';
 
 export {effectiveCpuCount, formatRunTimestampPrefix, sanitizeRunIdSuffix} from '../run-preparation.js';
 export type {PathInspection} from '../run-preparation.js';
@@ -82,6 +83,7 @@ export function createAnnotationTransferDraft(
 export function buildAnnotationTransferConfiguration(
   draft: AnnotationTransferConfigurationDraft,
   currentDirectory: string,
+  genopilot: GenoPilotDetails,
   availableCpus: number = availableParallelism(),
   now: Date = new Date(),
 ): PreparedAnnotationTransferRun {
@@ -93,6 +95,7 @@ export function buildAnnotationTransferConfiguration(
     schema_version: ANNOTATION_TRANSFER_CONFIGURATION_SCHEMA_VERSION,
     workflow_id: ANNOTATION_TRANSFER_WORKFLOW_ID,
     workflow_version: ANNOTATION_TRANSFER_WORKFLOW_VERSION,
+    genopilot,
     inputs: {
       reference:
         draft.referenceSource === 'ncbi'

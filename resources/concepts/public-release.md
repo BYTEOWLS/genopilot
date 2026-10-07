@@ -10,27 +10,14 @@ Make the repository public in a state where a researcher can install GenoPilot, 
 
 Each run says how to cite it, so citing never depends on the researcher reconstructing versions afterwards.
 
-### Prerequisite: the GenoPilot version in provenance
+### Prerequisite: the GenoPilot version in provenance (done)
 
-Run provenance records the workflow ID and version and the configured and observed tool versions, but not the GenoPilot package version. That is the open question of the Zenodo concept. Record it, from `package.json`, in the saved configuration and in the provenance. A direct Snakemake run then reports the version that saved its configuration.
+Every saved configuration has a required `genopilot` section: the `package.json` version and, when known, the build's commit, its committer date, whether the working tree had uncommitted changes, and whether it is a release build (`released`: built from the unmodified commit tagged `v<version>`; running the sources is never a release). The provenance scripts copy it into `provenance/run.json` and each iteration's provenance, so a direct Snakemake run reports the version that saved its configuration. The result page and the browser's provenance footer show it; a release shows only its version.
 
-Many development builds share one version number, so record the build's commit next to the version: the commit, its committer date, and whether the working tree had uncommitted changes. A run from a released version is identified by its version alone; the commit only makes development runs traceable.
+Decisions:
 
-What exists:
-
-- `src/package-root.ts` (`packagedPath('package.json')`) reads the version in the sources and in the bundle alike; `src/cli.tsx` already holds it in `metadata.version`.
-- `src/build-info.ts` (`readBuildInfo()`) returns the commit, `committedAt`, and `modified`, embedded by `scripts/build.mjs` or read from Git under `pnpm dev`, and `undefined` outside a Git checkout. `metadata.build` holds it, and the tooling page already shows it.
-
-Where it goes:
-
-- The saved configuration: each workflow's builder (`src/workflows/*/run-configuration.ts`) writes it, and its validator (`src/workflows/*/configuration.ts`, with the shared checks in `src/workflows/configuration-validation.ts`) accepts it. The builders run in the UI, so the version and build info are passed in rather than read inside them, which keeps them testable.
-- The provenance: the scripts that write `provenance/run.json` copy it from the configuration they already receive through `--config-json`: `workflows/shared/scripts/collect_run_provenance.py`, and `collect_consensus_provenance.py` and `collect_iteration_provenance.py` under `workflows/reference-consensus/scripts/`. Their Python tests are under `tests/workflows/`.
-- The result page: next to the workflow identity in `src/ui/run-results-screen/screen.tsx`, and in the browser's provenance footer (`src/browser/page/provenance.tsx`), which today shows only the running application's version.
-
-Open points:
-
-- A reference-consensus iteration runs later from the same `config.yaml`, possibly with a newer GenoPilot. Decide whether its provenance records the version that saved the configuration, the one that ran the iteration, or both.
-- Runs saved before this change have no version. The project is unreleased, so no schema bump or migration is needed, but decide whether such runs still open, showing the version as unknown, or are rejected as incompatible.
+- A reference-consensus iteration records the version that saved the configuration, not the one that ran the iteration. Passing the running version as a `--config` override would change the configuration Snakemake sees and make the iteration's dry-run check refuse it; an iteration runs the same workflow version, and the result page already flags a mismatch.
+- The section is required. No runs exist from before it, so there is no fallback for a missing version.
 
 ### Citation file per run
 
@@ -112,7 +99,7 @@ Going public publishes the full Git history, not only the current tree, and Zeno
 
 The [bundled package](done/bundled-package.md) is done: it pins the application's own code, and its package-root helper is how the application reads its version from `package.json`. Native binaries or a single executable stay out of scope (see the bundled-package concept).
 
-1. The GenoPilot version in provenance.
+1. The GenoPilot version in provenance (done).
 2. The history audit.
 3. The citation file per run, with machine-readable workflow references.
 4. The environment locks already in `tasks.md`.

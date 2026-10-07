@@ -6,12 +6,14 @@ import {
   requireObject,
   validateAbsolutePath,
   validateAccession,
+  validateGenoPilot,
   validateInputSource,
   validateNcbiCacheMode,
   validateResources,
   validateRun,
   validateWorkflowIdentity,
   type ConfigurationValidationIssue,
+  type GenoPilotDetails,
   type NcbiCacheMode,
   type ResourceSettings,
   type RunDetails,
@@ -58,6 +60,7 @@ export type ReferenceConsensusConfiguration = {
   schema_version: typeof REFERENCE_CONSENSUS_CONFIGURATION_SCHEMA_VERSION;
   workflow_id: typeof REFERENCE_CONSENSUS_WORKFLOW_ID;
   workflow_version: typeof REFERENCE_CONSENSUS_WORKFLOW_VERSION;
+  genopilot: GenoPilotDetails;
   inputs: {
     backbone: BackboneInput;
     isolates_file: typeof ISOLATE_SNAPSHOT_FILENAME;
@@ -269,7 +272,7 @@ export function validateReferenceConsensusConfiguration(
   }
   rejectUnknownFields(
     value,
-    ['schema_version', 'workflow_id', 'workflow_version', 'inputs', 'calling', 'consensus', 'resources', 'run'],
+    ['schema_version', 'workflow_id', 'workflow_version', 'genopilot', 'inputs', 'calling', 'consensus', 'resources', 'run'],
     '$',
     issues,
   );
@@ -279,19 +282,21 @@ export function validateReferenceConsensusConfiguration(
     workflowVersion: REFERENCE_CONSENSUS_WORKFLOW_VERSION,
   }, issues);
 
+  const genopilot = validateGenoPilot(value.genopilot, issues);
   const inputs = validateInputs(value.inputs, issues);
   const calling = validateCalling(value.calling, issues);
   const consensus = validateConsensus(value.consensus, inputs?.selected_isolates.length, issues);
   const resources = validateResources(value.resources, issues);
   const run = validateRun(value.run, issues);
 
-  if (issues.length > 0 || !inputs || !calling || !consensus || !resources || !run) {
+  if (issues.length > 0 || !genopilot || !inputs || !calling || !consensus || !resources || !run) {
     throw new ReferenceConsensusConfigurationError(issues);
   }
   return {
     schema_version: REFERENCE_CONSENSUS_CONFIGURATION_SCHEMA_VERSION,
     workflow_id: REFERENCE_CONSENSUS_WORKFLOW_ID,
     workflow_version: REFERENCE_CONSENSUS_WORKFLOW_VERSION,
+    genopilot,
     inputs,
     calling,
     consensus,

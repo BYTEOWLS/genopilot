@@ -9,7 +9,7 @@ function git(outputs: Record<string, string | undefined>): GitRunner {
 test('reads the commit, its date, and a clean working tree', () => {
   assert.deepEqual(
     gitBuildInfo(git({log: 'abc123\n2026-10-07T08:30:00+02:00\n', status: ''})),
-    {commit: 'abc123', committedAt: '2026-10-07T08:30:00+02:00', modified: false},
+    {commit: 'abc123', committedAt: '2026-10-07T08:30:00+02:00', modified: false, released: false},
   );
 });
 

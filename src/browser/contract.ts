@@ -16,9 +16,25 @@ export type BrowserDocument = {
   blocks?: Block[];
   links: Record<string, {documentId: string; anchor: string}>;
 };
+/** The GenoPilot that saved a run's configuration, as the configuration records it. */
+export type RunGenoPilot = {
+  version: string;
+  build?: {commit: string; modified: boolean; released: boolean};
+};
+/** The version that saved a run and whether it was a release, which only a release run can be cited by. */
+export function genoPilotSummary(genopilot: RunGenoPilot): string {
+  if (!genopilot.build) {
+    return `v${genopilot.version}, build unknown`;
+  }
+  if (genopilot.build.released) {
+    return `v${genopilot.version}`;
+  }
+  return `v${genopilot.version}, development build ${genopilot.build.commit.slice(0, 12)}`
+    + (genopilot.build.modified ? ' with uncommitted changes' : '');
+}
 export type ViewProvenance = {
   application: {name: string; version: string};
-  run?: {id: string; name?: string; workflow: {id: string; version: number}};
+  run?: {id: string; name?: string; workflow: {id: string; version: number}; genopilot: RunGenoPilot};
   sources: {label: string; path: string; sha256?: string}[];
 };
 export type DocumentView = {

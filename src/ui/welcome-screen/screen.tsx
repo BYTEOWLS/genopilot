@@ -18,6 +18,7 @@ import {
 } from './commands/definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {NewRunScreen} from '../new-run-screen/screen.js';
+import {genoPilotDetails} from '../../workflows/configuration-validation.js';
 import {AccessionsScreen} from '../accessions-screen/screen.js';
 import {fetchAssemblyMetadata, type AssemblyMetadataFetcher} from '../../accessions/ncbi-metadata.js';
 import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
@@ -296,6 +297,7 @@ export function WelcomeScreen({
             discoverWorkflows={workflowDiscovery}
             inputActive={columns >= minimumTerminalWidth}
             currentDirectory={currentDirectory}
+            genopilot={genoPilotDetails(metadata.version, metadata.build)}
           />
         );
       case 'open-run':

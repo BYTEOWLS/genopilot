@@ -95,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
             "manifest_schema_version": args.manifest_schema_version,
             "manifest_checksum": {"algorithm": "sha256", "value": sha256_file(args.manifest)},
         },
+        # The GenoPilot that saved the configuration, so the run can be traced to a release.
+        "genopilot": config["genopilot"],
         "run": config["run"],
         "cohort": args.cohort,
         "decision": {

@@ -30,7 +30,7 @@ class TestOutput extends Writable {
   }
 }
 
-const build = {commit: '0123456789abcdef0123456789abcdef01234567', committedAt: '2026-10-07T08:30:00Z', modified: false};
+const build = {commit: '0123456789abcdef0123456789abcdef01234567', committedAt: '2026-10-07T08:30:00Z', modified: false, released: false};
 
 test('application rows show the commit and its date only when the build knows them', () => {
   assert.deepEqual(applicationRows({version: '1.2.3'}).map(row => row.id), ['version']);
