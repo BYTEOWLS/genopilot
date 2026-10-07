@@ -68,7 +68,7 @@ These tasks are already in [`tasks.md`](../tasks.md#tooling) and block the first
 - record each rule environment's explicit conda package list and `pip freeze` in run provenance;
 - lock the rule environments with Snakemake's per-platform pin files.
 
-Pinned versions are not the same as available packages. Zenodo archives the code but not the conda or PyPI packages, and channels can drop builds. For a cited release, decide whether to also archive the explicit lock files, and possibly a container or Apptainer image with the provisioned environments. Clusters often need such an image anyway (see [Clusters](#clusters)).
+Pinned versions are not the same as available packages. Zenodo archives the code but not the conda or PyPI packages, and channels can drop builds. For a cited release, decide whether to also archive the explicit lock files, and possibly a container or Apptainer image with the provisioned environments. [Remote execution](remote-execution.md#software-and-data) on services without a shared filesystem needs such an image anyway.
 
 ## A worked example on public data
 
@@ -92,9 +92,9 @@ The example belongs to the workflow (`workflows/<id>/`), not to `docs/`. A test 
 
 Researchers need a run's evidence for supplementary material and bug reports without its large files. Add a single export action that packs a run's configuration, decisions, provenance, logs, checksums, and citation file, and leaves out reads, alignments, and other large intermediates. It lists what it left out and their checksums, so a reader can still verify them against the original run.
 
-## Clusters
+## Clusters and cloud services
 
-Large cohorts do not run on a laptop. Every workflow runs directly through Snakemake already. Document how to run a GenoPilot-saved configuration with a Snakemake executor, such as SLURM, and what the run then records. Non-interactive `--version` and `--help` are already in [`tasks.md`](../tasks.md#application).
+Running on SLURM, AWS, and similar services through Snakemake executor plugins has its own concept: [Remote execution](remote-execution.md).
 
 ## Before switching to public
 
@@ -115,4 +115,4 @@ The [bundled package](done/bundled-package.md) is done: it pins the application'
 4. The environment locks already in `tasks.md`.
 5. The worked examples.
 6. Community files and issue templates.
-7. Run export and cluster documentation, which can follow the first public release.
+7. Run export, which can follow the first public release.
