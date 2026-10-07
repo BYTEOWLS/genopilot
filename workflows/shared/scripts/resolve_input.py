@@ -11,39 +11,23 @@ interpreter Snakemake already uses, without its own conda environment.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
 import zipfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from provenance import CHECKSUM_ALGORITHM, sha256_file, utc_now_iso, write_json  # noqa: E402
+
 SCHEMA_VERSION = 1
-CHECKSUM_ALGORITHM = "sha256"
 _FILE_KIND_SUFFIXES = {"fasta": ".fna", "gff3": ".gff"}
 
 DownloadFn = Callable[[str, list[str], Path, str, str | None], None]
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def read_json_or_empty(path: Path) -> dict:

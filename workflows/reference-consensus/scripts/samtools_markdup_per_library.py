@@ -25,16 +25,15 @@ import json
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
+
+from provenance import utc_now_iso  # noqa: E402
 
 SCHEMA_VERSION = 1
 # The exact samtools markdup options, recorded in the metrics with its statistics.
 MARKDUP_OPTIONS = ["--mode", "t"]
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def run(command: list[str]) -> None:

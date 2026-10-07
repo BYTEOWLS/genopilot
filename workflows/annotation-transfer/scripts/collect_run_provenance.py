@@ -12,9 +12,6 @@ the same provenance contract as TUI-driven execution:
                 and observed tool versions, and the provenance of the resolved
                 reference and target inputs
 
-Its checksum, JSON, and configured-version helpers are also imported by
-reference-consensus's collect_consensus_provenance.py.
-
 Only Python's standard library is used by the implementation and its tests.
 """
 
@@ -24,29 +21,29 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
-import os
 import platform
-import re
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
+
+from provenance import (  # noqa: E402
+    CHECKSUM_ALGORITHM,
+    SHARED_ENVS_DIR,
+    canonical_json_checksum,
+    configured_tool_versions,
+    read_json,
+    sha256_file,
+    utc_now_iso,
+    write_json,
+)
+
 SCHEMA_VERSION = 1
-CHECKSUM_ALGORITHM = "sha256"
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+# This workflow's rule environments; with the shared ones they hold every pin it records.
+ENVS_DIRS = [Path(__file__).resolve().parent.parent / "envs", SHARED_ENVS_DIR]
 
 
 def sha256_directory(path: Path) -> tuple[str, int, int]:
@@ -68,11 +65,6 @@ def sha256_directory(path: Path) -> tuple[str, int, int]:
     return digest.hexdigest(), file_count, size
 
 
-def canonical_json_checksum(value: object) -> dict[str, str]:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return {"algorithm": CHECKSUM_ALGORITHM, "value": hashlib.sha256(encoded).hexdigest()}
-
-
 def checksum_record(path: Path) -> tuple[dict[str, str], dict[str, int]]:
     if path.is_dir():
         value, file_count, size = sha256_directory(path)
@@ -84,20 +76,6 @@ def checksum_record(path: Path) -> tuple[dict[str, str], dict[str, int]]:
         {"algorithm": CHECKSUM_ALGORITHM, "value": sha256_file(path)},
         {"size_bytes": path.stat().st_size},
     )
-
-
-def read_json(path: Path) -> dict:
-    value = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(value, dict):
-        raise ValueError(f"expected a JSON object in {path}")
-    return value
-
-
-def write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
 
 
 def artifact_record(
@@ -145,33 +123,6 @@ def observed_tool_versions(run: Callable[..., subprocess.CompletedProcess] = sub
     return versions
 
 
-ENVS_DIR = Path(__file__).resolve().parent.parent / "envs"
-_PINNED_DEPENDENCY = re.compile(r"^\s*-\s+([A-Za-z0-9_.-]+)(?:==|=)([^\s=#]+)\s*(?:#.*)?$")
-
-
-def configured_tool_versions(envs_dir: Path = ENVS_DIR) -> dict[str, str]:
-    """Read the exact pins from the packaged rule environments.
-
-    The environment files are the single source of pinned versions, so a bump there is
-    recorded without further edits. Conda (`name=version`) and pip (`name==version`)
-    pins are both read. A package pinned to different versions in two environments
-    cannot be recorded as one configured version and is rejected.
-    """
-    versions: dict[str, str] = {}
-    for environment in sorted(envs_dir.glob("*/environment.yaml")):
-        for line in environment.read_text(encoding="utf-8").splitlines():
-            match = _PINNED_DEPENDENCY.match(line)
-            if not match:
-                continue
-            name, version = match.groups()
-            if versions.setdefault(name, version) != version:
-                raise ValueError(
-                    f"{name} is pinned to both {versions[name]} and {version} "
-                    f"across the rule environments in {envs_dir}"
-                )
-    return versions
-
-
 def relevant_configuration(config: dict, stage: str) -> dict:
     common = {
         "schema_version": config["schema_version"],
@@ -201,7 +152,7 @@ def producer_record(config: dict, stage: str, snakemake_python_version: str) -> 
         "summarize-results": ["snakemake-python"],
         "record-provenance": ["python"],
     }
-    versions = {**configured_tool_versions(), "snakemake-python": snakemake_python_version}
+    versions = {**configured_tool_versions(ENVS_DIRS), "snakemake-python": snakemake_python_version}
     return {
         "workflow": {"id": config["workflow_id"], "version": config["workflow_version"]},
         "tools": {name: versions[name] for name in stage_tools[stage]},
@@ -441,7 +392,7 @@ def main(argv: list[str] | None = None) -> int:
         },
         "commands": build_commands(config),
         "tool_versions": {
-            "configured": configured_tool_versions(),
+            "configured": configured_tool_versions(ENVS_DIRS),
             "observed": {
                 **observed_tool_versions(),
                 "snakemake": {"version": args.snakemake_version, "source": "workflow-runtime"},

@@ -346,6 +346,6 @@ Trimmed input runs through the same steps, which then change little. Untrimmed i
 14. Günther T, Nettelblad C. The presence and impact of reference bias on population genomic studies of prehistoric human populations. PLoS Genet 15:e1008302 (2019). https://doi.org/10.1371/journal.pgen.1008302
 15. Eizenga JM, et al. Pangenome graphs. Annu Rev Genomics Hum Genet 21:139–162 (2020). https://doi.org/10.1146/annurev-genom-120219-080406
 16. Cornish-Bowden A. Nomenclature for incompletely specified bases in nucleic acid sequences: recommendations 1984. Nucleic Acids Res 13:3021–3030 (1985). https://doi.org/10.1093/nar/13.9.3021
-17. Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3
+17. Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3
 18. Li H. Tabix: fast retrieval of sequence features from generic TAB-delimited files. Bioinformatics 27:718–719 (2011). https://doi.org/10.1093/bioinformatics/btq671
 19. O'Leary NA, et al. Exploring and retrieving sequence and metadata for species across the tree of life with NCBI Datasets. Sci Data 11:732 (2024). https://doi.org/10.1038/s41597-024-03571-y

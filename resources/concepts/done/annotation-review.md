@@ -104,7 +104,7 @@ The view is useful on its own, and it is how the [decision's](../annotation-revi
 - Item IDs are stable per row: the reference gene ID, since only primary copies are rated, so selecting the same gene again only moves the selection. Items carry `details` but no `target.tracks`, because the tracks do not change per gene.
 - Extract the guide from `results.md` by its heading, as the Sites view does with `Sites genome review`.
 - Presets use the existing `GenomePreset` fields: `padding` 500 and 10000, `reads: false`.
-- Build opening, following, and detaching on `useGenomeSession` (`src/browser/use-genome-session.ts`), its `open` and `updateSelection`, as the Sites tab does. The Sites wiring itself is consensus-specific and inline in `src/ui/run-results-screen/screen.tsx`; keep the annotation-transfer wiring beside `annotation-transfer-results.tsx` instead of adding a second workflow's branch there, in line with the [workflow code layout](../../later.md#workflow-code-layout) task.
+- Build opening, following, and detaching on `useGenomeSession` (`src/browser/use-genome-session.ts`), its `open` and `updateSelection`, as the Sites tab does. The Sites wiring itself is consensus-specific and inline in `src/ui/run-results-screen/screen.tsx`; keep the annotation-transfer wiring beside `annotation-transfer-results.tsx` instead of adding a second workflow's branch there, in line with the [workflow modules](../workflow-modules.md) concept.
 - Fixture tests for the builder: the track order, a missing candidate file shown with its problem, a checksum mismatch refusing the reference, and item cards from table rows. Browser tests stay parked.
 
 ### Not in the browser

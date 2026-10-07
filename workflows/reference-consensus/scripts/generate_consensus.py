@@ -59,9 +59,10 @@ from pathlib import Path
 from typing import Callable, Iterator, TextIO, TypeVar
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
 
 from aggregate_support import FLAGS, SITE_COLUMNS, read_fai, read_fasta  # noqa: E402
-from artifacts import sha256_file  # noqa: E402
+from provenance import sha256_file, write_json  # noqa: E402
 
 SCHEMA_VERSION = 1
 INTERVAL_COLUMNS = ("chrom", "start", "end", "backbone_votes", "callable_isolates")
@@ -419,7 +420,7 @@ def main(argv: list[str] | None = None) -> int:
             args.fai, args.backbone, args.sites, args.intervals, args.support_summary, policy, fasta, sites,
         )
     summary["outputs"] = {"fasta": {"path": args.fasta.as_posix(), "sha256": sha256_file(args.fasta)}}
-    args.summary.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_json(args.summary, summary)
     return 0
 
 

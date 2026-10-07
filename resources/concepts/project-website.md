@@ -32,6 +32,17 @@ Each highlight is a short heading, two or three sentences, and one screenshot wi
 
 The footer links the GitHub repository, the npm package, the license (AGPL-3.0-or-later), and how to cite GenoPilot. The concept DOI appears there once [Zenodo release archiving](zenodo-release-archiving.md) is set up.
 
+## Worked examples on public data
+
+The site's real-looking screenshots and a researcher's first run both need data a reader can obtain. The fixtures are synthetic and prove the rules work. They do not show a researcher what a real run looks like, and they cannot support a scientific claim. Each workflow needs one documented example on public data:
+
+- public accessions and reads, small enough to run on a laptop;
+- the expected duration, disk use, and memory on a stated machine;
+- the expected key results, such as counts and checksums, that a researcher can compare;
+- for reviewers, a comparison with an independent result where one exists.
+
+The example belongs to the workflow (`workflows/<id>/`), not to `docs/`. A test can check that its documented expectations match a recorded run, but the example itself is not part of CI.
+
 ## Screenshots
 
 ### Terminal
@@ -86,7 +97,7 @@ The genome view is captured with a Playwright script that opens the URL GenoPilo
 ### Data
 
 - Every capture runs under a temporary `HOME`, so the catalogs, managed tooling, and paths shown belong to that directory and reveal nothing of the developer's machine. GenoPilot resolves its data directory from `homedir()`, which follows `HOME`.
-- Inputs are the synthetic fixtures in `tests/fixtures/` and, once they exist, the worked examples on public data from the [public release](public-release.md#a-worked-example-on-public-data). Real-looking results need the latter; the fixtures are too small to look like a real run.
+- Inputs are the synthetic fixtures in `tests/fixtures/` and, once they exist, the [worked examples on public data](#worked-examples-on-public-data). Real-looking results need the latter; the fixtures are too small to look like a real run.
 - Never private reads, unpublished assemblies, or collaborator data, also not cropped or blurred.
 
 ### Regenerating
@@ -108,7 +119,8 @@ The genome view is captured with a Playwright script that opens the URL GenoPilo
 ## Order
 
 1. The page with placeholder images, reviewed locally.
-2. The VHS tapes for the terminal screenshots and `pnpm screenshots`.
-3. The Playwright capture of the genome view.
-4. The Pages workflow and the release-checklist step.
-5. Going live with the public repository; link the site from the README header and set `homepage` in `package.json`.
+2. The worked examples on public data, unless the site launches with fixture-based screenshots (see the open questions).
+3. The VHS tapes for the terminal screenshots and `pnpm screenshots`.
+4. The Playwright capture of the genome view.
+5. The Pages workflow and the release-checklist step.
+6. Going live with the public repository; link the site from the README header and set `homepage` in `package.json`.

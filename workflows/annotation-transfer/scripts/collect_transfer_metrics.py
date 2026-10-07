@@ -18,9 +18,12 @@ import re
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from statistics import fmean
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
+
+from provenance import utc_now_iso, write_json  # noqa: E402
 
 METRICS_SCHEMA_VERSION = 1
 SUMMARY_SCHEMA_VERSION = 1
@@ -119,11 +122,9 @@ class SummaryError(ValueError):
     """Raised when persisted LiftOn evidence is missing or contradictory."""
 
 
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def parse_attributes(raw: str) -> dict[str, str]:
+def parse_gff3_attributes(raw: str) -> dict[str, str]:
+    """The `key=value` pairs of a GFF3 attributes column; entries without `=` are skipped, and a
+    repeated key keeps its last value. Values stay as written, such as `Parent=a,b`."""
     attributes: dict[str, str] = {}
     for entry in raw.split(";"):
         if not entry or "=" not in entry:
@@ -168,7 +169,23 @@ class CompletenessRow:
     target: int
 
 
-def parse_gff3(path: Path) -> list[Feature]:
+def read_gff3_features(path: Path) -> list[Feature]:
+    """Read every feature of a GFF3 file that `check_gff3` has already checked.
+
+    Comment, pragma, and blank lines are skipped. Unlike `check_gff3` in validate_inputs.py,
+    nothing else is checked, and the first malformed line ends the reading. The metrics also
+    run when that check failed, so such a line can still reach this function.
+
+    Args:
+        path: The GFF3 file, UTF-8 encoded.
+
+    Returns:
+        The features in file order.
+
+    Raises:
+        SummaryError: A line does not have nine tab-separated columns, or its start or end
+            is not an integer.
+    """
     features: list[Feature] = []
     with open(path, encoding="utf-8") as handle:
         for line_number, raw_line in enumerate(handle, start=1):
@@ -193,7 +210,7 @@ def parse_gff3(path: Path) -> list[Feature]:
                     start=start,
                     end=end,
                     strand=columns[6],
-                    attributes=parse_attributes(columns[8]),
+                    attributes=parse_gff3_attributes(columns[8]),
                 )
             )
     return features
@@ -780,11 +797,6 @@ def evidence_entry(path: Path) -> dict[str, object]:
     return {"path": str(path), "available": path.exists()}
 
 
-def write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
 def write_details(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="") as handle:
@@ -809,8 +821,8 @@ def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object
     unmapped_report = parse_reported_features(unmapped_path, mapped=False)
     extra_report = parse_reported_features(extra_path, mapped=True)
 
-    reference_all = parse_gff3(args.reference_gff3)
-    target_all = parse_gff3(args.raw_gff3)
+    reference_all = read_gff3_features(args.reference_gff3)
+    target_all = read_gff3_features(args.raw_gff3)
     reference = top_level_features(reference_all, args.reference_gff3, selected_types)
     target = top_level_features(target_all, args.raw_gff3, selected_types)
 

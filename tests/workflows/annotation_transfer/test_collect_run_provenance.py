@@ -123,7 +123,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
         raw = records["raw-gff3"]
         self.assertEqual(raw["origin"], "generated")
         self.assertEqual(raw["producer"]["workflow"], {"id": "annotation-transfer", "version": 1})
-        configured = collect.configured_tool_versions()
+        configured = collect.configured_tool_versions(collect.ENVS_DIRS)
         self.assertEqual(raw["producer"]["tools"]["lifton"], configured["lifton"])
         # Rules without a Conda environment ran on Snakemake's interpreter, not an environment's.
         self.assertEqual(records["input-validation"]["producer"]["tools"], {"snakemake-python": "3.13.15"})
@@ -173,45 +173,13 @@ class DirectoryChecksumTests(unittest.TestCase):
             self.assertEqual(second[1:], (1, 3))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-class ConfiguredToolVersionTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
-        self.envs = Path(self.temporary.name)
-
-    def tearDown(self) -> None:
-        self.temporary.cleanup()
-
-    def _environment(self, name: str, content: str) -> None:
-        directory = self.envs / name
-        directory.mkdir()
-        (directory / "environment.yaml").write_text(content, encoding="utf-8")
-
-    def test_reads_conda_and_pip_pins_from_every_environment(self) -> None:
-        self._environment(
-            "aligner",
-            "name: aligner\nchannels:\n  - conda-forge\n  - bioconda\ndependencies:\n"
-            "  - python=3.11.16\n  - minimap2=2.31  # aligner\n  - pip\n  - pip:\n      - tool==1.2.3\n",
-        )
-        self._environment("fetch", "dependencies:\n  - python=3.11.16\n  - fetcher=18.0.0\n")
-
-        self.assertEqual(
-            collect.configured_tool_versions(self.envs),
-            {"python": "3.11.16", "minimap2": "2.31", "tool": "1.2.3", "fetcher": "18.0.0"},
-        )
-
-    def test_rejects_a_package_pinned_differently_across_environments(self) -> None:
-        self._environment("one", "dependencies:\n  - python=3.11.16\n")
-        self._environment("two", "dependencies:\n  - python=3.12.1\n")
-
-        with self.assertRaises(ValueError):
-            collect.configured_tool_versions(self.envs)
-
+class PackagedEnvironmentTests(unittest.TestCase):
     def test_packaged_environments_pin_every_recorded_stage_tool(self) -> None:
-        configured = collect.configured_tool_versions()
+        configured = collect.configured_tool_versions(collect.ENVS_DIRS)
 
         for name in ("python", "lifton", "miniprot", "minimap2", "parasail-python", "ncbi-datasets-cli"):
             self.assertIn(name, configured)
+
+
+if __name__ == "__main__":
+    unittest.main()

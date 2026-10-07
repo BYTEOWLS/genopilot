@@ -25,6 +25,7 @@ updates:
   - package-ecosystem: conda
     directories:
       - /workflows/shared/envs/*
+      - /workflows/annotation-transfer/envs/*
       - /workflows/reference-consensus/envs/*
     schedule:
       interval: weekly

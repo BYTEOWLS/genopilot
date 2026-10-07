@@ -33,8 +33,8 @@ validate transferred GFF3
 Implemented files:
 
 ```text
-workflows/shared/scripts/collect_transfer_metrics.py
-workflows/shared/rules/summarize_results.smk
+workflows/annotation-transfer/scripts/collect_transfer_metrics.py
+workflows/annotation-transfer/rules/summarize_results.smk
 workflows/annotation-transfer/Snakefile
 workflows/annotation-transfer/manifest.yaml
 ```

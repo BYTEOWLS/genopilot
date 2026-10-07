@@ -30,19 +30,18 @@ Standard library only.
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import string
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from provenance import read_json  # noqa: E402
+
 
 class MethodsTemplate(string.Template):
     braceidpattern = r"[a-z][a-z0-9_.-]*"
-
-
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def citable(genopilot: dict) -> bool:

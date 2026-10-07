@@ -57,7 +57,6 @@ from __future__ import annotations
 import argparse
 import bisect
 import gzip
-import json
 import re
 import sys
 from collections import Counter
@@ -66,9 +65,9 @@ from itertools import groupby
 from pathlib import Path
 from typing import Iterator, TextIO
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
 
-from artifacts import sha256_file  # noqa: E402
+from provenance import sha256_file, write_json  # noqa: E402
 
 SCHEMA_VERSION = 1
 UNCALLABLE, AMBIGUOUS, CALLABLE = 0, 1, 2
@@ -552,7 +551,7 @@ def main(argv: list[str] | None = None) -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
     with args.sites.open("w", encoding="utf-8") as sites, args.intervals.open("w", encoding="utf-8") as intervals:
         summary = aggregate(args.fai, args.backbone, voters, args.include_backbone_vote == "yes", sites, intervals)
-    args.summary.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_json(args.summary, summary)
     return 0
 
 

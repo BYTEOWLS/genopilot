@@ -34,23 +34,16 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
 
-from artifacts import checksum_artifact, isolate_artifacts, sha256_file  # noqa: E402
+from artifacts import checksum_artifact, isolate_artifacts  # noqa: E402
+from provenance import read_json, sha256_file, utc_now_iso, write_json  # noqa: E402
 
 SCHEMA_VERSION = 1
 CANDIDATE_SCHEMA_VERSION = 1
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def tool_versions() -> dict:
@@ -180,10 +173,6 @@ def build_candidate(isolate_id: str, config: dict, run_dir: Path) -> dict:
         "provenance": f"{directory}/provenance.json",
         "created_at": utc_now_iso(),
     }
-
-
-def write_json(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:

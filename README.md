@@ -95,11 +95,11 @@ workflows/
 │   ├── results.md           Its result page, explained
 │   ├── citation/            Its references, methods template, and phrases, for each run's citation
 │   ├── development.md       Optional maintainer notes, not packaged
-│   ├── rules/               Optional: its own rules
+│   ├── rules/               Its own rules
 │   ├── scripts/             Their standard-library scripts
 │   └── envs/                Their pinned Conda environments
-└── shared/                  Rules, scripts, and environments several workflows use, including the
-                             run-events logger plugin
+└── shared/                  Only what several workflows use: rules, scripts, and environments, the
+                             run-events logger plugin, and how GenoPilot is cited
 ```
 
 Only selected, redistributable workflow resources in this directory are included in the npm package. TypeScript application tests and Python workflow tests share `tests/`; their runners distinguish them by filename.

@@ -1,44 +1,19 @@
-"""Loads a shared workflow script by path as an importable module.
+"""Loads an annotation-transfer workflow script by path as an importable module.
 
-The scripts under `workflows/shared/scripts/` are plain, dependency-free files
-invoked directly by Snakemake rules, not a Python package, so tests
-load them by file path instead of adding packaging machinery they do not
-otherwise need.
+The workflow's own scripts live under `workflows/annotation-transfer/scripts/`,
+next to its Snakefile; see `shared/_load.py` for why they are loaded by path.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
 from types import ModuleType
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
-SCRIPTS_DIR = PROJECT_ROOT / "workflows" / "shared" / "scripts"
-ANNOTATION_TRANSFER_WORKFLOW_DIR = PROJECT_ROOT / "workflows" / "annotation-transfer"
-LOGGING_DIR = PROJECT_ROOT / "workflows" / "shared" / "logging"
-FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures" / "annotation-transfer"
+from ..shared import _load as shared
+
+WORKFLOW_DIR = shared.PROJECT_ROOT / "workflows" / "annotation-transfer"
+SCRIPTS_DIR = WORKFLOW_DIR / "scripts"
+FIXTURES_DIR = shared.PROJECT_ROOT / "tests" / "fixtures" / "annotation-transfer"
 
 
 def load_script(name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, SCRIPTS_DIR / f"{name}.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-def load_run_events_module() -> ModuleType:
-    """Loads the logger plugin's Snakemake-free record translation.
-
-    Only `events.py` is loaded, by path: importing the package itself would pull in
-    `snakemake_interface_logger_plugins`, which these tests deliberately do not require.
-    """
-    path = LOGGING_DIR / "snakemake_logger_plugin_genopilot_run_events" / "events.py"
-    spec = importlib.util.spec_from_file_location("genopilot_run_events_events", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    return shared.load_script(name, SCRIPTS_DIR)

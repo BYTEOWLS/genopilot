@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ..annotation_transfer._load import PROJECT_ROOT
+from ..shared._load import PROJECT_ROOT
 from ._load import load_script
 
 validate_read_pair = load_script("validate_read_pair")

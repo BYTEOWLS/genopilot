@@ -4,8 +4,7 @@
 Checks FASTA structure, GFF3 structure and ID/Parent relationships, and the
 cross-references between the reference GFF3 and reference FASTA. Emits the
 annotation-transfer `input-validation` artifact (see its manifest.yaml).
-Its FASTA parser is also imported by reference-consensus's
-validate_run_inputs.py.
+The FASTA parser is the shared one in workflows/shared/scripts/fasta.py.
 
 Kept dependency-free (standard library only) since these are structural
 checks, not sequence analysis. See AGENTS.md "Scientific and reproducibility
@@ -15,16 +14,16 @@ guidelines": validate inputs before dependent stages run.
 from __future__ import annotations
 
 import argparse
-import json
-import re
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
+
+from fasta import FastaCheck, check_fasta  # noqa: E402
+from provenance import utc_now_iso, write_json  # noqa: E402
+
 SCHEMA_VERSION = 1
-_HEADER_ID_PATTERN = re.compile(r"^>(\S+)")
-_SEQUENCE_CHARACTERS = re.compile(r"^[ACGTUNRYSWKMBDHV.-]*$", re.IGNORECASE)
 _STRANDS = {"+", "-", ".", "?"}
 _GFF3_COLUMNS = (
     "seqid",
@@ -39,78 +38,18 @@ _GFF3_COLUMNS = (
 )
 
 
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
 @dataclass
-class FastaResult:
-    sequence_ids: list[str] = field(default_factory=list)
-    sequence_lengths: dict[str, int] = field(default_factory=dict)
-    errors: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-    # Bases that are not A, C, G, or T in any case: N, and every other IUPAC code or gap character.
-    unresolved_bases: dict[str, int] = field(default_factory=lambda: {"n": 0, "iupac": 0})
+class Gff3Check:
+    """What `check_gff3` found in one GFF3 file.
 
+    Attributes:
+        feature_count: The feature lines with nine columns.
+        feature_types: How many of those lines have each type in column 3, such as gene or CDS.
+        seqids: The sequence identifiers the features lie on, from column 1.
+        errors: Structural problems that make the file unusable; empty when it passed.
+        warnings: Deviations from GFF3 conventions that do not block a run.
+    """
 
-def _count_unresolved(line: str, counts: dict[str, int]) -> None:
-    upper = line.upper()
-    n = upper.count("N")
-    counts["n"] += n
-    counts["iupac"] += len(upper) - n - sum(upper.count(base) for base in "ACGT")
-
-
-def parse_fasta(path: Path) -> FastaResult:
-    result = FastaResult()
-    seen: set[str] = set()
-    current_id: str | None = None
-    current_length = 0
-    has_records = False
-
-    with open(path, encoding="utf-8") as handle:
-        for line_number, raw_line in enumerate(handle, start=1):
-            line = raw_line.rstrip("\n")
-            if line.startswith(">"):
-                if current_id is not None:
-                    if current_length == 0:
-                        result.errors.append(f"sequence '{current_id}' has no sequence data")
-                    result.sequence_lengths[current_id] = current_length
-                match = _HEADER_ID_PATTERN.match(line)
-                if not match:
-                    result.errors.append(f"line {line_number}: header has no identifier")
-                    current_id = None
-                    continue
-                current_id = match.group(1)
-                has_records = True
-                if current_id in seen:
-                    result.errors.append(f"duplicate sequence id '{current_id}'")
-                seen.add(current_id)
-                result.sequence_ids.append(current_id)
-                current_length = 0
-            elif line.strip() == "":
-                continue
-            else:
-                if current_id is None:
-                    result.errors.append(f"line {line_number}: sequence data before any header")
-                    continue
-                if not _SEQUENCE_CHARACTERS.match(line):
-                    result.errors.append(
-                        f"sequence '{current_id}': line {line_number} has non-IUPAC characters"
-                    )
-                current_length += len(line.strip())
-                _count_unresolved(line.strip(), result.unresolved_bases)
-
-    if current_id is not None:
-        if current_length == 0:
-            result.errors.append(f"sequence '{current_id}' has no sequence data")
-        result.sequence_lengths[current_id] = current_length
-    if not has_records:
-        result.errors.append("file contains no FASTA records")
-    return result
-
-
-@dataclass
-class Gff3Result:
     feature_count: int = 0
     feature_types: dict[str, int] = field(default_factory=dict)
     seqids: set[str] = field(default_factory=set)
@@ -118,7 +57,9 @@ class Gff3Result:
     warnings: list[str] = field(default_factory=list)
 
 
-def _parse_attributes(raw: str) -> dict[str, str]:
+def _parse_gff3_attributes(raw: str) -> dict[str, str]:
+    """The `key=value` pairs of a GFF3 attributes column; entries without `=` are skipped, and a
+    repeated key keeps its last value. Values stay as written, such as `Parent=a,b`."""
     attributes: dict[str, str] = {}
     for entry in raw.split(";"):
         entry = entry.strip()
@@ -131,8 +72,27 @@ def _parse_attributes(raw: str) -> dict[str, str]:
     return attributes
 
 
-def parse_gff3(path: Path) -> Gff3Result:
-    result = Gff3Result()
+def check_gff3(path: Path) -> Gff3Check:
+    """Check the structure and feature hierarchy of a GFF3 file.
+
+    Reads the whole file and collects every problem instead of stopping at the first, so a
+    validation report can list them all. Used for the reference annotation before LiftOn
+    and, by validate_annotation.py, for LiftOn's result. `read_gff3_features` in
+    collect_transfer_metrics.py reads features for the metrics instead.
+
+    Args:
+        path: The GFF3 file, UTF-8 encoded.
+
+    Returns:
+        The feature counts and sequence identifiers, with an error for a missing
+        `##gff-version` pragma on the first line, a line without nine tab-separated columns,
+        start or end coordinates that are not integers or not a 1-based range, an unknown
+        strand, a CDS phase other than 0, 1, or 2, or a `Parent` without a matching `ID`; and
+        a warning for a phase on a feature other than a CDS, a feature other than an exon
+        without an `ID`, or an `ID` shared by several lines, which is valid for a multi-part
+        feature.
+    """
+    result = Gff3Check()
     has_version_pragma = False
     ids_seen: dict[str, int] = {}
     parent_refs: list[tuple[int, str]] = []
@@ -181,7 +141,7 @@ def parse_gff3(path: Path) -> Gff3Result:
                     f"line {line_number}: phase should be '.' for non-CDS feature '{feature_type}'"
                 )
 
-            attributes = _parse_attributes(attributes_raw)
+            attributes = _parse_gff3_attributes(attributes_raw)
             feature_id = attributes.get("ID")
             if feature_id:
                 ids_seen[feature_id] = ids_seen.get(feature_id, 0) + 1
@@ -213,7 +173,7 @@ def parse_gff3(path: Path) -> Gff3Result:
     return result
 
 
-def cross_check(reference_fasta: FastaResult, reference_gff3: Gff3Result) -> list[str]:
+def cross_check(reference_fasta: FastaCheck, reference_gff3: Gff3Check) -> list[str]:
     errors: list[str] = []
     fasta_ids = set(reference_fasta.sequence_ids)
     for seqid in sorted(reference_gff3.seqids):
@@ -222,7 +182,7 @@ def cross_check(reference_fasta: FastaResult, reference_gff3: Gff3Result) -> lis
     return errors
 
 
-def warn_about_unresolved_target_bases(target_fasta: FastaResult) -> None:
+def warn_about_unresolved_target_bases(target_fasta: FastaCheck) -> None:
     """A codon with such a base cannot be translated, so it changes the protein comparison of the
     gene it lies in without any real change in the target."""
     counts = target_fasta.unresolved_bases
@@ -235,11 +195,11 @@ def warn_about_unresolved_target_bases(target_fasta: FastaResult) -> None:
 
 def build_summary(
     reference_fasta_path: Path,
-    reference_fasta: FastaResult,
+    reference_fasta: FastaCheck,
     reference_gff3_path: Path,
-    reference_gff3: Gff3Result,
+    reference_gff3: Gff3Check,
     target_fasta_path: Path,
-    target_fasta: FastaResult,
+    target_fasta: FastaCheck,
     cross_check_errors: list[str],
 ) -> dict:
     passed = (
@@ -293,9 +253,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
-    reference_fasta = parse_fasta(args.reference_fasta)
-    reference_gff3 = parse_gff3(args.reference_gff3)
-    target_fasta = parse_fasta(args.target_fasta)
+    reference_fasta = check_fasta(args.reference_fasta)
+    reference_gff3 = check_gff3(args.reference_gff3)
+    target_fasta = check_fasta(args.target_fasta)
     warn_about_unresolved_target_bases(target_fasta)
     cross_check_errors = cross_check(reference_fasta, reference_gff3)
 
@@ -308,8 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         target_fasta,
         cross_check_errors,
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_json(args.output, summary)
     # Always succeeds: a "failed" status is carried in the report itself so
     # Snakemake preserves it as diagnostic evidence instead of deleting the
     # output of a failed job. transfer_annotation checks this report's status

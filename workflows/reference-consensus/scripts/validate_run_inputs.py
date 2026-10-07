@@ -19,19 +19,15 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
-# The FASTA parser is shared with annotation-transfer.
+# The shared FASTA check and timestamp format.
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
 
-from validate_inputs import parse_fasta  # noqa: E402
+from fasta import check_fasta  # noqa: E402
+from provenance import utc_now_iso  # noqa: E402
 
 SCHEMA_VERSION = 1
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def check_read_file(path: Path) -> str | None:
@@ -50,7 +46,7 @@ def check_read_file(path: Path) -> str | None:
 
 
 def build_summary(backbone_path: Path, read_pairs: list[list[str]]) -> dict:
-    backbone = parse_fasta(backbone_path)
+    backbone = check_fasta(backbone_path)
     isolates: dict[str, dict] = {}
     for isolate_id, r1, r2, trimmed in read_pairs:
         entry = isolates.setdefault(isolate_id, {"read_pairs": [], "errors": []})

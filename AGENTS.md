@@ -10,9 +10,9 @@ Keep the package independent of private research data, machine-specific paths, a
 
 - `src/` — TypeScript/Ink CLI.
 - `docs/` — general documentation, shown on GitHub and in the application's Help; it never names a workflow.
-- `workflows/` — packaged Snakemake assets, one directory per workflow with its entry Snakefile, manifest, parameter definitions, `README.md` documenting its science and outputs, `results.md` explaining its result page, `citation/` with its machine-readable references, methods template, and the wording of setting values in it, and optionally `development.md` with maintainer notes that are not packaged. `reference-consensus/` also holds its own `rules/*.smk`, `scripts/*.py`, and `envs/<name>/environment.yaml`; `shared/` holds annotation-transfer's rules, scripts, and environments together with what both workflows use, including `logging/` (the Snakemake logger plugin that records structured run events).
+- `workflows/` — packaged Snakemake assets, one directory per workflow with its entry Snakefile, manifest, parameter definitions, `README.md` documenting its science and outputs, `results.md` explaining its result page, `citation/` with its machine-readable references, methods template, and the wording of setting values in it, and optionally `development.md` with maintainer notes that are not packaged. Each workflow also holds its own `rules/*.smk`, `scripts/*.py`, and `envs/<name>/environment.yaml`; `shared/` holds only what several workflows use, including `logging/` (the Snakemake logger plugin that records structured run events).
 - `runtime/` — the Pixi workspace (`pixi.toml` and `pixi.lock`) that guided setup installs Snakemake, Conda, and Python from.
-- `tests/` — TypeScript application tests plus Python tests for the shared rules, their scripts, and direct-Snakemake execution.
+- `tests/` — TypeScript application tests plus Python tests for the workflow and shared scripts and for direct-Snakemake execution.
 - `tests/fixtures/` — small synthetic, redistributable FASTA/GFF3 fixtures with known expected results.
 - [`resources/tasks.md`](resources/tasks.md) — open work as checkboxes, in execution order.
 - [`resources/later.md`](resources/later.md) — deferred and optional ideas.

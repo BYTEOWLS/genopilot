@@ -41,26 +41,18 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, TextIO
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
+
+from aggregate_support import read_fai  # noqa: E402
+from provenance import utc_now_iso  # noqa: E402
 
 SCHEMA_VERSION = 1
 UNCALLABLE, AMBIGUOUS, CALLABLE = 0, 1, 2
 STATE_NAMES = {UNCALLABLE: "uncallable", AMBIGUOUS: "ambiguous", CALLABLE: "callable"}
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def read_fai(path: Path) -> list[tuple[str, int]]:
-    contigs = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line:
-            name, length = line.split("\t")[:2]
-            contigs.append((name, int(length)))
-    return contigs
 
 
 def allele_depths(field: str) -> list[int] | None:

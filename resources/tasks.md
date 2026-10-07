@@ -8,6 +8,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 
 ## Workflows
 
+- [ ] Reject annotation formats other than GFF3 with a clear message and a conversion hint ([concept](concepts/annotation-formats.md#now-reject-other-formats-clearly)).
 - [ ] Save isolate FASTAs from a run to the isolate catalog ([concept](concepts/saved-isolate-sequences.md)).
 - [ ] Annotation review decision: record verdicts and candidate-model choices for the genes the annotation review lists, and write a reviewed GFF3 ([concept](concepts/annotation-review-decision.md)).
 - [ ] GFF3 find-and-replace ([concept](concepts/annotation-id-rewriting.md)); required before INSDC submission.
@@ -20,14 +21,14 @@ Every task includes proportionate unit tests in the same change. A task is not c
 - [ ] Show a systems check before a run: free disk against an estimate, CPUs, and memory, and duration estimates from the machine's completed runs ([concept](concepts/systems-check.md)).
 - [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](later.md#workflow-cancellation).
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
-- [ ] Separate workflow-specific UI and result code from the shared screens, so each workflow plugs in through one module ([notes](later.md#workflow-code-layout)).
+- [ ] Separate workflow-specific UI and result code from the shared screens, so each workflow plugs in through one module ([concept](concepts/workflow-modules.md)).
 
 ## Integration and packaging
 
 - [ ] Add a direct-Snakemake cancellation test that checks cleanup and complete logs; success, failure, and resume are covered, and cancellation is covered only with an injected process.
-- [ ] Prepare the public release: worked examples on public data and the history audit ([concept](concepts/public-release.md)).
+- [ ] Prepare the public release: the rule-environment locks (the *Before 0.1.0* tooling tasks) and the checks before switching to public ([concept](concepts/public-release.md)).
 - [ ] Run workflows on clusters and cloud services such as SLURM and AWS ([concept](concepts/remote-execution.md)).
-- [ ] Project website on GitHub Pages with reproducible screenshots of the highlights ([concept](concepts/project-website.md)).
+- [ ] Project website on GitHub Pages with worked examples on public data and reproducible screenshots of the highlights ([concept](concepts/project-website.md)).
 
 ## Tooling
 

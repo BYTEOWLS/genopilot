@@ -64,12 +64,9 @@ type PinnedEnvironment = {conda: Map<string, string>; pip: Map<string, string>};
  * Reads a rule environment and requires every dependency to be pinned exactly, so version
  * bumps stay deliberate while the concrete versions can change without editing this test.
  */
-async function readPinnedEnvironment(name: string): Promise<PinnedEnvironment> {
+async function readPinnedEnvironment(name: string, envsDirectory = 'envs/'): Promise<PinnedEnvironment> {
   const environment = parse(
-    await readFile(
-      new URL(`../../../workflows/shared/envs/${name}/environment.yaml`, import.meta.url),
-      'utf8',
-    ),
+    await readResource(`${envsDirectory}${name}/environment.yaml`),
   ) as {dependencies: Array<string | {pip: string[]}>};
   const pinned: PinnedEnvironment = {conda: new Map(), pip: new Map()};
 
@@ -104,7 +101,7 @@ test('pins an installable LiftOn environment including native parasail support',
 });
 
 test('pins Python for dependency-free rule scripts in the NCBI environment', async () => {
-  const environment = await readPinnedEnvironment('ncbi-datasets-cli');
+  const environment = await readPinnedEnvironment('ncbi-datasets-cli', '../shared/envs/');
 
   assert.ok(environment.conda.has('python'));
   assert.ok(environment.conda.has('ncbi-datasets-cli'));

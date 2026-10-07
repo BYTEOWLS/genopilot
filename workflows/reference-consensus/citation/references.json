@@ -254,7 +254,7 @@
     },
     {
       "id": "molder2025",
-      "text": "Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3",
+      "text": "Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3",
       "authors": [
         "Mölder F",
         "Jablonski KP",
@@ -262,7 +262,7 @@
       ],
       "others": true,
       "type": "article",
-      "title": "Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]",
+      "title": "Sustainable data analysis with Snakemake",
       "journal": "F1000Research",
       "volume": "10",
       "pages": "33",

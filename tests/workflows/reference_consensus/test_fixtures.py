@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ..annotation_transfer._load import PROJECT_ROOT
+from ..shared._load import PROJECT_ROOT
 
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures" / "reference-consensus"
 

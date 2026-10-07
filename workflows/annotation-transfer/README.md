@@ -96,10 +96,10 @@ The versions are pinned only in the files linked below and recorded in every run
 |---|---|---|---|
 | Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`pixi.toml`](../../runtime/pixi.toml)) | [7] |
 | NCBI Datasets CLI | downloading NCBI accessions | [`ncbi-datasets-cli`](../shared/envs/ncbi-datasets-cli/environment.yaml) | [8] |
-| LiftOn | annotation transfer | [`lifton`](../shared/envs/lifton/environment.yaml) | [1] |
-| minimap2 | DNA alignment inside Liftoff | [`lifton`](../shared/envs/lifton/environment.yaml) | [4] |
-| miniprot | protein-to-genome alignment | [`lifton`](../shared/envs/lifton/environment.yaml) | [5] |
-| parasail | protein and sequence comparison | [`lifton`](../shared/envs/lifton/environment.yaml) | [6] |
+| LiftOn | annotation transfer | [`lifton`](envs/lifton/environment.yaml) | [1] |
+| minimap2 | DNA alignment inside Liftoff | [`lifton`](envs/lifton/environment.yaml) | [4] |
+| miniprot | protein-to-genome alignment | [`lifton`](envs/lifton/environment.yaml) | [5] |
+| parasail | protein and sequence comparison | [`lifton`](envs/lifton/environment.yaml) | [6] |
 
 LiftOn drives minimap2, miniprot, and parasail itself, so they are pinned together in one environment. Input checks, validation, and the summaries are small scripts that read the tools' outputs. Scripts of steps without their own environment run on the Python pinned with Snakemake in the GenoPilot runtime, and each run records its version.
 
@@ -113,5 +113,5 @@ Publications that use this workflow's results should cite the tools above, next 
 4. Li H. Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics 34:3094–3100 (2018). https://doi.org/10.1093/bioinformatics/bty191
 5. Li H. Protein-to-genome alignment with miniprot. Bioinformatics 39:btad014 (2023). https://doi.org/10.1093/bioinformatics/btad014
 6. Daily J. Parasail: SIMD C library for global, semi-global, and local pairwise sequence alignments. BMC Bioinformatics 17:81 (2016). https://doi.org/10.1186/s12859-016-0930-z
-7. Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake [version 3; peer review: 2 approved]. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3
+7. Mölder F, Jablonski KP, Letcher B, et al. Sustainable data analysis with Snakemake. F1000Research 10:33 (2025). https://doi.org/10.12688/f1000research.29032.3
 8. O'Leary NA, et al. Exploring and retrieving sequence and metadata for species across the tree of life with NCBI Datasets. Sci Data 11:732 (2024). https://doi.org/10.1038/s41597-024-03571-y

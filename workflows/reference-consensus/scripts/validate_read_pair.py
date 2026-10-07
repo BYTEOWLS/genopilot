@@ -42,19 +42,18 @@ import io
 import json
 import re
 import sys
-from datetime import datetime, timezone
 from itertools import islice
 from pathlib import Path
 from typing import BinaryIO, Iterator
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
+
+from provenance import utc_now_iso  # noqa: E402
 
 SCHEMA_VERSION = 1
 MAX_REPORTED_ERRORS = 20
 ILLUMINA_FILE_NAME = re.compile(r"^(.+)_S(\d+)(?:_L(\d{3}))?_R1_(\d{3})\.fastq\.gz$")
 READ_GROUP_VALUE = re.compile(r"^[A-Za-z0-9._+-]+$")
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 class HashingReader(io.RawIOBase):

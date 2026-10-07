@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from ..annotation_transfer._load import PROJECT_ROOT
+from ..shared._load import PROJECT_ROOT
 
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures" / "reference-consensus"
 EXPECTED = json.loads((FIXTURES_DIR / "expected.json").read_text(encoding="utf-8"))

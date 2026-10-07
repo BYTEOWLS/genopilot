@@ -3,24 +3,24 @@
 Steps, in the order they run (each is one rule; paths are inside the run
 directory, and every step writes its log to logs/):
 
-  1. resolve_reference, resolve_target           shared/rules/resolve_inputs.smk
+  1. resolve_reference, resolve_target           rules/resolve_inputs.smk
        Copy local files or download NCBI accessions, with checksums.
        -> resolved/reference.fasta, resolved/reference.gff3, resolved/target.fasta
-  2. validate_inputs                             shared/rules/validate_inputs.smk
+  2. validate_inputs                             rules/validate_inputs.smk
        Check the structure of the FASTA and GFF3 inputs; LiftOn only starts
        when this report passed.
        -> results/input-validation.json
-  3. transfer_annotation                         shared/rules/transfer_annotation.smk
+  3. transfer_annotation                         rules/transfer_annotation.smk
        LiftOn maps the reference gene models onto the target genome.
        -> results/annotation/lifton.raw.gff3, results/annotation/lifton_output/
-  4. validate_annotation                         shared/rules/validate_annotation.smk
+  4. validate_annotation                         rules/validate_annotation.smk
        Check the structure of the transferred annotation.
        -> results/validation.json
-  5. summarize_annotation_transfer               shared/rules/summarize_results.smk
+  5. summarize_annotation_transfer               rules/summarize_results.smk
        Per-feature table with the protein rating, metrics, and completion summary.
        -> results/feature-transfer.tsv, results/metrics.json, results/summary.json,
           results/target-unresolved.bed
-  6. record_annotation_transfer_provenance       shared/rules/record_provenance.smk
+  6. record_annotation_transfer_provenance       rules/record_provenance.smk
        Checksums, tool versions, and commands of the whole run.
        -> artifacts.yaml, provenance/run.json
   7. write_citation                              shared/rules/write_citation.smk
@@ -47,23 +47,28 @@ from pathlib import Path
 
 configfile: "config.yaml"
 
-# Packaged locations, relative to this Snakefile rather than the working directory.
+# Packaged locations, relative to this Snakefile rather than the working directory. This
+# workflow's own rules, scripts, and environments live next to it; shared/ holds only what
+# reference-consensus uses too.
 WORKFLOW_DIR = Path(workflow.basedir)
-SHARED_DIR = WORKFLOW_DIR.parent / "shared"
-SCRIPTS_DIR = SHARED_DIR / "scripts"
-ENVS_DIR = SHARED_DIR / "envs"
+RULES_DIR = WORKFLOW_DIR / "rules"
+SCRIPTS_DIR = WORKFLOW_DIR / "scripts"
+ENVS_DIR = WORKFLOW_DIR / "envs"
 SCRIPTS_DIR_SH = shlex.quote(str(SCRIPTS_DIR))
+SHARED_DIR = WORKFLOW_DIR.parent / "shared"
+SHARED_ENVS_DIR = SHARED_DIR / "envs"
+SHARED_SCRIPTS_DIR_SH = shlex.quote(str(SHARED_DIR / "scripts"))
 # Rules without a Conda environment run their standard-library scripts with Snakemake's own
 # interpreter, so they never depend on whichever python3 the host has, or lacks, on PATH.
 PYTHON_SH = shlex.quote(sys.executable)
 
 # The steps, in the order they run; see the list at the top of this file.
-include: str(SHARED_DIR / "rules" / "resolve_inputs.smk")
-include: str(SHARED_DIR / "rules" / "validate_inputs.smk")
-include: str(SHARED_DIR / "rules" / "transfer_annotation.smk")
-include: str(SHARED_DIR / "rules" / "validate_annotation.smk")
-include: str(SHARED_DIR / "rules" / "summarize_results.smk")
-include: str(SHARED_DIR / "rules" / "record_provenance.smk")
+include: str(RULES_DIR / "resolve_inputs.smk")
+include: str(RULES_DIR / "validate_inputs.smk")
+include: str(RULES_DIR / "transfer_annotation.smk")
+include: str(RULES_DIR / "validate_annotation.smk")
+include: str(RULES_DIR / "summarize_results.smk")
+include: str(RULES_DIR / "record_provenance.smk")
 include: str(SHARED_DIR / "rules" / "write_citation.smk")
 
 

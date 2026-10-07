@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 WORKFLOW_SCRIPTS = Path(__file__).resolve().parent
@@ -35,19 +34,19 @@ SHARED_SCRIPTS = WORKFLOW_SCRIPTS.parents[1] / "shared" / "scripts"
 sys.path.insert(0, str(WORKFLOW_SCRIPTS))
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
-from artifacts import checksum_artifact, run_artifacts, sha256_file  # noqa: E402
-from collect_run_provenance import canonical_json_checksum, configured_tool_versions, write_json  # noqa: E402
+from artifacts import checksum_artifact, run_artifacts  # noqa: E402
+from provenance import (  # noqa: E402
+    SHARED_ENVS_DIR,
+    canonical_json_checksum,
+    configured_tool_versions,
+    read_json,
+    sha256_file,
+    utc_now_iso,
+    write_json,
+)
 
 SCHEMA_VERSION = 1
 EVENTS_FILE = Path("events.jsonl")
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def job_commands(events_path: Path) -> dict:
@@ -68,10 +67,8 @@ def job_commands(events_path: Path) -> dict:
 
 
 def configured_versions() -> dict:
-    """The exact pins of the environments this workflow's rules use."""
-    workflow = configured_tool_versions(WORKFLOW_SCRIPTS.parent / "envs")
-    shared = configured_tool_versions(SHARED_SCRIPTS.parent / "envs")
-    return {**workflow, "ncbi-datasets-cli": shared["ncbi-datasets-cli"]}
+    """The exact pins of the environments this workflow's rules use: its own and the shared ones."""
+    return configured_tool_versions([WORKFLOW_SCRIPTS.parent / "envs", SHARED_ENVS_DIR])
 
 
 def main(argv: list[str] | None = None) -> int:

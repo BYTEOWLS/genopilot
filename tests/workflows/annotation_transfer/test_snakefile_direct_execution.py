@@ -16,7 +16,8 @@ import time
 import unittest
 from pathlib import Path
 
-from ._load import ANNOTATION_TRANSFER_WORKFLOW_DIR, FIXTURES_DIR, LOGGING_DIR
+from ..shared._load import LOGGING_DIR
+from ._load import FIXTURES_DIR, WORKFLOW_DIR
 
 SNAKEMAKE_BIN = shutil.which("snakemake")
 LIFTON_TOOLING_AVAILABLE = all(
@@ -73,7 +74,7 @@ def run_snakemake(
         [
             SNAKEMAKE_BIN,
             "--snakefile",
-            str(ANNOTATION_TRANSFER_WORKFLOW_DIR / "Snakefile"),
+            str(WORKFLOW_DIR / "Snakefile"),
             "--directory",
             str(run_dir),
             "--configfile",
@@ -537,7 +538,7 @@ class DirectExecutionContractTests(unittest.TestCase):
             command = [
                 SNAKEMAKE_BIN,
                 "--snakefile",
-                str(ANNOTATION_TRANSFER_WORKFLOW_DIR / "Snakefile"),
+                str(WORKFLOW_DIR / "Snakefile"),
                 "--directory",
                 str(run_dir),
                 "--configfile",
@@ -625,7 +626,7 @@ class CondaDeploymentExecutionTests(unittest.TestCase):
 class FullPipelineExecutionTests(unittest.TestCase):
     """Runs the real LiftOn stage end to end when lifton, miniprot, and
     minimap2 are available directly on PATH, for example while executing
-    tests inside the environment pinned by `workflows/shared/envs/lifton/environment.yaml`.
+    tests inside the environment pinned by `workflows/annotation-transfer/envs/lifton/environment.yaml`.
     CI installations without those scientific tools skip these tests."""
 
     def test_full_pipeline_on_the_synthetic_fixtures(self) -> None:

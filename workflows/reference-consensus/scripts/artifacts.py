@@ -16,8 +16,12 @@ Standard library only; imported by the Snakefile and by the scripts.
 
 from __future__ import annotations
 
-import hashlib
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
+
+from provenance import sha256_file  # noqa: E402
 
 
 def _artifact(artifact_id: str, path: str, artifact_type: str, stage: str, declared: bool = True) -> dict:
@@ -137,14 +141,6 @@ def run_artifacts(isolates: list[dict]) -> list[dict]:
         + [entry for isolate in isolates for entry in isolate_artifacts(isolate)]
         + [dict(entry) for entry in COHORT_ARTIFACTS]
     )
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def checksum_artifact(entry: dict, origin: str = "generated") -> dict:

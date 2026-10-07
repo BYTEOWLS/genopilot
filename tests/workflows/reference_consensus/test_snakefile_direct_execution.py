@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 
 from ._load import WORKFLOW_DIR
-from ..annotation_transfer._load import PROJECT_ROOT
+from ..shared._load import PROJECT_ROOT
 from .fixtures import FIXTURES_DIR, write_decision, write_run
 
 SNAKEMAKE_BIN = shutil.which("snakemake")

@@ -35,9 +35,9 @@ SHARED_SCRIPTS = WORKFLOW_SCRIPTS.parents[1] / "shared" / "scripts"
 sys.path.insert(0, str(WORKFLOW_SCRIPTS))
 sys.path.insert(0, str(SHARED_SCRIPTS))
 
-from artifacts import checksum_artifact, cohort_artifacts, sha256_file  # noqa: E402
+from artifacts import checksum_artifact, cohort_artifacts  # noqa: E402
 from collect_consensus_provenance import EVENTS_FILE, configured_versions, job_commands  # noqa: E402
-from collect_run_provenance import read_json, utc_now_iso, write_json  # noqa: E402
+from provenance import read_json, sha256_file, utc_now_iso, write_json  # noqa: E402
 
 SCHEMA_VERSION = 1
 
