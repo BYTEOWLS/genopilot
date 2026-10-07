@@ -102,6 +102,7 @@ Going public publishes the full Git history, not only the current tree, and Zeno
 
 - Audit the history for private material. A search of `git log -p` for accessions and paths found only public or placeholder accessions (for example `GCF_000149205`, `SRR1234567`) and test paths (`/Users/researcher`). Still check the design notes for collaborator names, unpublished findings, and personal notes, as was done for the Zenodo concept.
 - Check that `CITATION.cff` has the author's ORCID and affiliation (see the Zenodo concept).
+- Prepare the [project website](project-website.md), which goes live with the public repository.
 - Consider the [Journal of Open Source Software](https://joss.theoj.org) review checklist. It asks for an OSI license, tests, documentation, community guidelines, and a statement of need, which this concept mostly covers, and a JOSS paper is a citable description of GenoPilot next to the version DOIs.
 
 ## Order
