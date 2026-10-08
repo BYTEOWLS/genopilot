@@ -34,6 +34,7 @@ const metadata: CliMetadata = {
   author: 'Test Author',
   license: 'Test-License',
   version: '0.8.0',
+  igv: '3.8.9',
 };
 
 function discoveredWorkflow(

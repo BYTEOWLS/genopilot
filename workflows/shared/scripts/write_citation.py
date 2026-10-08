@@ -2,9 +2,10 @@
 """Write how to cite a finished run: CITATION.md, with BibTeX and RIS beside it.
 
 The citation names the GenoPilot that saved the run's configuration, the workflow, the
-tools that ran with the versions the run observed, their references, and a draft methods
-paragraph built from the effective configuration. A run saved by a development build is
-marked as not citable, because only a release has a DOI.
+tools that ran with the versions the run observed, the genome viewer with the version
+GenoPilot bundles, their references, and a draft methods paragraph built from the effective
+configuration. A run saved by a development build is marked as not citable, because only a
+release has a DOI.
 
 Inputs, all found by convention:
   provenance/run.json                    the run's provenance: configuration, versions
@@ -12,6 +13,7 @@ Inputs, all found by convention:
   <workflow>/citation/methods.txt        the methods paragraph, as a template
   <workflow>/citation/phrases.json       wording for setting values in the paragraph
   shared/citation/genopilot.json         how GenoPilot itself is cited
+  shared/citation/igv.json               how its genome viewer, igv.js, is cited
 
 A tool is cited only when it ran: a tool with an `input_source` ran only when an input
 came from that source, for example an NCBI download. A tool's version is the observed one,
@@ -259,7 +261,9 @@ def status_paragraph(genopilot: dict, citation: dict) -> str:
     )
 
 
-def citation_markdown(provenance: dict, citation: dict, tools: list[dict], references: list[dict], methods: str) -> str:
+def citation_markdown(
+    provenance: dict, citation: dict, tools: list[dict], viewer: dict, references: list[dict], methods: str
+) -> str:
     genopilot = provenance["genopilot"]
     numbers = {entry["id"]: index for index, entry in enumerate(references, 1)}
     lines = [
@@ -282,6 +286,7 @@ def citation_markdown(provenance: dict, citation: dict, tools: list[dict], refer
     for tool in tools:
         cited = "[" + ", ".join(str(numbers[reference]) for reference in tool["references"]) + "]"
         lines.append(f"| {tool['name']} | {tool_version(provenance, tool['versions']) or 'unknown'} | {cited} |")
+    lines.append(f"| {viewer['name']} | {genopilot['igv']} | [{numbers[viewer['reference']['id']]}] |")
     lines += ["", "## Methods", "", methods, "", "## References", ""]
     lines += [f"{number}. {entry['text']}" for number, entry in enumerate(references, 1)]
     lines += ["", "## BibTeX", "", "```bibtex", "\n\n".join(bibtex_entry(entry) for entry in references), "```"]
@@ -293,6 +298,7 @@ def write_citation(args: argparse.Namespace) -> None:
     provenance = read_json(args.provenance)
     workflow = read_json(args.references)
     citation = read_json(args.genopilot)
+    viewer = read_json(args.viewer)
     tools = tools_that_ran(provenance, workflow["tools"])
     by_id = {entry["id"]: entry for entry in workflow["references"]}
     references = [genopilot_reference(provenance["genopilot"], citation)]
@@ -300,18 +306,20 @@ def write_citation(args: argparse.Namespace) -> None:
         for reference in tool["references"]:
             if all(entry["id"] != reference for entry in references):
                 references.append(by_id[reference])
+    # Shows the results; cited after the tools that ran.
+    references.append(viewer["reference"])
     values = apply_phrases(methods_values(provenance, workflow["tools"]), read_json(args.phrases))
     methods = render_methods(args.methods.read_text(encoding="utf-8"), values)
 
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
-    args.markdown.write_text(citation_markdown(provenance, citation, tools, references, methods), encoding="utf-8")
+    args.markdown.write_text(citation_markdown(provenance, citation, tools, viewer, references, methods), encoding="utf-8")
     args.bibtex.write_text("\n\n".join(bibtex_entry(entry) for entry in references) + "\n", encoding="utf-8")
     args.ris.write_text("\n".join(ris_entry(entry) for entry in references) + "\n", encoding="utf-8")
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    for name in ("provenance", "references", "methods", "phrases", "genopilot", "markdown", "bibtex", "ris"):
+    for name in ("provenance", "references", "methods", "phrases", "genopilot", "viewer", "markdown", "bibtex", "ris"):
         parser.add_argument(f"--{name}", type=Path, required=True)
     return parser.parse_args(argv)
 

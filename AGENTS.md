@@ -81,8 +81,13 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Prefer a deliberate later schema or interface revision over premature complexity, while preserving explicit versioning and migration boundaries where persisted data requires them.
 - Treat performance as a non-functional requirement: runs should fit a time, disk, and memory budget a researcher can plan for, also on slower machines. Measure before optimizing, and avoid work that grows with the square of the cohort or genome where a linear approach is as simple. A deep performance review is deferred ([`resources/later.md`](resources/later.md#performance-review)).
 
+## Planning
+
+In plan mode, discuss the approach in plain text first; call ExitPlanMode only when the user says the plan is ready.
+
 ## Package and documentation
 
+- Keep all texts short: documentation, changelog entries, comments, plans, and replies. Be precise and readable; cut what the reader does not need.
 - Treat `package.json` as the source for the displayed command name, description, author, and version.
 - Keep installation and developer documentation in [`README.md`](README.md), user documentation in `docs/`, and package changes in [`CHANGELOG.md`](CHANGELOG.md).
 - Keep all documentation a researcher reads in Markdown that GitHub and the application render alike, using only the subset in [`resources/concepts/done/workflow-documentation.md`](resources/concepts/done/workflow-documentation.md); do not write help texts in TypeScript.

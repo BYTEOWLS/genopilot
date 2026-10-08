@@ -14,6 +14,7 @@ COMMIT = "0123456789abcdef0123456789abcdef01234567"
 def provenance(workflow_id: str, inputs: dict, configuration: dict, released: bool = True, modified: bool = False) -> dict:
     genopilot = {
         "version": "1.2.3",
+        "igv": "3.8.9",
         "build": {"commit": COMMIT, "committed_at": "2026-10-07T06:30:00.000Z", "modified": modified, "released": released},
     }
     return {
@@ -71,6 +72,7 @@ class WriteCitationTests(unittest.TestCase):
             "--methods", str(citation_dir / "methods.txt"),
             "--phrases", str(citation_dir / "phrases.json"),
             "--genopilot", str(WORKFLOWS_DIR / "shared" / "citation" / "genopilot.json"),
+            "--viewer", str(WORKFLOWS_DIR / "shared" / "citation" / "igv.json"),
             "--markdown", str(output / "CITATION.md"),
             "--bibtex", str(output / "references.bib"),
             "--ris", str(output / "references.ris"),
@@ -100,6 +102,12 @@ class WriteCitationTests(unittest.TestCase):
         self.assertNotIn("NCBI Datasets", markdown)
         self.assertNotIn("oleary2024", bibtex)
         self.assertEqual(ris.count("ER  -"), bibtex.count("\n@") + 1)
+
+    def test_cites_the_genome_viewer_with_the_version_genopilot_bundles(self) -> None:
+        markdown, bibtex, ris = self.write("annotation-transfer", provenance("annotation-transfer", LOCAL_TRANSFER_INPUTS, TRANSFER_CONFIGURATION))
+        self.assertRegex(markdown, r"\| igv\.js \| 3\.8\.9 \| \[\d+\] \|")
+        self.assertIn("@article{robinson2023,", bibtex)
+        self.assertIn("DO  - 10.1093/bioinformatics/btac830", ris)
 
     def test_cites_the_download_tool_when_an_input_came_from_ncbi(self) -> None:
         inputs = {**LOCAL_TRANSFER_INPUTS, "target": {"source": "ncbi", "accession": "GCF_000149205.2"}}

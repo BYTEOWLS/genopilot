@@ -29,6 +29,8 @@ export type RunDetails = {
 /** The GenoPilot that saved a configuration; its provenance copies it, so a run can be cited. */
 export type GenoPilotDetails = {
   version: string;
+  /** The IGV version its genome views use; a run's citation names it. */
+  igv: string;
   /** Omitted when the build's commit is unknown, such as a build outside a Git checkout. */
   build?: {
     commit: string;
@@ -39,9 +41,10 @@ export type GenoPilotDetails = {
 };
 
 /** The saved form of the running application's version and build. */
-export function genoPilotDetails(version: string, build: BuildInfo | undefined): GenoPilotDetails {
+export function genoPilotDetails(version: string, igv: string, build: BuildInfo | undefined): GenoPilotDetails {
   return {
     version,
+    igv,
     ...(build
       ? {build: {
           commit: build.commit,
@@ -316,8 +319,9 @@ export function validateGenoPilot(
   if (!genopilot) {
     return undefined;
   }
-  rejectUnknownFields(genopilot, ['version', 'build'], '$.genopilot', issues);
+  rejectUnknownFields(genopilot, ['version', 'igv', 'build'], '$.genopilot', issues);
   let valid = requireNonEmptyString(genopilot.version, '$.genopilot.version', issues);
+  valid = requireNonEmptyString(genopilot.igv, '$.genopilot.igv', issues) && valid;
   if ('build' in genopilot) {
     const build = requireObject(genopilot.build, '$.genopilot.build', issues);
     if (build) {

@@ -6,9 +6,10 @@ What it does
 
   Reads:  provenance/run.json
           <workflow>/citation/references.json, methods.txt, and phrases.json
-          shared/citation/genopilot.json
+          shared/citation/genopilot.json and igv.json
   Writes: citation/CITATION.md     - the tools that ran with their versions and
-                                     references, a draft methods paragraph, and
+                                     references, the genome viewer that shows
+                                     the results, a draft methods paragraph, and
                                      BibTeX and RIS; a run of a development build
                                      is marked as not citable
           citation/references.bib, citation/references.ris
@@ -32,6 +33,7 @@ rule write_citation:
         methods=ancient(WORKFLOW_DIR / "citation" / "methods.txt"),
         phrases=ancient(WORKFLOW_DIR / "citation" / "phrases.json"),
         genopilot=ancient(SHARED_DIR / "citation" / "genopilot.json"),
+        viewer=ancient(SHARED_DIR / "citation" / "igv.json"),
     output:
         markdown="citation/CITATION.md",
         bibtex="citation/references.bib",
@@ -45,6 +47,7 @@ rule write_citation:
         " --methods {input.methods:q}"
         " --phrases {input.phrases:q}"
         " --genopilot {input.genopilot:q}"
+        " --viewer {input.viewer:q}"
         " --markdown {output.markdown}"
         " --bibtex {output.bibtex}"
         " --ris {output.ris}"

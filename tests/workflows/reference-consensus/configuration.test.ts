@@ -11,7 +11,7 @@ const validConfiguration = {
   schema_version: 1,
   workflow_id: 'reference-consensus',
   workflow_version: 1,
-  genopilot: {version: '1.2.3'},
+  genopilot: {version: '1.2.3', igv: '3.8.9'},
   inputs: {
     backbone: {source: 'ncbi', accession: 'GCF_000149205.2', ncbi_cache_mode: 'reuse'},
     isolates_file: 'isolates.yaml',
@@ -53,6 +53,7 @@ workflow_id: reference-consensus
 workflow_version: 1
 genopilot:
   version: 1.2.3
+  igv: 3.8.9
 inputs:
   backbone:
     source: local

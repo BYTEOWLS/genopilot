@@ -1,4 +1,5 @@
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {packagedPath} from './package-root.js';
 
 /** The Git commit the application was built from; the version alone is shared by many commits. */
@@ -17,6 +18,7 @@ export type BuildInfo = {
 
 // Defined by the build (scripts/build.mjs); absent when the sources run through tsx.
 declare const __GENOPILOT_BUILD__: BuildInfo | null | undefined;
+declare const __GENOPILOT_IGV__: string | undefined;
 
 export type GitRunner = (arguments_: readonly string[]) => string | undefined;
 
@@ -39,4 +41,12 @@ export function gitBuildInfo(git: GitRunner = runGit): BuildInfo | undefined {
 /** The build's commit, embedded by the build or, when running the sources, read from Git. */
 export function readBuildInfo(): BuildInfo | undefined {
   return typeof __GENOPILOT_BUILD__ === 'undefined' ? gitBuildInfo() : __GENOPILOT_BUILD__ ?? undefined;
+}
+
+/** The version of IGV the genome views use, embedded by the build or, when running the sources, installed. */
+export function readIgvVersion(): string {
+  if (typeof __GENOPILOT_IGV__ !== 'undefined') {
+    return __GENOPILOT_IGV__;
+  }
+  return (JSON.parse(readFileSync(packagedPath('node_modules/igv/package.json'), 'utf8')) as {version: string}).version;
 }

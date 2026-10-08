@@ -64,6 +64,8 @@ export type CliMetadata = {
   license: string;
   /** The commit this build comes from, when known. */
   build?: BuildInfo;
+  /** The bundled IGV version, which draws the genome views. */
+  igv: string;
 };
 
 const minimumTerminalWidth = 40;
@@ -297,7 +299,7 @@ export function WelcomeScreen({
             discoverWorkflows={workflowDiscovery}
             inputActive={columns >= minimumTerminalWidth}
             currentDirectory={currentDirectory}
-            genopilot={genoPilotDetails(metadata.version, metadata.build)}
+            genopilot={genoPilotDetails(metadata.version, metadata.igv, metadata.build)}
           />
         );
       case 'open-run':

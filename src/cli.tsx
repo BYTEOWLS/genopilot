@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import React from 'react';
 import {render} from 'ink';
 import {ThemeProvider} from '@inkjs/ui';
-import {readBuildInfo} from './build-info.js';
+import {readBuildInfo, readIgvVersion} from './build-info.js';
 import {packagedPath} from './package-root.js';
 import {selfUpdate} from './self-update.js';
 import {BrowserViewProvider} from './browser/provider.js';
@@ -44,6 +44,7 @@ const metadata: CliMetadata = {
   version: packageJson.version,
   license: packageJson.license,
   build: readBuildInfo(),
+  igv: readIgvVersion(),
 };
 
 /** Runs non-interactive commands before mounting the interactive application. */

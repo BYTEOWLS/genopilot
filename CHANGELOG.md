@@ -6,6 +6,10 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+### Provenance
+
+- A run's citation includes igv.js, the genome viewer, with its version.
+
 ## [0.0.2] - 2026-10-08
 
 ### Provenance

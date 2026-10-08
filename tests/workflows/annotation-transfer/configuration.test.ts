@@ -10,7 +10,7 @@ const validConfiguration = {
   schema_version: 1,
   workflow_id: 'annotation-transfer',
   workflow_version: 1,
-  genopilot: {version: '1.2.3'},
+  genopilot: {version: '1.2.3', igv: '3.8.9'},
   inputs: {
     reference: {source: 'local', fasta: '/data/reference.fa', gff3: '/data/reference.gff3'},
     target: {source: 'local', fasta: '/data/target.fa'},
@@ -52,6 +52,7 @@ test('parses the minimal automatic-CPU configuration from YAML', () => {
     workflow_version: 1
     genopilot:
       version: 1.2.3
+      igv: 3.8.9
     inputs:
       reference:
         source: local

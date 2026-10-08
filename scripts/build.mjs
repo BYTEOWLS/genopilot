@@ -25,6 +25,8 @@ if (released && status !== '') {
   process.exit(1);
 }
 const buildInfo = commit && committedAt && status !== undefined ? {commit, committedAt, modified: status.length > 0, released} : null;
+// The bundled IGV version, recorded with every configuration so a run's citation can name it.
+const igvVersion = JSON.parse(await readFile('node_modules/igv/package.json', 'utf8')).version;
 
 // The CLI and everything it imports, so an installation runs exactly the locked dependencies.
 const cli = await build({
@@ -38,7 +40,7 @@ const cli = await build({
   // Identifiers stay unrenamed so stack traces in bug reports keep real function names.
   minifyWhitespace: true,
   minifySyntax: true,
-  define: {'process.env.NODE_ENV': '"production"', __GENOPILOT_BUILD__: JSON.stringify(buildInfo)},
+  define: {'process.env.NODE_ENV': '"production"', __GENOPILOT_BUILD__: JSON.stringify(buildInfo), __GENOPILOT_IGV__: JSON.stringify(igvVersion)},
   // Ink imports its devtools only when DEV=true, and they import this optional, uninstalled package.
   alias: {'react-devtools-core': './scripts/empty-module.js'},
   // Bundled CommonJS code requires Node built-ins, which an ES module has no `require` for.

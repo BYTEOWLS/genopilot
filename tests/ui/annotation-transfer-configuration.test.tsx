@@ -203,7 +203,7 @@ function renderConfiguration(
       currentDirectory={currentDirectory}
       onBack={options.onBack ?? (() => {})}
       inputActive
-      genopilot={{version: '1.2.3'}}
+      genopilot={{version: '1.2.3', igv: '3.8.9'}}
       availableCpus={4}
       snakefilePath={packagedPath('workflows/annotation-transfer/Snakefile')}
       validatePreparedRun={options.validatePreparedRun}
@@ -815,7 +815,7 @@ test('labels a previous run by its name and creation time, not its run ID', () =
     schema_version: 1,
     workflow_id: 'annotation-transfer',
     workflow_version: 1,
-    genopilot: {version: '1.2.3'},
+    genopilot: {version: '1.2.3', igv: '3.8.9'},
     inputs: {
       reference: {source: 'local', fasta: '/data/reference.fa', gff3: '/data/reference.gff3'},
       target: {source: 'local', fasta: '/data/target.fa'},

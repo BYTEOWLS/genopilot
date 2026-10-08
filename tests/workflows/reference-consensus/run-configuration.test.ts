@@ -23,7 +23,7 @@ import {parseIsolateSnapshot} from '../../../src/workflows/reference-consensus/s
 import {createRunWorkspace} from '../../../src/workflows/run-preparation.js';
 
 const now = new Date('2026-09-25T10:00:00.000Z');
-const genopilot = {version: '1.2.3'};
+const genopilot = {version: '1.2.3', igv: '3.8.9'};
 const fastq = '@read1\nACGT\n+\nIIII\n';
 
 async function createTempDir(context: TestContext): Promise<string> {

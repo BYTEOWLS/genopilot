@@ -23,7 +23,7 @@ import {
 } from '../../../src/workflows/annotation-transfer/run-configuration.js';
 
 const now = new Date('2026-09-05T08:34:12.123Z');
-const genopilot = {version: '1.2.3'};
+const genopilot = {version: '1.2.3', igv: '3.8.9'};
 const runTimestampPrefix = '2026-09-05_083412123_';
 
 async function fixture(): Promise<{

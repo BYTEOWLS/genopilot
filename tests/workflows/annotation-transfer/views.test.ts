@@ -14,7 +14,7 @@ const configuration = {
   schema_version: 1,
   workflow_id: 'annotation-transfer',
   workflow_version: 1,
-  genopilot: {version: '1.2.3'},
+  genopilot: {version: '1.2.3', igv: '3.8.9'},
   inputs: {
     reference: {source: 'ncbi', accession: 'GCA_000000001.1'},
     target: {source: 'local', fasta: '/data/target.fasta'},

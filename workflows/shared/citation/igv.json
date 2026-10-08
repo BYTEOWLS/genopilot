@@ -1,0 +1,22 @@
+{
+  "name": "igv.js",
+  "reference": {
+    "id": "robinson2023",
+    "text": "Robinson JT, Thorvaldsdóttir H, Turner D, Mesirov JP. igv.js: an embeddable JavaScript implementation of the Integrative Genomics Viewer (IGV). Bioinformatics 39(1):btac830 (2023). https://doi.org/10.1093/bioinformatics/btac830",
+    "authors": [
+      "Robinson JT",
+      "Thorvaldsdóttir H",
+      "Turner D",
+      "Mesirov JP"
+    ],
+    "others": false,
+    "type": "article",
+    "title": "igv.js: an embeddable JavaScript implementation of the Integrative Genomics Viewer (IGV)",
+    "journal": "Bioinformatics",
+    "volume": "39",
+    "issue": "1",
+    "pages": "btac830",
+    "year": 2023,
+    "doi": "10.1093/bioinformatics/btac830"
+  }
+}

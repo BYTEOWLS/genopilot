@@ -22,7 +22,7 @@ const configuration = validateReferenceConsensusConfiguration({
   schema_version: 1,
   workflow_id: 'reference-consensus',
   workflow_version: 1,
-  genopilot: {version: '1.2.3'},
+  genopilot: {version: '1.2.3', igv: '3.8.9'},
   inputs: {
     backbone: {source: 'local', fasta: '/data/backbone.fa'},
     isolates_file: 'isolates.yaml',

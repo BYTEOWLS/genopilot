@@ -44,7 +44,7 @@ test('discovers run metadata and result states newest first', async () => {
   await addRun(tempDir, 'older-directory', {
     workflow_id: 'annotation-transfer',
     workflow_version: 1,
-    genopilot: {version: '1.2.3', build: {commit: '0123456789abcdef0123456789abcdef01234567', committed_at: '2026-01-01T00:00:00.000Z', modified: false, released: true}},
+    genopilot: {version: '1.2.3', igv: '3.8.9', build: {commit: '0123456789abcdef0123456789abcdef01234567', committed_at: '2026-01-01T00:00:00.000Z', modified: false, released: true}},
     run: {
       id: 'older-run',
       name: 'Older name',

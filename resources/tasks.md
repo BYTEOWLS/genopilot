@@ -27,16 +27,16 @@ Every task includes proportionate unit tests in the same change. A task is not c
 ## Integration and packaging
 
 - [ ] Add a direct-Snakemake cancellation test that checks cleanup and complete logs; success, failure, and resume are covered, and cancellation is covered only with an injected process.
-- [ ] Prepare the public release: lock the rule environments as the *Before 0.1.0* tooling tasks describe ([concept](concepts/public-release.md)).
+- [ ] Prepare the public release: lock the rule environments tooling tasks describe ([concept](concepts/public-release.md)).
 - [ ] Run workflows on clusters and cloud services such as SLURM and AWS ([concept](concepts/remote-execution.md)).
 - [ ] Project website on GitHub Pages with worked examples on public data and reproducible screenshots of the highlights ([concept](concepts/project-website.md)).
 
 ## Tooling
 
 - [ ] Save complete tooling-check logs outside the Ink render output; setup logs are already preserved.
-- [ ] Before 0.1.0: pin LiftOn's pip dependencies with `==` in its rule environment; they are declared only as lower bounds upstream and installed from PyPI when the environment is created.
-- [ ] Before 0.1.0: record each rule environment's explicit conda package list and `pip freeze` in run provenance.
-- [ ] Before 0.1.0: lock the rule environments' conda dependencies with Snakemake's per-platform pin files (`<environment>.<platform>.pin.txt`).
+- [ ] Pin LiftOn's pip dependencies with `==` in its rule environment; they are declared only as lower bounds upstream and installed from PyPI when the environment is created.
+- [ ] Record each rule environment's explicit conda package list and `pip freeze` in run provenance.
+- [ ] Lock the rule environments' conda dependencies with Snakemake's per-platform pin files (`<environment>.<platform>.pin.txt`).
 - [ ] Run real installation smoke tests on each supported platform/architecture and record the tested versions.
 
 ## Windows support (last)

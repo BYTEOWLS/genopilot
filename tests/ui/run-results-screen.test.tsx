@@ -79,7 +79,7 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
       schema_version: 1,
       workflow_id: 'annotation-transfer',
       workflow_version: 1,
-      genopilot: {version: '1.2.3'},
+      genopilot: {version: '1.2.3', igv: '3.8.9'},
       inputs: {
         reference: {source: 'local', fasta: '/data/reference.fa', gff3: '/data/reference.gff3'},
         target: {source: 'local', fasta: '/data/target.fa'},
@@ -601,7 +601,7 @@ test('reads a run\'s citation as a copyable document once the run wrote it', asy
 });
 
 test('views opened from a run carry its citation, other views do not', () => {
-  const run = {id: 'run-1', workflow: {id: 'annotation-transfer', version: 1}, genopilot: {version: '1.2.3'}};
+  const run = {id: 'run-1', workflow: {id: 'annotation-transfer', version: 1}, genopilot: {version: '1.2.3', igv: '3.8.9'}};
   const view = {id: 'view', title: 'Genome', provenance: {application: {name: 'GenoPilot', version: '1.2.3'}, run, sources: []},
     content: {kind: 'genome', reference: {name: 'ref', fasta: '/ref.fa', snapshot: {size: 1, mtimeMs: 1}}, tracks: []}} as unknown as Parameters<typeof withRunCitation>[0];
   assert.equal(withRunCitation(view, citationDocument).provenance.run?.citation?.copyable, true);
