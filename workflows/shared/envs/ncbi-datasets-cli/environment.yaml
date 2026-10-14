@@ -3,4 +3,4 @@ channels:
   - conda-forge
 dependencies:
   - python=3.13.15
-  - ncbi-datasets-cli=18.38.0
+  - ncbi-datasets-cli=18.39.0
