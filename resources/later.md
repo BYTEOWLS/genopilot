@@ -21,7 +21,7 @@ Consensus [Task 5.3](concepts/done/consensus/5c-review-and-rerun.md) saves and r
 
 ## Performance review
 
-Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](concepts/systems-check.md).
+Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](concepts/done/systems-check.md).
 
 A later review should start from measurements, the job benchmarks every run already writes, on real cohorts and slower machines, and consider:
 

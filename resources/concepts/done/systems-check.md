@@ -40,7 +40,7 @@ Estimates are shown as ranges and labeled as estimates. A machine without a comp
 ## Decisions
 
 - **Machine record.** Saved configurations record the machine: platform, architecture, CPU model, CPU count, and memory. Rates count only for runs whose record matches the current machine, which also covers a data directory shared between hosts. The record is taken when the configuration is saved; a run resumed on another machine, such as a copied run directory, keeps the first record and is accepted as a known limit.
-- **Stored rates.** After a completed run, GenoPilot writes `machine-rates.yaml` to its data directory: per workflow, the latest completed run's machine record, run ID and directory, effective CPUs, its measured disk factors, time per isolate, and peak memory. Resetting the tooling removes it; the next completed run writes it again.
+- **Stored rates.** After a completed run, GenoPilot writes `machine-rates.yaml` to its data directory: per workflow, the latest completed run's machine record, run ID and directory, effective CPUs, its default disk estimate, its measured directory size, its duration, and its sampled peak memory. The default estimate is the yardstick that scales the measurement to the next run. Resetting the tooling removes it; the next completed run writes it again.
 - **Default disk factors** of reference consensus, measured per isolate on a real run of 9 isolates of a haploid genome of about 30 Mb, with 1.4–2.5 GB of gzipped reads per isolate from two sequencing batches:
 
   | Part | Kept | Factor |
@@ -51,7 +51,7 @@ Estimates are shown as ranges and labeled as estimates. A machine without a comp
   | Cohort tables and consensus | 31 MB | about 1 × genome bytes per cohort |
 
   The default uses the upper ends (0.62 and 9), which overestimate the measured isolates by at most 25 %. The peak adds, for each isolate aligned at the same time (effective CPUs ÷ the aligner's 8 threads, at least 1), its temporary trimmed reads and per-pair alignment: about 1.6 × its read bytes. The peak is derived from the rule outputs, not measured, and is checked on the first monitored run. Cohort tables grow faster than linearly with the cohort; the term is revisited with a larger cohort. Annotation transfer has no factors yet and shows free disk only.
-- **Duration** comes only from stored rates, in the same shape: per-isolate time per read byte from the benchmarks, times the isolates, divided by the CPUs, plus the cohort steps. It is shown as a range, names the source run, and flags a different CPU count. On the measured run, the isolates took 23 of its 23½ minutes.
+- **Duration** comes only from stored rates: the measured run's duration, scaled by the ratio of the new run's default disk estimate to the measured run's, shown as ×0.7 to ×1.5, naming the source run and its CPUs, and flagging a different CPU count. The measured run's kept bytes, scaled the same way, replace the default disk estimate; the temporary files keep the manifest's factor. Its sampled peak memory is shown as measured, with a warning when it exceeds the installed memory. A workflow without disk factors has no rates. On the measured run, the isolates took 23 of its 23½ minutes.
 - **Peak memory** is sampled by GenoPilot, not read from Snakemake's job benchmarks: on macOS, Snakemake writes `NA` for every memory and CPU value, because psutil's `memory_full_info()` is refused there for other processes and Snakemake then drops the whole sample, a Snakemake bug. Every 5 seconds while an execution runs, GenoPilot sums the resident memory of Snakemake's process tree from `ps` and records the highest total. Tested on macOS; Linux and WSL2 use the same `ps` options and are expected to behave alike. A spike shorter than the interval can be missed, and shared memory counts once per process, so the figure errs high. CPU time is not sampled: `ps` no longer shows a job that has finished, so a sum would undercount.
 - **Run timing** comes first: a live overall timer while Snakemake runs, and, when it ends, GenoPilot appends the execution's start, end, duration, exit code, command, and stage times (from its structured events) to the run's `timing.yaml`. Results and the run list read only that file. An iteration's execution is recognized by its target, `provenance/cohort/iteration-<n>.json`, in the recorded command.
 
@@ -61,8 +61,8 @@ Estimates are shown as ranges and labeled as estimates. A machine without a comp
 - [x] Record the machine in saved configurations and provenance.
 - [x] Show free disk, CPUs, and memory on the start page, with the disk estimate and a warning when it does not fit.
 - [x] Sample the run's peak memory while it executes, save it in `timing.yaml`, and show it in the run results.
-- [ ] Write `machine-rates.yaml` after a completed run and show duration and disk estimates from it with their source.
-- [ ] Test estimates from injected benchmark data, missing or partial benchmarks, a machine without completed runs, and the warning path, without depending on the test machine's hardware.
+- [x] Write `machine-rates.yaml` after a completed run and show duration, disk, and memory estimates from it with their source.
+- [x] Test estimates from injected measurements, a machine without completed runs, another machine's rate, and the warning paths, without depending on the test machine's hardware.
 
 ## Acceptance
 

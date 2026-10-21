@@ -182,6 +182,7 @@ function renderScreen(
     backboneCached?: boolean;
     rows?: number;
     checkSystem?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['checkSystem'];
+    recordRate?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['recordRate'];
   } = {},
 ) {
   const input = new TestInput();
@@ -216,6 +217,8 @@ function renderScreen(
       registerAccessionCaches={async () => 'Recorded.'}
       // Never the test machine's disks or hardware.
       checkSystem={options.checkSystem ?? (async () => ({rows: [], warnings: []}))}
+      // Never the researcher's own rates file.
+      recordRate={options.recordRate ?? (async () => undefined)}
     />,
     {
       exitOnCtrlC: false,
@@ -263,8 +266,12 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   const executedModes: string[] = [];
   let saved: PreparedReferenceConsensusRun | undefined;
   const checked: PreparedReferenceConsensusRun[] = [];
+  const measured: PreparedReferenceConsensusRun[] = [];
   const {input, output, reviewed} = renderScreen(context, {
     rows: 80,
+    recordRate: async prepared => {
+      measured.push(prepared);
+    },
     checkSystem: async prepared => {
       checked.push(prepared);
       return {rows: [{label: 'Free disk', value: 'system-check-row'}], warnings: ['system-check-warning']};
@@ -327,6 +334,8 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   await waitUntil(() => saved !== undefined, 'the run is saved as the dry run starts');
   await waitUntil(() => executedModes.length === 1, 'the dry run starts');
   assert.deepEqual(executedModes, ['dry-run']);
+  // A dry run is not measured for the next estimate.
+  assert.deepEqual(measured, []);
   // After the dry run, the workflow itself can be executed, and its isolates are followed.
   await waitForFrame(output, next => next.includes('Job stats'));
   // Back on the start page, the execution is preselected once a dry run has passed.
@@ -335,6 +344,9 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   await press(input, ENTER);
   await waitUntil(() => executedModes.length === 2, 'the execution starts');
   assert.deepEqual(executedModes, ['dry-run', 'execute']);
+  // A successful execution is measured for the next estimate on this machine.
+  await waitUntil(() => measured.length === 1, 'the run is measured');
+  assert.equal(measured[0], prepared);
   await waitForFrame(output, next => next.includes(snapshot.isolates[0]!.name) && next.includes(snapshot.isolates[1]!.name));
 });
 
@@ -372,6 +384,35 @@ test('shows a save that fails as a run starts, and tries it again on the next st
   await press(input, ENTER);
   await waitUntil(() => executed.length === 1, 'a run starts after the save');
   assert.equal(saveAttempts, 2);
+});
+
+test('reports a run that could not be measured without failing it, next to the NCBI cache note', async context => {
+  const executed: string[] = [];
+  const {input, output, reviewed} = renderScreen(context, {
+    rows: 80,
+    executeSnakemakeRun: async run => {
+      executed.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+    recordRate: async () => {
+      throw new Error('measure-failure-message');
+    },
+  });
+  await waitForFrame(output, frame => selectedLine(frame) !== undefined);
+  await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
+  await chooseIsolates(input, output, ['mutant-one']);
+  await startReview(input, output);
+  await waitForFrame(output, frame => reviewed.length === 1 && frame.includes(reviewed[0]!.configuration.run.id));
+  await press(input, ENTER);
+  await waitForFrame(output, next => next.includes('--dry-run'));
+  await press(input, ARROW_DOWN);
+  await waitForFrame(output, next => next.includes('workflows/reference-consensus/Snakefile') && !next.includes('--dry-run'));
+  await press(input, ENTER);
+  await waitUntil(() => executed.length === 1, 'the execution starts');
+  const frame = await waitForFrame(output, next => next.includes('measure-failure-message'));
+  // The run itself succeeded, and the accession catalog note is kept.
+  assert.ok(frame.includes('Recorded.'));
+  assert.deepEqual(executed, ['execute']);
 });
 
 test('asks how to handle a cached backbone and saves the decision', async context => {

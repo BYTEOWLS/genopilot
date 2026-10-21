@@ -17,7 +17,6 @@ Every task includes proportionate unit tests in the same change. A task is not c
 ## Application
 
 - [ ] Add non-interactive `--help` and `--version` output.
-- [ ] Show a systems check before a run: free disk against an estimate, CPUs, and memory, and duration estimates from the machine's completed runs ([concept](concepts/systems-check.md)).
 - [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](later.md#workflow-cancellation).
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
 - [ ] Separate workflow-specific UI and result code from the shared screens, so each workflow plugs in through one module ([concept](concepts/workflow-modules.md)).

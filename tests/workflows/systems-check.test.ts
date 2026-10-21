@@ -6,6 +6,7 @@ import {
   estimateDisk,
   formatBytes,
   formatMemory,
+  formatRoughDuration,
   systemsCheckReview,
 } from '../../src/workflows/systems-check.js';
 
@@ -74,4 +75,36 @@ test('formats bytes in decimal units', () => {
   assert.equal(formatBytes(1_500_000), '1.5 MB');
   assert.equal(formatBytes(11e9), '11.0 GB');
   assert.equal(formatBytes(2.2e15), '2200.0 TB');
+});
+
+test('replaces the default disk estimate with a measured run and adds duration and memory', () => {
+  const machine = {freeBytes: 100e9, availableCpus: 8, installedMemoryBytes: 16 * 2 ** 30};
+  const measured = {
+    runId: 'run-a',
+    keptBytes: 20e9,
+    durationSeconds: {low: 42 * 60, high: 90 * 60},
+    effectiveCpus: 8,
+    peakMemoryBytes: 6 * 2 ** 30,
+  };
+  const review = systemsCheckReview(machine, {disk: {keptBytes: 25e9, peakBytes: 30e9}, measured, effectiveCpus: 8});
+  // Kept bytes from the measured run; the temporary 5 GB from the factors stay.
+  assert.ok(review.rows.some(row => row.value.includes('20.0 GB') && row.value.includes('25.0 GB') && row.value.includes('run-a')));
+  assert.ok(review.rows.some(row => row.value.includes('42 min') && row.value.includes('1 h 30 min')));
+  assert.ok(review.rows.some(row => row.value.includes('6.0 GB')));
+  assert.deepEqual(review.warnings, []);
+
+  // A different CPU count is named, and a peak above the installed memory warns.
+  const tight = systemsCheckReview(
+    {...machine, installedMemoryBytes: 4 * 2 ** 30},
+    {disk: {keptBytes: 25e9, peakBytes: 30e9}, measured, effectiveCpus: 4},
+  );
+  assert.ok(tight.rows.some(row => row.value.includes('8 CPUs') && row.value.includes('4')));
+  assert.equal(tight.warnings.length, 1);
+  assert.ok(tight.warnings[0]!.includes('6.0 GB') && tight.warnings[0]!.includes('4.0 GB'));
+});
+
+test('rounds an estimated duration to minutes, or hours and minutes', () => {
+  assert.equal(formatRoughDuration(10), '1 min');
+  assert.equal(formatRoughDuration(42 * 60 + 20), '42 min');
+  assert.equal(formatRoughDuration(3 * 3600 + 5 * 60), '3 h 5 min');
 });

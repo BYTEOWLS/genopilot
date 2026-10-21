@@ -311,7 +311,7 @@ Before a run, the start page estimates its disk need from the size of each isola
 | All-sites calls, isolate FASTA, and reports | about 9 × the backbone's bytes, per isolate |
 | Resolved backbone with its index, and one cohort | about 3.6 × the backbone's bytes, per run |
 
-While an isolate is aligned, its trimmed reads and per-pair alignments also need about 1.6 × its read bytes, for as many isolates as the effective CPUs align at once (8 CPUs each). The factors are per byte, so they carry over to other genomes and coverages; the estimate is a rough guide and may be up to a quarter too high. An NCBI backbone counts once it is in the download cache; before its first download, the estimate says it leaves it out.
+While an isolate is aligned, its trimmed reads and per-pair alignments also need about 1.6 × its read bytes, for as many isolates as the effective CPUs align at once (8 CPUs each). The factors are per byte, so they carry over to other genomes and coverages; the estimate is a rough guide and may be up to a quarter too high. An NCBI backbone counts once it is in the download cache; before its first download, the estimate says it leaves it out. Once a run has completed on the same machine, its measured size, duration, and peak memory replace these factors, scaled by the size of the new run.
 
 ## Tools
 

@@ -44,6 +44,7 @@ import WorkflowConfigurationScreen, {
   type WorkflowFormValues,
 } from './workflow-configuration.js';
 import {checkMachine, estimateDisk, systemsCheckReview} from '../../workflows/systems-check.js';
+import {estimateFromRate, rateForMachine, readMachineRates, recordMachineRate} from '../../workflows/machine-rates.js';
 
 export type IsolateCatalogSnapshotLoader = () => Promise<IsolateCatalog>;
 export type ReferenceConsensusRunInspector = (prepared: PreparedReferenceConsensusRun) => Promise<RunInspection>;
@@ -298,7 +299,29 @@ export function ReferenceConsensusConfigurationScreen({
       return systemsCheckReview(machine);
     }
     const {inputs, note} = await diskEstimateInputs(prepared);
-    return systemsCheckReview(machine, {disk: estimateDisk(manifest.disk_estimate, inputs), ...(note ? {note} : {})});
+    const disk = estimateDisk(manifest.disk_estimate, inputs);
+    const {resources} = prepared.configuration;
+    const rate = rateForMachine(await readMachineRates(resolveToolingPaths().machineRatesPath), manifest.id, resources.machine);
+    return systemsCheckReview(machine, {
+      disk,
+      ...(note ? {note} : {}),
+      ...(rate ? {measured: estimateFromRate(rate, disk.keptBytes), effectiveCpus: resources.effective_cpus} : {}),
+    });
+  },
+  recordRate = async prepared => {
+    if (!manifest?.disk_estimate) {
+      return;
+    }
+    const {resources, run} = prepared.configuration;
+    await recordMachineRate({
+      ratesPath: resolveToolingPaths().machineRatesPath,
+      workflowId: manifest.id,
+      runId: run.id,
+      runDirectory: prepared.outputDirectory,
+      machine: resources.machine,
+      effectiveCpus: resources.effective_cpus,
+      estimatedBytes: estimateDisk(manifest.disk_estimate, (await diskEstimateInputs(prepared)).inputs).keptBytes,
+    });
   },
 }: {
   currentDirectory: string;
@@ -326,6 +349,8 @@ export function ReferenceConsensusConfigurationScreen({
   registerAccessionCaches?: AccessionCacheRegistration;
   /** Free disk, CPUs, and memory, with the disk estimate and a warning when the run may not fit. */
   checkSystem?: (prepared: PreparedReferenceConsensusRun) => Promise<ReturnType<typeof systemsCheckReview>>;
+  /** Measures a completed run for the next run's estimates on this machine. */
+  recordRate?: (prepared: PreparedReferenceConsensusRun) => Promise<void>;
 }): React.JSX.Element {
   const [previousRuns, setPreviousRuns] = useState<Awaited<ReturnType<PreviousRunsLoader>>>([]);
 
@@ -443,12 +468,23 @@ export function ReferenceConsensusConfigurationScreen({
         prepared.outputDirectory,
         prepared.snapshot.isolates.map(isolate => isolate.id),
       )}
-      onRunSucceeded={prepared => prepared.configuration.inputs.backbone.source === 'ncbi'
-        ? {
-          label: 'Recording the NCBI accession cache in the accession catalog…',
-          outcome: registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory),
-        }
-        : undefined}
+      onRunSucceeded={prepared => {
+        const ncbi = prepared.configuration.inputs.backbone.source === 'ncbi';
+        // A failed measurement only means the next estimate uses the defaults.
+        const measured = recordRate(prepared).then(
+          () => undefined,
+          (error: unknown) => `This run was not measured for the next estimate: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        const registered = ncbi
+          ? registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory)
+          : Promise.resolve(undefined);
+        return {
+          label: ncbi
+            ? 'Recording the NCBI accession cache in the accession catalog…'
+            : 'Measuring this run for the next estimate…',
+          outcome: Promise.all([registered, measured]).then(notes => notes.filter(Boolean).join(' ') || undefined),
+        };
+      }}
       {...(loadIsolates ? {loadIsolates} : {})}
     />
   );
