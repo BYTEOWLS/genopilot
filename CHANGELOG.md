@@ -6,6 +6,12 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+### Runtime
+
+- Pixi 0.82.1, Snakemake 9.27.1, and Python 3.13.16, also in the rule environments; existing installations are asked to run setup again. Conda stays at 26.7.3: newer versions require a `packaging` release that Snakemake does not yet allow.
+- NCBI Datasets CLI 18.39.0.
+- Existing reference-consensus runs need a new run for further iterations: the new Python pin makes their per-isolate results out of date.
+
 ### Provenance
 
 - A run's citation includes igv.js, the genome viewer, with its version.

@@ -40,8 +40,7 @@ test('defines one verified Pixi download for every supported platform', () => {
   assert.deepEqual(actualPlatforms, expectedPlatforms);
 });
 
-test('pins Pixi and keeps the managed runtime inside the data directory', () => {
-  assert.equal(toolingPolicy.pixi.managedVersion, '0.81.0');
+test('keeps the managed runtime inside the data directory', () => {
   assert.match(toolingPolicy.pixi.relativeExecutablePath, /^runtimes\/pixi\//);
   assert.equal(toolingPolicy.managedRuntime.relativeBinPath, '.pixi/envs/default/bin');
 });
@@ -70,14 +69,6 @@ test('locks the packaged runtime to the versions setup verifies, on every suppor
       );
     }
   }
-});
-
-test('records versions tested with separately from supported ranges', () => {
-  assert.deepEqual(toolingPolicy.node.versionsTestedWith, ['24.19.0']);
-  assert.deepEqual(toolingPolicy.pixi.versionsTestedWith, []);
-  assert.deepEqual(toolingPolicy.conda.versionsTestedWith, []);
-  assert.deepEqual(toolingPolicy.snakemake.versionsTestedWith, []);
-  assert.deepEqual(toolingPolicy.python.versionsTestedWith, []);
 });
 
 test('uses bounded compatibility ranges for all managed tools', () => {

@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkTooling, isVersionSupported} from '../../src/tooling/check.js';
 import {resolveToolingPaths} from '../../src/tooling/paths.js';
+import {toolingPolicy} from '../../src/tooling/policy.js';
 
 test('accepts versions inside an inclusive-minimum and exclusive-maximum range', () => {
   assert.equal(isVersionSupported('v24.0.0', '24.0.0', '26.0.0'), true);
@@ -16,7 +17,7 @@ test('accepts versions inside an inclusive-minimum and exclusive-maximum range',
 test('extracts versions from supported tool output formats', () => {
   assert.equal(isVersionSupported('pixi 0.79.0', '0.79.0', '0.80.0'), true);
   assert.equal(isVersionSupported('conda 25.11.1', '25.1.0', '26.0.0'), true);
-  assert.equal(isVersionSupported('9.26.1', '9.26.1', '10.0.0'), true);
+  assert.equal(isVersionSupported('9.0.0', '9.0.0', '10.0.0'), true);
 });
 
 test('rejects missing or unparseable versions', () => {
@@ -59,10 +60,10 @@ test('detects compatible executables in the managed tooling location', async con
   });
 
   for (const [path, output] of [
-    [paths.pixiExecutable, 'pixi 0.81.0'],
-    [paths.condaExecutable, 'conda 26.7.3'],
-    [paths.snakemakeExecutable, '9.27.0'],
-    [paths.pythonExecutable, 'Python 3.13.15'],
+    [paths.pixiExecutable, `pixi ${toolingPolicy.pixi.managedVersion}`],
+    [paths.condaExecutable, `conda ${toolingPolicy.conda.managedVersion}`],
+    [paths.snakemakeExecutable, toolingPolicy.snakemake.managedVersion],
+    [paths.pythonExecutable, `Python ${toolingPolicy.python.managedVersion}`],
   ]) {
     await mkdir(dirname(path), {recursive: true});
     await writeFile(path, `#!/bin/sh\nprintf '%s\\n' '${output}'\n`);

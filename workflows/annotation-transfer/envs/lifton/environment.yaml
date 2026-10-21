@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python=3.13.15
+  - python=3.13.16
   - minimap2=2.31
   - miniprot=0.18
   # LiftOn depends on parasail. Install its native library through conda so

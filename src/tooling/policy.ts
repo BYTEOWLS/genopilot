@@ -8,7 +8,7 @@ export type RuntimeDownload = {
   sha256: string;
 };
 
-const pixiVersion = '0.81.0';
+const pixiVersion = '0.82.1';
 const pixiReleaseTag = `v${pixiVersion}`;
 
 /**
@@ -25,7 +25,7 @@ const pixiReleaseTag = `v${pixiVersion}`;
  * independent of the directory from which the CLI is invoked. Every platform
  * uses the same hidden directory under the user's home: one location to
  * document and back up, and one without whitespace, which matters because
- * Snakemake (checked with 9.26.1) does not quote Conda's activation-script path when
+ * Snakemake does not quote Conda's activation-script path when
  * constructing rule commands.
  */
 export const toolingPolicy = {
@@ -33,13 +33,11 @@ export const toolingPolicy = {
     minimumVersion: '24.0.0',
     maximumVersionExclusive: '26.0.0',
     installationVersion: '24 LTS',
-    versionsTestedWith: ['24.19.0'],
   },
   pixi: {
     command: 'pixi',
     minimumVersion: pixiVersion,
-    maximumVersionExclusive: '0.81.1',
-    versionsTestedWith: [],
+    maximumVersionExclusive: '0.82.2',
     managedVersion: pixiVersion,
     releaseTag: pixiReleaseTag,
     relativeExecutablePath: `runtimes/pixi/${pixiVersion}/bin/pixi`,
@@ -50,25 +48,25 @@ export const toolingPolicy = {
         platform: 'linux',
         architecture: 'x64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-x86_64-unknown-linux-musl.tar.gz`,
-        sha256: '7aa3ec39aecceff9062fa2ed4d42cbaa0bdc25ddea727d048e061cf188d434f6',
+        sha256: '7ac72af79c50653bfcfddb2473b6e9eff2654affe0057d19fe21b0d8556a7fe2',
       },
       {
         platform: 'linux',
         architecture: 'arm64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-aarch64-unknown-linux-musl.tar.gz`,
-        sha256: '9f8d2113fe9dc01788a65f5c2acec34fa56b1193461a5c3e9a775d6d2d621bcb',
+        sha256: '6f4c4a101b84b15f33440f39fe5889afb1b77a4e88f02962248240cdcab56966',
       },
       {
         platform: 'darwin',
         architecture: 'x64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-x86_64-apple-darwin.tar.gz`,
-        sha256: '9859588ba57f390b5c77d56b2654fab37bc00e10952da25e3efd6e3434557e5a',
+        sha256: '249e92ad4254642ecc3dd2d498b082cfd417c4de219dc9b093750671d882f0e2',
       },
       {
         platform: 'darwin',
         architecture: 'arm64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-aarch64-apple-darwin.tar.gz`,
-        sha256: 'f4e32ea91970d4e11739488817979a5f2c6ebbb9cedb0d6dea74b2b790b272dc',
+        sha256: 'cf02c669b8c4a3d7332b6aa30931d37587c299d906b30d9827b9d40cec9b0c47',
       },
     ] satisfies RuntimeDownload[],
   },
@@ -76,24 +74,21 @@ export const toolingPolicy = {
     command: 'conda',
     minimumVersion: '26.7.3',
     maximumVersionExclusive: '26.7.4',
-    versionsTestedWith: [],
     managedVersion: '26.7.3',
   },
   snakemake: {
     command: 'snakemake',
-    minimumVersion: '9.27.0',
-    maximumVersionExclusive: '9.27.1',
-    versionsTestedWith: [],
-    managedVersion: '9.27.0',
+    minimumVersion: '9.27.1',
+    maximumVersionExclusive: '9.27.2',
+    managedVersion: '9.27.1',
   },
   // The rule environments pin the same Python, so every workflow script runs on one version.
   // It stays on 3.13 until bioconda's parasail-python, which LiftOn needs, is built for 3.14.
   python: {
     command: 'python',
-    minimumVersion: '3.13.15',
-    maximumVersionExclusive: '3.13.16',
-    versionsTestedWith: [],
-    managedVersion: '3.13.15',
+    minimumVersion: '3.13.16',
+    maximumVersionExclusive: '3.13.17',
+    managedVersion: '3.13.16',
   },
   managedRuntime: {
     // Pixi's own home, kept inside the data directory so the user's Pixi configuration and

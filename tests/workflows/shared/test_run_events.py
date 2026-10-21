@@ -1,6 +1,6 @@
 """Tests for the run-event translation used by the `genopilot-run-events` logger plugin.
 
-The field names asserted here are the ones Snakemake 9.26.1 attaches to its structured log
+The field names asserted here are the ones Snakemake attaches to its structured log
 records, captured from real runs of this workflow.
 """
 
@@ -27,7 +27,7 @@ class TimestampTests(unittest.TestCase):
 class TranslationTests(unittest.TestCase):
     def test_reports_the_workflow_start_with_its_version_and_command(self) -> None:
         event = events.translate(
-            record(event="workflow_started", snakemake_version="9.26.1", cmd="snakemake --cores 1")
+            record(event="workflow_started", snakemake_version="9.0.0", cmd="snakemake --cores 1")
         )
 
         self.assertEqual(
@@ -36,7 +36,7 @@ class TranslationTests(unittest.TestCase):
                 "schema_version": 1,
                 "timestamp": "2026-09-06T07:50:14.123Z",
                 "type": "workflow-started",
-                "snakemake_version": "9.26.1",
+                "snakemake_version": "9.0.0",
                 "command": "snakemake --cores 1",
             },
         )
