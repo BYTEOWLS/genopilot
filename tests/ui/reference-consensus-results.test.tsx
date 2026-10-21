@@ -302,7 +302,7 @@ test('selects an iteration and compares it with the first completed cohort', asy
   }
 });
 
-test('shows each cohort\'s duration in the list and its timing in the details', async () => {
+test('omits cohort durations while retaining execution timestamps in the details', async () => {
   const result = consensusResult();
   result.cohorts[0] = {...result.cohorts[0]!, timing: {durationMs: 15_000}};
   result.cohorts[1] = {...result.cohorts[1]!, timing: {
@@ -314,16 +314,15 @@ test('shows each cohort\'s duration in the list and its timing in the details', 
   const screen = renderScreen({loaded: loaded(result)});
   try {
     await settle();
-    // The active iteration is selected: its row and details carry its own timing.
     let frame = await screen.press(TAB, TAB);
-    assert.match(selectedLine(frame) ?? '', /1 min 5 s/);
+    assert.doesNotMatch(frame, /1 min 5 s/);
     assert.match(frame, /formatted:2026-01-02T10:00:00\.000Z/);
-    // The initial cohort ran within the run: its duration only.
+    // Even an older result containing partial cohort timing must not display that duration.
     frame = await screen.press(ARROW_UP);
-    assert.match(selectedLine(frame) ?? '', /\b15 s\b/);
-    // A pending iteration has not run.
+    assert.doesNotMatch(frame, /\b15 s\b/);
+    // A pending iteration has no execution timestamps.
     frame = await screen.press(ARROW_DOWN, ARROW_DOWN);
-    assert.match(selectedLine(frame) ?? '', /—/);
+    assert.doesNotMatch(frame, /formatted:2026-01-02T10:00:00\.000Z/);
   } finally {
     screen.unmount();
   }

@@ -382,7 +382,7 @@ test('times the run and each iteration from their own recorded executions', asyn
   assert.equal(loaded.shell.timing?.durationMs, 3_015_000);
   assert.equal(loaded.shell.timing?.attempts.length, 1);
   const [initial, iteration] = loaded.result.cohorts;
-  assert.deepEqual(initial?.timing, {durationMs: 15_000});
+  assert.equal(initial?.timing, undefined);
   assert.equal(iteration?.timing?.startedAt, at(9000));
   assert.equal(iteration?.timing?.durationMs, 8_000);
 

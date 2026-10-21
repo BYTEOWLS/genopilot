@@ -24,7 +24,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 ### Results
 
 - Every run records the machine that saved its configuration (CPUs, memory, CPU model, operating system) in `config.yaml` and its provenance; the result page shows it.
-- A running workflow shows its elapsed time, and GenoPilot saves each execution's start, end, and duration in the run's `timing.yaml`. The result page shows them with each stage's duration, and a reference-consensus iteration shows its own.
+- Runs show elapsed time while running and saved execution and stage timings in results.
 - The list of existing runs shows how many runs each workflow has and how long each run took.
 - GenoPilot samples a run's peak memory while it executes and shows it with the run's timing.
 - A new run is saved when its first dry run or execution starts, so leaving the start page without starting one no longer leaves a run in the list of existing runs.

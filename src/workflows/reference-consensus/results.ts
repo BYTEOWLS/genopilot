@@ -116,10 +116,7 @@ export type CohortResult = {
   finishedAt?: string;
   /** From an iteration's provenance: whether the initial cohort existed when it ran. */
   initialAggregated?: boolean;
-  /**
-   * An iteration's own execution timing; for the initial cohort, which ran within the run, only
-   * the wall time of its cohort steps.
-   */
+  /** An iteration's own execution timing; the initial cohort has no separate execution. */
   timing?: CohortTiming;
   counts?: CohortCounts;
   paths: Partial<Record<CohortPathKey, ResultPath>>;
@@ -128,14 +125,6 @@ export type CohortResult = {
 
 export type CohortTiming = Pick<RunTiming, 'durationMs'> &
   Partial<Pick<RunTiming, 'startedAt' | 'finishedAt' | 'attempts' | 'peakMemoryBytes'>>;
-
-/** The stages whose jobs build a cohort; they run within the run for the initial cohort. */
-const cohortStageIds: readonly string[] = ['aggregate-support', 'generate-consensus'];
-
-function initialCohortTiming(runTiming: RunTiming | undefined): CohortTiming | undefined {
-  const stages = runTiming?.stages.filter(stage => cohortStageIds.includes(stage.id)) ?? [];
-  return stages.length > 0 ? {durationMs: stages.reduce((sum, stage) => sum + stage.durationMs, 0)} : undefined;
-}
 
 /**
  * Adds the timing of the run and of each cohort from the run's recorded executions. An iteration's
@@ -151,7 +140,7 @@ export function withConsensusTiming(
   const timing = runTiming(executions.filter(execution => iterationOf(execution) === undefined));
   const cohorts = result.cohorts.map(cohort => {
     const cohortTiming = cohort.id === 'initial'
-      ? initialCohortTiming(timing)
+      ? undefined
       : runTiming(executions.filter(execution => iterationOf(execution) === cohort.iteration));
     return cohortTiming ? {...cohort, timing: cohortTiming} : cohort;
   });
