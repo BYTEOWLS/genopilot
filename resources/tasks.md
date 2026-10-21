@@ -16,6 +16,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 
 ## Application
 
+- [ ] Make sequencing technology explicit per read set, with workflow compatibility and a versioned catalog/run transition ([concept](concepts/sequencing-read-sets.md)).
 - [ ] Add non-interactive `--help` and `--version` output.
 - [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](later.md#workflow-cancellation).
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
