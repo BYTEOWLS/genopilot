@@ -78,6 +78,8 @@ PYTHONPATH=<package>/workflows/shared/logging snakemake ... \
   --logger genopilot-run-events --logger-genopilot-run-events-path <run-dir>/events.jsonl
 ```
 
+When Snakemake ends, GenoPilot also records the execution's start, end, and duration in the run's `timing.yaml`; a direct run is not recorded there.
+
 Without it, a workflow's provenance lists its commands as unavailable.
 
 ## Development

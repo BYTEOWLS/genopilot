@@ -54,6 +54,8 @@ import {
 } from '../new-run-screen/workflow-execution.js';
 import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
 import {formatLocalDateTime} from "../utils.js";
+import {stageDurationRows, timingRows} from '../run-timing-rows.js';
+import type {MachineDetails} from '../../workflows/configuration-validation.js';
 import {SectionList, type SectionListItem} from "./section-list.js";
 import {useGenomeSession} from '../../browser/use-genome-session.js';
 import {browserViewShortcut, genoPilotSummary, runViewTitle} from '../../browser/contract.js';
@@ -62,6 +64,12 @@ import {useTransferGenomeViews} from './transfer-genome-views.js';
 import {useProteinReview} from './protein-review.js';
 import {readReviewGenes as defaultReadReviewGenes} from '../../workflows/annotation-transfer/proteins.js';
 import {cohortConsensusView, consensusIsolateView, consensusSitesView, siteItemId} from '../../workflows/reference-consensus/views.js';
+
+/** `16 CPUs, 64 GB · Apple M3 Max · darwin arm64` */
+function machineSummary(machine: MachineDetails): string {
+  const memory = `${String(Math.round(machine.memory_bytes / 2 ** 30))} GB`;
+  return `${String(machine.cpus)} CPUs, ${memory} · ${machine.cpu_model} · ${machine.platform} ${machine.architecture}`;
+}
 
 export type SupportPath = ResultPath & {id: string; label: string};
 
@@ -505,15 +513,25 @@ export function RunResultsScreen({
   if (metadata?.createdAt) {
     metadataItems.push({id: 'run.created', label: 'Created', value: formatDateTime(metadata.createdAt)});
   }
+  if (shell?.timing) {
+    metadataItems.push(...timingRows(shell.timing, 'run', formatDateTime));
+  }
   if (shell?.generatedAt) {
     metadataItems.push({id: 'run.summary_generated', label: 'Results written', value: formatDateTime(shell.generatedAt)});
   }
   if (shell) {
     metadataItems.push({id: 'run.effective_cpus', label: 'Effective CPUs', value: String(shell.effectiveCpus)});
   }
+  if (configuration) {
+    metadataItems.push({id: 'run.machine', label: 'Machine', value: sanitizeTerminalText(machineSummary(configuration.resources.machine))});
+  }
 
 
+  const stageItems = shell?.timing
+    ? stageDurationRows(shell.timing, manifest.stages, 'run').map(row => ({...row, label: sanitizeTerminalText(row.label), row: true}))
+    : [];
   const metadataSection = (
+    <>
     <SectionList title={'Run Metadata'} items={metadataItems}>
       {runMetadata && (runMetadata.workflowId !== manifest.id || runMetadata.workflowVersion !== manifest.workflow_version) ? (
           <Alert variant="warning">
@@ -521,6 +539,10 @@ export function RunResultsScreen({
           </Alert>
       ) : null}
     </SectionList>
+    {stageItems.length > 0 ? (
+      <SectionList title="Stage durations" description="Wall time while a stage's jobs ran." items={stageItems} />
+    ) : null}
+    </>
   );
   const runDirectorySection = (
     <SectionList title="Run Directory" items={[]}>

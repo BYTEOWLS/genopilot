@@ -23,6 +23,7 @@ import {readRunCitation, type Document} from '../../src/docs/documents.js';
 import {mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {testMachine} from '../workflows/machine.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -86,7 +87,7 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
       },
       lifton: {profile: 'same-species'},
       review: {minimum_protein_identity: 99},
-      resources: {cpu_mode: 'automatic', effective_cpus: 7},
+      resources: {cpu_mode: 'automatic', effective_cpus: 7, machine: testMachine},
       run: {
         output_root: '/runs',
         id: 'result-42',
@@ -163,7 +164,11 @@ function refreshed(loaded: LoadedWorkflowResult): LoadedWorkflowResult {
     return loaded;
   }
   const annotation = loaded as CompatibleAnnotationTransferResult;
-  return {...annotation, shell: annotationTransferShell(annotation.result, annotation.configuration.resources.effective_cpus)};
+  const {timing} = annotation.shell;
+  return {
+    ...annotation,
+    shell: {...annotationTransferShell(annotation.result, annotation.configuration.resources.effective_cpus), ...(timing ? {timing} : {})},
+  };
 }
 
 /** Result help as a stand-in document; the packaged pages are tested on their own. */
@@ -234,8 +239,9 @@ test('presents compatible run metadata, scientific metrics, and direct result pa
     assert.ok(!overview!.includes('annotation-transfer@1') && !overview!.includes('131'));
     assert.ok(transfer!.includes('131') && !transfer!.includes('annotation-transfer@1'));
     assert.ok(details!.includes('annotation-transfer@1') && !details!.includes('131'));
-    // The GenoPilot that saved the configuration is a run detail.
+    // The GenoPilot and the machine that saved the configuration are run details.
     assert.ok(details!.includes('v1.2.3'));
+    assert.ok(details!.includes(testMachine.cpu_model) && details!.includes('16 GB'));
     // The run directory is listed once, in its own section, not again as a run file shown as ".".
     assert.doesNotMatch(files!, /\s\.\s*$/m);
     const frame = frames.join('\n');
@@ -608,4 +614,46 @@ test('views opened from a run carry its citation, other views do not', () => {
   assert.equal(withRunCitation(view, undefined).provenance.run?.citation, undefined);
   const accession = {...view, provenance: {...view.provenance, run: undefined}};
   assert.equal(withRunCitation(accession, citationDocument).provenance.run, undefined);
+});
+
+test('shows the run\'s start, finish, duration, attempts, and stage durations among its details', async () => {
+  const loaded = compatibleResult();
+  const timed: CompatibleAnnotationTransferResult = {
+    ...loaded,
+    shell: {
+      ...loaded.shell,
+      timing: {
+        startedAt: '2026-10-21T08:00:00.000Z',
+        finishedAt: '2026-10-21T10:00:05.000Z',
+        durationMs: 3_605_000,
+        attempts: [
+          {startedAt: '2026-10-21T08:00:00.000Z', finishedAt: '2026-10-21T08:00:05.000Z', durationMs: 5_000},
+          {startedAt: '2026-10-21T09:00:05.000Z', finishedAt: '2026-10-21T10:00:05.000Z', durationMs: 3_600_000},
+        ],
+        stages: [{id: 'unclassified', durationMs: 42_000}],
+      },
+    },
+  };
+  const screen = renderScreen(timed, {inputActive: true});
+  try {
+    const details = (await tabFrames(screen)).at(-1)!;
+    for (const expected of [
+      'formatted:2026-10-21T08:00:00.000Z',
+      'formatted:2026-10-21T10:00:05.000Z',
+      '1 h 0 min 5 s',
+      '42 s',
+    ]) {
+      assert.ok(details.includes(expected), `missing ${expected}`);
+    }
+  } finally {
+    screen.unmount();
+  }
+
+  const untimed = renderScreen(compatibleResult(), {inputActive: true});
+  try {
+    const details = (await tabFrames(untimed)).at(-1)!;
+    assert.ok(!details.includes('formatted:2026-10-21T08:00:00.000Z') && !/\b\d+ s\b/.test(details));
+  } finally {
+    untimed.unmount();
+  }
 });

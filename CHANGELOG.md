@@ -10,6 +10,12 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 - A run's citation includes igv.js, the genome viewer, with its version.
 
+### Results
+
+- Every run records the machine that saved its configuration (CPUs, memory, CPU model, operating system) in `config.yaml` and its provenance; the result page shows it.
+- A running workflow shows its elapsed time, and GenoPilot saves each execution's start, end, and duration in the run's `timing.yaml`. The result page shows them with each stage's duration, and a reference-consensus iteration shows its own.
+- The list of existing runs shows how many runs each workflow has and how long each run took.
+
 ## [0.0.2] - 2026-10-08
 
 ### Provenance

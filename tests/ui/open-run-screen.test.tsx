@@ -96,6 +96,7 @@ function renderScreen(context: TestContext, options: {
   runs?: DiscoveredRun[];
   rows?: number;
   onHomeSuspension?: (suspension: HomeSuspension | undefined) => void;
+  countRuns?: (collectionRoot: string, workflowId: string) => Promise<number>;
 } = {}) {
   const input = new TestInput();
   const output = new TestOutput();
@@ -112,6 +113,7 @@ function renderScreen(context: TestContext, options: {
         return options.runs ?? [run];
       }}
       deleteRun={options.deleteRun}
+      countRuns={options.countRuns ?? (async () => 0)}
       formatDateTime={value => `formatted:${value}`}
     />
     </HomeSuspensionContext.Provider>,
@@ -147,6 +149,32 @@ test('uses the default run collection and opens persisted results without execut
   screen.output.clearOutput();
   screen.input.write('\x1b');
   await waitForOutput(screen.output, 'Saved run description');
+});
+
+test('shows how many runs each workflow has and how long each run took', async context => {
+  const counted: string[] = [];
+  const timed: DiscoveredRun = {
+    ...run,
+    timing: {
+      startedAt: '2026-09-05T20:00:00.000Z',
+      finishedAt: '2026-09-05T21:23:45.000Z',
+      durationMs: 5_025_000,
+      attempts: [],
+      stages: [],
+    },
+  };
+  const screen = renderScreen(context, {
+    runs: [timed],
+    countRuns: async (collectionRoot, workflowId) => {
+      counted.push(`${collectionRoot}/${workflowId}`);
+      return 3;
+    },
+  });
+  await waitForOutput(screen.output, '3 runs');
+  assert.deepEqual(counted, [`/research/project/runs/${workflow.manifest.id}`]);
+
+  screen.input.write('\r');
+  await waitForOutput(screen.output, '1 h 23 min 45 s');
 });
 
 test('deletes a selected run only after explicit confirmation', async context => {

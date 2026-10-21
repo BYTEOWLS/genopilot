@@ -17,6 +17,7 @@ import {
 } from '../../../src/workflows/reference-consensus/cohort-decision.js';
 import {validateReferenceConsensusConfiguration} from '../../../src/workflows/reference-consensus/configuration.js';
 import {stringifyRunFile} from '../../../src/workflows/run-preparation.js';
+import {testMachine} from '../machine.js';
 
 const configuration = validateReferenceConsensusConfiguration({
   schema_version: 1,
@@ -30,7 +31,7 @@ const configuration = validateReferenceConsensusConfiguration({
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
   consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
-  resources: {cpu_mode: 'automatic', effective_cpus: 2},
+  resources: {cpu_mode: 'automatic', effective_cpus: 2, machine: testMachine},
   run: {output_root: '/analysis/runs', id: 'run-a', created_at: '2026-01-01T12:00:00.000Z'},
 });
 

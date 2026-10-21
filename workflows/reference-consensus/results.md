@@ -110,6 +110,7 @@ Shown once the active iteration's consensus FASTA exists. The consensus is not a
 | Iteration | The cohort's number: 1 is the initial cohort of all selected isolates, and every saved decision adds the next one. The active cohort is marked. |
 | State | Whether the cohort finished; see *Cohort states* under *Terms*. |
 | Date | When the cohort finished, or for a pending iteration when its decision was saved, in local time. |
+| Duration | How long the cohort's steps ran; see *Iteration details*. |
 | Voters | Number of isolates that vote in the cohort. |
 | Reason | The reason saved with the decision; the initial cohort has none. |
 
@@ -118,7 +119,7 @@ Shown once the active iteration's consensus FASTA exists. The consensus is not a
 | Item | Meaning |
 |---|---|
 | Decision saved | When the decision that created this iteration was saved, in local time. |
-| Finished | When the cohort's provenance record was written, which is when the cohort finished, in local time. |
+| Started, Finished, Duration | When the iteration's Snakemake execution started and ended, in local time, and how long it ran; *Attempts* appears when it was continued after an interruption. The initial cohort ran within the run, so it shows only the wall time of its aggregation and consensus steps, and Finished from its provenance record. |
 | Reason | The reason the researcher saved with the decision that created this iteration. |
 | Voting method, backbone votes, minimum callable isolates, unresolved SNPs, voting isolates | The cohort's settings and voters, as explained under *Active cohort*. |
 | Excluded isolates | Selected isolates that do not vote in this cohort, with whether their processing completed. Their results and logs stay in the run directory. |

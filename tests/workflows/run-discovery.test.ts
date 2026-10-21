@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
-import {access, mkdir, mkdtemp, symlink, writeFile} from 'node:fs/promises';
+import {access, mkdir, mkdtemp, rm, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
 import type {WorkflowManifest} from '../../src/workflows/manifest.js';
 import {
+  countWorkflowRuns,
   deleteWorkflowRun,
   discoverWorkflowRuns,
 } from '../../src/workflows/run-discovery.js';
 import type {LoadedWorkflowResult} from '../../src/workflows/results.js';
+import {appendExecutionRecord} from '../../src/workflows/run-timing.js';
 
 const manifest: WorkflowManifest = {
   schema_version: 1,
@@ -121,4 +123,35 @@ test('refuses deletion through a workflow-directory symlink', async () => {
 test('returns an empty list when a workflow has no run directory', async () => {
   const tempDir = await mkdtemp(join(tmpdir(), 'genopilot-run-discovery-'));
   assert.deepEqual(await discoverWorkflowRuns(tempDir, manifest), []);
+});
+
+test('counts a workflow\'s run directories, and none before its first run', async context => {
+  const collectionRoot = await mkdtemp(join(tmpdir(), 'run-count-'));
+  context.after(() => rm(collectionRoot, {recursive: true, force: true}));
+  assert.equal(await countWorkflowRuns(collectionRoot, 'some-workflow'), 0);
+  await mkdir(join(collectionRoot, 'some-workflow', 'run-a'), {recursive: true});
+  await mkdir(join(collectionRoot, 'some-workflow', 'run-b'));
+  await writeFile(join(collectionRoot, 'some-workflow', 'notes.txt'), '');
+  assert.equal(await countWorkflowRuns(collectionRoot, 'some-workflow'), 2);
+});
+
+test('gives a run without a result, such as a failed one, the duration of its recorded executions', async context => {
+  const collectionRoot = await mkdtemp(join(tmpdir(), 'run-timing-discovery-'));
+  context.after(() => rm(collectionRoot, {recursive: true, force: true}));
+  const directory = join(collectionRoot, manifest.id, 'run-a');
+  await mkdir(directory, {recursive: true});
+  await appendExecutionRecord(directory, {
+    started_at: '2026-10-21T08:00:00.000Z',
+    finished_at: '2026-10-21T08:01:00.000Z',
+    duration_seconds: 60,
+    exit_code: 1,
+    command: 'snakemake',
+    stages: {},
+  });
+  const [run] = await discoverWorkflowRuns(collectionRoot, manifest, async () => ({
+    kind: 'incompatible',
+    error: {kind: 'missing-summary', message: 'no summary'},
+  }));
+  assert.equal(run?.status, 'incomplete');
+  assert.equal(run?.timing?.durationMs, 60_000);
 });

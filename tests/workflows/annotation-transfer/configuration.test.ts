@@ -5,6 +5,7 @@ import {
   parseAnnotationTransferConfiguration,
   validateAnnotationTransferConfiguration,
 } from '../../../src/workflows/annotation-transfer/configuration.js';
+import {testMachine, testMachineYaml} from '../machine.js';
 
 const validConfiguration = {
   schema_version: 1,
@@ -22,6 +23,7 @@ const validConfiguration = {
   resources: {
     cpu_mode: 'automatic',
     effective_cpus: 8,
+    machine: testMachine,
   },
   run: {
     output_root: '/data/runs',
@@ -68,6 +70,7 @@ test('parses the minimal automatic-CPU configuration from YAML', () => {
     resources:
       cpu_mode: automatic
       effective_cpus: 8
+${testMachineYaml('      ')}
     run:
       output_root: /data/runs
       id: 2026-09-05_083412123_annotation-transfer
@@ -75,7 +78,7 @@ test('parses the minimal automatic-CPU configuration from YAML', () => {
   `);
 
   assert.equal(parsed.workflow_id, 'annotation-transfer');
-  assert.deepEqual(parsed.resources, {cpu_mode: 'automatic', effective_cpus: 8});
+  assert.deepEqual(parsed.resources, {cpu_mode: 'automatic', effective_cpus: 8, machine: testMachine});
   assert.equal(parsed.run.id, '2026-09-05_083412123_annotation-transfer');
   assert.equal(parsed.run.name, undefined);
   assert.equal(parsed.run.description, undefined);
@@ -83,10 +86,10 @@ test('parses the minimal automatic-CPU configuration from YAML', () => {
 
 test('accepts leave-one-free and manual CPU modes', () => {
   const leaveOneFree = configuration({
-    resources: {cpu_mode: 'leave-one-free', effective_cpus: 7},
+    resources: {cpu_mode: 'leave-one-free', effective_cpus: 7, machine: testMachine},
   });
   const manual = configuration({
-    resources: {cpu_mode: 'manual', manual_limit: 8, effective_cpus: 8},
+    resources: {cpu_mode: 'manual', manual_limit: 8, effective_cpus: 8, machine: testMachine},
   });
 
   assert.equal(
@@ -98,10 +101,10 @@ test('accepts leave-one-free and manual CPU modes', () => {
 
 test('requires a positive manual limit only in manual CPU mode', () => {
   for (const resources of [
-    {cpu_mode: 'manual', effective_cpus: 1},
-    {cpu_mode: 'manual', manual_limit: 0, effective_cpus: 1},
-    {cpu_mode: 'manual', manual_limit: 1.5, effective_cpus: 1},
-    {cpu_mode: 'automatic', manual_limit: 4, effective_cpus: 1},
+    {cpu_mode: 'manual', effective_cpus: 1, machine: testMachine},
+    {cpu_mode: 'manual', manual_limit: 0, effective_cpus: 1, machine: testMachine},
+    {cpu_mode: 'manual', manual_limit: 1.5, effective_cpus: 1, machine: testMachine},
+    {cpu_mode: 'automatic', manual_limit: 4, effective_cpus: 1, machine: testMachine},
   ]) {
     const issues = validationIssues(configuration({resources}));
     assert.ok(issues.some(issue => issue.path === '$.resources.manual_limit'));
@@ -111,7 +114,7 @@ test('requires a positive manual limit only in manual CPU mode', () => {
 test('requires a positive effective CPU count', () => {
   for (const effectiveCpus of [undefined, 0, 1.5]) {
     const issues = validationIssues(
-      configuration({resources: {cpu_mode: 'automatic', effective_cpus: effectiveCpus}}),
+      configuration({resources: {cpu_mode: 'automatic', effective_cpus: effectiveCpus, machine: testMachine}}),
     );
     assert.ok(issues.some(issue => issue.path === '$.resources.effective_cpus'));
   }
@@ -119,7 +122,7 @@ test('requires a positive effective CPU count', () => {
 
 test('rejects unsupported CPU modes', () => {
   const issues = validationIssues(
-    configuration({resources: {cpu_mode: 'maximum', effective_cpus: 1}}),
+    configuration({resources: {cpu_mode: 'maximum', effective_cpus: 1, machine: testMachine}}),
   );
 
   assert.ok(issues.some(issue => issue.path === '$.resources.cpu_mode'));

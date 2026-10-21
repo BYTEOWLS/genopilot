@@ -29,7 +29,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
             },
             "lifton": {"profile": "same-species"},
             "review": {"minimum_protein_identity": 99},
-            "resources": {"cpu_mode": "manual", "manual_limit": 3, "effective_cpus": 3},
+            "resources": {"cpu_mode": "manual", "manual_limit": 3, "effective_cpus": 3, "machine": {"platform": "linux", "architecture": "x64", "cpu_model": "Test CPU", "cpus": 8, "memory_bytes": 17179869184}},
             "run": {
                 "output_root": str(self.temp_dir.parent),
                 "id": "test-run",
@@ -149,6 +149,7 @@ class CollectRunProvenanceTests(unittest.TestCase):
         self.assertEqual(provenance["effective_configuration"], self.config)
         self.assertEqual(provenance["resources"]["requested"]["manual_limit"], 3)
         self.assertEqual(provenance["resources"]["effective_cpus"], 3)
+        self.assertEqual(provenance["resources"]["machine"]["cpus"], 8)
         self.assertEqual(provenance["tool_versions"]["configured"], configured)
         self.assertEqual(provenance["tool_versions"]["observed"]["snakemake"]["version"], "9.11.3")
         self.assertTrue(all("argv" in command for command in provenance["commands"]))

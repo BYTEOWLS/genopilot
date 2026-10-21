@@ -11,6 +11,8 @@ import {
 } from './cohort-decision.js';
 import type {ReferenceConsensusConfiguration} from './configuration.js';
 import type {IsolateSnapshot} from './snapshot.js';
+import {iterationTarget} from './iteration-run.js';
+import {executionTargets, runTiming, type ExecutionRecord, type RunTiming} from '../run-timing.js';
 
 /** Every persisted record this reader interprets carries this schema version. */
 export const REFERENCE_CONSENSUS_RECORD_SCHEMA_VERSION = 1 as const;
@@ -114,10 +116,47 @@ export type CohortResult = {
   finishedAt?: string;
   /** From an iteration's provenance: whether the initial cohort existed when it ran. */
   initialAggregated?: boolean;
+  /**
+   * An iteration's own execution timing; for the initial cohort, which ran within the run, only
+   * the wall time of its cohort steps.
+   */
+  timing?: CohortTiming;
   counts?: CohortCounts;
   paths: Partial<Record<CohortPathKey, ResultPath>>;
   issues: RecordIssue[];
 };
+
+export type CohortTiming = Pick<RunTiming, 'durationMs'> &
+  Partial<Pick<RunTiming, 'startedAt' | 'finishedAt' | 'attempts'>>;
+
+/** The stages whose jobs build a cohort; they run within the run for the initial cohort. */
+const cohortStageIds: readonly string[] = ['aggregate-support', 'generate-consensus'];
+
+function initialCohortTiming(runTiming: RunTiming | undefined): CohortTiming | undefined {
+  const stages = runTiming?.stages.filter(stage => cohortStageIds.includes(stage.id)) ?? [];
+  return stages.length > 0 ? {durationMs: stages.reduce((sum, stage) => sum + stage.durationMs, 0)} : undefined;
+}
+
+/**
+ * Adds the timing of the run and of each cohort from the run's recorded executions. An iteration's
+ * execution asks Snakemake for its provenance record; every other execution is the run's own.
+ */
+export function withConsensusTiming(
+  result: ReferenceConsensusResult,
+  executions: readonly ExecutionRecord[],
+): ReferenceConsensusResult {
+  const iterations = result.cohorts.filter(cohort => cohort.id !== 'initial').map(cohort => cohort.iteration);
+  const iterationOf = (execution: ExecutionRecord) =>
+    iterations.find(iteration => executionTargets(execution, iterationTarget(iteration)));
+  const timing = runTiming(executions.filter(execution => iterationOf(execution) === undefined));
+  const cohorts = result.cohorts.map(cohort => {
+    const cohortTiming = cohort.id === 'initial'
+      ? initialCohortTiming(timing)
+      : runTiming(executions.filter(execution => iterationOf(execution) === cohort.iteration));
+    return cohortTiming ? {...cohort, timing: cohortTiming} : cohort;
+  });
+  return {...result, cohorts, ...(timing ? {timing} : {})};
+}
 
 export type BackboneResult = {
   source?: 'local' | 'ncbi';
@@ -146,6 +185,8 @@ export type ReferenceConsensusResult = {
   status: ResultStatus;
   generatedAt?: string;
   effectiveCpus: number;
+  /** The run's own executions, without its iterations'. */
+  timing?: RunTiming;
   runFiles: {configuration: ResultPath; snapshot: ResultPath; inputValidation: ResultPath};
   /** Paths that should exist now; the shell counts the unavailable ones as missing. */
   linkedPaths: ResultPath[];

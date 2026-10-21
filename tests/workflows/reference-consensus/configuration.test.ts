@@ -6,6 +6,7 @@ import {
   validateReferenceConsensusConfiguration,
 } from '../../../src/workflows/reference-consensus/configuration.js';
 import {parseIsolateSnapshot} from '../../../src/workflows/reference-consensus/snapshot.js';
+import {testMachine, testMachineYaml} from '../machine.js';
 
 const validConfiguration = {
   schema_version: 1,
@@ -24,7 +25,7 @@ const validConfiguration = {
     min_callable_isolates: 0,
     unresolved_snp: 'n',
   },
-  resources: {cpu_mode: 'automatic', effective_cpus: 8},
+  resources: {cpu_mode: 'automatic', effective_cpus: 8, machine: testMachine},
   run: {output_root: '/analysis/runs', id: '2026-01-01_120000000_example', created_at: '2026-01-01T12:00:00.000Z'},
 };
 
@@ -75,6 +76,7 @@ resources:
   cpu_mode: manual
   manual_limit: 2
   effective_cpus: 2
+${testMachineYaml('  ')}
 run:
   output_root: /analysis/runs
   id: example

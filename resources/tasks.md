@@ -17,7 +17,7 @@ Every task includes proportionate unit tests in the same change. A task is not c
 ## Application
 
 - [ ] Add non-interactive `--help` and `--version` output.
-- [ ] Add start and finish times, total and per-stage duration, and available resource metrics to the run results; status, creation time, effective CPUs, and validation counts are shown.
+- [ ] Add available resource metrics (CPU time and peak memory per stage, from the job benchmarks) to the run results; timing is shown.
 - [ ] Show a systems check before a run: free disk against an estimate, CPUs, and memory, and duration estimates from the machine's completed runs ([concept](concepts/systems-check.md)).
 - [ ] Resume an incomplete run from the open-run screen in its own workspace, and load runs by stable workflow ID and version even when the manifest's label or description changed. Direct Snakemake resume is covered; take this up with [workflow cancellation](later.md#workflow-cancellation).
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.

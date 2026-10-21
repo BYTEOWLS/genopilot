@@ -23,6 +23,8 @@ import {ParameterList, parameterLabelWidth, type ParameterRow} from '../componen
 import type {TabDefinition} from '../components/tabs.js';
 import {Table} from '../components/table.js';
 import {sanitizeTerminalText} from '../sanitize.js';
+import {formatDuration} from '../../workflows/run-timing.js';
+import {timingRows} from '../run-timing-rows.js';
 import {mutedColor} from '../theme.js';
 
 export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files' | 'run' | 'citation';
@@ -296,6 +298,7 @@ const cohortColumns: readonly {id: string; label: string}[] = [
   {id: 'cohorts.iteration', label: 'Iteration'},
   {id: 'cohorts.state', label: 'State'},
   {id: 'cohorts.date', label: 'Date'},
+  {id: 'cohorts.duration', label: 'Duration'},
   {id: 'cohorts.voters', label: 'Voters'},
   {id: 'cohorts.reason', label: 'Reason'},
 ];
@@ -307,6 +310,7 @@ export function cohortTableRows(result: ReferenceConsensusResult, formatDateTime
       `${cohortName(cohort)}${cohort.id === result.activeCohortId ? ' · active' : ''}`,
       cohort.state,
       date ? formatDateTime(date) : '—',
+      cohort.timing ? formatDuration(cohort.timing.durationMs) : '—',
       cohort.voters ? String(cohort.voters.length) : '—',
       cohort.reason ?? '—',
     ];
@@ -330,7 +334,10 @@ function cohortDetailSections(cohort: CohortResult, formatDateTime: DateFormatte
   if (cohort.decidedAt) {
     rows.push({id: 'cohort.decided_at', label: 'Decision saved', value: formatDateTime(cohort.decidedAt)});
   }
-  if (cohort.finishedAt) {
+  if (cohort.timing) {
+    // An iteration's own events give its start and finish; the initial cohort ran within the run.
+    rows.push(...timingRows({...(cohort.finishedAt ? {finishedAt: cohort.finishedAt} : {}), ...cohort.timing}, 'cohort', formatDateTime));
+  } else if (cohort.finishedAt) {
     rows.push({id: 'cohort.finished_at', label: 'Finished', value: formatDateTime(cohort.finishedAt)});
   }
   if (cohort.reason) {

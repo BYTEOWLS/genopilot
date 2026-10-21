@@ -73,7 +73,7 @@ def write_run(
             "min_callable_isolates": 0,
             "unresolved_snp": "n",
         },
-        "resources": {"cpu_mode": "automatic", "effective_cpus": effective_cpus},
+        "resources": {"cpu_mode": "automatic", "effective_cpus": effective_cpus, "machine": {"platform": "linux", "architecture": "x64", "cpu_model": "Test CPU", "cpus": 8, "memory_bytes": 17179869184}},
         "run": {
             "output_root": str(run_dir.parent),
             "id": run_dir.name,

@@ -226,6 +226,14 @@ The Illumina importer (consensus Task 1b) suggests raw or trimmed reads from rea
 
 Revisit when a multi-lane delivery with processed copies appears, or when raw reads are already adapter-trimmed during demultiplexing so that read lengths no longer tell raw and processed copies apart.
 
+## Result triage
+
+Order warnings, unresolved loci, and genes listed for review by documented, visible criteria, such as whether a coding sequence is affected and how, so a researcher knows what to inspect first. Each workflow explains its criteria in its `results.md`; no hidden score decides the order. Design it from researchers' reviews of real results.
+
+## AI-assisted interpretation
+
+A read-only MCP server lets AI assistants answer questions about runs from their recorded results and documentation, and later propose decisions for the researcher to save. Comparison and triage stay in GenoPilot. Designed in the [AI-assisted interpretation concept](concepts/ai-interpretation.md); it builds on the [run export](concepts/run-export.md) and the [workflow modules](concepts/workflow-modules.md).
+
 ## Run verification command
 
 Researchers should be able to inspect and rerun a released workflow without repository access. Every run records package and workflow versions, workflow checksums, effective configuration, input/output checksums, reference versions, tool versions, commands, logs, events, timestamps, and platform.

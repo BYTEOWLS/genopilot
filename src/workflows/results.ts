@@ -2,6 +2,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {parse} from 'yaml';
 import type {WorkflowManifest} from './manifest.js';
+import {readExecutionRecords, runTiming, type RunTiming} from './run-timing.js';
 import {
   ANNOTATION_TRANSFER_WORKFLOW_ID,
   ANNOTATION_TRANSFER_WORKFLOW_VERSION,
@@ -23,7 +24,11 @@ import {
   ReferenceConsensusConfigurationError,
   type ReferenceConsensusConfiguration,
 } from './reference-consensus/configuration.js';
-import {readReferenceConsensusResult, type ReferenceConsensusResult} from './reference-consensus/results.js';
+import {
+  readReferenceConsensusResult,
+  withConsensusTiming,
+  type ReferenceConsensusResult,
+} from './reference-consensus/results.js';
 import {parseIsolateSnapshot, type IsolateSnapshot} from './reference-consensus/snapshot.js';
 
 export type WorkflowResultCompatibilityError = {
@@ -46,6 +51,8 @@ export type ResultShell = {
   status: {variant: 'success' | 'warning' | 'error'; explanation: string};
   generatedAt?: string;
   effectiveCpus: number;
+  /** The run's own executions, from its event file; absent before the first one. */
+  timing?: RunTiming;
   /** Paths that should exist now; unavailable ones are reported as missing. */
   linkedPaths: readonly ResultPath[];
 };
@@ -179,8 +186,33 @@ function configurationIdentity(value: unknown): WorkflowIdentity | undefined {
   return {id: configuration.workflow_id, version: configuration.workflow_version as number};
 }
 
-/** Loads a persisted run through the explicit reader for its supported workflow contract. */
+/** Adds the run's timing, as GenoPilot recorded it, to a compatible result. */
+async function withRunTiming(
+  loaded: LoadedWorkflowResult,
+  runDirectory: string,
+  manifest: WorkflowManifest,
+): Promise<LoadedWorkflowResult> {
+  if (loaded.kind !== 'compatible') {
+    return loaded;
+  }
+  const executions = await readExecutionRecords(resolve(runDirectory));
+  if (isReferenceConsensusResult(loaded)) {
+    const result = withConsensusTiming(loaded.result, executions);
+    return {...loaded, result, shell: {...loaded.shell, ...(result.timing ? {timing: result.timing} : {})}};
+  }
+  const timing = runTiming(executions);
+  return timing ? {...loaded, shell: {...loaded.shell, timing}} : loaded;
+}
+
+/** Loads a persisted run through the explicit reader for its supported workflow contract, with its timing. */
 export async function loadWorkflowResult(
+  runDirectory: string,
+  manifest: WorkflowManifest,
+): Promise<LoadedWorkflowResult> {
+  return withRunTiming(await readWorkflowResult(runDirectory, manifest), runDirectory, manifest);
+}
+
+async function readWorkflowResult(
   runDirectory: string,
   manifest: WorkflowManifest,
 ): Promise<LoadedWorkflowResult> {

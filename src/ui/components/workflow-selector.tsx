@@ -6,6 +6,7 @@ import type {DiscoveredWorkflow} from '../../workflows/discovery.js';
 import {MarkdownDocumentPage} from './markdown-document-page.js';
 import {Page} from './page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
+import {mutedColor} from '../theme.js';
 
 export type WorkflowDiscovery = () => Promise<DiscoveredWorkflow[]>;
 
@@ -88,6 +89,7 @@ export function WorkflowSelector({
   onSelect,
   onBack,
   selectHint,
+  detail,
   inputActive = true,
   loadDocuments = workflow => readWorkflowDocuments(workflow),
 }: {
@@ -96,6 +98,8 @@ export function WorkflowSelector({
   onSelect: (workflow: DiscoveredWorkflow) => void;
   onBack: () => void;
   selectHint?: string;
+  /** A short line under a workflow's description, such as how many runs it has. */
+  detail?: (workflow: DiscoveredWorkflow) => string | undefined;
   inputActive?: boolean;
   /** A workflow's documents, opened with `?`. */
   loadDocuments?: (workflow: DiscoveredWorkflow) => Promise<Document[]>;
@@ -177,6 +181,7 @@ export function WorkflowSelector({
               {highlighted ? '› ' : '  '}{sanitizeTerminalText(workflow.manifest.label)}
             </Text>
             <Text wrap="wrap">{sanitizeTerminalText(workflow.manifest.description)}</Text>
+            {detail?.(workflow) ? <Text color={mutedColor}>{detail(workflow)}</Text> : null}
           </Box>
         );
       }) : null}

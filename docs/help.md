@@ -6,7 +6,7 @@ GenoPilot configures and runs curated genome workflows. Each workflow is a packa
 
 A new run starts by choosing a workflow; its documentation is available from the selection. Configure the run, then start it as a dry run, which only previews the jobs Snakemake would execute, or execute it. Each run gets its own directory with the saved configuration, all results, the complete logs, and a provenance record of commands, tool versions, checksums, and the effective configuration.
 
-Open existing runs to view their results again or to delete them. On a result page, `?` explains every item it shows.
+Open existing runs to view their results again or to delete them. Each workflow shows how many runs it has, and each run how long it took. On a result page, `?` explains every item it shows.
 
 Files a run copied in from outside are marked **imported**, files it computed are **generated**, and stages reused from elsewhere instead of computed are **cached**.
 
@@ -38,7 +38,7 @@ The tooling page also shows GenoPilot's own version and, when known, the Git com
 | `v` | Open the current document page in the browser |
 | Ctrl+C twice | Exit GenoPilot |
 
-A running workflow is not left by Esc or `h` until it finished or was stopped.
+A running workflow is not left by Esc or `h` until it finished or was stopped. Its screen shows the elapsed time, which stops when Snakemake ends.
 
 ## Browser documents
 

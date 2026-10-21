@@ -21,6 +21,7 @@ import {
 } from '../../../src/workflows/reference-consensus/run-configuration.js';
 import {parseIsolateSnapshot} from '../../../src/workflows/reference-consensus/snapshot.js';
 import {createRunWorkspace} from '../../../src/workflows/run-preparation.js';
+import {machineDetails} from '../../../src/workflows/configuration-validation.js';
 
 const now = new Date('2026-09-25T10:00:00.000Z');
 const genopilot = {version: '1.2.3', igv: '3.8.9'};
@@ -105,7 +106,8 @@ test('snapshots every selected isolate with all read pairs in selection order', 
   assert.deepEqual(configuration.consensus, {
     include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 1, unresolved_snp: 'iupac',
   });
-  assert.deepEqual(configuration.resources, {cpu_mode: 'manual', manual_limit: 2, effective_cpus: 2});
+  // The builder records the machine it runs on.
+  assert.deepEqual(configuration.resources, {cpu_mode: 'manual', manual_limit: 2, effective_cpus: 2, machine: machineDetails()});
   assert.deepEqual(configuration.genopilot, genopilot);
   assert.equal(configuration.run.id, '2026-09-25_100000000_Cohort-one');
   assert.equal(prepared.outputDirectory, join(tempDir, 'runs', 'reference-consensus', configuration.run.id));

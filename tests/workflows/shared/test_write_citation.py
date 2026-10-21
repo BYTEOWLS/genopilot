@@ -41,7 +41,7 @@ def provenance(workflow_id: str, inputs: dict, configuration: dict, released: bo
 TRANSFER_CONFIGURATION = {
     "lifton": {"profile": "same-species"},
     "review": {"minimum_protein_identity": 99},
-    "resources": {"cpu_mode": "automatic", "effective_cpus": 4},
+    "resources": {"cpu_mode": "automatic", "effective_cpus": 4, "machine": {"platform": "linux", "architecture": "x64", "cpu_model": "Test CPU", "cpus": 8, "memory_bytes": 17179869184}},
 }
 LOCAL_TRANSFER_INPUTS = {
     "reference": {"source": "local", "fasta": "/inputs/reference.fasta", "gff3": "/inputs/reference.gff3"},

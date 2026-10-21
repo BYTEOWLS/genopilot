@@ -25,6 +25,7 @@ import {
   parseParameterDefinitions,
   type WorkflowParameterDefinition,
 } from '../../src/workflows/parameter-definitions.js';
+import {testMachine} from '../workflows/machine.js';
 
 const packagedParameterDefinitions = parseParameterDefinitions(
   readFileSync(
@@ -822,7 +823,7 @@ test('labels a previous run by its name and creation time, not its run ID', () =
     },
     lifton: {profile: 'same-species'},
     review: {minimum_protein_identity: 99},
-    resources: {cpu_mode: 'automatic', effective_cpus: 8},
+    resources: {cpu_mode: 'automatic', effective_cpus: 8, machine: testMachine},
     run: {
       output_root: '/data/runs',
       id: '2026-09-05_083412123_Baseline-transfer',

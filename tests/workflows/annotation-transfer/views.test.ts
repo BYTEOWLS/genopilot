@@ -7,6 +7,7 @@ import test from 'node:test';
 import type {AnnotationTransferConfiguration} from '../../../src/workflows/annotation-transfer/configuration.js';
 import type {ReviewGene} from '../../../src/workflows/annotation-transfer/proteins.js';
 import {proteinsGuideHeading, transferGuideHeading, transferReferenceView, transferReviewView, transferTargetView} from '../../../src/workflows/annotation-transfer/views.js';
+import {testMachine} from '../machine.js';
 
 const fixtures = join(import.meta.dirname, '../../fixtures/annotation-transfer');
 
@@ -21,7 +22,7 @@ const configuration = {
   },
   lifton: {profile: 'same-species'},
   review: {minimum_protein_identity: 99},
-  resources: {cpu_mode: 'automatic', effective_cpus: 1},
+  resources: {cpu_mode: 'automatic', effective_cpus: 1, machine: testMachine},
   run: {id: 'run-1', name: 'Fixture run', created_at: '2026-10-05T10:00:00.000Z'},
 } as unknown as AnnotationTransferConfiguration;
 

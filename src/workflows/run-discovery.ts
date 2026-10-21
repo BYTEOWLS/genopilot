@@ -4,6 +4,7 @@ import {parse} from 'yaml';
 import {validateGenoPilot, type GenoPilotDetails} from './configuration-validation.js';
 import type {WorkflowManifest} from './manifest.js';
 import {loadWorkflowResult, type LoadedWorkflowResult} from './results.js';
+import {readExecutionRecords, runTiming, type RunTiming} from './run-timing.js';
 
 export type ExistingRunMetadata = {
   id: string;
@@ -30,6 +31,8 @@ export type DiscoveredRun = {
   status: ExistingRunStatus;
   missingLinkedPaths: number;
   loaded: LoadedWorkflowResult;
+  /** The result's timing, or for a run without a result, such as a failed one, all its executions. */
+  timing?: RunTiming;
 };
 
 export type WorkflowResultLoader = (
@@ -128,6 +131,19 @@ export async function deleteWorkflowRun(
   await rm(targetDirectory, {recursive: true});
 }
 
+/** Counts a workflow's run directories without loading them; none when the workflow has no runs yet. */
+export async function countWorkflowRuns(collectionRoot: string, workflowId: string): Promise<number> {
+  try {
+    const entries = await readdir(resolve(collectionRoot, workflowId), {withFileTypes: true});
+    return entries.filter(entry => entry.isDirectory()).length;
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') {
+      return 0;
+    }
+    throw error;
+  }
+}
+
 /** Discovers persisted runs in one workflow collection without starting or resuming them. */
 export async function discoverWorkflowRuns(
   collectionRoot: string,
@@ -156,12 +172,16 @@ export async function discoverWorkflowRuns(
         parsedConfiguration = undefined;
       }
       const loaded = await loadResult(directory, manifest);
+      const timing = loaded.kind === 'compatible'
+        ? loaded.shell.timing
+        : runTiming(await readExecutionRecords(directory));
       return {
         directory,
         metadata: metadataFromConfiguration(parsedConfiguration, directory, manifest),
         status: runStatus(loaded),
         missingLinkedPaths: missingLinkedPaths(loaded),
         loaded,
+        ...(timing ? {timing} : {}),
       } satisfies DiscoveredRun;
     }));
 

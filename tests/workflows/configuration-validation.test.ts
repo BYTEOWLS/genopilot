@@ -2,9 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   genoPilotDetails,
+  machineDetails,
   validateGenoPilot,
+  validateResources,
   type ConfigurationValidationIssue,
 } from '../../src/workflows/configuration-validation.js';
+import {testMachine} from './machine.js';
 
 const build = {
   commit: '0123456789abcdef0123456789abcdef01234567',
@@ -58,4 +61,24 @@ test('rejects unknown GenoPilot and build fields', () => {
     issuePaths({version: '1.2.3', igv: '3.8.9', label: 'GenoPilot', build: {...build, branch: 'main'}}),
     ['$.genopilot.label', '$.genopilot.build.branch'],
   );
+});
+
+function machineIssues(machine: unknown): string[] {
+  const issues: ConfigurationValidationIssue[] = [];
+  validateResources({cpu_mode: 'automatic', effective_cpus: 1, machine}, issues);
+  return issues.map(issue => issue.path);
+}
+
+test('requires a complete machine record among the resources', () => {
+  assert.deepEqual(machineIssues(testMachine), []);
+  assert.deepEqual(machineIssues(undefined), ['$.resources.machine']);
+  assert.deepEqual(machineIssues({...testMachine, cpus: 0, cpu_model: '', extra: true}), [
+    '$.resources.machine.extra',
+    '$.resources.machine.cpu_model',
+    '$.resources.machine.cpus',
+  ]);
+});
+
+test('records the running machine in a valid form', () => {
+  assert.deepEqual(machineIssues(machineDetails()), []);
 });
