@@ -317,12 +317,14 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   assert.ok(frame.indexOf('system-check-row') < frame.indexOf('mutant-one_R1.fastq.gz'));
 
   await press(input, ENTER);
-  await waitUntil(() => saved !== undefined, 'the run is saved');
   // The start page shows the exact dry-run command.
   const onStartPage = (next: string): boolean =>
     next.includes('--dry-run') && next.includes('workflows/reference-consensus/Snakefile');
   await waitForFrame(output, onStartPage);
+  // Nothing is saved before a run starts, so leaving the start page leaves no run behind.
+  assert.equal(saved, undefined);
   await press(input, ENTER);
+  await waitUntil(() => saved !== undefined, 'the run is saved as the dry run starts');
   await waitUntil(() => executedModes.length === 1, 'the dry run starts');
   assert.deepEqual(executedModes, ['dry-run']);
   // After the dry run, the workflow itself can be executed, and its isolates are followed.
@@ -336,6 +338,42 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   await waitForFrame(output, next => next.includes(snapshot.isolates[0]!.name) && next.includes(snapshot.isolates[1]!.name));
 });
 
+test('shows a save that fails as a run starts, and tries it again on the next start', async context => {
+  let saveAttempts = 0;
+  const executed: string[] = [];
+  const {input, output, reviewed} = renderScreen(context, {
+    rows: 80,
+    saveRun: async prepared => {
+      saveAttempts += 1;
+      if (saveAttempts === 1) {
+        throw new Error('save-failure-message');
+      }
+      return `${prepared.outputDirectory}/config.yaml`;
+    },
+    executeSnakemakeRun: async run => {
+      executed.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+  });
+  await waitForFrame(output, frame => selectedLine(frame) !== undefined);
+  await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
+  await chooseIsolates(input, output, ['mutant-one']);
+  await startReview(input, output);
+  await waitForFrame(output, frame => reviewed.length === 1 && frame.includes(reviewed[0]!.configuration.run.id));
+  await press(input, ENTER);
+  await waitForFrame(output, next => next.includes('--dry-run'));
+
+  await press(input, ENTER);
+  await waitForFrame(output, next => next.includes('save-failure-message'));
+  assert.deepEqual(executed, []);
+  // Back on the start options, the next start saves again and runs.
+  await press(input, ESCAPE);
+  await waitForFrame(output, next => next.includes('workflows/reference-consensus/Snakefile'));
+  await press(input, ENTER);
+  await waitUntil(() => executed.length === 1, 'a run starts after the save');
+  assert.equal(saveAttempts, 2);
+});
+
 test('asks how to handle a cached backbone and saves the decision', async context => {
   let saved: PreparedReferenceConsensusRun | undefined;
   const {input, output, reviewed} = renderScreen(context, {
@@ -345,6 +383,7 @@ test('asks how to handle a cached backbone and saves the decision', async contex
       saved = prepared;
       return `${prepared.outputDirectory}/config.yaml`;
     },
+    executeSnakemakeRun: async run => ({...run, exitCode: 0}),
   });
   await waitForFrame(output, frame => selectedLine(frame) !== undefined);
   await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
@@ -362,6 +401,9 @@ test('asks how to handle a cached backbone and saves the decision', async contex
   await waitForFrame(output, frame => frame !== cacheFrame);
   await startReview(input, output);
   await waitForFrame(output, frame => frame.includes(reviewed[0]!.configuration.run.id));
+  await press(input, ENTER);
+  // Saved as the dry run starts.
+  await waitForFrame(output, next => next.includes('--dry-run'));
   await press(input, ENTER);
   await waitUntil(() => saved !== undefined, 'the run is saved');
   const backbone = saved?.configuration.inputs.backbone;

@@ -29,9 +29,9 @@ Hardware specifications alone do not predict duration well, and a speed test on 
 
 ## After a run
 
-Every Snakemake job already writes a benchmark file (`logs/**/*.benchmark.tsv`) with wall time, CPU time, and peak memory. Once a run has completed, GenoPilot can:
+GenoPilot samples the memory of Snakemake and its jobs while a run executes (see *Decisions*). Once a run has completed, GenoPilot can:
 
-- show per-stage CPU time and peak memory in the run results;
+- show the run's peak memory in the run results;
 - derive this machine's own factors, in the shape of the default disk factors below, and its time per isolate;
 - estimate the next run's disk need and duration on the same machine, stating which run the estimate comes from.
 
@@ -52,6 +52,7 @@ Estimates are shown as ranges and labeled as estimates. A machine without a comp
 
   The default uses the upper ends (0.62 and 9), which overestimate the measured isolates by at most 25 %. The peak adds, for each isolate aligned at the same time (effective CPUs ÷ the aligner's 8 threads, at least 1), its temporary trimmed reads and per-pair alignment: about 1.6 × its read bytes. The peak is derived from the rule outputs, not measured, and is checked on the first monitored run. Cohort tables grow faster than linearly with the cohort; the term is revisited with a larger cohort. Annotation transfer has no factors yet and shows free disk only.
 - **Duration** comes only from stored rates, in the same shape: per-isolate time per read byte from the benchmarks, times the isolates, divided by the CPUs, plus the cohort steps. It is shown as a range, names the source run, and flags a different CPU count. On the measured run, the isolates took 23 of its 23½ minutes.
+- **Peak memory** is sampled by GenoPilot, not read from Snakemake's job benchmarks: on macOS, Snakemake writes `NA` for every memory and CPU value, because psutil's `memory_full_info()` is refused there for other processes and Snakemake then drops the whole sample, a Snakemake bug. Every 5 seconds while an execution runs, GenoPilot sums the resident memory of Snakemake's process tree from `ps` and records the highest total. Tested on macOS; Linux and WSL2 use the same `ps` options and are expected to behave alike. A spike shorter than the interval can be missed, and shared memory counts once per process, so the figure errs high. CPU time is not sampled: `ps` no longer shows a job that has finished, so a sum would undercount.
 - **Run timing** comes first: a live overall timer while Snakemake runs, and, when it ends, GenoPilot appends the execution's start, end, duration, exit code, command, and stage times (from its structured events) to the run's `timing.yaml`. Results and the run list read only that file. An iteration's execution is recognized by its target, `provenance/cohort/iteration-<n>.json`, in the recorded command.
 
 ## Work
@@ -59,7 +60,7 @@ Estimates are shown as ranges and labeled as estimates. A machine without a comp
 - [x] Run timing: a live overall timer, and start, finish, duration, and per-stage durations in the run results; workflows reuse it for their own executions.
 - [x] Record the machine in saved configurations and provenance.
 - [x] Show free disk, CPUs, and memory on the start page, with the disk estimate and a warning when it does not fit.
-- [ ] Read job benchmarks into the run results: CPU time and peak memory per stage.
+- [x] Sample the run's peak memory while it executes, save it in `timing.yaml`, and show it in the run results.
 - [ ] Write `machine-rates.yaml` after a completed run and show duration and disk estimates from it with their source.
 - [ ] Test estimates from injected benchmark data, missing or partial benchmarks, a machine without completed runs, and the warning path, without depending on the test machine's hardware.
 

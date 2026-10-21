@@ -1,13 +1,14 @@
 import {formatDuration, type RunTiming} from '../workflows/run-timing.js';
+import {formatMemory} from '../workflows/systems-check.js';
 
 export type TimingRow = {id: string; label: string; value: string};
 
 /**
- * Started, finished, duration, and attempts of one execution's timing, as rows any result section
- * shows under its own ID prefix. Parts the timing lacks are left out.
+ * Started, finished, duration, peak memory, and attempts of an execution's timing, as rows any result
+ * section shows under its own ID prefix. Parts the timing lacks are left out.
  */
 export function timingRows(
-  timing: Pick<RunTiming, 'durationMs'> & Partial<Pick<RunTiming, 'startedAt' | 'finishedAt' | 'attempts'>>,
+  timing: Pick<RunTiming, 'durationMs'> & Partial<Pick<RunTiming, 'startedAt' | 'finishedAt' | 'attempts' | 'peakMemoryBytes'>>,
   idPrefix: string,
   formatDateTime: (value: string) => string,
 ): TimingRow[] {
@@ -19,6 +20,9 @@ export function timingRows(
     rows.push({id: `${idPrefix}.finished_at`, label: 'Finished', value: formatDateTime(timing.finishedAt)});
   }
   rows.push({id: `${idPrefix}.duration`, label: 'Duration', value: formatDuration(timing.durationMs)});
+  if (timing.peakMemoryBytes !== undefined) {
+    rows.push({id: `${idPrefix}.peak_memory`, label: 'Peak memory', value: formatMemory(timing.peakMemoryBytes)});
+  }
   if (timing.attempts && timing.attempts.length > 1) {
     rows.push({
       id: `${idPrefix}.attempts`,

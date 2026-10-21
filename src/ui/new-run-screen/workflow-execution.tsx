@@ -136,7 +136,7 @@ export type WorkflowRun = {
  */
 export type DryRunGate<R extends WorkflowRun> = (run: R) => Promise<{allowed: true} | {allowed: false; reason: string}>;
 
-export type WorkflowRunResult = WorkflowRun & {exitCode: number | null};
+export type WorkflowRunResult = WorkflowRun & {exitCode: number | null; peakMemoryBytes?: number};
 
 export type WorkflowRunPreparer<R extends WorkflowRun> = (mode: WorkflowRunMode) => R;
 
@@ -423,7 +423,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     const startOffset = run.eventsPath ? fileSize(run.eventsPath).catch(() => 0) : Promise.resolve(0);
     let firstEventOffset = 0;
     /** Records this execution's process times, with stage times from the events it appended. */
-    const saveTiming = async (endedAt: number, exitCode?: number | null): Promise<void> => {
+    const saveTiming = async (endedAt: number, exitCode?: number | null, peakMemoryBytes?: number): Promise<void> => {
       if (!run.eventsPath) {
         return;
       }
@@ -434,6 +434,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         finished_at: new Date(endedAt).toISOString(),
         duration_seconds: Math.round((endedAt - startedAt) / 1000),
         ...(typeof exitCode === 'number' ? {exit_code: exitCode} : {}),
+        ...(peakMemoryBytes === undefined ? {} : {peak_memory_bytes: peakMemoryBytes}),
         command: run.command,
         stages: stageSeconds(events, stagesRef.current, endedAt),
       }).catch(() => undefined);
@@ -452,7 +453,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         liveOutput.current?.flush();
         // The last events can land after the final poll, so drain once more before settling.
         await drainEvents(run.eventsPath);
-        await saveTiming(endedAt, result.exitCode);
+        await saveTiming(endedAt, result.exitCode, result.peakMemoryBytes);
         const persisted =
           run.mode === 'execute' && resultHandoff
             ? {
@@ -495,7 +496,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         const endedAt = Date.now();
         liveOutput.current?.flush();
         await drainEvents(run.eventsPath);
-        await saveTiming(endedAt);
+        // A stopped or failed execution carries the peak memory it reached.
+        const peak = (error as {peakMemoryBytes?: unknown} | undefined)?.peakMemoryBytes;
+        await saveTiming(endedAt, undefined, typeof peak === 'number' ? peak : undefined);
         if (run.mode === 'execute') {
           await settleIsolates(false);
         }
@@ -693,7 +696,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         shortcuts={[availableModes.length > 1 && '↑/↓ — Choose', 'Enter — Start']}
         back={labels.back ?? 'Back to workflow'}
       >
-        <Alert variant="info">{labels.intro ?? 'Configuration saved. Choose how to start this run.'}</Alert>
+        <Alert variant="info">{labels.intro ?? 'Choose how to start this run. It is saved when it starts.'}</Alert>
         <Text>{sanitizeTerminalText(configurationPath)}</Text>
         <Box marginTop={1} flexDirection="column">
           {modeOptions.map(option => {

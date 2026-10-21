@@ -414,11 +414,11 @@ test('edits all required fields and confirms effective options before saving', a
   assert.equal(apiKeyChecks, 0);
 
   input.write(ENTER);
-  await waitUntil(() => saved !== undefined, 'the configuration is saved');
-  assert.equal(saved?.configuration.run.id, configuration.run.id);
   // The rendered command wraps across terminal lines, so match it unwrapped.
   const unwrap = (frame: string): string => frame.replace(/\s+/g, ' ');
   const startFrame = await waitForFrame(output, frame => unwrap(frame).includes('--keep-going --dry-run'));
+  // Nothing is saved before a run starts, so leaving the start page leaves no run behind.
+  assert.equal((() => saved)(), undefined);
   assert.match(unwrap(startFrame), /--cores 3 --use-conda --conda-prefix \S+ --printshellcmds --keep-going --dry-run/);
   assert.ok(unwrap(startFrame).includes(`--directory ${review.prepared.outputDirectory}`));
 
@@ -429,6 +429,7 @@ test('edits all required fields and confirms effective options before saving', a
   input.write(ENTER);
   await waitUntil(() => executedModes.length === 1, 'the workflow is executed');
   assert.deepEqual(executedModes, ['execute']);
+  assert.equal(saved?.configuration.run.id, configuration.run.id);
   await waitForFrame(output, frame => frame.includes('Nothing to be done.'));
   // Local inputs leave nothing to record in the accession catalog.
   assert.deepEqual(registrations, []);
@@ -469,14 +470,14 @@ test('records the NCBI cache in the accession catalog after a successful NCBI-so
   await startReview(input, output);
   await waitForReview(output, () => reviewed);
   input.write(ENTER);
-  await waitUntil(() => saves === 1, 'the configuration is saved');
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await waitForFrame(output, frame => frame.includes('--dry-run'));
   // The start options list the dry run first; the execution is the next option.
   input.write(ARROW_DOWN);
   await new Promise<void>(resolve => setTimeout(resolve, 50));
   input.write(ENTER);
 
   await waitUntil(() => registrations.length === 1, 'the cache is recorded');
+  assert.equal(saves, 1);
   assert.deepEqual(executedModes, ['execute']);
   assert.deepEqual(registrations, ['/research/runs']);
   await waitForFrame(output, frame => frame.includes('Test registration note'));
@@ -538,11 +539,11 @@ test('shows a failed dry run with its live output, then offers execution again',
   await waitUntil(() => prepareCalls === 1, 'the run is prepared');
   await waitForFrame(output, frame => frame.includes('/run/output'));
   input.write(ENTER);
-  await waitUntil(() => saveCalls === 1, 'the configuration is saved');
   // The dry run is preselected and its exact command is shown before starting it.
   await waitForFrame(output, frame => frame.includes('/managed/snakemake --dry-run'));
   input.write(ENTER);
   await waitUntil(() => attempts.length === 1, 'the dry run is started');
+  assert.equal(saveCalls, 1);
   // The failed run keeps its captured stderr on screen.
   await waitForFrame(output, frame => frame.includes('Invalid workflow configuration'));
 
@@ -637,6 +638,7 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
       saved = prepared;
       return '/research/runs/annotation-transfer/run/config.yaml';
     },
+    executeSnakemakeRun: async run => ({...run, exitCode: 0}),
     findCacheEntries: async () => {
       cacheLookups += 1;
       return [{input: 'reference', accession: 'GCF_000149205.2'}];
@@ -664,6 +666,9 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
   // Enter acts only on the continue button, which follows the cache choices.
   await startReview(input, output);
   await waitForReview(output, () => reviewed);
+  input.write(ENTER);
+  // Saved as the dry run starts.
+  await waitForFrame(output, frame => frame.includes('--dry-run'));
   input.write(ENTER);
   await waitUntil(() => saved !== undefined, 'the configuration is saved');
   const reference = saved?.configuration.inputs.reference;

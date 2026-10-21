@@ -143,6 +143,31 @@ test('returns a non-zero exit code and preserves failure output', async context 
   assert.equal(await readFile(result.stderrLogPath, 'utf8'), 'failed\n');
 });
 
+test('samples the memory of an execution\'s process tree with ps, but not of a dry run', async context => {
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const runDirectory = join(tempDir, 'run');
+  const peaks: (number | undefined)[] = [];
+  for (const mode of ['execute', 'dry-run'] as const) {
+    const prepared = prepareSnakemakeRun({
+      mode,
+      runDirectory,
+      configurationPath: join(runDirectory, 'config.yaml'),
+      snakefilePath: join(tempDir, 'Snakefile'),
+      cores: 1,
+      paths,
+    });
+    prepared.executable = process.execPath;
+    // A child that lives long enough to be sampled at its start.
+    prepared.arguments = ['--eval', 'setTimeout(() => undefined, 300)'];
+    const result = await executeSnakemakeRun(prepared, undefined, undefined, {paths, readApiKey: async () => undefined});
+    peaks.push(result.peakMemoryBytes);
+  }
+  // The real ps, as on macOS and Linux, sees the process at its start.
+  assert.ok((peaks[0] ?? 0) > 0);
+  assert.equal(peaks[1], undefined);
+});
+
 test('reports a process start failure while retaining empty logs', async context => {
   const {tempDir, paths} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
@@ -166,6 +191,31 @@ test('reports a process start failure while retaining empty logs', async context
   );
   assert.equal(await readFile(prepared.stdoutLogPath, 'utf8'), '');
   assert.equal(await readFile(prepared.stderrLogPath, 'utf8'), '');
+});
+
+test('keeps the peak memory of a cancelled execution on its error', async context => {
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const runDirectory = join(tempDir, 'run');
+  const prepared = prepareSnakemakeRun({
+    mode: 'execute',
+    runDirectory,
+    configurationPath: join(runDirectory, 'config.yaml'),
+    snakefilePath: join(tempDir, 'Snakefile'),
+    cores: 1,
+    paths,
+  });
+  prepared.executable = process.execPath;
+  prepared.arguments = ['--eval', 'setInterval(() => {}, 1000)'];
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 300);
+
+  const error: unknown = await executeSnakemakeRun(prepared, undefined, controller.signal, {
+    paths,
+    readApiKey: async () => undefined,
+  }).then(() => assert.fail('expected the cancelled run to reject'), (reason: unknown) => reason);
+  assert.match(String(error), /Snakemake run cancelled\./);
+  assert.ok(((error as {peakMemoryBytes?: number}).peakMemoryBytes ?? 0) > 0);
 });
 
 test('cancels the detached process and still closes its log files', async context => {

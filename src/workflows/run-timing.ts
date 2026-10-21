@@ -17,6 +17,8 @@ export type ExecutionRecord = {
   command: string;
   /** Seconds while at least one of a stage's jobs ran, by stage ID; parallel jobs count once. */
   stages: Record<string, number>;
+  /** The highest memory Snakemake and its jobs used together, sampled every few seconds. */
+  peak_memory_bytes?: number;
 };
 
 export type ExecutionAttempt = {startedAt: string; finishedAt: string; durationMs: number};
@@ -31,6 +33,8 @@ export type RunTiming = {
   attempts: readonly ExecutionAttempt[];
   /** Summed over executions, in the order they first appear. */
   stages: readonly StageDuration[];
+  /** The highest of the executions' sampled peaks; absent when none was sampled. */
+  peakMemoryBytes?: number;
 };
 
 type TimingStages = readonly {id: string; rules?: readonly string[]}[];
@@ -103,7 +107,8 @@ function isExecutionRecord(value: unknown): value is ExecutionRecord {
     typeof record.duration_seconds === 'number' && record.duration_seconds >= 0 &&
     typeof record.command === 'string' &&
     typeof record.stages === 'object' && record.stages !== null &&
-    Object.values(record.stages).every(seconds => typeof seconds === 'number');
+    Object.values(record.stages).every(seconds => typeof seconds === 'number') &&
+    (record.peak_memory_bytes === undefined || typeof record.peak_memory_bytes === 'number');
 }
 
 /** The run's recorded executions; a missing or unreadable file has none, and a malformed entry is skipped. */
@@ -139,6 +144,7 @@ export function runTiming(records: readonly ExecutionRecord[]): RunTiming | unde
   if (!first || !last) {
     return undefined;
   }
+  const peaks = records.flatMap(record => record.peak_memory_bytes === undefined ? [] : [record.peak_memory_bytes]);
   const stages = new Map<string, number>();
   for (const record of records) {
     for (const [id, seconds] of Object.entries(record.stages)) {
@@ -155,6 +161,7 @@ export function runTiming(records: readonly ExecutionRecord[]): RunTiming | unde
       durationMs: record.duration_seconds * 1000,
     })),
     stages: [...stages].map(([id, durationMs]) => ({id, durationMs})),
+    ...(peaks.length > 0 ? {peakMemoryBytes: Math.max(...peaks)} : {}),
   };
 }
 

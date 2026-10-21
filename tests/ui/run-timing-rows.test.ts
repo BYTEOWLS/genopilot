@@ -16,6 +16,11 @@ test('lists start, finish, and duration under the given prefix, and attempts onl
   assert.ok(resumed.some(row => row.id === 'run.attempts' && row.value.startsWith('2')));
 });
 
+test('shows the sampled peak memory in binary gigabytes', () => {
+  const rows = timingRows({durationMs: 1_000, peakMemoryBytes: 6 * 2 ** 30}, 'run', format);
+  assert.deepEqual(rows.find(row => row.id === 'run.peak_memory')?.value, '6.0 GB');
+});
+
 test('leaves out what a partial timing lacks', () => {
   assert.deepEqual(timingRows({durationMs: 5_000}, 'cohort', format).map(row => row.id), ['cohort.duration']);
 });

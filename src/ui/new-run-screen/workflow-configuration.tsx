@@ -1,4 +1,5 @@
-import React, {useCallback, useMemo, useState} from 'react';
+import {join} from 'node:path';
+import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
@@ -300,6 +301,21 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   // The field whose file browser or accession picker is open over the form.
   const [browserId, setBrowserId] = useState<string>();
   const [screen, setScreen] = useState<ScreenState<T>>({state: 'editing'});
+  // The run is saved when its first dry run or execution starts, so leaving the start page
+  // without starting one leaves no run behind. A failed save is tried again on the next start.
+  const savedRun = useRef<{payload: T; saved: Promise<string>}>(undefined);
+  const saveOnStart = (payload: T): Promise<string> => {
+    if (savedRun.current?.payload !== payload) {
+      const saved = saveRun(payload);
+      savedRun.current = {payload, saved};
+      saved.catch(() => {
+        if (savedRun.current?.saved === saved) {
+          savedRun.current = undefined;
+        }
+      });
+    }
+    return savedRun.current.saved;
+  };
   // Opening the isolate picker reloads the catalog, so it lists isolates added meanwhile.
   const [isolatePickerOpenings, setIsolatePickerOpenings] = useState(0);
   const usesIsolates = useMemo(
@@ -464,21 +480,15 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
             scroll: Math.min(reviewWindow.maximumScroll, Math.max(0, screen.scroll + offset)),
           });
         } else if (key.return) {
-          setScreen({state: 'saving', prepared: screen.prepared, scroll: screen.scroll});
           const payload = screen.prepared.payload;
+          if (prepareSnakemakeRun && executeSnakemakeRun) {
+            const {outputDirectory} = screen.prepared;
+            setScreen({state: 'execution', payload, configurationPath: join(outputDirectory, 'config.yaml'), outputDirectory});
+            return;
+          }
+          setScreen({state: 'saving', prepared: screen.prepared, scroll: screen.scroll});
           saveRun(payload).then(
-            configurationPath => {
-              setScreen(
-                prepareSnakemakeRun && executeSnakemakeRun
-                  ? {
-                      state: 'execution',
-                      payload,
-                      configurationPath,
-                      outputDirectory: screen.prepared.outputDirectory,
-                    }
-                  : {state: 'saved', configurationPath},
-              );
-            },
+            configurationPath => setScreen({state: 'saved', configurationPath}),
             error => setScreen({state: 'invalid', messages: messageLines(error)}),
           );
         }
@@ -664,7 +674,10 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       <WorkflowExecutionScreen
         configurationPath={configurationPath}
         prepareRun={mode => prepareSnakemakeRun(mode, payload, configurationPath)}
-        executeRun={executeSnakemakeRun}
+        executeRun={async (run, onOutput, signal) => {
+          await saveOnStart(payload);
+          return executeSnakemakeRun(run, onOutput, signal);
+        }}
         onBack={onBack}
         inputActive={inputActive}
         stages={stages}

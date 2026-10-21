@@ -76,7 +76,12 @@ test('sums executions, leaving out the time between an interrupted one and its r
   assert.equal(timing?.durationMs, 61_000);
   assert.deepEqual(timing?.attempts.map(attempt => attempt.durationMs), [1_000, 60_000]);
   assert.deepEqual(timing?.stages, [{id: 'align', durationMs: 51_000}, {id: 'vote', durationMs: 10_000}]);
+  assert.equal(timing?.peakMemoryBytes, undefined);
   assert.equal(runTiming([]), undefined);
+
+  // The highest sampled peak of the executions that have one.
+  const sampled = runTiming([record(0, 1, {peak_memory_bytes: 3e9}), record(10, 1), record(20, 1, {peak_memory_bytes: 5e9})]);
+  assert.equal(sampled?.peakMemoryBytes, 5e9);
 });
 
 test('recognizes an execution by a target named in its command', () => {
@@ -88,7 +93,7 @@ test('recognizes an execution by a target named in its command', () => {
 test('appends executions to the run\'s timing file and reads them back', async context => {
   const directory = await tempDir(context);
   assert.deepEqual(await readExecutionRecords(directory), []);
-  const first = record(0, 90, {stages: {align: 80}});
+  const first = record(0, 90, {stages: {align: 80}, peak_memory_bytes: 2_147_483_648});
   const second = record(100, 5);
   await appendExecutionRecord(directory, first);
   await appendExecutionRecord(directory, second);

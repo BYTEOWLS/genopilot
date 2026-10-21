@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
 import {appendFile, mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -272,7 +273,7 @@ test('shows the elapsed time while running, keeps the time the process took, and
         eventLine({type: 'job-started', job_id: 1, rule: 'validate_inputs', timestamp: new Date(1_000_000).toISOString()}),
         eventLine({type: 'job-finished', job_id: 1, timestamp: new Date(1_042_000).toISOString()}),
       ].join(''));
-      finish = () => resolve({...run, exitCode: 0});
+      finish = () => resolve({...run, exitCode: 0, peakMemoryBytes: 3_000_000_000});
     }));
   context.after(() => instance.unmount());
 
@@ -296,7 +297,23 @@ test('shows the elapsed time while running, keeps the time the process took, and
     exit_code: 0,
     command: '/managed/snakemake',
     stages: {'validate-inputs': 42},
+    peak_memory_bytes: 3_000_000_000,
   });
+});
+
+test('saves the timing of a stopped or failed execution with the peak memory it reached', async context => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const {input, output, instance} = renderExecution(join(tempDir, 'events.jsonl'), async () => {
+    throw Object.assign(new Error('Snakemake run cancelled.'), {peakMemoryBytes: 7_000_000_000});
+  });
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  await waitUntil(() => existsSync(join(tempDir, 'timing.yaml')), 'the timing is saved');
+  const [saved] = await readExecutionRecords(tempDir);
+  assert.equal(saved?.peak_memory_bytes, 7_000_000_000);
+  assert.equal(saved?.exit_code, undefined);
 });
 
 test('scrolls back through retained output while the run keeps producing more', async context => {

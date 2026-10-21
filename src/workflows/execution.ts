@@ -7,6 +7,7 @@ import {readNcbiApiKey} from '../tooling/ncbi-api-key.js';
 import {resolveToolingPaths, type ToolingPaths} from '../tooling/paths.js';
 import {formatCompactUtcTimestamp} from './timestamps.js';
 import {RUN_EVENTS_FILENAME} from './run-events.js';
+import {readProcessList, sampleTreeMemory, type ProcessListReader} from './memory-sampling.js';
 
 export type WorkflowOutput = {stream: 'stdout' | 'stderr'; text: string};
 
@@ -45,7 +46,11 @@ export const packagedLoggerDirectory = packagedPath('workflows/shared/logging');
 
 const runEventsLoggerName = 'genopilot-run-events';
 
-export type SnakemakeRunResult = SnakemakeRun & {exitCode: number | null};
+export type SnakemakeRunResult = SnakemakeRun & {
+  exitCode: number | null;
+  /** The highest memory Snakemake and its jobs used together, sampled during an execution. */
+  peakMemoryBytes?: number;
+};
 
 export function snakemakeRunModeLabel(mode: SnakemakeRunMode): string {
   return mode === 'dry-run' ? 'dry run' : 'run';
@@ -172,11 +177,13 @@ export async function executeSnakemakeRun(
     spawnProcess = spawn as WorkflowProcessSpawner,
     readApiKey = readNcbiApiKey,
     loggerDirectory = packagedLoggerDirectory,
+    readProcesses = readProcessList,
   }: {
     paths?: ToolingPaths;
     spawnProcess?: WorkflowProcessSpawner;
     readApiKey?: (path: string) => Promise<string | undefined>;
     loggerDirectory?: string;
+    readProcesses?: ProcessListReader;
   } = {},
 ): Promise<SnakemakeRunResult> {
   const cancelled = (): Error =>
@@ -243,6 +250,10 @@ export async function executeSnakemakeRun(
   if (logError) {
     cancel();
   }
+  // Only an execution runs jobs; a dry run's memory says nothing about the workflow.
+  const memory = prepared.mode === 'execute' && child.pid !== undefined
+    ? sampleTreeMemory(child.pid, {readProcesses})
+    : undefined;
 
   child.stdout.on('data', chunk => {
     const text = String(chunk);
@@ -264,6 +275,7 @@ export async function executeSnakemakeRun(
 
   let exitCode: number | null = null;
   let processError: unknown;
+  let peakMemoryBytes: number | undefined;
   try {
     exitCode = await new Promise<number | null>((resolveExit, reject) => {
       child?.once('error', reject);
@@ -272,6 +284,7 @@ export async function executeSnakemakeRun(
   } catch (error) {
     processError = error;
   } finally {
+    peakMemoryBytes = memory?.stop();
     if (forceTimer) {
       clearTimeout(forceTimer);
     }
@@ -280,14 +293,17 @@ export async function executeSnakemakeRun(
     stderrLog.end();
     await Promise.all(logCompletions);
   }
+  // A run that was stopped or failed keeps its peak memory: often the reason it was stopped.
+  const failure = (error: unknown): unknown =>
+    peakMemoryBytes !== undefined && error instanceof Error ? Object.assign(error, {peakMemoryBytes}) : error;
   if (signal?.aborted) {
-    throw cancelled();
+    throw failure(cancelled());
   }
   if (logError) {
-    throw logError;
+    throw failure(logError);
   }
   if (processError) {
-    throw processError;
+    throw failure(processError);
   }
-  return {...prepared, exitCode};
+  return {...prepared, exitCode, ...(peakMemoryBytes === undefined ? {} : {peakMemoryBytes})};
 }

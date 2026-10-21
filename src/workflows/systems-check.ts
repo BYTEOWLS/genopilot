@@ -68,9 +68,13 @@ export function estimateDisk(factors: DiskEstimateFactors, inputs: DiskEstimateI
   return {keptBytes: Math.round(keptBytes), peakBytes: Math.round(keptBytes + temporary)};
 }
 
-/** Formats installed memory in binary gigabytes, as the operating system reports it: 64 GB is 64 × 2³⁰ bytes. */
+/**
+ * Formats memory in binary gigabytes, as the operating system reports it: 64 GB is 64 × 2³⁰
+ * bytes. Below 10 GB with one decimal, so a small peak is not shown as 0 GB.
+ */
 export function formatMemory(bytes: number): string {
-  return `${String(Math.round(bytes / 2 ** 30))} GB`;
+  const gigabytes = bytes / 2 ** 30;
+  return `${gigabytes < 10 ? gigabytes.toFixed(1) : String(Math.round(gigabytes))} GB`;
 }
 
 /** Formats disk sizes in decimal units, as file browsers and `df -H` show them. */

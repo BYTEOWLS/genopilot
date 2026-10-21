@@ -127,7 +127,7 @@ export type CohortResult = {
 };
 
 export type CohortTiming = Pick<RunTiming, 'durationMs'> &
-  Partial<Pick<RunTiming, 'startedAt' | 'finishedAt' | 'attempts'>>;
+  Partial<Pick<RunTiming, 'startedAt' | 'finishedAt' | 'attempts' | 'peakMemoryBytes'>>;
 
 /** The stages whose jobs build a cohort; they run within the run for the initial cohort. */
 const cohortStageIds: readonly string[] = ['aggregate-support', 'generate-consensus'];
