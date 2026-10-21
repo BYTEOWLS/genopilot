@@ -76,12 +76,13 @@ def run_snakemake(
     config_path: Path,
     *extra_args: str,
     env: dict | None = None,
+    snakefile: Path = WORKFLOW_DIR / "Snakefile",
 ) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
             SNAKEMAKE_BIN,
             "--snakefile",
-            str(WORKFLOW_DIR / "Snakefile"),
+            str(snakefile),
             "--directory",
             str(run_dir),
             "--configfile",
@@ -448,6 +449,47 @@ class DirectExecutionContractTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertIn("Nothing to be done", second.stdout + second.stderr)
             self.assertEqual({path: path.stat().st_mtime_ns for path in mtimes}, mtimes)
+
+    def test_installing_another_genopilot_keeps_a_finished_runs_citation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            temp_dir = Path(tmp)
+            run_dir, config_path, _bin_dir, env = self.prepare(temp_dir)
+            # A copy of the packaged workflows stands in for the installed GenoPilot.
+            package = temp_dir / "package"
+            for name in ("annotation-transfer", "shared"):
+                shutil.copytree(
+                    WORKFLOW_DIR.parent / name,
+                    package / name,
+                    ignore=shutil.ignore_patterns("__pycache__"),
+                )
+            snakefile = package / "annotation-transfer" / "Snakefile"
+
+            first = run_snakemake(run_dir, config_path, env=env, snakefile=snakefile)
+
+            self.assertEqual(first.returncode, 0, first.stderr)
+            citation = {
+                path: path.read_bytes()
+                for path in (run_dir / "citation").iterdir()
+            }
+            self.assertIn(run_dir / "citation" / "CITATION.md", citation)
+
+            # Another GenoPilot version installs newer citation files.
+            (package / "annotation-transfer" / "citation" / "methods.txt").write_text(
+                "A later release describes the methods differently.\n", encoding="utf-8"
+            )
+            for path in (
+                package / "annotation-transfer" / "citation" / "references.json",
+                package / "annotation-transfer" / "citation" / "phrases.json",
+                package / "shared" / "citation" / "genopilot.json",
+                package / "shared" / "citation" / "igv.json",
+            ):
+                path.write_text(path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+            second = run_snakemake(run_dir, config_path, "-p", env=env, snakefile=snakefile)
+
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertIn("Nothing to be done", second.stdout + second.stderr)
+            self.assertEqual({path: path.read_bytes() for path in citation}, citation)
 
     def test_failed_lifton_rule_fails_without_a_completion_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
