@@ -408,6 +408,10 @@ test('edits all required fields and confirms effective options before saving', a
   assert.ok(review.frame.includes(review.prepared.outputDirectory));
   // The systems check where the run will be saved.
   assert.ok(review.frame.includes('system-check-row'));
+  for (const definition of packagedParameterDefinitions.filter(field => !field.hidden && field.preview && !field.preview.includes('{value}'))) {
+    const hint = definition.preview!;
+    assert.ok(review.frame.replace(/\s+/g, ' ').includes(hint.replace(/\s+/g, ' ')));
+  }
   assert.match(fieldLine(review.frame, 'run-name') ?? '', /Test run/);
   assert.equal(fieldLine(review.frame, 'lifton-profile'), undefined);
   // The NCBI API key only matters, and is only checked, when an input is downloaded from NCBI.
@@ -563,6 +567,7 @@ test('switches the reference to an NCBI accession independently of the target', 
   let reviewed: PreparedAnnotationTransferRun | undefined;
   let apiKeyChecks = 0;
   const {input, output, instance} = renderConfiguration('/research', {
+    rows: 60,
     validatePreparedRun: async prepared => {
       reviewed = prepared;
     },
@@ -631,6 +636,7 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
   let saved: PreparedAnnotationTransferRun | undefined;
   let cacheLookups = 0;
   const {input, output, instance} = renderConfiguration('/research', {
+    rows: 60,
     validatePreparedRun: async prepared => {
       reviewed = prepared;
     },

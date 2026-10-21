@@ -142,6 +142,14 @@ function reviewItems<T>(
         label: definition.label,
         value: prepared.resolvedValues[definition.id] ?? displayValue(definition, values[definition.id] ?? ''),
       });
+      if (definition.preview) {
+        items.push({
+          kind: 'text',
+          key: `hint:${definition.id}`,
+          text: definition.preview.replaceAll('{value}', values[definition.id] || '<value>'),
+          color: mutedColor,
+        });
+      }
     }
   }
   for (const detail of prepared.details ?? []) {

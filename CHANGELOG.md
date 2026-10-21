@@ -18,6 +18,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ### Application
 
+- Reference-consensus calling settings have clearer configuration hints and Help explanations, including Q20/Q30 and allele-fraction examples. Configuration reviews show the same parameter hints as the form.
 - Ctrl+A in the isolate picker selects every isolate matching the search, or all of them without one; pressing it again deselects them.
 
 ### Results

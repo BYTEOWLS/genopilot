@@ -22,8 +22,22 @@ The reads must keep their original Illumina read names, because the read groups 
 | Ploidy | 1 | Fixed: isolates are called haploid. |
 | Minimum read depth | 10 | Reads needed at a position, counted after the quality filters and without duplicates. |
 | Minimum mapping quality | 20 | Reads mapped with a lower quality are not counted. |
-| Minimum base quality | 20 | Bases with a lower quality are not counted. |
-| Minimum allele fraction | 0.8 | Share of the counted reads the winning allele needs; above 0.5 and at most 1. |
+| Minimum base quality | 20 | Only bases at this Phred score or higher count: 20 requires Q20 or higher, 30 requires Q30 or higher. |
+| Minimum allele fraction | 0.8 | Share of usable reads that must agree on one allele; 0.8 means at least 80%. Must be above 0.5 and at most 1. |
+
+### Per-isolate calling
+
+The same calling settings apply to every selected isolate. They determine whether an isolate has enough trustworthy evidence to call an allele at a backbone position, including agreement with the backbone. Ploidy is fixed at 1: each isolate is treated as haploid, with one allele per position rather than a diploid genotype.
+
+Mapping quality measures confidence in a read's alignment location; reads that match several repeats often have low mapping quality. Base quality measures confidence in an individual sequenced base. **Q20** means an estimated 1% chance that the base is wrong (99% accuracy); **Q30** means 0.1% (99.9% accuracy). Minimum base quality 20 counts only bases at Q20 or higher. A sequencing report's **% Q30** instead describes the percentage of bases reaching Q30, not a filtering setting.
+
+With the default minimum depth of 10 and minimum allele fraction of 0.8, after quality filters and excluding marked duplicates:
+
+- 18 A and 2 G reads: call A, because 90% agree.
+- 12 A and 8 G reads: ambiguous, because neither allele reaches 80%.
+- Only 7 usable reads: uncallable, regardless of their agreement.
+
+Ambiguous and uncallable positions become `N` in the isolate FASTA and cast no isolate vote in the cohort consensus. Higher thresholds generally mean fewer questionable calls but more missing positions.
 
 ## Background
 
