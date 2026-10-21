@@ -108,7 +108,7 @@ const reservedReviewChromeLines = 10;
 type ReviewItem =
   | {kind: 'heading'; key: string; text: string; color?: string}
   | {kind: 'row'; key: string; label: string; value: string}
-  | {kind: 'text'; key: string; text: string; color?: string};
+  | {kind: 'text'; key: string; text: string; color?: string; indent?: number};
 
 /**
  * Everything the review shows, flattened into rows so a review taller than the terminal can be
@@ -146,6 +146,7 @@ function reviewItems<T>(
         items.push({
           kind: 'text',
           key: `hint:${definition.id}`,
+          indent: 2,
           text: definition.preview.replaceAll('{value}', values[definition.id] || '<value>'),
           color: mutedColor,
         });
@@ -175,7 +176,7 @@ function reviewItemLines(item: ReviewItem, first: boolean, valueWidth: number, w
     case 'row':
       return Math.max(1, Math.ceil(item.value.length / valueWidth));
     case 'text':
-      return Math.max(1, Math.ceil(item.text.length / width));
+      return Math.max(1, Math.ceil(item.text.length / Math.max(1, width - (item.indent ?? 0))));
   }
 }
 
@@ -660,7 +661,11 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
             );
           }
           if (item.kind === 'text') {
-            return <Text key={item.key} color={item.color} wrap="wrap">{sanitizeTerminalText(item.text)}</Text>;
+            return (
+              <Box key={item.key} paddingLeft={item.indent ?? 0}>
+                <Text color={item.color} wrap="wrap">{sanitizeTerminalText(item.text)}</Text>
+              </Box>
+            );
           }
           return (
             <ParameterList
