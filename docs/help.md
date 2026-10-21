@@ -30,6 +30,7 @@ The tooling page also shows GenoPilot's own version and, when known, the Git com
 | ↑/↓ | Select a row, move between form fields, or scroll |
 | PageUp/PageDown (or fn + ↑/↓) | Scroll by a page |
 | Space, ←/→ | Change the selected choice in a form |
+| Ctrl+A | In the isolate chooser, select every isolate matching the search; again to deselect them |
 | Tab, Shift+Tab | Switch tabs, or move between form fields |
 | Enter | Open, choose, or press the selected button |
 | Esc | Go back one step |

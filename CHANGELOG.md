@@ -16,6 +16,10 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 - A run's citation includes igv.js, the genome viewer, with its version.
 
+### Application
+
+- Ctrl+A in the isolate picker selects every isolate matching the search, or all of them without one; pressing it again deselects them.
+
 ### Results
 
 - Every run records the machine that saved its configuration (CPUs, memory, CPU model, operating system) in `config.yaml` and its provenance; the result page shows it.
