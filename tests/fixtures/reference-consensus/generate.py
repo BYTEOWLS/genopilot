@@ -221,8 +221,9 @@ def read_mates(sequence: str, low_offsets: list[int], reverse: bool, trimmed: bo
 def fastq_bytes(records: list[tuple[str, str, str]]) -> bytes:
     text = "".join(f"{header}\n{bases}\n+\n{quality}\n" for header, bases, quality in records)
     buffer = io.BytesIO()
-    # A fixed mtime and no file name make the compressed bytes reproducible.
-    with gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0, filename="") as handle:
+    # A fixed level, mtime, and no file name make the compressed bytes reproducible; Python 3.15
+    # lowered the default level from 9 to 6.
+    with gzip.GzipFile(fileobj=buffer, mode="wb", compresslevel=9, mtime=0, filename="") as handle:
         handle.write(text.encode("ascii"))
     return buffer.getvalue()
 
