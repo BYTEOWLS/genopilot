@@ -23,7 +23,7 @@ On the start page, next to the exact command, show:
 - the available CPUs and the run's effective CPUs, which the configuration already records;
 - the available memory.
 
-The disk estimate starts from a documented default per gigabase of reads and is replaced by the machine's own measurement once a completed run exists (see below). A run whose estimate exceeds the free space gets a clear warning with both numbers; the researcher decides.
+The disk estimate adds up what each part of a run keeps, from sizes known before it starts, at one `stat` per file: each isolate's read files and the genome (the backbone or reference FASTA). A workflow's manifest declares default factors: bytes kept per read byte and per genome byte for each isolate, and per genome byte for the run. The factors are per byte, so they carry over to other species, genome sizes, and coverages; a species enters only through its read and genome sizes. The machine's own measurement replaces the defaults once a completed run exists (see below). A workflow without factors shows free disk only, and inputs still to be downloaded from NCBI are left out with a note. A run whose estimate exceeds the free space gets a clear warning with both numbers; the researcher decides.
 
 Hardware specifications alone do not predict duration well, and a speed test on the bundled fixtures is dominated by startup overhead, so neither is used for time estimates.
 
@@ -31,18 +31,36 @@ Hardware specifications alone do not predict duration well, and a speed test on 
 
 Every Snakemake job already writes a benchmark file (`logs/**/*.benchmark.tsv`) with wall time, CPU time, and peak memory. Once a run has completed, GenoPilot can:
 
-- show total and per-stage duration and peak memory in the run results (the open task in [`tasks.md`](../tasks.md) about durations and resource metrics);
-- derive per-step rates for this machine, such as seconds per million read pairs for alignment and calling, and bytes kept per million read pairs;
-- use those rates to estimate the next run's duration and disk need on the same machine, stating which run the estimate comes from.
+- show per-stage CPU time and peak memory in the run results;
+- derive this machine's own factors, in the shape of the default disk factors below, and its time per isolate;
+- estimate the next run's disk need and duration on the same machine, stating which run the estimate comes from.
 
 Estimates are shown as ranges and labeled as estimates. A machine without a completed run shows only the disk estimate from the default and no duration.
 
+## Decisions
+
+- **Machine record.** Saved configurations record the machine: platform, architecture, CPU model, CPU count, and memory. Rates count only for runs whose record matches the current machine, which also covers a data directory shared between hosts. The record is taken when the configuration is saved; a run resumed on another machine, such as a copied run directory, keeps the first record and is accepted as a known limit.
+- **Stored rates.** After a completed run, GenoPilot writes `machine-rates.yaml` to its data directory: per workflow, the latest completed run's machine record, run ID and directory, effective CPUs, its measured disk factors, time per isolate, and peak memory. Resetting the tooling removes it; the next completed run writes it again.
+- **Default disk factors** of reference consensus, measured per isolate on a real run of 9 isolates of a haploid genome of about 30 Mb, with 1.4–2.5 GB of gzipped reads per isolate from two sequencing batches:
+
+  | Part | Kept | Factor |
+  |---|---|---|
+  | Duplicate-marked alignment | 0.84–1.22 GB per isolate | 0.47–0.62 × the isolate's read bytes |
+  | All-sites calls, isolate FASTA, and reports | 0.24–0.27 GB per isolate | about 9 × genome bytes per isolate |
+  | Resolved backbone with its index | 79 MB | about 2.6 × genome bytes per run |
+  | Cohort tables and consensus | 31 MB | about 1 × genome bytes per cohort |
+
+  The default uses the upper ends (0.62 and 9), which overestimate the measured isolates by at most 25 %. The peak adds, for each isolate aligned at the same time (effective CPUs ÷ the aligner's 8 threads, at least 1), its temporary trimmed reads and per-pair alignment: about 1.6 × its read bytes. The peak is derived from the rule outputs, not measured, and is checked on the first monitored run. Cohort tables grow faster than linearly with the cohort; the term is revisited with a larger cohort. Annotation transfer has no factors yet and shows free disk only.
+- **Duration** comes only from stored rates, in the same shape: per-isolate time per read byte from the benchmarks, times the isolates, divided by the CPUs, plus the cohort steps. It is shown as a range, names the source run, and flags a different CPU count. On the measured run, the isolates took 23 of its 23½ minutes.
+- **Run timing** comes first: a live overall timer while Snakemake runs, and, when it ends, GenoPilot appends the execution's start, end, duration, exit code, command, and stage times (from its structured events) to the run's `timing.yaml`. Results and the run list read only that file. An iteration's execution is recognized by its target, `provenance/cohort/iteration-<n>.json`, in the recorded command.
+
 ## Work
 
-- [ ] Kickoff: decide where the per-machine rates are stored (next to the tooling state or derived from discovered runs on each start) and the default disk rate.
+- [x] Run timing: a live overall timer, and start, finish, duration, and per-stage durations in the run results; workflows reuse it for their own executions.
+- [x] Record the machine in saved configurations and provenance.
 - [ ] Show free disk, CPUs, and memory on the start page, with the disk estimate and a warning when it does not fit.
-- [ ] Read job benchmarks into the run results, together with the open run-metrics task.
-- [ ] Derive per-machine rates from completed runs and show duration and disk estimates with their source.
+- [ ] Read job benchmarks into the run results: CPU time and peak memory per stage.
+- [ ] Write `machine-rates.yaml` after a completed run and show duration and disk estimates from it with their source.
 - [ ] Test estimates from injected benchmark data, missing or partial benchmarks, a machine without completed runs, and the warning path, without depending on the test machine's hardware.
 
 ## Acceptance
