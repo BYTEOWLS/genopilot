@@ -42,6 +42,15 @@ The exact schema, identifier rules, platform values, and representation of layou
 - Keep compatibility validation in the application and file/evidence validation in workflow rules.
 - Do not implement generic scheduler or platform-plugin abstractions for hypothetical future callers.
 
+### Sequencing-specific preprocessing defaults
+
+- Choose validated preprocessing defaults by sequencing technology and layout, with instrument chemistry where it affects artefacts. A platform label alone may not be enough; record only the additional metadata needed to select supported defaults.
+- Do not apply the current Illumina fastp settings universally. Poly-G trimming addresses artefacts associated particularly with two-colour Illumina chemistry; adapter handling, minimum retained read length, and read-quality filtering also need technology-appropriate defaults. Long reads require separately validated preprocessing rather than inherited short-read settings.
+- Review the current poly-G minimum of 10 bases, minimum retained length of 30 bp, and disabled read-quality filtering as an Illumina baseline, not universal recommendations. Read-quality filtering is separate from the caller's base-quality threshold.
+- Resolve defaults per selected read set, so mixed-technology isolates do not receive one isolate-wide preprocessing profile. Require review when metadata cannot identify an applicable validated default; do not silently guess chemistry.
+- Save effective preprocessing settings and the metadata used to select them in immutable run snapshots and provenance. Any supported overrides must be explicit and recorded.
+- Validate each supported default set before execution support is added. Changing trimming cannot resolve intrinsically non-unique short-read mapping in repeats; fewer consensus Ns alone is not evidence of better defaults.
+
 ### Discovery and validation
 
 - Retain Illumina delivery-pattern discovery as an import convenience, not the definition of an isolate or its eligibility.
@@ -65,6 +74,7 @@ The exact schema, identifier rules, platform values, and representation of layou
 - Support archive-renamed Illumina reads through explicit metadata now, or in a separate change?
 - Does the proposed read-set boundary fit repeated sequencing of one library and lane-merged deliveries, and how are file groups and shared library identity represented?
 - Which platforms and layouts can be recorded before they have an executable workflow, and how is unknown platform handled?
+- Which instrument/chemistry metadata is needed for preprocessing defaults, how are unknown values handled, and which settings may users override?
 - Which read-group metadata is required for execution, how is its source recorded, and how are conflicting supplied and inferred values resolved?
 - What is the supported boundary for viewing and executing existing runs after the contract change?
 
@@ -75,11 +85,12 @@ The exact schema, identifier rules, platform values, and representation of layou
 - [ ] Implement versioned catalog storage and the agreed migration or re-import boundary.
 - [ ] Update discovery, metadata review, catalog editing, and read-set presentation.
 - [ ] Add explicit workflow compatibility and read-set selection, saved in immutable run snapshots.
-- [ ] Update workflow inputs, read-group handling, provenance, and old-run handling as agreed.
+- [ ] Define validated sequencing-specific preprocessing defaults and required metadata; resolve and snapshot effective settings per read set.
+- [ ] Update workflow inputs, preprocessing, read-group handling, provenance, and old-run handling as agreed.
 - [ ] Update user documentation, workflow documentation, and changelog together with the implementation.
 - [ ] Test transition failures, mixed-platform isolates, unsupported versus invalid input, layout compatibility, lane/chunk pairing, shared libraries across read sets, metadata conflicts, and snapshots unaffected by catalog edits; follow the repository's browser-test pause.
 - [ ] Run `pnpm test`, `pnpm typecheck`, `pnpm build`, `pnpm pack:local`, and Python workflow tests.
 
 ## Out of scope
 
-Execution on any non-Illumina platform, including DNBSEQ, AVITI, Nanopore, and PacBio; hybrid calling; technology-specific optimization; and a general platform execution framework. Additional platform support needs validated preprocessing, alignment, calling, and quality behavior. Another short-read platform may reuse much of the existing pipeline rather than require a separate one.
+Execution on any non-Illumina platform, including DNBSEQ, AVITI, Nanopore, and PacBio; hybrid calling; benchmarking and tuning additional technology-specific default sets; and a general platform execution framework. Additional platform support needs validated preprocessing, alignment, calling, and quality behavior. Another short-read platform may reuse much of the existing pipeline rather than require a separate one.
