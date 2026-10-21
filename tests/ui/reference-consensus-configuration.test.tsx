@@ -181,6 +181,7 @@ function renderScreen(
     executeSnakemakeRun?: typeof executeSnakemakeRun;
     backboneCached?: boolean;
     rows?: number;
+    checkSystem?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['checkSystem'];
   } = {},
 ) {
   const input = new TestInput();
@@ -213,6 +214,8 @@ function renderScreen(
       discoverPreviousRuns={async () => []}
       executeSnakemakeRun={options.executeSnakemakeRun}
       registerAccessionCaches={async () => 'Recorded.'}
+      // Never the test machine's disks or hardware.
+      checkSystem={options.checkSystem ?? (async () => ({rows: [], warnings: []}))}
     />,
     {
       exitOnCtrlC: false,
@@ -259,8 +262,13 @@ test('requires at least one isolate before preparing the run', async context => 
 test('configures a run from cataloged isolates, reviews it, and starts a dry run or an execution', async context => {
   const executedModes: string[] = [];
   let saved: PreparedReferenceConsensusRun | undefined;
+  const checked: PreparedReferenceConsensusRun[] = [];
   const {input, output, reviewed} = renderScreen(context, {
     rows: 80,
+    checkSystem: async prepared => {
+      checked.push(prepared);
+      return {rows: [{label: 'Free disk', value: 'system-check-row'}], warnings: ['system-check-warning']};
+    },
     inspectRun: async () => ({sameFiles: [{first: '/reads/one.fq', second: '/reads/linked.fq'}]}),
     saveRun: async prepared => {
       saved = prepared;
@@ -301,6 +309,12 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   assert.ok(frame.includes('mutant-one_R1.fastq.gz'));
   assert.ok(frame.includes(prepared.outputDirectory));
   assert.ok(!frame.includes('--dry-run'));
+  // The systems check of the prepared run, with its warning.
+  assert.equal(checked[0], prepared);
+  assert.ok(frame.includes('system-check-row') && frame.includes('system-check-warning'));
+  // It follows the warnings at the top, before the configured values and isolates.
+  assert.ok(frame.indexOf('system-check-warning') < frame.indexOf('system-check-row'));
+  assert.ok(frame.indexOf('system-check-row') < frame.indexOf('mutant-one_R1.fastq.gz'));
 
   await press(input, ENTER);
   await waitUntil(() => saved !== undefined, 'the run is saved');

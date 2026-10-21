@@ -162,6 +162,7 @@ Potential capabilities include:
 - [ ] Offer manual installation instructions followed by a `Check again` action.
 - [ ] Add a `Repair tooling` path for previously installed but missing or incompatible tooling.
 - [ ] Add explicit approval and coherent-bundle validation before supporting external tooling from `PATH`.
+- [ ] Shorten the run review's sections, such as Voting: show the chosen values in a few words, not full sentences. The explanations and worked examples belong in the workflow's help, which the review currently repeats.
 
 ### Workflow cancellation
 

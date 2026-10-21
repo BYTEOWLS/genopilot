@@ -66,6 +66,8 @@ export type PreparedWorkflowRun<T> = {
   details?: readonly ReviewSection[];
   /** Problems that do not stop the run but that the researcher should see first. */
   warnings?: readonly string[];
+  /** Free disk, CPUs, memory, and the disk estimate, shown right after the warnings. */
+  systemCheck?: readonly {label: string; value: string}[];
   /**
    * Cached NCBI inputs the researcher decides to reuse or download again before the review, and
    * how those decisions are applied; kept together so a decision can never be dropped.
@@ -109,8 +111,8 @@ type ReviewItem =
 
 /**
  * Everything the review shows, flattened into rows so a review taller than the terminal can be
- * scrolled: warnings first, so they are seen without scrolling, then the form's fields, the
- * workflow's own details, the effective options, and the run directory.
+ * scrolled: warnings first, so they are seen without scrolling, then the system check, the form's
+ * fields, the workflow's own details, the effective options, and the run directory.
  */
 function reviewItems<T>(
   prepared: PreparedWorkflowRun<T>,
@@ -124,6 +126,11 @@ function reviewItems<T>(
     items.push({kind: 'heading', key: 'warnings', text: 'Warnings', color: 'yellow'});
     warnings.forEach((warning, index) =>
       items.push({kind: 'text', key: `warning:${String(index)}`, text: `⚠ ${warning}`, color: 'yellow'}));
+  }
+  if (prepared.systemCheck && prepared.systemCheck.length > 0) {
+    items.push({kind: 'heading', key: 'system-check', text: 'System check'});
+    prepared.systemCheck.forEach((row, index) =>
+      items.push({kind: 'row', key: `system-check:${String(index)}`, label: row.label, value: row.value}));
   }
   for (const section of sections) {
     items.push({kind: 'heading', key: `section:${section}`, text: section});

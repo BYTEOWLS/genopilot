@@ -30,6 +30,31 @@ export type WorkflowArtifact = {
   produced_by: string;
 };
 
+/**
+ * Default factors of the disk a run needs, measured on a real run; see `estimateDisk`. Bytes are
+ * those of the input files: each isolate's read files and the genome FASTA.
+ */
+export type DiskEstimateFactors = {
+  /** Kept per byte of an isolate's reads. */
+  isolate_read_bytes: number;
+  /** Kept per genome byte, for each isolate. */
+  isolate_genome_bytes: number;
+  /** Kept per genome byte, once per run. */
+  run_genome_bytes: number;
+  /** Temporary, per byte of the reads of each isolate processed at the same time. */
+  temporary_read_bytes: number;
+  /** CPUs one isolate's processing uses, which bounds how many run at the same time. */
+  cpus_per_isolate: number;
+};
+
+const diskEstimateFields = [
+  'isolate_read_bytes',
+  'isolate_genome_bytes',
+  'run_genome_bytes',
+  'temporary_read_bytes',
+  'cpus_per_isolate',
+] as const;
+
 export type WorkflowManifest = {
   schema_version: typeof WORKFLOW_MANIFEST_SCHEMA_VERSION;
   workflow_version: number;
@@ -40,6 +65,7 @@ export type WorkflowManifest = {
   'parameter-definitions': string;
   stages: WorkflowStage[];
   artifacts: WorkflowArtifact[];
+  disk_estimate?: DiskEstimateFactors;
 };
 
 export type WorkflowManifestValidationIssue = {
@@ -356,6 +382,7 @@ export function validateWorkflowManifest(value: unknown): WorkflowManifest {
       'parameter-definitions',
       'stages',
       'artifacts',
+      'disk_estimate',
     ],
     '$',
     issues,
@@ -382,6 +409,20 @@ export function validateWorkflowManifest(value: unknown): WorkflowManifest {
 
   const {stages, ids: stageIds} = validateStages(value.stages, issues);
   const artifacts = validateArtifacts(value.artifacts, stageIds, issues);
+  if ('disk_estimate' in value) {
+    if (isRecord(value.disk_estimate)) {
+      const factors = value.disk_estimate;
+      rejectUnknownFields(factors, [...diskEstimateFields], '$.disk_estimate', issues);
+      for (const field of diskEstimateFields) {
+        const factor = factors[field];
+        if (typeof factor !== 'number' || !Number.isFinite(factor) || factor < 0 || (field === 'cpus_per_isolate' && factor < 1)) {
+          issues.push({path: `$.disk_estimate.${field}`, message: field === 'cpus_per_isolate' ? 'must be a number of at least 1' : 'must be a non-negative number'});
+        }
+      }
+    } else {
+      issues.push({path: '$.disk_estimate', message: 'must be an object'});
+    }
+  }
 
   if (issues.length > 0) {
     throw new WorkflowManifestValidationError(issues);
@@ -397,6 +438,7 @@ export function validateWorkflowManifest(value: unknown): WorkflowManifest {
     'parameter-definitions': value['parameter-definitions'] as string,
     stages,
     artifacts,
+    ...(isRecord(value.disk_estimate) ? {disk_estimate: value.disk_estimate as DiskEstimateFactors} : {}),
   };
 }
 

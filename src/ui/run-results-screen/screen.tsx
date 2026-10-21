@@ -56,6 +56,7 @@ import type {ExistingRunMetadata} from '../../workflows/run-discovery.js';
 import {formatLocalDateTime} from "../utils.js";
 import {stageDurationRows, timingRows} from '../run-timing-rows.js';
 import type {MachineDetails} from '../../workflows/configuration-validation.js';
+import {formatMemory} from '../../workflows/systems-check.js';
 import {SectionList, type SectionListItem} from "./section-list.js";
 import {useGenomeSession} from '../../browser/use-genome-session.js';
 import {browserViewShortcut, genoPilotSummary, runViewTitle} from '../../browser/contract.js';
@@ -67,8 +68,7 @@ import {cohortConsensusView, consensusIsolateView, consensusSitesView, siteItemI
 
 /** `16 CPUs, 64 GB · Apple M3 Max · darwin arm64` */
 function machineSummary(machine: MachineDetails): string {
-  const memory = `${String(Math.round(machine.memory_bytes / 2 ** 30))} GB`;
-  return `${String(machine.cpus)} CPUs, ${memory} · ${machine.cpu_model} · ${machine.platform} ${machine.architecture}`;
+  return `${String(machine.cpus)} CPUs, ${formatMemory(machine.memory_bytes)} · ${machine.cpu_model} · ${machine.platform} ${machine.architecture}`;
 }
 
 export type SupportPath = ResultPath & {id: string; label: string};

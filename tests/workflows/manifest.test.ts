@@ -210,3 +210,20 @@ test('reports malformed YAML as a structured manifest validation error', () => {
     },
   );
 });
+
+test('accepts disk estimate factors and rejects incomplete or invalid ones', () => {
+  const factors = {
+    isolate_read_bytes: 0.62,
+    isolate_genome_bytes: 9,
+    run_genome_bytes: 3.6,
+    temporary_read_bytes: 1.6,
+    cpus_per_isolate: 8,
+  };
+  assert.deepEqual(validateWorkflowManifest(manifest({disk_estimate: factors})).disk_estimate, factors);
+  assert.equal(validateWorkflowManifest(manifest()).disk_estimate, undefined);
+  assert.deepEqual(
+    validationIssues(manifest({disk_estimate: {...factors, isolate_read_bytes: -1, cpus_per_isolate: 0, extra: 1}})).map(issue => issue.path),
+    ['$.disk_estimate.extra', '$.disk_estimate.isolate_read_bytes', '$.disk_estimate.cpus_per_isolate'],
+  );
+  assert.deepEqual(validationIssues(manifest({disk_estimate: 3})).map(issue => issue.path), ['$.disk_estimate']);
+});

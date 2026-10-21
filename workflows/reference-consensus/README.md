@@ -301,6 +301,18 @@ Existing alignments, indexed variants, and masks can be inspected against the ba
 
 Trimmed reads and per-pair alignments are temporary: the isolate's alignment keeps every read, and the fastp reports record what trimming did.
 
+## Disk space
+
+Before a run, the start page estimates its disk need from the size of each isolate's read files and of the backbone FASTA, with the factors in [`manifest.yaml`](manifest.yaml). They were measured on 9 isolates of a haploid genome of about 30 Mb, with 1.4–2.5 GB of gzipped reads each:
+
+| Part | Kept |
+|---|---|
+| Duplicate-marked alignment | 0.47–0.62 × the isolate's read bytes; the estimate uses 0.62 |
+| All-sites calls, isolate FASTA, and reports | about 9 × the backbone's bytes, per isolate |
+| Resolved backbone with its index, and one cohort | about 3.6 × the backbone's bytes, per run |
+
+While an isolate is aligned, its trimmed reads and per-pair alignments also need about 1.6 × its read bytes, for as many isolates as the effective CPUs align at once (8 CPUs each). The factors are per byte, so they carry over to other genomes and coverages; the estimate is a rough guide and may be up to a quarter too high. An NCBI backbone counts once it is in the download cache; before its first download, the estimate says it leaves it out.
+
 ## Tools
 
 Every scientific step runs in one pinned environment; Snakemake schedules the steps. The versions are pinned only in the files linked below and recorded in every run's provenance.

@@ -28,6 +28,7 @@ import {
   discoverReferenceConsensusRuns,
   hasBackboneCacheEntry,
   inspectPreparedRun,
+  diskEstimateInputs,
   reviewWarnings,
   savePreparedRun,
   type PreparedReferenceConsensusRun,
@@ -42,6 +43,7 @@ import WorkflowConfigurationScreen, {
   type ReviewSection,
   type WorkflowFormValues,
 } from './workflow-configuration.js';
+import {checkMachine, estimateDisk, systemsCheckReview} from '../../workflows/systems-check.js';
 
 export type IsolateCatalogSnapshotLoader = () => Promise<IsolateCatalog>;
 export type ReferenceConsensusRunInspector = (prepared: PreparedReferenceConsensusRun) => Promise<RunInspection>;
@@ -290,6 +292,14 @@ export function ReferenceConsensusConfigurationScreen({
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
   registerAccessionCaches = defaultRegisterAccessionCaches,
+  checkSystem = async prepared => {
+    const machine = await checkMachine(prepared.outputDirectory);
+    if (!manifest?.disk_estimate) {
+      return systemsCheckReview(machine);
+    }
+    const {inputs, note} = await diskEstimateInputs(prepared);
+    return systemsCheckReview(machine, {disk: estimateDisk(manifest.disk_estimate, inputs), ...(note ? {note} : {})});
+  },
 }: {
   currentDirectory: string;
   onBack: () => void;
@@ -314,6 +324,8 @@ export function ReferenceConsensusConfigurationScreen({
   prepareSnakemakeRun?: typeof defaultPrepareSnakemakeRun;
   executeSnakemakeRun?: typeof defaultExecuteSnakemakeRun;
   registerAccessionCaches?: AccessionCacheRegistration;
+  /** Free disk, CPUs, and memory, with the disk estimate and a warning when the run may not fit. */
+  checkSystem?: (prepared: PreparedReferenceConsensusRun) => Promise<ReturnType<typeof systemsCheckReview>>;
 }): React.JSX.Element {
   const [previousRuns, setPreviousRuns] = useState<Awaited<ReturnType<PreviousRunsLoader>>>([]);
 
@@ -357,6 +369,7 @@ export function ReferenceConsensusConfigurationScreen({
       availableCpus,
     );
     const inspection = await inspectRun(prepared);
+    const system = await checkSystem(prepared);
     const usesNcbi = prepared.configuration.inputs.backbone.source === 'ncbi';
     const apiKeyConfigured = usesNcbi ? await checkNcbiApiKey() : false;
     const cached = usesNcbi ? await checkBackboneCache(prepared) : false;
@@ -380,7 +393,8 @@ export function ReferenceConsensusConfigurationScreen({
         payload: run,
         resolvedValues: resolvedValues(run),
         details: [backboneSection(run, inspection), isolatesSection(run), votingSection(run.configuration)],
-        warnings: reviewWarnings(run, inspection),
+        warnings: [...reviewWarnings(run, inspection), ...system.warnings],
+        systemCheck: system.rows,
         effectiveOptions,
         outputDirectory: run.outputDirectory,
       };

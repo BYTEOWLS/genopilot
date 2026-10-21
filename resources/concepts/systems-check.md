@@ -58,7 +58,7 @@ Estimates are shown as ranges and labeled as estimates. A machine without a comp
 
 - [x] Run timing: a live overall timer, and start, finish, duration, and per-stage durations in the run results; workflows reuse it for their own executions.
 - [x] Record the machine in saved configurations and provenance.
-- [ ] Show free disk, CPUs, and memory on the start page, with the disk estimate and a warning when it does not fit.
+- [x] Show free disk, CPUs, and memory on the start page, with the disk estimate and a warning when it does not fit.
 - [ ] Read job benchmarks into the run results: CPU time and peak memory per stage.
 - [ ] Write `machine-rates.yaml` after a completed run and show duration and disk estimates from it with their source.
 - [ ] Test estimates from injected benchmark data, missing or partial benchmarks, a machine without completed runs, and the warning path, without depending on the test machine's hardware.

@@ -216,6 +216,8 @@ function renderConfiguration(
       executeSnakemakeRun={options.executeSnakemakeRun}
       // Never the real catalog: a test run must not touch the researcher's accession catalog.
       registerAccessionCaches={options.registerAccessionCaches ?? (async () => 'Recorded.')}
+      // Never the test machine's disks or hardware.
+      checkSystem={async () => ({rows: [{label: 'Free disk', value: 'system-check-row'}], warnings: []})}
     />,
     {
       exitOnCtrlC: false,
@@ -404,6 +406,8 @@ test('edits all required fields and confirms effective options before saving', a
   assert.match(configuration.run.created_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.match(review.prepared.outputDirectory, /^\/research\/runs\/annotation-transfer\//);
   assert.ok(review.frame.includes(review.prepared.outputDirectory));
+  // The systems check where the run will be saved.
+  assert.ok(review.frame.includes('system-check-row'));
   assert.match(fieldLine(review.frame, 'run-name') ?? '', /Test run/);
   assert.equal(fieldLine(review.frame, 'lifton-profile'), undefined);
   // The NCBI API key only matters, and is only checked, when an input is downloaded from NCBI.
@@ -600,6 +604,8 @@ test('reflects the NCBI API key status in the review of an NCBI-sourced run', as
         reviewed = prepared;
       },
       checkNcbiApiKey: async () => apiKeyConfigured,
+      // Tall enough to show the whole review without scrolling.
+      rows: 80,
     });
     registerCleanup(context, instance);
     await waitForForm(output);

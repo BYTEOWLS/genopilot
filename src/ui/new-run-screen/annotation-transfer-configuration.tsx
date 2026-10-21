@@ -32,6 +32,7 @@ import WorkflowConfigurationScreen, {
   type PreviousWorkflowRun,
   type WorkflowFormValues,
 } from './workflow-configuration.js';
+import {checkMachine, systemsCheckReview} from '../../workflows/systems-check.js';
 
 export type PreparedRunValidator = (prepared: PreparedAnnotationTransferRun) => Promise<void>;
 export type PreparedRunSaver = (prepared: PreparedAnnotationTransferRun) => Promise<string>;
@@ -181,6 +182,7 @@ export function AnnotationTransferConfigurationScreen({
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
   registerAccessionCaches = defaultRegisterAccessionCaches,
+  checkSystem = async outputDirectory => systemsCheckReview(await checkMachine(outputDirectory)),
   manifest,
 }: {
   currentDirectory: string;
@@ -201,6 +203,8 @@ export function AnnotationTransferConfigurationScreen({
   prepareSnakemakeRun?: typeof defaultPrepareSnakemakeRun;
   executeSnakemakeRun?: typeof defaultExecuteSnakemakeRun;
   registerAccessionCaches?: AccessionCacheRegistration;
+  /** Free disk, CPUs, and memory where the run will be saved. */
+  checkSystem?: (outputDirectory: string) => Promise<ReturnType<typeof systemsCheckReview>>;
   manifest?: WorkflowManifest;
 }): React.JSX.Element {
   const [previousRuns, setPreviousRuns] = useState<readonly PreviousWorkflowRun[]>([]);
@@ -237,6 +241,7 @@ export function AnnotationTransferConfigurationScreen({
     const usesNcbi = usesNcbiInput(prepared);
     const apiKeyConfigured = usesNcbi ? await checkNcbiApiKey() : false;
     const cacheEntries = usesNcbi ? await findCacheEntries(prepared) : [];
+    const system = await checkSystem(prepared.outputDirectory);
 
     const prepareForReview = (
       run: PreparedAnnotationTransferRun,
@@ -269,6 +274,7 @@ export function AnnotationTransferConfigurationScreen({
         payload: run,
         resolvedValues: resolvedValues(run),
         effectiveOptions,
+        systemCheck: system.rows,
         outputDirectory: run.outputDirectory,
       };
     };
