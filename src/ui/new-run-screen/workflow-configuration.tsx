@@ -12,6 +12,7 @@ import {
   readCatalogedIsolates,
   useIsolateChoices,
   type IsolateCatalogReader,
+  type ReadSetCompatibility,
 } from '../components/isolates-field.js';
 import {PathField} from '../components/path-field.js';
 import {TextField} from '../components/text-field.js';
@@ -272,6 +273,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   executionIsolates,
   completedIsolates,
   loadIsolates = readCatalogedIsolates,
+  readSetCompatibility,
 }: {
   title: string;
   currentDirectory: string;
@@ -296,6 +298,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   /** The saved run's isolates whose results are complete, for a run that ended with a failure. */
   completedIsolates?: (payload: T) => Promise<ReadonlySet<string>>;
   loadIsolates?: IsolateCatalogReader;
+  readSetCompatibility?: ReadSetCompatibility;
 }): React.JSX.Element {
   const editableDefinitions = useMemo(
     () => parameterDefinitions.filter(definition => !definition.hidden && definition.kind !== 'fixed'),
@@ -574,6 +577,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   if (browserId && browsedDefinition?.kind === 'isolates') {
     return (
       <IsolatesField
+        compatibility={readSetCompatibility}
         label={browsedDefinition.label}
         selected
         inputActive={inputActive}
@@ -736,7 +740,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
             ? 'Enter — Browse for file'
             : enterOpensAccessionPicker
               ? 'Enter — Choose from catalog'
-              : enterOpensIsolatePicker && 'Enter — Choose isolates',
+              : enterOpensIsolatePicker && 'Enter — Choose read sets',
       ]}
       saveLabel="Continue to review"
       saveSelected={continueSelected}
@@ -792,6 +796,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         } else if (definition.kind === 'isolates') {
           return (
             <IsolatesField
+              compatibility={readSetCompatibility}
               key={`${row.key}:${runApplyGeneration}`}
               label={definition.label}
               required={definition.required}

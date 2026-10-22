@@ -50,7 +50,14 @@ def write_run(
         "captured_at": "2026-09-25T10:00:00.000Z",
         "isolates": [
             {"id": isolate["id"], "name": isolate["id"], "wildtype": None, "derived_from": None,
-             "read_pairs": isolate["read_pairs"]}
+             "read_sets": [{
+                 "id": f"reads-{index}", "name": f"Reads {index}", "platform": "illumina", "layout": "paired-end",
+                 "library_id": f"{isolate['id']}-library-{index if isolate['id'] == 'iso-c' else 1}",
+                 "illumina": {"chemistry": "two-colour", "poly_g": "auto"},
+                 "read_pairs": [pair],
+                 "effective_preprocessing": {"poly_g": True, "poly_g_source": "chemistry", "poly_g_min_length": 10,
+                                             "minimum_length": 30, "quality_filtering": False, "paired_adapter_detection": True},
+             } for index, pair in enumerate(isolate["read_pairs"], 1)]}
             for isolate in isolates
         ],
     }
@@ -65,6 +72,7 @@ def write_run(
             "backbone": {"source": "local", "fasta": str(FIXTURES_DIR / "backbone.fasta")},
             "isolates_file": "isolates.yaml",
             "selected_isolates": [isolate["id"] for isolate in isolates],
+            "selected_read_sets": [f"{isolate['id']}/{read_set['id']}" for isolate in snapshot["isolates"] for read_set in isolate["read_sets"]],
         },
         "calling": {**DEFAULT_CALLING, **(calling or {})},
         "consensus": {

@@ -7,9 +7,9 @@ Status: the initial cohort consensus is implemented. Every isolate gets its alig
 ## Inputs
 
 - **Backbone**: one assembly FASTA, either a local file or a versioned NCBI assembly accession. It supplies the coordinates and every base an isolate does not change.
-- **Isolates**: the selected isolates and their read pairs (R1/R2 FASTQ files), taken from a snapshot of the isolate catalog made when the run was created. Later catalog edits never change an existing run.
+- **Read sets**: explicitly selected paired-end Illumina sets from the isolate catalog. Each set holds one library and multiple R1/R2 file groups across lanes or chunks; several sets may share a confirmed library ID. The immutable snapshot records their paths, metadata, and resolved preprocessing. Later catalog edits never change a run.
 
-The reads must keep their original Illumina read names, because the read groups are derived from them (see *Read groups*).
+Archive-renamed Illumina reads are supported using supplied library identity. Original Illumina headers contribute optional sequencing metadata, not proof of library identity. Unknown previous processing must be reviewed before execution. Other platforms/layouts are not supported.
 
 ## Parameters
 
@@ -75,8 +75,8 @@ The workflow runs three stages before any isolate is processed:
 
 Then, for every read pair of every isolate:
 
-4. **Validate read pair**: check the read names and record counts, derive the read group, and checksum both files.
-5. **Trim**: fastp read QC and light adapter trimming.
+4. **Validate read pair**: check every FASTQ record, quality length, mate name and count, derive optional sequencing metadata, generate the read group, and checksum both files.
+5. **Trim**: fastp with the read set's resolved Illumina settings, or explicitly skip provider-trimmed groups and link their inputs unchanged.
 6. **Align**: bwa mem with the pair's read group, then samtools fixmate and sort.
 
 And for every isolate:
@@ -109,7 +109,7 @@ The other isolates still finish, although the cohort steps wait, because:
 
 A read group labels where reads came from: the sequencing run, lane, library, and sample. Every read in a BAM file carries its read group, so reads from different read pairs remain distinguishable after they are merged into one isolate alignment.
 
-Every read pair gets its own read group, derived from its Illumina read names and file name. A read name looks like this:
+Every file group gets a generated unique read-group ID from the isolate ID, stable read-set ID, and group position. Library identity is supplied and confirmed by the researcher, never inferred from a filename or substituted with the isolate ID. An original Illumina read name looks like this:
 
 ```text
 @A00123:45:HXYZ7DSX2:2:1101:1000:2000 1:N:0:ACGTACGT+TGCATGCA
@@ -119,25 +119,15 @@ Its fields are instrument (`A00123`), run (`45`), flowcell (`HXYZ7DSX2`), lane (
 
 | Field | Meaning | Derived from | Example |
 |---|---|---|---|
-| `ID` | Unique key of the read group | flowcell, lane, barcode | `HXYZ7DSX2.2.ACGTACGT+TGCATGCA` |
-| `PU` | Platform unit | same as `ID` | `HXYZ7DSX2.2.ACGTACGT+TGCATGCA` |
+| `ID` | Unique key of the read group | generated from snapshot identities | `isolate-a.reads-a.1` |
+| `PU` | Optional platform unit | header flowcell, single lane, consistent barcode | `HXYZ7DSX2.2.ACGTACGT+TGCATGCA` |
 | `SM` | Sample | isolate ID | the isolate ID |
-| `LB` | Library | sample name from the R1 file name, barcode | `NID42.ACGTACGT+TGCATGCA` |
-| `PL` | Platform | fixed | `ILLUMINA` |
+| `LB` | Library | user-confirmed library ID | `library-a` |
+| `PL` | Platform | selected platform | `ILLUMINA` |
 
-- The lane is part of `ID` and `PU` only when every read of the pair has the same lane. A lane-merged delivery combines all lanes of a flowcell in one file, so its read group carries no lane.
-- The barcode keeps the `ID` distinct when two libraries were sequenced on the same lane. It is taken from the first read.
-- When the R1 file name does not follow the Illumina pattern, the isolate ID is used as the library's sample name.
+A lane-merged group has no single lane in `PU`. A barcode is used only when all header index comments agree; sequencing errors can make it unknown. Archive-renamed reads have no fabricated flowcell, lane, barcode, or platform unit. The report records whether metadata came from headers, explicit input, or generated identity.
 
-A read pair fails validation when:
-
-- a read name is not an Illumina read name;
-- a read name disagrees with the first one on instrument, run, or flowcell (lanes may differ);
-- R1 and R2 hold different numbers of reads, which bwa does not check.
-
-An isolate fails when two of its read pairs have the same read group `ID`, which means the same lane and barcode were listed twice.
-
-Reads downloaded from a public archive often lost their Illumina read names and cannot be processed yet.
+A group fails on malformed FASTQ records, invalid qualities, mate-name/count disagreements, mixed original/archive formats, or inconsistent instrument/run/flowcell evidence. These checks also run for provider-trimmed groups. Libraries shared across read sets retain the same `LB`, so duplicate marking works across resequencing.
 
 ## Duplicates
 
@@ -347,12 +337,12 @@ Publications that use this workflow's results should cite the tools above, next 
 
 Every option that changes a result is set explicitly rather than left to a tool default:
 
-- **fastp**: adapters detected for paired-end reads; quality filtering off, because the aligner soft-clips and the caller weighs base qualities; reads shorter than 30 bp dropped; poly-G tails of at least 10 bases trimmed on every instrument.
+- **fastp**: adapters detected for paired-end reads; quality filtering off, because the aligner soft-clips and the caller weighs base qualities; reads shorter than 30 bp dropped. Poly-G trimming is Auto / On / Off per read set, with a fixed minimum of 10 bases when enabled. Chemistry records four-colour SBS, two-colour SBS, one-channel SBS, or unknown. Auto enables poly-G trimming for two-colour and disables it for four-colour. One-channel has no validated Auto default; it and unknown chemistry require an explicit On/Off choice if trimming will run. Off explicitly disables fastp's own poly-G auto-detection. These are Illumina-specific defaults [4], not general recommendations for other technologies. Read-quality filtering is separate from the caller's base-quality threshold.
 - **bwa mem**: a fixed batch size, so alignments do not depend on the number of threads.
 - **bcftools mpileup**: maximum depth 10000; unmapped, secondary, QC-failed, and duplicate reads skipped; indel candidates need at least 2 reads and a 5% share. Base-alignment quality stays at the pinned default, which the recorded command and version document.
 - **bgzip and tabix** (HTSlib): compress and index the support and consensus tables.
 
-Trimmed input runs through the same steps, which then change little. Untrimmed input is preferred, because aggressive provider trimming mostly discards data the aligner and caller could use. Whether an isolate's reads were trimmed is recorded in its metrics and provenance.
+Provider-trimmed file groups skip fastp; their input files are linked unchanged for alignment. Their JSON/HTML reports explicitly state that trimming was skipped and contain no invented fastp measurements. Unknown processing state requires review. Untrimmed input is preferred because aggressive provider trimming can discard usable evidence. Snapshots and provenance record the source state, resolved settings and source, and whether preprocessing was generated or skipped on imported inputs. Changing trimming cannot resolve intrinsically non-unique mapping in repeats; fewer Ns alone does not establish better defaults.
 
 ## References
 

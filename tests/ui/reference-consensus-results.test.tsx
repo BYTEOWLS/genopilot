@@ -80,6 +80,7 @@ const configuration = validateReferenceConsensusConfiguration({
     backbone: {source: 'ncbi', accession: 'GCF_000000001.1'},
     isolates_file: 'isolates.yaml',
     selected_isolates: isolateIds,
+    selected_read_sets: isolateIds.map(id => `${id}/reads`),
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
   consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {testReadSet} from '../read-sets.js';
 import {readFileSync} from 'node:fs';
 import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
@@ -164,7 +165,7 @@ function isolate(id: string, name: string, trimmed = false): Isolate {
     name,
     wildtype: null,
     derived_from: null,
-    read_pairs: [{r1: `/reads/${id}_R1.fastq.gz`, r2: `/reads/${id}_R2.fastq.gz`, trimmed}],
+    read_sets: [testReadSet([{r1: `/reads/${id}_R1.fastq.gz`, r2: `/reads/${id}_R2.fastq.gz`, trimmed}])],
   };
 }
 
@@ -238,18 +239,19 @@ async function chooseIsolates(input: TestInput, output: TestOutput, ids: readonl
   await focusField(input, output, 'isolates');
   await press(input, ENTER);
   for (const id of ids) {
-    await waitForFrame(output, frame => frame.includes(`(${id})`));
-    // Move the highlight onto the isolate's row, found by its stable ID.
+    const name = catalog.isolates.find(isolate => isolate.id === id)!.name;
+    await waitForFrame(output, frame => frame.includes(name));
+    // Resolve the expected fixture data by ID; internal IDs need not be displayed.
     for (let attempt = 0; attempt < catalog.isolates.length; attempt += 1) {
       const before = selectedLine(output.lastFrame());
-      if (before?.includes(`(${id})`)) {
+      if (before?.includes(name)) {
         break;
       }
       await press(input, ARROW_DOWN);
       await waitForFrame(output, frame => selectedLine(frame) !== before);
     }
     await press(input, SPACE);
-    await waitForFrame(output, frame => frame.split('\n').some(line => line.includes(`(${id})`) && line.includes('[✔]')));
+    await waitForFrame(output, frame => frame.split('\n').some(line => line.includes(name) && line.includes('[✔]')));
   }
   await press(input, ENTER);
   await waitForFrame(output, frame => fieldLine(frame, 'isolates')?.includes(`${String(ids.length)} selected`) ?? false);
@@ -462,7 +464,7 @@ test('scrolls a review taller than the terminal', async context => {
   await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
   await focusField(input, output, 'isolates');
   await press(input, ENTER);
-  await waitForFrame(output, frame => frame.includes('(isolate-1)'));
+  await waitForFrame(output, frame => frame.includes(many.isolates[0]!.name));
   for (let index = 0; index < 12; index += 1) {
     await press(input, SPACE);
     await press(input, ARROW_DOWN);

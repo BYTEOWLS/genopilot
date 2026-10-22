@@ -218,7 +218,11 @@ Isolates reused across runs are stored in a user-local catalog, `isolates/isolat
 $HOME/.byteowlsGenopilot/isolates/isolates.yaml
 ```
 
-The catalog records local research paths, so it is owner-only and never belongs in a repository or run workspace. Each isolate has a stable ID, a name, an optional description, a `wildtype` value (`true`, `false`, or `null` when not recorded), an optional `derived_from` parent ID, and one or more R1/R2 FASTQ pairs (plain or gzip-compressed) given as absolute paths. Sequencing providers deliver one pair per lane or run, so a library sequenced twice has two pairs. Each pair records whether the provider already trimmed or filtered it; untrimmed reads are preferred, and one isolate may mix trimmed and untrimmed pairs:
+The catalog records private local paths and never belongs in a repository. Isolates have stable IDs, names, optional descriptions, `wildtype` (`true`, `false`, or `null`), and `derived_from` (parent ID or `null`). Each owns read sets with stable IDs independent of names and paths. A read set represents one library, platform, and layout and holds multiple lane/chunk file groups. Separate deliveries may share a confirmed `library_id` when they sequence the same library again. Only paired-end Illumina is currently supported.
+
+New library IDs start as editable suggestions such as `isolate-a-library-1`, avoiding IDs already assigned under that isolate. The suggestion is not evidence of library identity: users review it before saving, reusing a saved ID only for the same physical preparation. Existing IDs are not changed.
+
+Each file group records absolute plain/gzip FASTQ paths and `trimmed`: `true` for provider-processed reads, `false` for confirmed unprocessed reads, or `null` when unknown. Illumina chemistry and poly-G choices belong to the read set:
 
 ```yaml
 schema_version: 1
@@ -227,16 +231,37 @@ isolates:
     name: "Isolate A"
     wildtype: true
     derived_from: null
-    read_pairs:
-      - r1: "/data/isolate-a_S1_L001_R1_001.fastq.gz"
-        r2: "/data/isolate-a_S1_L001_R2_001.fastq.gz"
-        trimmed: false
-      - r1: "/data/isolate-a_S1_L002_R1_001.fastq.gz"
-        r2: "/data/isolate-a_S1_L002_R2_001.fastq.gz"
-        trimmed: false
+    read_sets:
+      - id: "library-a-delivery"
+        name: "Library A delivery"
+        platform: illumina
+        layout: paired-end
+        library_id: "library-a"
+        illumina:
+          chemistry: two-colour
+          poly_g: auto
+        read_pairs:
+          - r1: "/data/isolate-a_S1_L001_R1_001.fastq.gz"
+            r2: "/data/isolate-a_S1_L001_R2_001.fastq.gz"
+            trimmed: false
+          - r1: "/data/isolate-a_S1_L002_R1_001.fastq.gz"
+            r2: "/data/isolate-a_S1_L002_R2_001.fastq.gz"
+            trimmed: false
 ```
 
 The CLI validates the whole file on every load and save: duplicate or malformed IDs, relative paths, a read file used more than once, missing parents, and lineage cycles are rejected. Saves take an exclusive lock, refuse to overwrite changes made by another GenoPilot window, and replace the file atomically. A file that fails validation is reported with its path and left untouched; fix or move it aside to continue. Removing an isolate from the catalog never deletes its read files.
+
+Schema versions remain at `1` during this breaking development change. Old catalog/run structures are unsupported: discard and re-import the catalog and create new runs. No migration or legacy-run compatibility is provided; existing files and evidence are not automatically changed or deleted.
+
+### Example: adding another technology
+
+Hypothetical example only: Oxford Nanopore is **not supported**. To add it:
+
+1. Extend the read-set contract in `src/isolates/catalog.ts` with its supported platform/layout and approved metadata. Keep isolate, library, and file-group identities independent of the technology.
+2. Add a dedicated technology module for discovery, metadata validation, header interpretation, and validated preprocessing. `src/isolates/illumina/` illustrates the current boundary; do not put Nanopore behavior in that folder or apply Illumina defaults to long reads.
+3. Let a workflow explicitly accept the new combination and implement its pinned Snakemake rules, environments, and file validation. Catalog support alone must not make existing workflows accept it.
+4. Reuse general storage, selection mechanics, snapshots, and provenance. Extend their contracts only where the new data requires it; no plugin registry is needed.
+5. Test import, unsupported selections, effective settings, file validation, and snapshot isolation. Document the science and execution requirements in the workflow's README and results page.
 
 ## Accession catalog
 

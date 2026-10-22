@@ -54,8 +54,11 @@ export async function readRunCitation(runDirectory: string, read: ReadText = rea
   return citation.blocks ? {...citation, copyable: true} : undefined;
 }
 
+/** General isolate guidance, followed by one document per supported sequencing technique. */
+export const isolateDocumentNames = ['isolates', 'illumina'] as const;
+
 /** The general documents in `docs/` the application shows, in tab order. */
-export const generalDocumentNames = ['help', 'import-review', 'run-results', 'browser-view', 'genome-view'] as const;
+export const generalDocumentNames = ['help', ...isolateDocumentNames, 'import-review', 'run-results', 'browser-view', 'genome-view'] as const;
 
 /** General documents in `docs/`, by file name without `.md`. */
 export function readGeneralDocuments(

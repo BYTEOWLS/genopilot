@@ -16,6 +16,8 @@ The general documentation in `docs/` never names a workflow or a tool only one w
 
 - `docs/README.md` is the entry point on GitHub; it links the general pages and the `workflows/` directory.
 - `docs/help.md` is the in-app help: what GenoPilot does, runs, catalogs, and the key and mouse conventions.
+- `docs/isolates.md` explains the isolate list and edit form, shared read-set identity, and library identity.
+- Each supported isolate sequencing technique has a separate `docs/<technique>.md`, currently `docs/illumina.md`, for its files, chemistry, and processing settings. `isolateDocumentNames` in `src/docs/documents.ts` lists these beside general isolate help.
 - `docs/import-review.md` explains the isolate import review.
 - `docs/run-results.md` explains the run metadata and run files every workflow's result page shows.
 
@@ -46,6 +48,7 @@ Help pages show whole documents rather than entries per result item: a researche
 - from the welcome screen's Help, as an index of topics: GenoPilot, then one per discovered workflow;
 - from the workflow selection when a new run is created, with the highlighted workflow's README;
 - from a run's results, with the workflow's results page and the general run results page;
+- from the isolate list and edit-form choices/buttons with `?`, using general isolate help and separate technique tabs; closing help preserves selection and unsaved edits, while text/path fields keep `?` as input;
 - from the import review, with the import review page.
 
 A missing file shows that no documentation is available.

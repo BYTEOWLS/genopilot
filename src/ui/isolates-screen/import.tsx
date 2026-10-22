@@ -1,15 +1,16 @@
 import {basename, dirname, relative} from 'node:path';
 import React, {useEffect, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
-import {IsolateCatalogValidationError, suggestIsolateId, validateIsolateCatalog} from '../../isolates/catalog.js';
-import type {DeliveryScan, SkipReason} from '../../isolates/illumina-delivery.js';
+import {Alert} from '@inkjs/ui';
+import {IsolateCatalogValidationError, suggestIsolateId, suggestLibraryId, validateIsolateCatalog} from '../../isolates/catalog.js';
+import type {DeliveryScan, SkipReason} from '../../isolates/illumina/delivery.js';
 import {
   applyImportDecisions,
   chooseVariant,
   ImportDecisionError,
   initialDecisions,
   type CandidateDecision,
-} from '../../isolates/illumina-import.js';
+} from '../../isolates/illumina/import.js';
 import type {ReadPairsChecker} from '../../isolates/reads.js';
 import {IsolateCatalogChangedError, type LoadedIsolateCatalog} from '../../isolates/store.js';
 import {useHomeSuspension} from '../home-navigation.js';
@@ -37,7 +38,7 @@ type Stage =
 
 type Row =
   | {id: string; kind: 'target'; candidate: number}
-  | {id: string; kind: 'name' | 'id'; candidate: number}
+  | {id: string; kind: 'name' | 'id' | 'library'; candidate: number}
   | {id: string; kind: 'wildtype' | 'parent'; candidate: number}
   | {id: string; kind: 'variant' | 'trimmed'; candidate: number; readSet: number}
   | {id: string; kind: 'save'};
@@ -46,7 +47,6 @@ const skipReasonLabels: Record<SkipReason, string> = {
   'not-illumina-name': 'not an Illumina FASTQ name',
   undetermined: 'undetermined reads, not a sample',
   'index-read': 'index read',
-  'split-chunk': 'lane split into several files, unsupported',
   'missing-mate': 'mate file missing',
   'invalid-fastq': 'not valid FASTQ',
   unreadable: 'cannot be read',
@@ -117,6 +117,7 @@ function limitProblems(problems: readonly string[]): string[] {
 }
 
 const importTitle = 'Import isolates from an Illumina delivery';
+const preprocessingWarning = 'After import, set chemistry or poly-G On/Off in Edit isolate before running untrimmed reads.';
 const importIntro =
   'Illumina names FASTQ files and read headers the same way across instruments and delivery ' +
   'formats, so GenoPilot can find each sample\'s read pairs in a delivery folder and propose ' +
@@ -152,11 +153,12 @@ export function IsolateImport({
   /** The document the import review's help shows. */
   loadHelp?: DocumentsLoader;
 }): React.JSX.Element {
-  const {rows: terminalRows} = useWindowSize();
+  const {rows: terminalRows, columns} = useWindowSize();
   const [loaded, setLoaded] = useState(initialCatalog);
   const [stage, setStage] = useState<Stage>({kind: 'folder'});
   const [decisions, setDecisions] = useState<CandidateDecision[]>([]);
   const [editedIds, setEditedIds] = useState<ReadonlySet<number>>(new Set());
+  const [editedLibraries, setEditedLibraries] = useState<ReadonlySet<number>>(new Set());
   const [selectedRowId, setSelectedRowId] = useState('');
   const [reportOffset, setReportOffset] = useState(0);
   const [problems, setProblems] = useState<string[]>([]);
@@ -178,6 +180,7 @@ export function IsolateImport({
         if (!controller.signal.aborted) {
           setDecisions(initialDecisions(scan, catalogRef.current));
           setEditedIds(new Set());
+          setEditedLibraries(new Set());
           setReportOffset(0);
           setSelectedRowId('');
           setProblems([]);
@@ -216,14 +219,14 @@ export function IsolateImport({
             ? [{id: `${String(index)}:${String(readSet)}:trimmed`, kind: 'trimmed', candidate: index, readSet} as const]
             : []),
         ]);
-        return [target, ...fields, ...readSets];
+        return [target, ...fields, {id: `${String(index)}:library`, kind: 'library', candidate: index}, ...readSets];
       }),
       {id: 'save', kind: 'save'},
     ]
     : [];
   const selectedIndex = Math.max(0, rows.findIndex(row => row.id === selectedRowId));
   const selectedRow = rows[selectedIndex];
-  const typing = selectedRow?.kind === 'name' || selectedRow?.kind === 'id';
+  const typing = selectedRow?.kind === 'name' || selectedRow?.kind === 'id' || selectedRow?.kind === 'library';
 
   useHomeSuspension(saving ? 'busy' : stage.kind === 'review' && typing ? 'typing' : undefined);
 
@@ -264,7 +267,16 @@ export function IsolateImport({
         const key = (target: CandidateDecision['target']): string => typeof target === 'string' ? target : target.existingId;
         const next = pick(options, options.findIndex(option => key(option) === key(decision.target)));
         if (next !== undefined) {
-          updateDecision(row.candidate, current => ({...current, target: next}));
+          const targetId = typeof next === 'object' ? next.existingId : decision.newIsolate.id;
+          const usedLibraries = [
+            ...(isolates.find(isolate => isolate.id === targetId)?.read_sets.map(set => set.library_id) ?? []),
+            ...decisions.filter((other, index) => index !== row.candidate &&
+              (typeof other.target === 'object' ? other.target.existingId : other.newIsolate.id) === targetId)
+              .map(other => other.libraryId),
+          ];
+          updateDecision(row.candidate, current => ({...current, target: next,
+            libraryId: editedLibraries.has(row.candidate) || next === 'skip'
+              ? current.libraryId : suggestLibraryId(targetId, usedLibraries)}));
         }
         return;
       }
@@ -371,7 +383,8 @@ export function IsolateImport({
   // Below the rows: path lines of the selected copy, the saving note, and the problem box.
   const shownProblems = limitProblems(problems);
   const belowRows = 2 + (shownProblems.length > 0 ? shownProblems.length + 4 : 0) + (saving ? 1 : 0);
-  const reviewPageSize = Math.max(4, terminalRows - 15 - belowRows);
+  const warningRows = 2 + Math.ceil(preprocessingWarning.length / Math.max(1, columns - 6));
+  const reviewPageSize = Math.max(1, terminalRows - 15 - belowRows - warningRows);
   const lines = scan ? reportLines(scan) : [];
 
   useInput(
@@ -550,6 +563,13 @@ export function IsolateImport({
             {marker}{sampleNumber(row.candidate)}<Text bold>{sanitizeTerminalText(candidate.sample)}</Text>: ‹ {sanitizeTerminalText(describeTarget(decision))} ›
           </Text>
         );
+      case 'library':
+        return <TextField key={row.id} label="  Library ID" required selected={selected}
+          inputActive={inputActive && !saving} defaultValue={decision.libraryId} displayValue={decision.libraryId}
+          onChange={text => {
+            setEditedLibraries(current => new Set(current).add(row.candidate));
+            updateDecision(row.candidate, current => ({...current, libraryId: text}));
+          }} />;
       case 'name':
       case 'id': {
         const value = decision.newIsolate[row.kind];
@@ -601,7 +621,7 @@ export function IsolateImport({
             `${String(variant.readLength.min)}–${String(variant.readLength.max)} bp · ` +
             `${formatBytes(variant.r1Bytes + variant.r2Bytes)} · ${basename(dirname(variant.r1))}`
           : choice.variant === 'none' ? 'leave out' : `choose one of ${String(readSet.variants.length)} copies`;
-        const lane = readSet.lane === null ? 'merged lanes' : `lane ${String(readSet.lane)}`;
+        const lane = `${readSet.lane === null ? 'merged lanes' : `lane ${String(readSet.lane)}`} · chunk ${readSet.chunk}`;
         return (
           <Text key={row.id} color={color ?? (choice.variant === 'undecided' ? 'yellow' : undefined)} wrap="truncate">
             {marker}  Run {readSet.run} · {sanitizeTerminalText(readSet.flowcell)} · {lane}: ‹ {sanitizeTerminalText(label)} ›
@@ -648,16 +668,13 @@ export function IsolateImport({
       savingLabel="Checking reads and saving…"
       problems={shownProblems}
     >
-      <Text wrap="wrap">
-        Press <Text bold color="cyan">?</Text> for help: what each row means, such as run, flowcell, lane,
-        {' '}copies, and read lengths.{typing ? ' (Leave the text field first.)' : ''}
-      </Text>
       <Box marginTop={1} flexDirection="column">
         {rows.slice(reviewStart, reviewStart + reviewPageSize).map(renderRow)}
         {rows.length > reviewPageSize ? (
           <Text color={mutedColor}>Row {selectedIndex + 1} of {rows.length}</Text>
         ) : null}
       </Box>
+      <Alert variant="warning">{preprocessingWarning}</Alert>
       {selectedVariant ? (
         <Box marginTop={1} flexDirection="column">
           <Text color={mutedColor} wrap="truncate-start">R1: {sanitizeTerminalText(selectedVariant.r1)}</Text>
