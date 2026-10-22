@@ -32,6 +32,14 @@ import WorkflowConfigurationScreen, {
   type PreviousWorkflowRun,
   type WorkflowFormValues,
 } from './workflow-configuration.js';
+import {annotationTransferDiskEstimate} from '../../workflows/annotation-transfer/disk-estimate.js';
+import {
+  checkRunSystem,
+  recordRunRate,
+  recordsRunRates,
+  systemsCheckRun,
+  type SystemsCheck,
+} from '../../workflows/systems-check.js';
 
 export type PreparedRunValidator = (prepared: PreparedAnnotationTransferRun) => Promise<void>;
 export type PreparedRunSaver = (prepared: PreparedAnnotationTransferRun) => Promise<string>;
@@ -181,6 +189,8 @@ export function AnnotationTransferConfigurationScreen({
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
   registerAccessionCaches = defaultRegisterAccessionCaches,
+  checkSystem = prepared => checkRunSystem(manifest, systemsCheckRun(prepared, annotationTransferDiskEstimate)),
+  recordRate = prepared => recordRunRate(manifest, systemsCheckRun(prepared, annotationTransferDiskEstimate)),
   manifest,
 }: {
   currentDirectory: string;
@@ -201,6 +211,10 @@ export function AnnotationTransferConfigurationScreen({
   prepareSnakemakeRun?: typeof defaultPrepareSnakemakeRun;
   executeSnakemakeRun?: typeof defaultExecuteSnakemakeRun;
   registerAccessionCaches?: AccessionCacheRegistration;
+  /** Free disk, CPUs, and memory where the run will be saved. */
+  checkSystem?: (prepared: PreparedAnnotationTransferRun) => Promise<SystemsCheck>;
+  /** Measures a completed run for the next run's estimates on this machine; resolves to a note when that failed. */
+  recordRate?: (prepared: PreparedAnnotationTransferRun) => Promise<string | undefined>;
   manifest?: WorkflowManifest;
 }): React.JSX.Element {
   const [previousRuns, setPreviousRuns] = useState<readonly PreviousWorkflowRun[]>([]);
@@ -237,6 +251,7 @@ export function AnnotationTransferConfigurationScreen({
     const usesNcbi = usesNcbiInput(prepared);
     const apiKeyConfigured = usesNcbi ? await checkNcbiApiKey() : false;
     const cacheEntries = usesNcbi ? await findCacheEntries(prepared) : [];
+    const system = await checkSystem(prepared);
 
     const prepareForReview = (
       run: PreparedAnnotationTransferRun,
@@ -269,6 +284,8 @@ export function AnnotationTransferConfigurationScreen({
         payload: run,
         resolvedValues: resolvedValues(run),
         effectiveOptions,
+        warnings: system.warnings,
+        systemCheck: system.rows,
         outputDirectory: run.outputDirectory,
       };
     };
@@ -314,12 +331,23 @@ export function AnnotationTransferConfigurationScreen({
         executeSnakemakeRun(run, onOutput as (output: WorkflowOutput) => void, signal)
       }
       resultManifest={manifest}
-      onRunSucceeded={prepared => usesNcbiInput(prepared)
-        ? {
-          label: 'Recording the NCBI accession cache in the accession catalog…',
-          outcome: registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory),
+      onRunSucceeded={prepared => {
+        const ncbi = usesNcbiInput(prepared);
+        const measures = recordsRunRates(manifest);
+        if (!ncbi && !measures) {
+          return undefined;
         }
-        : undefined}
+        const measured = measures ? recordRate(prepared) : Promise.resolve(undefined);
+        const registered = ncbi
+          ? registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory)
+          : Promise.resolve(undefined);
+        return {
+          label: ncbi
+            ? 'Recording the NCBI accession cache in the accession catalog…'
+            : 'Measuring this run for the next estimate…',
+          outcome: Promise.all([registered, measured]).then(notes => notes.filter(Boolean).join(' ') || undefined),
+        };
+      }}
     />
   );
 }

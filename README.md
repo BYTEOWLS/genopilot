@@ -78,6 +78,8 @@ PYTHONPATH=<package>/workflows/shared/logging snakemake ... \
   --logger genopilot-run-events --logger-genopilot-run-events-path <run-dir>/events.jsonl
 ```
 
+When Snakemake ends, GenoPilot also records the execution's start, end, and duration in the run's `timing.yaml`; a direct run is not recorded there.
+
 Without it, a workflow's provenance lists its commands as unavailable.
 
 ## Development
@@ -169,29 +171,38 @@ The packaged policy runs on Linux or macOS on x64 or arm64. Managed setup downlo
 
 `src/tooling/policy.ts` repeats the Snakemake, Conda, and Python versions to verify an installation, and a test keeps them equal to the lock. GenoPilot's tooling check shows each tool's target version and the version it found.
 
-To change a runtime pin, edit `runtime/pixi.toml` and `src/tooling/policy.ts`, run `pnpm lock:runtime` with the pinned Pixi version on `PATH`, and review the lock diff. A release with a changed lock installs its runtime into a new directory, so existing users are asked to run setup again.
+A release with a changed lock installs its runtime into a new directory, so existing users are asked to run setup again.
 
 ### Workflow rule environments
 
-Each workflow step runs in a pinned Conda environment under `workflows/*/envs/`. Each workflow README's *Tools* table names its tools and links the environment that pins them; version numbers are written only in these files, `runtime/pixi.toml`, and `src/tooling/policy.ts`, never repeated in documentation. Every run records the versions it used in its provenance. These files pin each tool but not its dependencies, which Conda resolves when Snakemake first creates an environment.
+Each workflow step runs in a pinned Conda environment under `workflows/*/envs/`. Each workflow README's *Tools* table names its tools and links the environment that pins them; version numbers are written only in these files, `runtime/pixi.toml`, and `src/tooling/policy.ts`, never repeated in documentation. Every run records the versions it used in its provenance: it reads them from the environment files, so nothing else records a tool's version. These files pin each tool but not its dependencies, which Conda resolves when Snakemake first creates an environment.
 
-Dependabot proposes updates for the rule environments, npm, and GitHub Actions, but it changes only the environment file. Runtime pins in `runtime/pixi.toml` and `src/tooling/policy.ts` are updated manually, including the Pixi download checksums.
+### Updating dependencies
 
-### Updating a pinned version
+Dependabot proposes weekly updates for npm, GitHub Actions, and the rule environments. Pixi, Snakemake, Conda, Python, and pnpm are updated by hand. To update everything at once:
 
-Every rule-environment bump changes:
+1. **Dependabot.** Take over the open Dependabot branches, `git checkout origin/dependabot/<branch> -- <files>`, and close their pull requests once the change is merged.
+2. **npm.** `pnpm outdated` lists newer packages; `@types/node` stays on the oldest supported Node major. Set the exact versions in `package.json` and the newest pnpm in `packageManager`, then run `pnpm install`. Read the release notes of every major version.
+3. **Rule environments.** Compare each pin in `workflows/*/envs/*/environment.yaml` with the channel's latest version (`https://api.anaconda.org/package/<channel>/<name>`, or PyPI for pip pins). A tool's new output may need re-verification; a workflow's `development.md` lists what depends on the exact files and values its tools write.
+4. **Runtime.** Set Snakemake, Conda, and Python in `runtime/pixi.toml`, and the same versions with their ranges in `src/tooling/policy.ts`. The rule environments pin the same Python. For Pixi, set `pixiVersion` and its range in `src/tooling/policy.ts` and replace the four download checksums with the release's digests:
 
-1. `workflows/<shared or workflow>/envs/<environment>/environment.yaml`: the pin itself. Run provenance reads its configured tool versions from these files, so nothing else records the version.
-2. `CHANGELOG.md`: an entry under *Unreleased*.
+   ```bash
+   gh api repos/prefix-dev/pixi/releases/tags/vX.Y.Z --jq '.assets[] | select(.name | test("(apple-darwin|linux-musl)\\.tar\\.gz$")) | .name + " " + .digest'
+   ```
 
-A tool's own output may also need re-verification; a workflow's `development.md` lists what depends on the exact files and values its tools write.
+   Download the four archives and confirm each digest with `shasum -a 256`.
+5. **Lock.** With the new Pixi on `PATH`, run `pnpm lock:runtime` and review the lock diff. A failed solve means a pin conflicts with another package's requirements; keep that pin at its previous version.
+6. **Tests.** Run the full verification, and the Conda integration tests against the new runtime, installed from a copy of the lock:
 
-Then run the full verification, including the per-rule Conda integration tests, which run only locally:
+   ```bash
+   temp_dir="$(mktemp -d)" && cp runtime/pixi.toml runtime/pixi.lock "$temp_dir/"
+   pixi install --locked --manifest-path "$temp_dir/pixi.toml"
+   PATH="$temp_dir/.pixi/envs/default/bin:$PATH" RUN_SNAKEMAKE_CONDA_INTEGRATION=1 \
+     python3 -m unittest discover -s tests -p "test_*.py"
+   ```
 
-```bash
-RUN_SNAKEMAKE_CONDA_INTEGRATION=1 python3 -m unittest discover -s tests -p "test_*.py"
-```
-CI skips these tests, so run them before merging any change to a `workflows/*/envs/` directory, including Dependabot updates. Their expected coordinates on the synthetic fixtures detect changes in transfer results.
+   CI skips the Conda integration tests, so run them before merging any change to the runtime or to `workflows/*/envs/`, including Dependabot updates. Their expected coordinates on the synthetic fixtures detect changes in transfer results.
+7. **Changelog.** Add an entry under *Unreleased* in `CHANGELOG.md`.
 
 Windows support through WSL2 is planned after the core Linux and macOS implementation is complete. Native Windows execution is out of scope.
 

@@ -114,7 +114,7 @@ class IterationProvenanceTests(unittest.TestCase):
             "--config-json", json.dumps(config), "--cohort", "iteration-2",
             "--decision", "decisions/iteration-2.yaml", "--manifest", "manifest.yaml",
             "--manifest-schema-version", "1", "--snakemake-version", "9.0.0",
-            "--snakemake-python-version", "3.13.15", "--provenance", "provenance/cohort/iteration-2.json",
+            "--snakemake-python-version", "3.0.0", "--provenance", "provenance/cohort/iteration-2.json",
         ])
 
         record = json.loads(Path("provenance/cohort/iteration-2.json").read_text(encoding="utf-8"))

@@ -42,6 +42,14 @@ import WorkflowConfigurationScreen, {
   type ReviewSection,
   type WorkflowFormValues,
 } from './workflow-configuration.js';
+import {referenceConsensusDiskEstimate} from '../../workflows/reference-consensus/disk-estimate.js';
+import {
+  checkRunSystem,
+  recordRunRate,
+  recordsRunRates,
+  systemsCheckRun,
+  type SystemsCheck,
+} from '../../workflows/systems-check.js';
 
 export type IsolateCatalogSnapshotLoader = () => Promise<IsolateCatalog>;
 export type ReferenceConsensusRunInspector = (prepared: PreparedReferenceConsensusRun) => Promise<RunInspection>;
@@ -290,6 +298,8 @@ export function ReferenceConsensusConfigurationScreen({
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
   registerAccessionCaches = defaultRegisterAccessionCaches,
+  checkSystem = prepared => checkRunSystem(manifest, systemsCheckRun(prepared, referenceConsensusDiskEstimate)),
+  recordRate = prepared => recordRunRate(manifest, systemsCheckRun(prepared, referenceConsensusDiskEstimate)),
 }: {
   currentDirectory: string;
   onBack: () => void;
@@ -314,6 +324,10 @@ export function ReferenceConsensusConfigurationScreen({
   prepareSnakemakeRun?: typeof defaultPrepareSnakemakeRun;
   executeSnakemakeRun?: typeof defaultExecuteSnakemakeRun;
   registerAccessionCaches?: AccessionCacheRegistration;
+  /** Free disk, CPUs, and memory, with the disk estimate and a warning when the run may not fit. */
+  checkSystem?: (prepared: PreparedReferenceConsensusRun) => Promise<SystemsCheck>;
+  /** Measures a completed run for the next run's estimates on this machine; resolves to a note when that failed. */
+  recordRate?: (prepared: PreparedReferenceConsensusRun) => Promise<string | undefined>;
 }): React.JSX.Element {
   const [previousRuns, setPreviousRuns] = useState<Awaited<ReturnType<PreviousRunsLoader>>>([]);
 
@@ -357,6 +371,7 @@ export function ReferenceConsensusConfigurationScreen({
       availableCpus,
     );
     const inspection = await inspectRun(prepared);
+    const system = await checkSystem(prepared);
     const usesNcbi = prepared.configuration.inputs.backbone.source === 'ncbi';
     const apiKeyConfigured = usesNcbi ? await checkNcbiApiKey() : false;
     const cached = usesNcbi ? await checkBackboneCache(prepared) : false;
@@ -380,7 +395,8 @@ export function ReferenceConsensusConfigurationScreen({
         payload: run,
         resolvedValues: resolvedValues(run),
         details: [backboneSection(run, inspection), isolatesSection(run), votingSection(run.configuration)],
-        warnings: reviewWarnings(run, inspection),
+        warnings: [...reviewWarnings(run, inspection), ...system.warnings],
+        systemCheck: system.rows,
         effectiveOptions,
         outputDirectory: run.outputDirectory,
       };
@@ -429,12 +445,23 @@ export function ReferenceConsensusConfigurationScreen({
         prepared.outputDirectory,
         prepared.snapshot.isolates.map(isolate => isolate.id),
       )}
-      onRunSucceeded={prepared => prepared.configuration.inputs.backbone.source === 'ncbi'
-        ? {
-          label: 'Recording the NCBI accession cache in the accession catalog…',
-          outcome: registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory),
+      onRunSucceeded={prepared => {
+        const ncbi = prepared.configuration.inputs.backbone.source === 'ncbi';
+        const measures = recordsRunRates(manifest);
+        if (!ncbi && !measures) {
+          return undefined;
         }
-        : undefined}
+        const measured = measures ? recordRate(prepared) : Promise.resolve(undefined);
+        const registered = ncbi
+          ? registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory)
+          : Promise.resolve(undefined);
+        return {
+          label: ncbi
+            ? 'Recording the NCBI accession cache in the accession catalog…'
+            : 'Measuring this run for the next estimate…',
+          outcome: Promise.all([registered, measured]).then(notes => notes.filter(Boolean).join(' ') || undefined),
+        };
+      }}
       {...(loadIsolates ? {loadIsolates} : {})}
     />
   );

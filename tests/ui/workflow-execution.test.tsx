@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {existsSync} from 'node:fs';
 import {appendFile, mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -14,6 +15,7 @@ import {
   type WorkflowResultHandoff,
 } from '../../src/ui/new-run-screen/workflow-execution.js';
 import {RUN_EVENT_SCHEMA_VERSION} from '../../src/workflows/run-events.js';
+import {readExecutionRecords} from '../../src/workflows/run-timing.js';
 import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
 
 const ENTER = '\r';
@@ -63,8 +65,9 @@ async function waitForOutput(
   output: TestOutput,
   predicate: (value: string) => boolean,
 ): Promise<string> {
-  const timeoutAt = Date.now() + 2000;
-  while (Date.now() < timeoutAt) {
+  // performance.now(), unlike Date, stays real when a test mocks the clock.
+  const timeoutAt = performance.now() + 2000;
+  while (performance.now() < timeoutAt) {
     const value = output.readOutput();
     if (predicate(value)) {
       return value;
@@ -75,8 +78,9 @@ async function waitForOutput(
 }
 
 async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 2000;
-  while (Date.now() < timeoutAt) {
+  // performance.now(), unlike Date, stays real when a test mocks the clock.
+  const timeoutAt = performance.now() + 2000;
+  while (performance.now() < timeoutAt) {
     if (condition()) {
       return;
     }
@@ -255,6 +259,61 @@ test('shows no stage progress for a dry run, which schedules nothing', async con
   const frame = await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
   assert.doesNotMatch(frame, /Stages/);
   assert.doesNotMatch(frame, /Summarize results/);
+});
+
+test('shows the elapsed time while running, keeps the time the process took, and saves it in the run', async context => {
+  context.mock.timers.enable({apis: ['Date'], now: 1_000_000});
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  let finish: () => void = () => undefined;
+  const eventsPath = join(tempDir, 'events.jsonl');
+  const {input, output, instance} = renderExecution(eventsPath, run =>
+    new Promise(resolve => {
+      void appendFile(eventsPath, [
+        eventLine({type: 'job-started', job_id: 1, rule: 'validate_inputs', timestamp: new Date(1_000_000).toISOString()}),
+        eventLine({type: 'job-finished', job_id: 1, timestamp: new Date(1_042_000).toISOString()}),
+      ].join(''));
+      finish = () => resolve({...run, exitCode: 0, peakMemoryBytes: 3_000_000_000});
+    }));
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  await waitForOutput(output, value => /\b0 s\b/.test(value));
+  context.mock.timers.tick(65_000);
+  output.clearOutput();
+  finish();
+  await waitForOutput(output, value => /\b1 min 5 s\b/.test(value));
+  // Ended: later time no longer counts, even after the timer's next whole second.
+  context.mock.timers.tick(600_000);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.doesNotMatch(output.readOutput(), /\b11 min\b/);
+
+  // The run directory keeps the execution's process times and its stage times.
+  const [saved] = await readExecutionRecords(tempDir);
+  assert.deepEqual(saved, {
+    started_at: new Date(1_000_000).toISOString(),
+    finished_at: new Date(1_065_000).toISOString(),
+    duration_seconds: 65,
+    exit_code: 0,
+    command: '/managed/snakemake',
+    stages: {'validate-inputs': 42},
+    peak_memory_bytes: 3_000_000_000,
+  });
+});
+
+test('saves the timing of a stopped or failed execution with the peak memory it reached', async context => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const {input, output, instance} = renderExecution(join(tempDir, 'events.jsonl'), async () => {
+    throw Object.assign(new Error('Snakemake run cancelled.'), {peakMemoryBytes: 7_000_000_000});
+  });
+  context.after(() => instance.unmount());
+
+  await startExecution(input, output);
+  await waitUntil(() => existsSync(join(tempDir, 'timing.yaml')), 'the timing is saved');
+  const [saved] = await readExecutionRecords(tempDir);
+  assert.equal(saved?.peak_memory_bytes, 7_000_000_000);
+  assert.equal(saved?.exit_code, undefined);
 });
 
 test('scrolls back through retained output while the run keeps producing more', async context => {

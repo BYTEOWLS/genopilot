@@ -10,7 +10,14 @@ import {
 import {readCatalogedAccessions, type AccessionCatalogReader} from '../../accessions/store.js';
 import type {Isolate, IsolateCatalog} from '../../isolates/catalog.js';
 import {checkReadPairs, type ReadPairsChecker} from '../../isolates/reads.js';
-import type {ConfigurationValidationIssue, CpuMode, GenoPilotDetails, NcbiCacheMode} from '../configuration-validation.js';
+import {
+  machineDetails,
+  type ConfigurationValidationIssue,
+  type CpuMode,
+  type GenoPilotDetails,
+  type MachineDetails,
+  type NcbiCacheMode,
+} from '../configuration-validation.js';
 import {
   buildRunId,
   checkReadableFile,
@@ -81,6 +88,7 @@ export function buildReferenceConsensusRun(
   genopilot: GenoPilotDetails,
   availableCpus: number = availableParallelism(),
   now: Date = new Date(),
+  machine: MachineDetails = machineDetails(),
 ): PreparedReferenceConsensusRun {
   const staleIssues: ConfigurationValidationIssue[] = [];
   const isolates: Isolate[] = [];
@@ -133,6 +141,7 @@ export function buildReferenceConsensusRun(
       cpu_mode: draft.cpuMode,
       ...(draft.cpuMode === 'manual' ? {manual_limit: Number(draft.manualCpuLimit)} : {}),
       effective_cpus: effectiveCpuCount(draft.cpuMode, draft.manualCpuLimit, availableCpus),
+      machine,
     },
     run: {
       output_root: resolveDraftPath(currentDirectory, draft.outputRoot),

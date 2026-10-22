@@ -118,7 +118,7 @@ Shown once the active iteration's consensus FASTA exists. The consensus is not a
 | Item | Meaning |
 |---|---|
 | Decision saved | When the decision that created this iteration was saved, in local time. |
-| Finished | When the cohort's provenance record was written, which is when the cohort finished, in local time. |
+| Started, Finished | When the iteration's Snakemake execution started and ended, in local time; *Attempts* appears when it was continued after an interruption. The initial cohort shows only Finished from its provenance record. Iterations omit duration because their execution covers only cohort processing, not the full run; full run and stage timings are on the overview. |
 | Reason | The reason the researcher saved with the decision that created this iteration. |
 | Voting method, backbone votes, minimum callable isolates, unresolved SNPs, voting isolates | The cohort's settings and voters, as explained under *Active cohort*. |
 | Excluded isolates | Selected isolates that do not vote in this cohort, with whether their processing completed. Their results and logs stay in the run directory. |

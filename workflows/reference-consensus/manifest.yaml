@@ -70,6 +70,16 @@ stages:
       How to cite the run: the tools that ran with their versions and references, a draft methods
       paragraph, and BibTeX and RIS.
     rules: [write_citation]
+# Default disk factors, measured per isolate on a real run (see the README's Disk space).
+disk_estimate:
+  isolate_read_bytes: 0.62
+  isolate_genome_bytes: 9
+  # The resolved backbone with its index, and one cohort.
+  run_genome_bytes: 3.6
+  # Trimmed reads and per-pair alignments, removed once an isolate's alignment is merged.
+  temporary_read_bytes: 1.6
+  # The aligner's threads.
+  cpus_per_isolate: 8
 artifacts:
   - id: resolved-backbone
     label: Resolved backbone FASTA

@@ -171,7 +171,8 @@ function searchable(value: string): string {
 
 /**
  * Lists the cataloged isolates to choose several: typing filters by name or ID, Space toggles
- * the highlighted isolate, and Enter confirms. Esc keeps the previous selection.
+ * the highlighted isolate, Ctrl+A toggles every listed one, and Enter confirms. Esc keeps the
+ * previous selection.
  */
 export function IsolatePicker({
   fieldLabel,
@@ -223,6 +224,12 @@ export function IsolatePicker({
           const id = highlightedIsolate.id;
           setChosen(current => current.includes(id) ? current.filter(candidate => candidate !== id) : [...current, id]);
         }
+      } else if (key.ctrl && input === 'a') {
+        // Selects every listed isolate, or deselects them once all are selected.
+        const listed = filtered.map(isolate => isolate.id);
+        setChosen(current => listed.every(id => current.includes(id))
+          ? current.filter(id => !listed.includes(id))
+          : [...current, ...listed.filter(id => !current.includes(id))]);
       } else if (key.backspace || key.delete) {
         setQuery(current => current.slice(0, -1));
         setHighlighted(0);
@@ -243,7 +250,7 @@ export function IsolatePicker({
       title="Choose isolates"
       detail={`${String(cataloged.length)} selected`}
       description={`For ${sanitizeTerminalText(fieldLabel)}, from the isolate catalog. To add or edit isolates, use Manage isolates.`}
-      shortcuts={isolates.length > 0 ? ['Type — Search', '↑/↓ — Move', 'Space — Select', 'Enter — Done'] : []}
+      shortcuts={isolates.length > 0 ? ['Type — Search', '↑/↓ — Move', 'Space — Select', 'Ctrl+A — Select all listed', 'Enter — Done'] : []}
       back="Cancel"
     >
       {choices.state === 'loading' ? <Text>Loading the isolate catalog…</Text> : null}

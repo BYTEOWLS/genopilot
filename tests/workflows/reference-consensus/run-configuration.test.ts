@@ -19,8 +19,10 @@ import {
   savePreparedRun,
   type ReferenceConsensusDraft,
 } from '../../../src/workflows/reference-consensus/run-configuration.js';
+import {diskEstimateInputs} from '../../../src/workflows/reference-consensus/disk-estimate.js';
 import {parseIsolateSnapshot} from '../../../src/workflows/reference-consensus/snapshot.js';
-import {createRunWorkspace} from '../../../src/workflows/run-preparation.js';
+import {createRunWorkspace, ncbiCacheDirectory} from '../../../src/workflows/run-preparation.js';
+import {machineDetails} from '../../../src/workflows/configuration-validation.js';
 
 const now = new Date('2026-09-25T10:00:00.000Z');
 const genopilot = {version: '1.2.3', igv: '3.8.9'};
@@ -105,7 +107,8 @@ test('snapshots every selected isolate with all read pairs in selection order', 
   assert.deepEqual(configuration.consensus, {
     include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 1, unresolved_snp: 'iupac',
   });
-  assert.deepEqual(configuration.resources, {cpu_mode: 'manual', manual_limit: 2, effective_cpus: 2});
+  // The builder records the machine it runs on.
+  assert.deepEqual(configuration.resources, {cpu_mode: 'manual', manual_limit: 2, effective_cpus: 2, machine: machineDetails()});
   assert.deepEqual(configuration.genopilot, genopilot);
   assert.equal(configuration.run.id, '2026-09-25_100000000_Cohort-one');
   assert.equal(prepared.outputDirectory, join(tempDir, 'runs', 'reference-consensus', configuration.run.id));
@@ -302,4 +305,32 @@ test('refuses input paths Snakemake cannot declare', async context => {
     inspectPreparedRun(prepared, {readAccessions: noAccessions}),
     error => issuesOf(error).some(issue => issue.path.includes("'isolate-b' pair 1 R1") && issue.message.includes('{')),
   );
+});
+
+test('sums each isolate\'s read files and the local backbone for the disk estimate', async context => {
+  const {tempDir, catalog, draft} = await fixture(context);
+  const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, genopilot, 8, now);
+  const reads = Buffer.byteLength(fastq);
+  // Selection order: isolate-b (one pair), then isolate-a (two pairs).
+  assert.deepEqual(await diskEstimateInputs(prepared), {
+    inputs: {isolateReadBytes: [2 * reads, 4 * reads], genomeBytes: Buffer.byteLength('>chr1\nACGT\n'), effectiveCpus: 2},
+  });
+
+  // A missing read file counts as empty: the inspection reports it.
+  await rm(catalog.isolates[1]!.read_pairs[0]!.r1);
+  const withMissing = await diskEstimateInputs(prepared);
+  assert.deepEqual(withMissing.inputs.isolateReadBytes, [reads, 4 * reads]);
+
+  const ncbi = buildReferenceConsensusRun({...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000149205.2'}, catalog, tempDir, genopilot, 8, now);
+  const withoutBackbone = await diskEstimateInputs(ncbi);
+  assert.equal(withoutBackbone.inputs.genomeBytes, undefined);
+  assert.ok(withoutBackbone.note);
+
+  // A backbone in the download cache counts, without a note.
+  const cacheDirectory = ncbiCacheDirectory(ncbi.configuration.run.output_root, 'GCF_000149205.2');
+  await mkdir(cacheDirectory, {recursive: true});
+  await writeFile(join(cacheDirectory, 'genomic.fna'), '>chr1\nACGTACGT\n');
+  assert.deepEqual(await diskEstimateInputs(ncbi), {
+    inputs: {isolateReadBytes: [reads, 4 * reads], genomeBytes: Buffer.byteLength('>chr1\nACGTACGT\n'), effectiveCpus: 2},
+  });
 });

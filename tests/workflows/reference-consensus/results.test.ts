@@ -15,7 +15,9 @@ import {
   type LoadedWorkflowResult,
 } from '../../../src/workflows/results.js';
 import {discoverWorkflowRuns} from '../../../src/workflows/run-discovery.js';
+import {appendExecutionRecord} from '../../../src/workflows/run-timing.js';
 import {stringifyRunFile} from '../../../src/workflows/run-preparation.js';
+import {testMachine} from '../machine.js';
 
 const isolateIds = ['isolate-a', 'isolate-b', 'isolate-c'];
 
@@ -43,7 +45,7 @@ const configuration = validateReferenceConsensusConfiguration({
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
   consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
-  resources: {cpu_mode: 'automatic', effective_cpus: 3},
+  resources: {cpu_mode: 'automatic', effective_cpus: 3, machine: testMachine},
   run: {output_root: '/analysis/runs', id: 'run-a', created_at: '2026-01-01T12:00:00.000Z'},
 });
 
@@ -359,4 +361,33 @@ test('exposes every isolate and cohort path key', async context => {
   assert.deepEqual(Object.keys(result.isolates[0]!.paths).sort(), [...isolatePathKeys].sort());
   assert.deepEqual(Object.keys(result.cohorts[1]!.paths).sort(), [...cohortPathKeys].sort());
   assert.deepEqual(Object.keys(result.cohorts[0]!.paths).sort(), cohortPathKeys.filter(key => key !== 'decision').sort());
+});
+
+test('times the run and each iteration from their own recorded executions', async context => {
+  const {tempDir, directory} = await runDirectory(context);
+  await writeIteration(directory, decision(2), {tie: 1});
+  const at = (seconds: number) => new Date(Date.UTC(2026, 0, 1, 10) + seconds * 1000).toISOString();
+  const execution = (start: number, seconds: number, command: string, stages: Record<string, number>) => ({
+    started_at: at(start), finished_at: at(start + seconds), duration_seconds: seconds, exit_code: 0, command, stages,
+  });
+  await appendExecutionRecord(directory, execution(0, 3015, 'snakemake --cores 3', {
+    'process-isolates': 3000, 'aggregate-support': 10, 'generate-consensus': 5,
+  }));
+  await appendExecutionRecord(directory, execution(9000, 8, 'snakemake --cores 3 provenance/cohort/iteration-2.json', {
+    'aggregate-support': 7,
+  }));
+
+  const loaded = consensusResult(await loadWorkflowResult(directory, manifest));
+
+  assert.equal(loaded.shell.timing?.durationMs, 3_015_000);
+  assert.equal(loaded.shell.timing?.attempts.length, 1);
+  const [initial, iteration] = loaded.result.cohorts;
+  assert.equal(initial?.timing, undefined);
+  assert.equal(iteration?.timing?.startedAt, at(9000));
+  assert.equal(iteration?.timing?.durationMs, 8_000);
+
+  // A run list shows the same duration.
+  const [discovered] = await discoverWorkflowRuns(tempDir, manifest);
+  assert.ok(discovered && isReferenceConsensusResult(discovered.loaded));
+  assert.equal(discovered.loaded.shell.timing?.durationMs, 3_015_000);
 });

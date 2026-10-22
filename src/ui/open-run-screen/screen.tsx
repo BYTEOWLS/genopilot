@@ -1,6 +1,6 @@
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import React, {useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {Alert, ConfirmInput} from '@inkjs/ui';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {
@@ -8,10 +8,12 @@ import {
   type DiscoveredWorkflow,
 } from '../../workflows/discovery.js';
 import {
+  countWorkflowRuns,
   deleteWorkflowRun,
   discoverWorkflowRuns,
   type DiscoveredRun,
 } from '../../workflows/run-discovery.js';
+import {formatDuration} from '../../workflows/run-timing.js';
 import {Page} from '../components/page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {RunResultsScreen} from '../run-results-screen/screen.js';
@@ -83,6 +85,7 @@ export function OpenRunScreen({
   discoverRuns = (collectionRoot, workflow) =>
     discoverWorkflowRuns(collectionRoot, workflow.manifest),
   deleteRun,
+  countRuns = countWorkflowRuns,
   formatDateTime = formatLocalDateTime,
 }: {
   currentDirectory: string;
@@ -91,12 +94,39 @@ export function OpenRunScreen({
   discoverWorkflows?: WorkflowDiscovery;
   discoverRuns?: RunDiscovery;
   deleteRun?: RunDeletion;
+  countRuns?: (collectionRoot: string, workflowId: string) => Promise<number>;
   formatDateTime?: (value: string) => string;
 }): React.JSX.Element {
   const {rows: terminalRows} = useWindowSize();
   const collectionRoot = resolve(currentDirectory, 'runs');
   const workflowSelection = useWorkflowSelection(discoverWorkflows);
+  const [runCounts, setRunCounts] = useState<Record<string, number>>({});
+  // A ref, so a caller's inline function does not recount on every render.
+  const countRunsRef = useRef(countRuns);
+  countRunsRef.current = countRuns;
+  const workflows = workflowSelection.discovery.state === 'ready' ? workflowSelection.discovery.workflows : undefined;
   const [selectedWorkflow, setSelectedWorkflow] = useState<DiscoveredWorkflow>();
+  // Counted again whenever the workflow list is shown, so a deletion is reflected.
+  useEffect(() => {
+    if (!workflows || selectedWorkflow) {
+      return;
+    }
+    let active = true;
+    // A workflow whose runs cannot be counted shows no count.
+    void Promise.all(workflows.map(async workflow =>
+      countRunsRef.current(collectionRoot, workflow.manifest.id).then(
+        count => [[workflow.manifest.id, count] as const],
+        () => [],
+      ),
+    )).then(counts => {
+      if (active) {
+        setRunCounts(Object.fromEntries(counts.flat()));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [workflows, selectedWorkflow, collectionRoot]);
   useTerminalTitle({label: selectedWorkflow?.manifest.label});
   const [runState, setRunState] = useState<RunState>();
   const [runIndex, setRunIndex] = useState(0);
@@ -211,6 +241,10 @@ export function OpenRunScreen({
         selection={workflowSelection}
         onBack={onBack}
         onSelect={workflow => void openWorkflow(workflow)}
+        detail={workflow => {
+          const count = runCounts[workflow.manifest.id];
+          return count === undefined ? undefined : `${String(count)} run${count === 1 ? '' : 's'}`;
+        }}
         inputActive={inputActive}
       />
     );
@@ -255,6 +289,7 @@ export function OpenRunScreen({
               Created: {run.metadata.createdAt
                 ? formatDateTime(run.metadata.createdAt)
                 : 'Unavailable'}
+              {run.timing ? ` · Duration: ${formatDuration(run.timing.durationMs)}` : ''}
             </Text>
             <RunStatus run={run} />
             {run.missingLinkedPaths > 0 && (

@@ -39,6 +39,14 @@ stages:
       How to cite the run: the tools that ran with their versions and references, a draft methods
       paragraph, and BibTeX and RIS.
     rules: [write_citation]
+# Default disk factors, kept per input byte, measured on a real run (see the README's Disk space).
+disk_estimate:
+  # The resolved copy and its minimap2 index.
+  target_genome_bytes: 4.4
+  # The resolved copy.
+  reference_genome_bytes: 1
+  # The resolved copy, the transferred annotations, their databases, and the extracted sequences.
+  reference_annotation_bytes: 11
 artifacts:
   - id: input-validation
     label: Input validation report

@@ -210,3 +210,15 @@ test('reports malformed YAML as a structured manifest validation error', () => {
     },
   );
 });
+
+test('accepts named disk estimate factors and rejects ones that are not non-negative numbers', () => {
+  // The names are the workflow's own; its disk estimate checks them.
+  const factors = {kept_per_input_byte: 0.62, threads: 8};
+  assert.deepEqual(validateWorkflowManifest(manifest({disk_estimate: factors})).disk_estimate, factors);
+  assert.equal(validateWorkflowManifest(manifest()).disk_estimate, undefined);
+  assert.deepEqual(
+    validationIssues(manifest({disk_estimate: {...factors, kept_per_input_byte: -1, threads: 'eight'}})).map(issue => issue.path),
+    ['$.disk_estimate.kept_per_input_byte', '$.disk_estimate.threads'],
+  );
+  assert.deepEqual(validationIssues(manifest({disk_estimate: 3})).map(issue => issue.path), ['$.disk_estimate']);
+});

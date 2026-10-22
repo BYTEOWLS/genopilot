@@ -14,7 +14,12 @@ export const RUN_EVENT_SCHEMA_VERSION = 1;
 
 export const RUN_EVENTS_FILENAME = 'events.jsonl';
 
-export type RunEvent =
+export type RunEvent = RunEventBody & {
+  /** When Snakemake logged the event, as an ISO 8601 UTC instant. */
+  timestamp?: string;
+};
+
+type RunEventBody =
   | {type: 'workflow-started'; snakemakeVersion?: string; command?: string}
   | {type: 'run-info'; jobs: Readonly<Record<string, number>>; total: number}
   | {
@@ -56,6 +61,15 @@ export function toRunEvent(line: unknown): RunEvent | undefined {
   if (record.schema_version !== RUN_EVENT_SCHEMA_VERSION) {
     return undefined;
   }
+  const body = eventBody(record);
+  if (!body) {
+    return undefined;
+  }
+  const timestamp = optionalText(record.timestamp);
+  return timestamp && Number.isFinite(Date.parse(timestamp)) ? {...body, timestamp} : body;
+}
+
+function eventBody(record: Record<string, unknown>): RunEventBody | undefined {
   switch (record.type) {
     case 'workflow-started': {
       return {

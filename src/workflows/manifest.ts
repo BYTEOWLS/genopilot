@@ -30,6 +30,12 @@ export type WorkflowArtifact = {
   produced_by: string;
 };
 
+/**
+ * Default factors of the disk a run needs, measured on a real run. Their names and meaning are the
+ * workflow's own: its disk estimate reads and checks them.
+ */
+export type DiskEstimateFactors = Readonly<Record<string, number>>;
+
 export type WorkflowManifest = {
   schema_version: typeof WORKFLOW_MANIFEST_SCHEMA_VERSION;
   workflow_version: number;
@@ -40,6 +46,7 @@ export type WorkflowManifest = {
   'parameter-definitions': string;
   stages: WorkflowStage[];
   artifacts: WorkflowArtifact[];
+  disk_estimate?: DiskEstimateFactors;
 };
 
 export type WorkflowManifestValidationIssue = {
@@ -356,6 +363,7 @@ export function validateWorkflowManifest(value: unknown): WorkflowManifest {
       'parameter-definitions',
       'stages',
       'artifacts',
+      'disk_estimate',
     ],
     '$',
     issues,
@@ -382,6 +390,17 @@ export function validateWorkflowManifest(value: unknown): WorkflowManifest {
 
   const {stages, ids: stageIds} = validateStages(value.stages, issues);
   const artifacts = validateArtifacts(value.artifacts, stageIds, issues);
+  if ('disk_estimate' in value) {
+    if (isRecord(value.disk_estimate)) {
+      for (const [field, factor] of Object.entries(value.disk_estimate)) {
+        if (typeof factor !== 'number' || !Number.isFinite(factor) || factor < 0) {
+          issues.push({path: `$.disk_estimate.${field}`, message: 'must be a non-negative number'});
+        }
+      }
+    } else {
+      issues.push({path: '$.disk_estimate', message: 'must be an object'});
+    }
+  }
 
   if (issues.length > 0) {
     throw new WorkflowManifestValidationError(issues);
@@ -397,6 +416,7 @@ export function validateWorkflowManifest(value: unknown): WorkflowManifest {
     'parameter-definitions': value['parameter-definitions'] as string,
     stages,
     artifacts,
+    ...(isRecord(value.disk_estimate) ? {disk_estimate: value.disk_estimate as DiskEstimateFactors} : {}),
   };
 }
 

@@ -25,12 +25,18 @@ import {
   parseParameterDefinitions,
   type WorkflowParameterDefinition,
 } from '../../src/workflows/parameter-definitions.js';
+import {parseWorkflowManifest} from '../../src/workflows/manifest.js';
+import {testMachine} from '../workflows/machine.js';
 
 const packagedParameterDefinitions = parseParameterDefinitions(
   readFileSync(
     new URL('../../workflows/annotation-transfer/manifest.parameters.yaml', import.meta.url),
     'utf8',
   ),
+);
+
+const packagedManifest = parseWorkflowManifest(
+  readFileSync(new URL('../../workflows/annotation-transfer/manifest.yaml', import.meta.url), 'utf8'),
 );
 
 // Named key sequences instead of raw escape bytes, so a test reads as "press ENTER" rather than
@@ -190,6 +196,7 @@ function renderConfiguration(
     findCacheEntries?: NcbiCacheEntryFinder;
     executeSnakemakeRun?: typeof executeSnakemakeRun;
     registerAccessionCaches?: AccessionCacheRegistration;
+    recordRate?: (prepared: PreparedAnnotationTransferRun) => Promise<string | undefined>;
     rows?: number;
   } = {},
 ): {input: TestInput; output: TestOutput; instance: ReturnType<typeof render>} {
@@ -215,6 +222,11 @@ function renderConfiguration(
       executeSnakemakeRun={options.executeSnakemakeRun}
       // Never the real catalog: a test run must not touch the researcher's accession catalog.
       registerAccessionCaches={options.registerAccessionCaches ?? (async () => 'Recorded.')}
+      // Never the test machine's disks or hardware.
+      checkSystem={async () => ({rows: [{label: 'Free disk', value: 'system-check-row'}], warnings: []})}
+      manifest={packagedManifest}
+      // Never the real rates file.
+      recordRate={options.recordRate ?? (async () => undefined)}
     />,
     {
       exitOnCtrlC: false,
@@ -403,17 +415,23 @@ test('edits all required fields and confirms effective options before saving', a
   assert.match(configuration.run.created_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.match(review.prepared.outputDirectory, /^\/research\/runs\/annotation-transfer\//);
   assert.ok(review.frame.includes(review.prepared.outputDirectory));
+  // The systems check where the run will be saved.
+  assert.ok(review.frame.includes('system-check-row'));
+  for (const definition of packagedParameterDefinitions.filter(field => !field.hidden && field.preview && !field.preview.includes('{value}'))) {
+    const hint = definition.preview!;
+    assert.ok(review.frame.replace(/\s+/g, ' ').includes(hint.replace(/\s+/g, ' ')));
+  }
   assert.match(fieldLine(review.frame, 'run-name') ?? '', /Test run/);
   assert.equal(fieldLine(review.frame, 'lifton-profile'), undefined);
   // The NCBI API key only matters, and is only checked, when an input is downloaded from NCBI.
   assert.equal(apiKeyChecks, 0);
 
   input.write(ENTER);
-  await waitUntil(() => saved !== undefined, 'the configuration is saved');
-  assert.equal(saved?.configuration.run.id, configuration.run.id);
   // The rendered command wraps across terminal lines, so match it unwrapped.
   const unwrap = (frame: string): string => frame.replace(/\s+/g, ' ');
   const startFrame = await waitForFrame(output, frame => unwrap(frame).includes('--keep-going --dry-run'));
+  // Nothing is saved before a run starts, so leaving the start page leaves no run behind.
+  assert.equal((() => saved)(), undefined);
   assert.match(unwrap(startFrame), /--cores 3 --use-conda --conda-prefix \S+ --printshellcmds --keep-going --dry-run/);
   assert.ok(unwrap(startFrame).includes(`--directory ${review.prepared.outputDirectory}`));
 
@@ -424,22 +442,28 @@ test('edits all required fields and confirms effective options before saving', a
   input.write(ENTER);
   await waitUntil(() => executedModes.length === 1, 'the workflow is executed');
   assert.deepEqual(executedModes, ['execute']);
+  assert.equal(saved?.configuration.run.id, configuration.run.id);
   await waitForFrame(output, frame => frame.includes('Nothing to be done.'));
   // Local inputs leave nothing to record in the accession catalog.
   assert.deepEqual(registrations, []);
 });
 
-test('records the NCBI cache in the accession catalog after a successful NCBI-sourced run', async context => {
+test('records the NCBI cache and measures the run after a successful NCBI-sourced run', async context => {
   let reviewed: PreparedAnnotationTransferRun | undefined;
   let saves = 0;
   const executedModes: string[] = [];
   const registrations: string[] = [];
+  const measured: PreparedAnnotationTransferRun[] = [];
   const {input, output, instance} = renderConfiguration('/research', {
     // Tall enough to show the whole review without scrolling.
     rows: 60,
     registerAccessionCaches: async outputRoot => {
       registrations.push(outputRoot);
       return 'Test registration note';
+    },
+    recordRate: async prepared => {
+      measured.push(prepared);
+      return 'Test measurement note';
     },
     validatePreparedRun: async prepared => {
       reviewed = prepared;
@@ -464,17 +488,19 @@ test('records the NCBI cache in the accession catalog after a successful NCBI-so
   await startReview(input, output);
   await waitForReview(output, () => reviewed);
   input.write(ENTER);
-  await waitUntil(() => saves === 1, 'the configuration is saved');
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await waitForFrame(output, frame => frame.includes('--dry-run'));
   // The start options list the dry run first; the execution is the next option.
   input.write(ARROW_DOWN);
   await new Promise<void>(resolve => setTimeout(resolve, 50));
   input.write(ENTER);
 
   await waitUntil(() => registrations.length === 1, 'the cache is recorded');
+  assert.equal(saves, 1);
   assert.deepEqual(executedModes, ['execute']);
   assert.deepEqual(registrations, ['/research/runs']);
-  await waitForFrame(output, frame => frame.includes('Test registration note'));
+  // The completed run is also measured for the next estimate; both notes are shown.
+  assert.equal(measured[0], reviewed);
+  await waitForFrame(output, frame => frame.includes('Test registration note') && frame.includes('Test measurement note'));
 });
 
 test('shows a failed dry run with its live output, then offers execution again', async context => {
@@ -533,11 +559,11 @@ test('shows a failed dry run with its live output, then offers execution again',
   await waitUntil(() => prepareCalls === 1, 'the run is prepared');
   await waitForFrame(output, frame => frame.includes('/run/output'));
   input.write(ENTER);
-  await waitUntil(() => saveCalls === 1, 'the configuration is saved');
   // The dry run is preselected and its exact command is shown before starting it.
   await waitForFrame(output, frame => frame.includes('/managed/snakemake --dry-run'));
   input.write(ENTER);
   await waitUntil(() => attempts.length === 1, 'the dry run is started');
+  assert.equal(saveCalls, 1);
   // The failed run keeps its captured stderr on screen.
   await waitForFrame(output, frame => frame.includes('Invalid workflow configuration'));
 
@@ -557,6 +583,7 @@ test('switches the reference to an NCBI accession independently of the target', 
   let reviewed: PreparedAnnotationTransferRun | undefined;
   let apiKeyChecks = 0;
   const {input, output, instance} = renderConfiguration('/research', {
+    rows: 60,
     validatePreparedRun: async prepared => {
       reviewed = prepared;
     },
@@ -599,6 +626,8 @@ test('reflects the NCBI API key status in the review of an NCBI-sourced run', as
         reviewed = prepared;
       },
       checkNcbiApiKey: async () => apiKeyConfigured,
+      // Tall enough to show the whole review without scrolling.
+      rows: 80,
     });
     registerCleanup(context, instance);
     await waitForForm(output);
@@ -623,6 +652,7 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
   let saved: PreparedAnnotationTransferRun | undefined;
   let cacheLookups = 0;
   const {input, output, instance} = renderConfiguration('/research', {
+    rows: 60,
     validatePreparedRun: async prepared => {
       reviewed = prepared;
     },
@@ -630,6 +660,7 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
       saved = prepared;
       return '/research/runs/annotation-transfer/run/config.yaml';
     },
+    executeSnakemakeRun: async run => ({...run, exitCode: 0}),
     findCacheEntries: async () => {
       cacheLookups += 1;
       return [{input: 'reference', accession: 'GCF_000149205.2'}];
@@ -657,6 +688,9 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
   // Enter acts only on the continue button, which follows the cache choices.
   await startReview(input, output);
   await waitForReview(output, () => reviewed);
+  input.write(ENTER);
+  // Saved as the dry run starts.
+  await waitForFrame(output, frame => frame.includes('--dry-run'));
   input.write(ENTER);
   await waitUntil(() => saved !== undefined, 'the configuration is saved');
   const reference = saved?.configuration.inputs.reference;
@@ -822,7 +856,7 @@ test('labels a previous run by its name and creation time, not its run ID', () =
     },
     lifton: {profile: 'same-species'},
     review: {minimum_protein_identity: 99},
-    resources: {cpu_mode: 'automatic', effective_cpus: 8},
+    resources: {cpu_mode: 'automatic', effective_cpus: 8, machine: testMachine},
     run: {
       output_root: '/data/runs',
       id: '2026-09-05_083412123_Baseline-transfer',

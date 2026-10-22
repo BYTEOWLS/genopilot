@@ -1,4 +1,5 @@
 import {stat} from 'node:fs/promises';
+import {dirname} from 'node:path';
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
@@ -29,6 +30,8 @@ import {useTerminalTitle, type TerminalTitleStatus} from '../terminal-title.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {Page} from '../components/page.js';
 import {IsolateProgressList, isolateProgressHeight} from './isolate-progress-list.js';
+import {ElapsedTime} from '../components/elapsed-time.js';
+import {appendExecutionRecord, stageSeconds} from '../../workflows/run-timing.js';
 
 // Lines kept in memory so the researcher can scroll back through a long run. Complete output
 // always remains on disk regardless of this cap; see the run's stdout/stderr log files.
@@ -36,10 +39,11 @@ const maximumRetainedLogLines = 5000;
 const eventPollIntervalMs = 250;
 // Rows this screen uses around the log window: the status alert (3), the log's own margin,
 // border, title, scroll markers and footer (7), up to three failure lines (stage failure,
-// process error, exit code), and the page's title, margins, and shortcut line (4). The stage list
-// varies per workflow and is measured separately. Space taken by an outer wrapper, such as the
-// welcome screen's own header and footer, is not visible here and is not reserved.
-const reservedChromeLines = 17;
+// process error, exit code), the elapsed time (1), and the page's title, margins, and shortcut
+// line (4). The stage list varies per workflow and is measured separately. Space taken by an
+// outer wrapper, such as the welcome screen's own header and footer, is not visible here and is
+// not reserved.
+const reservedChromeLines = 18;
 const minimumVisibleLogLines = 5;
 
 export type WorkflowProgressStage = {
@@ -132,7 +136,7 @@ export type WorkflowRun = {
  */
 export type DryRunGate<R extends WorkflowRun> = (run: R) => Promise<{allowed: true} | {allowed: false; reason: string}>;
 
-export type WorkflowRunResult = WorkflowRun & {exitCode: number | null};
+export type WorkflowRunResult = WorkflowRun & {exitCode: number | null; peakMemoryBytes?: number};
 
 export type WorkflowRunPreparer<R extends WorkflowRun> = (mode: WorkflowRunMode) => R;
 
@@ -170,6 +174,9 @@ type PersistedRunResult = {
 type FinishedExecution = {
   state: 'finished';
   run: WorkflowRun;
+  /** When the process was started and when it ended, in epoch milliseconds. */
+  startedAt: number;
+  endedAt: number;
   logLines: string[];
   exitCode?: number | null;
   error?: string;
@@ -183,7 +190,7 @@ type FinishedExecution = {
 
 type ExecutionState<R extends WorkflowRun> =
   | {state: 'ready'; mode: WorkflowRunMode}
-  | {state: 'running'; run: R; logLines: string[]}
+  | {state: 'running'; run: R; logLines: string[]; startedAt: number}
   | FinishedExecution
   | {state: 'result'; finished: FinishedExecution & {result: PersistedRunResult}};
 
@@ -227,6 +234,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   inputActive,
   stages = [],
   readEvents = readAppendedRunEvents,
+  recordTiming = appendExecutionRecord,
   resultHandoff,
   onSucceeded,
   executionUnavailableReason,
@@ -243,6 +251,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   inputActive: boolean;
   stages?: readonly WorkflowProgressStage[];
   readEvents?: typeof readAppendedRunEvents;
+  /** Saves an execution's timing in its run directory when Snakemake ends. */
+  recordTiming?: typeof appendExecutionRecord;
   resultHandoff?: WorkflowResultHandoff;
   /**
    * Runs after a successful execution, never a dry run, and returns nothing when there is nothing
@@ -395,7 +405,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     setIsolateProgress(initialIsolates());
     setScrollOffset(0);
     setProgress(initialRunProgress([...stagesRef.current]));
-    setScreen({state: 'running', run, logLines: []});
+    const startedAt = Date.now();
+    setScreen({state: 'running', run, logLines: [], startedAt});
     liveOutput.current = new LiveOutputBuffer(lines => {
       setScreen(current =>
         current.state === 'running'
@@ -410,8 +421,27 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     // The event file is appended to by every attempt in the run directory, so this attempt's
     // progress starts where the file ended.
     const startOffset = run.eventsPath ? fileSize(run.eventsPath).catch(() => 0) : Promise.resolve(0);
+    let firstEventOffset = 0;
+    /** Records this execution's process times, with stage times from the events it appended. */
+    const saveTiming = async (endedAt: number, exitCode?: number | null, peakMemoryBytes?: number): Promise<void> => {
+      if (!run.eventsPath) {
+        return;
+      }
+      const {events} = await readEventsRef.current(run.eventsPath, firstEventOffset, new RunEventReader());
+      // A timing that cannot be saved leaves the run without one; it never fails the run.
+      await recordTiming(dirname(run.eventsPath), {
+        started_at: new Date(startedAt).toISOString(),
+        finished_at: new Date(endedAt).toISOString(),
+        duration_seconds: Math.round((endedAt - startedAt) / 1000),
+        ...(typeof exitCode === 'number' ? {exit_code: exitCode} : {}),
+        ...(peakMemoryBytes === undefined ? {} : {peak_memory_bytes: peakMemoryBytes}),
+        command: run.command,
+        stages: stageSeconds(events, stagesRef.current, endedAt),
+      }).catch(() => undefined);
+    };
     startOffset.then(offset => {
       eventOffset.current = offset;
+      firstEventOffset = offset;
       return executeRun(
         run,
         output => liveOutput.current?.append(output.stream, output.text),
@@ -419,9 +449,11 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
       );
     }).then(
       async result => {
+        const endedAt = Date.now();
         liveOutput.current?.flush();
         // The last events can land after the final poll, so drain once more before settling.
         await drainEvents(run.eventsPath);
+        await saveTiming(endedAt, result.exitCode, result.peakMemoryBytes);
         const persisted =
           run.mode === 'execute' && resultHandoff
             ? {
@@ -443,6 +475,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         setScreen(current => ({
           state: 'finished',
           run: result,
+          startedAt,
+          endedAt,
           logLines: current.state === 'running' ? current.logLines : [],
           exitCode: result.exitCode,
           ...(followUp ? {followUp: {text: followUp.label, error: false}} : {}),
@@ -459,8 +493,12 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         }
       },
       async error => {
+        const endedAt = Date.now();
         liveOutput.current?.flush();
         await drainEvents(run.eventsPath);
+        // A stopped or failed execution carries the peak memory it reached.
+        const peak = (error as {peakMemoryBytes?: unknown} | undefined)?.peakMemoryBytes;
+        await saveTiming(endedAt, undefined, typeof peak === 'number' ? peak : undefined);
         if (run.mode === 'execute') {
           await settleIsolates(false);
         }
@@ -481,6 +519,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         setScreen(current => ({
           state: 'finished',
           run,
+          startedAt,
+          endedAt,
           logLines: current.state === 'running' ? current.logLines : [],
           error: message,
           ...(persisted ? {result: persisted} : {}),
@@ -656,7 +696,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         shortcuts={[availableModes.length > 1 && '↑/↓ — Choose', 'Enter — Start']}
         back={labels.back ?? 'Back to workflow'}
       >
-        <Alert variant="info">{labels.intro ?? 'Configuration saved. Choose how to start this run.'}</Alert>
+        <Alert variant="info">{labels.intro ?? 'Choose how to start this run. It is saved when it starts.'}</Alert>
         <Text>{sanitizeTerminalText(configurationPath)}</Text>
         <Box marginTop={1} flexDirection="column">
           {modeOptions.map(option => {
@@ -703,6 +743,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
       ) : (
         <Text bold color="cyan">Running {sanitizeTerminalText(label.toLowerCase())}…</Text>
       )}
+      <ElapsedTime startedAt={screen.startedAt} {...(finished ? {endedAt: screen.endedAt} : {})} />
       {screen.run.eventsPath ? <StageProgressList progress={progress} /> : null}
       {screen.run.eventsPath ? (
         <IsolateProgressList isolates={isolateProgress} maximumRows={maximumIsolateRows} width={terminalColumns} />

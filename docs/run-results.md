@@ -18,8 +18,15 @@ Press `v` on the tab to open the citation in the browser view, where it can be c
 | Workflow | Workflow label with its stable identifier and version. Results are interpreted by identifier and version, so a changed label does not affect loading. |
 | GenoPilot | The GenoPilot version that saved the run's configuration. A release shows only its version; a development build also shows its commit, and whether it had uncommitted changes. It also records its igv.js version. Only a run saved by a release can be cited by that release's DOI. Later steps of the run, such as one started from a saved decision, keep this version. |
 | Created | Time the run workspace was created, shown in local time. |
+| Started, Finished | When the run's first Snakemake execution started and its last one ended, in local time, from the run's `timing.yaml`. GenoPilot adds each execution to it when Snakemake ends; a run started directly with Snakemake has none. |
+| Duration | Time Snakemake spent running the run, as hours, minutes, and seconds. The time between an interrupted execution and its resume is not counted. |
+| Peak memory | The most memory Snakemake and its jobs used together, sampled every 5 seconds while the run executed. A shorter spike can be missed, and memory shared between processes counts once for each, so the figure errs high. |
+| Attempts | Shown when the run was resumed: how many executions the duration adds up. |
 | Results written | Time the workflow wrote the results shown, in local time: the completion summary, or the provenance of the active cohort. A later rerun of that stage updates it. |
 | Effective CPUs | Number of CPUs the workflow was allowed to use after applying the selected CPU mode. |
+| Machine | The machine that saved the run's configuration: its CPUs, memory, CPU model, and operating system. Durations and resource use compare only between runs on the same machine. |
+
+**Stage durations** lists each stage that ran with its wall time: the time while at least one of its jobs ran, so jobs running in parallel count once.
 
 ## Run files
 

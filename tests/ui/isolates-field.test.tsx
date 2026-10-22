@@ -17,6 +17,7 @@ const ESCAPE = '\x1b';
 const SPACE = ' ';
 const BACKSPACE = '\x7f';
 const ARROW_DOWN = '\x1b[B';
+const CTRL_A = '\x01';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -201,6 +202,32 @@ test('keeps the previous selection when the picker is cancelled, and toggles an 
   await press(input, ENTER);
   await waitUntil(() => values.length === 1, 'the selection is confirmed');
   assert.deepEqual(parseIsolateSelection(values[0] ?? ''), ['mutant-one']);
+});
+
+test('selects every isolate matching the search, all without one, and deselects them again', async context => {
+  const {input, output, values} = renderField(context, {initialValue: 'wild-type'});
+  await waitForFrame(output, frame => frame.includes('1 selected'));
+  await press(input, ENTER);
+  await waitForFrame(output, frame => isChosen(frame, 'wild-type'));
+
+  for (const key of 'mutant') {
+    await press(input, key);
+  }
+  await waitForFrame(output, frame => rowFor(frame, 'wild-type') === undefined);
+  await press(input, CTRL_A);
+  await waitForFrame(output, frame => isChosen(frame, 'mutant-one') && isChosen(frame, 'mutant-two'));
+  await press(input, CTRL_A);
+  await waitForFrame(output, frame => !isChosen(frame, 'mutant-one') && !isChosen(frame, 'mutant-two'));
+
+  for (let index = 0; index < 'mutant'.length; index += 1) {
+    await press(input, BACKSPACE);
+  }
+  await waitForFrame(output, frame => rowFor(frame, 'wild-type') !== undefined);
+  await press(input, CTRL_A);
+  await waitForFrame(output, frame => catalog.every(isolate => isChosen(frame, isolate.id)));
+  await press(input, ENTER);
+  await waitUntil(() => values.length === 1, 'the selection is confirmed');
+  assert.deepEqual(parseIsolateSelection(values[0] ?? ''), ['wild-type', 'mutant-one', 'mutant-two']);
 });
 
 test('explains an empty or unreadable catalog and drops isolates that are no longer cataloged', async context => {

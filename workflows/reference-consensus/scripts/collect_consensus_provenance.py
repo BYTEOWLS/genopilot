@@ -129,8 +129,11 @@ def main(argv: list[str] | None = None) -> int:
         "run": config["run"],
         "effective_configuration": config,
         "resources": {
-            "requested": {key: value for key, value in config["resources"].items() if key != "effective_cpus"},
+            "requested": {
+                key: value for key, value in config["resources"].items() if key not in ("effective_cpus", "machine")
+            },
             "effective_cpus": config["resources"]["effective_cpus"],
+            "machine": config["resources"]["machine"],
         },
         "inputs": {
             "backbone": backbone,

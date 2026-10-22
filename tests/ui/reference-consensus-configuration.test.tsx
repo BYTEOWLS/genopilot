@@ -19,9 +19,10 @@ const packagedParameterDefinitions = parseParameterDefinitions(
   readFileSync(new URL('../../workflows/reference-consensus/manifest.parameters.yaml', import.meta.url), 'utf8'),
 );
 
-const packagedStages = parseWorkflowManifest(
+const packagedManifest = parseWorkflowManifest(
   readFileSync(new URL('../../workflows/reference-consensus/manifest.yaml', import.meta.url), 'utf8'),
-).stages;
+);
+const packagedStages = packagedManifest.stages;
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -181,6 +182,8 @@ function renderScreen(
     executeSnakemakeRun?: typeof executeSnakemakeRun;
     backboneCached?: boolean;
     rows?: number;
+    checkSystem?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['checkSystem'];
+    recordRate?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['recordRate'];
   } = {},
 ) {
   const input = new TestInput();
@@ -198,6 +201,7 @@ function renderScreen(
       snakefilePath={packagedPath('workflows/reference-consensus/Snakefile')}
       parameterDefinitions={packagedParameterDefinitions}
       stages={packagedStages}
+      manifest={packagedManifest}
       loadIsolateCatalogSnapshot={async () => {
         snapshotLoads += 1;
         return options.catalog ?? catalog;
@@ -213,6 +217,10 @@ function renderScreen(
       discoverPreviousRuns={async () => []}
       executeSnakemakeRun={options.executeSnakemakeRun}
       registerAccessionCaches={async () => 'Recorded.'}
+      // Never the test machine's disks or hardware.
+      checkSystem={options.checkSystem ?? (async () => ({rows: [], warnings: []}))}
+      // Never the researcher's own rates file.
+      recordRate={options.recordRate ?? (async () => undefined)}
     />,
     {
       exitOnCtrlC: false,
@@ -259,8 +267,18 @@ test('requires at least one isolate before preparing the run', async context => 
 test('configures a run from cataloged isolates, reviews it, and starts a dry run or an execution', async context => {
   const executedModes: string[] = [];
   let saved: PreparedReferenceConsensusRun | undefined;
+  const checked: PreparedReferenceConsensusRun[] = [];
+  const measured: PreparedReferenceConsensusRun[] = [];
   const {input, output, reviewed} = renderScreen(context, {
     rows: 80,
+    recordRate: async prepared => {
+      measured.push(prepared);
+      return undefined;
+    },
+    checkSystem: async prepared => {
+      checked.push(prepared);
+      return {rows: [{label: 'Free disk', value: 'system-check-row'}], warnings: ['system-check-warning']};
+    },
     inspectRun: async () => ({sameFiles: [{first: '/reads/one.fq', second: '/reads/linked.fq'}]}),
     saveRun: async prepared => {
       saved = prepared;
@@ -301,16 +319,26 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   assert.ok(frame.includes('mutant-one_R1.fastq.gz'));
   assert.ok(frame.includes(prepared.outputDirectory));
   assert.ok(!frame.includes('--dry-run'));
+  // The systems check of the prepared run, with its warning.
+  assert.equal(checked[0], prepared);
+  assert.ok(frame.includes('system-check-row') && frame.includes('system-check-warning'));
+  // It follows the warnings at the top, before the configured values and isolates.
+  assert.ok(frame.indexOf('system-check-warning') < frame.indexOf('system-check-row'));
+  assert.ok(frame.indexOf('system-check-row') < frame.indexOf('mutant-one_R1.fastq.gz'));
 
   await press(input, ENTER);
-  await waitUntil(() => saved !== undefined, 'the run is saved');
   // The start page shows the exact dry-run command.
   const onStartPage = (next: string): boolean =>
     next.includes('--dry-run') && next.includes('workflows/reference-consensus/Snakefile');
   await waitForFrame(output, onStartPage);
+  // Nothing is saved before a run starts, so leaving the start page leaves no run behind.
+  assert.equal(saved, undefined);
   await press(input, ENTER);
+  await waitUntil(() => saved !== undefined, 'the run is saved as the dry run starts');
   await waitUntil(() => executedModes.length === 1, 'the dry run starts');
   assert.deepEqual(executedModes, ['dry-run']);
+  // A dry run is not measured for the next estimate.
+  assert.deepEqual(measured, []);
   // After the dry run, the workflow itself can be executed, and its isolates are followed.
   await waitForFrame(output, next => next.includes('Job stats'));
   // Back on the start page, the execution is preselected once a dry run has passed.
@@ -319,7 +347,73 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   await press(input, ENTER);
   await waitUntil(() => executedModes.length === 2, 'the execution starts');
   assert.deepEqual(executedModes, ['dry-run', 'execute']);
+  // A successful execution is measured for the next estimate on this machine.
+  await waitUntil(() => measured.length === 1, 'the run is measured');
+  assert.equal(measured[0], prepared);
   await waitForFrame(output, next => next.includes(snapshot.isolates[0]!.name) && next.includes(snapshot.isolates[1]!.name));
+});
+
+test('shows a save that fails as a run starts, and tries it again on the next start', async context => {
+  let saveAttempts = 0;
+  const executed: string[] = [];
+  const {input, output, reviewed} = renderScreen(context, {
+    rows: 80,
+    saveRun: async prepared => {
+      saveAttempts += 1;
+      if (saveAttempts === 1) {
+        throw new Error('save-failure-message');
+      }
+      return `${prepared.outputDirectory}/config.yaml`;
+    },
+    executeSnakemakeRun: async run => {
+      executed.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+  });
+  await waitForFrame(output, frame => selectedLine(frame) !== undefined);
+  await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
+  await chooseIsolates(input, output, ['mutant-one']);
+  await startReview(input, output);
+  await waitForFrame(output, frame => reviewed.length === 1 && frame.includes(reviewed[0]!.configuration.run.id));
+  await press(input, ENTER);
+  await waitForFrame(output, next => next.includes('--dry-run'));
+
+  await press(input, ENTER);
+  await waitForFrame(output, next => next.includes('save-failure-message'));
+  assert.deepEqual(executed, []);
+  // Back on the start options, the next start saves again and runs.
+  await press(input, ESCAPE);
+  await waitForFrame(output, next => next.includes('workflows/reference-consensus/Snakefile'));
+  await press(input, ENTER);
+  await waitUntil(() => executed.length === 1, 'a run starts after the save');
+  assert.equal(saveAttempts, 2);
+});
+
+test('reports a run that could not be measured without failing it, next to the NCBI cache note', async context => {
+  const executed: string[] = [];
+  const {input, output, reviewed} = renderScreen(context, {
+    rows: 80,
+    executeSnakemakeRun: async run => {
+      executed.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+    recordRate: async () => 'measure-failure-message',
+  });
+  await waitForFrame(output, frame => selectedLine(frame) !== undefined);
+  await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
+  await chooseIsolates(input, output, ['mutant-one']);
+  await startReview(input, output);
+  await waitForFrame(output, frame => reviewed.length === 1 && frame.includes(reviewed[0]!.configuration.run.id));
+  await press(input, ENTER);
+  await waitForFrame(output, next => next.includes('--dry-run'));
+  await press(input, ARROW_DOWN);
+  await waitForFrame(output, next => next.includes('workflows/reference-consensus/Snakefile') && !next.includes('--dry-run'));
+  await press(input, ENTER);
+  await waitUntil(() => executed.length === 1, 'the execution starts');
+  const frame = await waitForFrame(output, next => next.includes('measure-failure-message'));
+  // The run itself succeeded, and the accession catalog note is kept.
+  assert.ok(frame.includes('Recorded.'));
+  assert.deepEqual(executed, ['execute']);
 });
 
 test('asks how to handle a cached backbone and saves the decision', async context => {
@@ -331,6 +425,7 @@ test('asks how to handle a cached backbone and saves the decision', async contex
       saved = prepared;
       return `${prepared.outputDirectory}/config.yaml`;
     },
+    executeSnakemakeRun: async run => ({...run, exitCode: 0}),
   });
   await waitForFrame(output, frame => selectedLine(frame) !== undefined);
   await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
@@ -348,6 +443,9 @@ test('asks how to handle a cached backbone and saves the decision', async contex
   await waitForFrame(output, frame => frame !== cacheFrame);
   await startReview(input, output);
   await waitForFrame(output, frame => frame.includes(reviewed[0]!.configuration.run.id));
+  await press(input, ENTER);
+  // Saved as the dry run starts.
+  await waitForFrame(output, next => next.includes('--dry-run'));
   await press(input, ENTER);
   await waitUntil(() => saved !== undefined, 'the run is saved');
   const backbone = saved?.configuration.inputs.backbone;

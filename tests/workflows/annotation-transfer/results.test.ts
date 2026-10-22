@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import test from 'node:test';
 import type {WorkflowManifest} from '../../../src/workflows/manifest.js';
 import {isAnnotationTransferResult, loadWorkflowResult} from '../../../src/workflows/results.js';
+import {testMachine} from '../machine.js';
 
 function manifest(overrides: Partial<WorkflowManifest> = {}): WorkflowManifest {
   return {
@@ -110,7 +111,7 @@ function validConfiguration(directory: string): Record<string, unknown> {
     },
     lifton: {profile: 'same-species'},
     review: {minimum_protein_identity: 99},
-    resources: {cpu_mode: 'automatic', effective_cpus: 4},
+    resources: {cpu_mode: 'automatic', effective_cpus: 4, machine: testMachine},
     run: {
       output_root: join(directory, '..'),
       id: 'test-run',

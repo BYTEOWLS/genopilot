@@ -23,6 +23,7 @@ import {ParameterList, parameterLabelWidth, type ParameterRow} from '../componen
 import type {TabDefinition} from '../components/tabs.js';
 import {Table} from '../components/table.js';
 import {sanitizeTerminalText} from '../sanitize.js';
+import {timingRows} from '../run-timing-rows.js';
 import {mutedColor} from '../theme.js';
 
 export type ConsensusTabId = 'overview' | 'isolates' | 'cohorts' | 'sites' | 'files' | 'run' | 'citation';
@@ -330,7 +331,10 @@ function cohortDetailSections(cohort: CohortResult, formatDateTime: DateFormatte
   if (cohort.decidedAt) {
     rows.push({id: 'cohort.decided_at', label: 'Decision saved', value: formatDateTime(cohort.decidedAt)});
   }
-  if (cohort.finishedAt) {
+  if (cohort.timing) {
+    rows.push(...timingRows({...(cohort.finishedAt ? {finishedAt: cohort.finishedAt} : {}), ...cohort.timing}, 'cohort', formatDateTime)
+      .filter(row => row.id !== 'cohort.duration'));
+  } else if (cohort.finishedAt) {
     rows.push({id: 'cohort.finished_at', label: 'Finished', value: formatDateTime(cohort.finishedAt)});
   }
   if (cohort.reason) {

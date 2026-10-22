@@ -1,4 +1,5 @@
-import React, {useCallback, useMemo, useState} from 'react';
+import {join} from 'node:path';
+import React, {useCallback, useMemo, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
@@ -66,6 +67,8 @@ export type PreparedWorkflowRun<T> = {
   details?: readonly ReviewSection[];
   /** Problems that do not stop the run but that the researcher should see first. */
   warnings?: readonly string[];
+  /** Free disk, CPUs, memory, and the disk estimate, shown right after the warnings. */
+  systemCheck?: readonly {label: string; value: string}[];
   /**
    * Cached NCBI inputs the researcher decides to reuse or download again before the review, and
    * how those decisions are applied; kept together so a decision can never be dropped.
@@ -105,12 +108,12 @@ const reservedReviewChromeLines = 10;
 type ReviewItem =
   | {kind: 'heading'; key: string; text: string; color?: string}
   | {kind: 'row'; key: string; label: string; value: string}
-  | {kind: 'text'; key: string; text: string; color?: string};
+  | {kind: 'text'; key: string; text: string; color?: string; indent?: number};
 
 /**
  * Everything the review shows, flattened into rows so a review taller than the terminal can be
- * scrolled: warnings first, so they are seen without scrolling, then the form's fields, the
- * workflow's own details, the effective options, and the run directory.
+ * scrolled: warnings first, so they are seen without scrolling, then the system check, the form's
+ * fields, the workflow's own details, the effective options, and the run directory.
  */
 function reviewItems<T>(
   prepared: PreparedWorkflowRun<T>,
@@ -125,6 +128,11 @@ function reviewItems<T>(
     warnings.forEach((warning, index) =>
       items.push({kind: 'text', key: `warning:${String(index)}`, text: `⚠ ${warning}`, color: 'yellow'}));
   }
+  if (prepared.systemCheck && prepared.systemCheck.length > 0) {
+    items.push({kind: 'heading', key: 'system-check', text: 'System check'});
+    prepared.systemCheck.forEach((row, index) =>
+      items.push({kind: 'row', key: `system-check:${String(index)}`, label: row.label, value: row.value}));
+  }
   for (const section of sections) {
     items.push({kind: 'heading', key: `section:${section}`, text: section});
     for (const definition of visibleDefinitions.filter(candidate => candidate.section === section)) {
@@ -134,6 +142,15 @@ function reviewItems<T>(
         label: definition.label,
         value: prepared.resolvedValues[definition.id] ?? displayValue(definition, values[definition.id] ?? ''),
       });
+      if (definition.preview) {
+        items.push({
+          kind: 'text',
+          key: `hint:${definition.id}`,
+          indent: 2,
+          text: definition.preview.replaceAll('{value}', values[definition.id] || '<value>'),
+          color: mutedColor,
+        });
+      }
     }
   }
   for (const detail of prepared.details ?? []) {
@@ -159,7 +176,7 @@ function reviewItemLines(item: ReviewItem, first: boolean, valueWidth: number, w
     case 'row':
       return Math.max(1, Math.ceil(item.value.length / valueWidth));
     case 'text':
-      return Math.max(1, Math.ceil(item.text.length / width));
+      return Math.max(1, Math.ceil(item.text.length / Math.max(1, width - (item.indent ?? 0))));
   }
 }
 
@@ -293,6 +310,21 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   // The field whose file browser or accession picker is open over the form.
   const [browserId, setBrowserId] = useState<string>();
   const [screen, setScreen] = useState<ScreenState<T>>({state: 'editing'});
+  // The run is saved when its first dry run or execution starts, so leaving the start page
+  // without starting one leaves no run behind. A failed save is tried again on the next start.
+  const savedRun = useRef<{payload: T; saved: Promise<string>}>(undefined);
+  const saveOnStart = (payload: T): Promise<string> => {
+    if (savedRun.current?.payload !== payload) {
+      const saved = saveRun(payload);
+      savedRun.current = {payload, saved};
+      saved.catch(() => {
+        if (savedRun.current?.saved === saved) {
+          savedRun.current = undefined;
+        }
+      });
+    }
+    return savedRun.current.saved;
+  };
   // Opening the isolate picker reloads the catalog, so it lists isolates added meanwhile.
   const [isolatePickerOpenings, setIsolatePickerOpenings] = useState(0);
   const usesIsolates = useMemo(
@@ -457,21 +489,15 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
             scroll: Math.min(reviewWindow.maximumScroll, Math.max(0, screen.scroll + offset)),
           });
         } else if (key.return) {
-          setScreen({state: 'saving', prepared: screen.prepared, scroll: screen.scroll});
           const payload = screen.prepared.payload;
+          if (prepareSnakemakeRun && executeSnakemakeRun) {
+            const {outputDirectory} = screen.prepared;
+            setScreen({state: 'execution', payload, configurationPath: join(outputDirectory, 'config.yaml'), outputDirectory});
+            return;
+          }
+          setScreen({state: 'saving', prepared: screen.prepared, scroll: screen.scroll});
           saveRun(payload).then(
-            configurationPath => {
-              setScreen(
-                prepareSnakemakeRun && executeSnakemakeRun
-                  ? {
-                      state: 'execution',
-                      payload,
-                      configurationPath,
-                      outputDirectory: screen.prepared.outputDirectory,
-                    }
-                  : {state: 'saved', configurationPath},
-              );
-            },
+            configurationPath => setScreen({state: 'saved', configurationPath}),
             error => setScreen({state: 'invalid', messages: messageLines(error)}),
           );
         }
@@ -635,7 +661,11 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
             );
           }
           if (item.kind === 'text') {
-            return <Text key={item.key} color={item.color} wrap="wrap">{sanitizeTerminalText(item.text)}</Text>;
+            return (
+              <Box key={item.key} paddingLeft={item.indent ?? 0}>
+                <Text color={item.color} wrap="wrap">{sanitizeTerminalText(item.text)}</Text>
+              </Box>
+            );
           }
           return (
             <ParameterList
@@ -657,7 +687,10 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       <WorkflowExecutionScreen
         configurationPath={configurationPath}
         prepareRun={mode => prepareSnakemakeRun(mode, payload, configurationPath)}
-        executeRun={executeSnakemakeRun}
+        executeRun={async (run, onOutput, signal) => {
+          await saveOnStart(payload);
+          return executeSnakemakeRun(run, onOutput, signal);
+        }}
         onBack={onBack}
         inputActive={inputActive}
         stages={stages}

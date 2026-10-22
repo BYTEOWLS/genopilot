@@ -24,7 +24,7 @@ def provenance(workflow_id: str, inputs: dict, configuration: dict, released: bo
         "tool_versions": {
             "configured": {"ncbi-datasets-cli": "18.38.0", "parasail-python": "1.3.4", "htslib": "1.24"},
             "observed": {
-                "snakemake": {"version": "9.27.0", "source": "workflow-runtime"},
+                "snakemake": {"version": "9.0.0", "source": "workflow-runtime"},
                 "lifton": {"version": "1.0.14", "source": "installed-package"},
                 "parasail": {"status": "unavailable", "reason": "package metadata not found"},
                 "minimap2": {"version": "2.31-r1215", "source": "executable"},
@@ -41,7 +41,7 @@ def provenance(workflow_id: str, inputs: dict, configuration: dict, released: bo
 TRANSFER_CONFIGURATION = {
     "lifton": {"profile": "same-species"},
     "review": {"minimum_protein_identity": 99},
-    "resources": {"cpu_mode": "automatic", "effective_cpus": 4},
+    "resources": {"cpu_mode": "automatic", "effective_cpus": 4, "machine": {"platform": "linux", "architecture": "x64", "cpu_model": "Test CPU", "cpus": 8, "memory_bytes": 17179869184}},
 }
 LOCAL_TRANSFER_INPUTS = {
     "reference": {"source": "local", "fasta": "/inputs/reference.fasta", "gff3": "/inputs/reference.gff3"},

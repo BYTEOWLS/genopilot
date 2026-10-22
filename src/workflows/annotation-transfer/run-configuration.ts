@@ -28,7 +28,7 @@ import {
   type NcbiCacheMode,
   validateAnnotationTransferConfiguration,
 } from './configuration.js';
-import type {GenoPilotDetails} from '../configuration-validation.js';
+import {machineDetails, type GenoPilotDetails, type MachineDetails} from '../configuration-validation.js';
 
 export {effectiveCpuCount, formatRunTimestampPrefix, sanitizeRunIdSuffix} from '../run-preparation.js';
 export type {PathInspection} from '../run-preparation.js';
@@ -86,6 +86,7 @@ export function buildAnnotationTransferConfiguration(
   genopilot: GenoPilotDetails,
   availableCpus: number = availableParallelism(),
   now: Date = new Date(),
+  machine: MachineDetails = machineDetails(),
 ): PreparedAnnotationTransferRun {
   const description = draft.runDescription.trim();
   const manualLimit = Number(draft.manualCpuLimit);
@@ -125,6 +126,7 @@ export function buildAnnotationTransferConfiguration(
       cpu_mode: draft.cpuMode,
       ...(draft.cpuMode === 'manual' ? {manual_limit: manualLimit} : {}),
       effective_cpus: effectiveCpuCount(draft.cpuMode, draft.manualCpuLimit, availableCpus),
+      machine,
     },
     run: {
       output_root: resolveDraftPath(currentDirectory, draft.outputRoot),

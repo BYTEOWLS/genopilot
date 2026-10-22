@@ -21,6 +21,7 @@ import {
   savePreparedRun,
   validatePreparedRunPaths,
 } from '../../../src/workflows/annotation-transfer/run-configuration.js';
+import {machineDetails} from '../../../src/workflows/configuration-validation.js';
 
 const now = new Date('2026-09-05T08:34:12.123Z');
 const genopilot = {version: '1.2.3', igv: '3.8.9'};
@@ -72,6 +73,7 @@ test('resolves draft paths and records requested and effective options', async c
     cpu_mode: 'manual',
     manual_limit: 8,
     effective_cpus: 4,
+    machine: machineDetails(),
   });
   assert.equal(prepared.configuration.run.description, 'Initial T2T annotation');
   assert.equal(prepared.configuration.run.name, 'Baseline transfer');

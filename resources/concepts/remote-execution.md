@@ -21,7 +21,7 @@ The Pixi workspace pins the executor and storage plugins GenoPilot supports, nex
 
 ## Rule resources
 
-Schedulers need memory and runtime per job. No rule declares `resources:` today; five declare `threads:`. Each rule needs memory and runtime that scale with its inputs, taken from the measurements of the [systems check](systems-check.md) rather than guessed. Profiles may override defaults, for example for a partition with a shorter time limit.
+Schedulers need memory and runtime per job. No rule declares `resources:` today; five declare `threads:`. Each rule needs memory and runtime that scale with its inputs, measured rather than guessed. The [systems check](done/systems-check.md) measures only whole runs: per-job values would have to come from Snakemake's job benchmarks, which hold them on Linux but are `NA` on macOS. Profiles may override defaults, for example for a partition with a shorter time limit.
 
 ## Software and data
 

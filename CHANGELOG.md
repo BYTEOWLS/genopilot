@@ -6,9 +6,29 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+### Runtime
+
+- Pixi 0.82.1, Snakemake 9.27.1, and Python 3.13.16, also in the rule environments; existing installations are asked to run setup again. Conda stays at 26.7.3: newer versions require a `packaging` release that Snakemake does not yet allow.
+- NCBI Datasets CLI 18.39.0.
+- Existing reference-consensus runs need a new run for further iterations: the new Python pin makes their per-isolate results out of date.
+
 ### Provenance
 
 - A run's citation includes igv.js, the genome viewer, with its version.
+
+### Application
+
+- Reference-consensus calling settings have clearer configuration hints and Help explanations, including Q20/Q30 and allele-fraction examples. Configuration reviews show the same parameter hints as the form.
+- Ctrl+A in the isolate picker selects every isolate matching the search, or all of them without one; pressing it again deselects them.
+
+### Results
+
+- Every run records the machine that saved its configuration (CPUs, memory, CPU model, operating system) in `config.yaml` and its provenance; the result page shows it.
+- Runs show elapsed time while running and saved execution and stage timings in results.
+- The list of existing runs shows how many runs each workflow has and how long each run took.
+- GenoPilot samples a run's peak memory while it executes and shows it with the run's timing.
+- A new run is saved when its first dry run or execution starts, so leaving the start page without starting one no longer leaves a run in the list of existing runs.
+- Before a run, its review shows free disk, available CPUs, and installed memory, with the run's estimated disk need and a warning when it may not fit. After a completed run on the same machine, the estimate uses its measurement and adds the expected duration and peak memory.
 
 ## [0.0.2] - 2026-10-08
 

@@ -97,6 +97,7 @@ parameters:
     required: true
     default: '10'
     hidden: false
+    preview: Usable reads needed at a position, after quality filters and excluding marked duplicates
   - id: min-mapping-quality
     label: Minimum mapping quality
     section: Per-isolate calling
@@ -104,6 +105,7 @@ parameters:
     required: true
     default: '20'
     hidden: false
+    preview: Excludes reads whose alignment location is uncertain, often because they match several repeats
   - id: min-base-quality
     label: Minimum base quality
     section: Per-isolate calling
@@ -111,6 +113,7 @@ parameters:
     required: true
     default: '20'
     hidden: false
+    preview: 'Only bases at this Phred score or higher count; Q20 means 1% error probability, Q30 means 0.1%'
   - id: min-allele-fraction
     label: Minimum allele fraction
     section: Per-isolate calling
@@ -118,7 +121,7 @@ parameters:
     required: true
     default: '0.8'
     hidden: false
-    preview: Above 0.5 and at most 1; a call needs this share of the reads at a position
+    preview: 'Share of usable reads that must agree on one allele; 0.8 means at least 80%. Must be above 0.5 and at most 1'
   - id: output-root
     label: Output directory
     section: Run details

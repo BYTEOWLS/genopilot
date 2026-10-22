@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python=3.13.15
+  - python=3.13.16
   - fastp=1.4.0
   - bwa=0.7.19
   - samtools=1.24

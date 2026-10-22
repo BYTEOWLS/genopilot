@@ -21,7 +21,7 @@ Consensus [Task 5.3](concepts/done/consensus/5c-review-and-rerun.md) saves and r
 
 ## Performance review
 
-Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](concepts/systems-check.md).
+Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](concepts/done/systems-check.md).
 
 A later review should start from measurements, the job benchmarks every run already writes, on real cohorts and slower machines, and consider:
 
@@ -162,6 +162,7 @@ Potential capabilities include:
 - [ ] Offer manual installation instructions followed by a `Check again` action.
 - [ ] Add a `Repair tooling` path for previously installed but missing or incompatible tooling.
 - [ ] Add explicit approval and coherent-bundle validation before supporting external tooling from `PATH`.
+- [ ] Shorten the run review's sections, such as Voting: show the chosen values in a few words, not full sentences. The explanations and worked examples belong in the workflow's help, which the review currently repeats.
 
 ### Workflow cancellation
 
@@ -225,6 +226,14 @@ The Illumina importer (consensus Task 1b) suggests raw or trimmed reads from rea
 - File sizes are not evidence: processed copies were about 15% smaller here, but gzip compression settings change sizes as much.
 
 Revisit when a multi-lane delivery with processed copies appears, or when raw reads are already adapter-trimmed during demultiplexing so that read lengths no longer tell raw and processed copies apart.
+
+## Result triage
+
+Order warnings, unresolved loci, and genes listed for review by documented, visible criteria, such as whether a coding sequence is affected and how, so a researcher knows what to inspect first. Each workflow explains its criteria in its `results.md`; no hidden score decides the order. Design it from researchers' reviews of real results.
+
+## AI-assisted interpretation
+
+A read-only MCP server lets AI assistants answer questions about runs from their recorded results and documentation, and later propose decisions for the researcher to save. Comparison and triage stay in GenoPilot. Designed in the [AI-assisted interpretation concept](concepts/ai-interpretation.md); it builds on the [run export](concepts/run-export.md) and the [workflow modules](concepts/workflow-modules.md).
 
 ## Run verification command
 

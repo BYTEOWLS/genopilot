@@ -388,6 +388,7 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             },
             "effective_cpus": config["resources"]["effective_cpus"],
+            "machine": config["resources"]["machine"],
             "benchmark": "logs/transfer-annotation.benchmark.tsv",
         },
         "commands": build_commands(config),

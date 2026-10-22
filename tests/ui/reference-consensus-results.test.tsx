@@ -23,6 +23,7 @@ import {
 } from '../../src/workflows/reference-consensus/results.js';
 import type {WorkflowManifest} from '../../src/workflows/manifest.js';
 import type {CompatibleReferenceConsensusResult} from '../../src/workflows/results.js';
+import {testMachine} from '../workflows/machine.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -82,7 +83,7 @@ const configuration = validateReferenceConsensusConfiguration({
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
   consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
-  resources: {cpu_mode: 'automatic', effective_cpus: 3},
+  resources: {cpu_mode: 'automatic', effective_cpus: 3, machine: testMachine},
   run: {output_root: '/runs', id: 'run-a', name: 'Synthetic cohort', created_at: '2026-01-01T12:00:00.000Z'},
 });
 
@@ -296,6 +297,32 @@ test('selects an iteration and compares it with the first completed cohort', asy
 
     frame = await screen.press(ARROW_DOWN, ARROW_DOWN);
     assert.match(frame, /iteration-3\/decision/);
+  } finally {
+    screen.unmount();
+  }
+});
+
+test('omits cohort durations while retaining execution timestamps in the details', async () => {
+  const result = consensusResult();
+  result.cohorts[0] = {...result.cohorts[0]!, timing: {durationMs: 15_000}};
+  result.cohorts[1] = {...result.cohorts[1]!, timing: {
+    startedAt: '2026-01-02T10:00:00.000Z',
+    finishedAt: '2026-01-02T10:01:05.000Z',
+    durationMs: 65_000,
+    attempts: [{startedAt: '2026-01-02T10:00:00.000Z', finishedAt: '2026-01-02T10:01:05.000Z', durationMs: 65_000}],
+  }};
+  const screen = renderScreen({loaded: loaded(result)});
+  try {
+    await settle();
+    let frame = await screen.press(TAB, TAB);
+    assert.doesNotMatch(frame, /1 min 5 s/);
+    assert.match(frame, /formatted:2026-01-02T10:00:00\.000Z/);
+    // Even an older result containing partial cohort timing must not display that duration.
+    frame = await screen.press(ARROW_UP);
+    assert.doesNotMatch(frame, /\b15 s\b/);
+    // A pending iteration has no execution timestamps.
+    frame = await screen.press(ARROW_DOWN, ARROW_DOWN);
+    assert.doesNotMatch(frame, /formatted:2026-01-02T10:00:00\.000Z/);
   } finally {
     screen.unmount();
   }

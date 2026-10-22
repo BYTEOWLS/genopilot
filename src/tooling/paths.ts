@@ -25,6 +25,8 @@ export type ToolingPaths = {
   temporaryDirectory: string;
   condaEnvironmentsDirectory: string;
   installationLockPath: string;
+  /** This machine's measured run rates, rebuilt by the next completed run after a reset. */
+  machineRatesPath: string;
   secretsDirectory: string;
   ncbiApiKeyPath: string;
   isolateCatalogDirectory: string;
@@ -100,6 +102,7 @@ export function resolveToolingPaths({
     // 600 MB copy of the same environments.
     condaEnvironmentsDirectory: join(dataDirectory, 'conda-envs'),
     installationLockPath: join(dataDirectory, 'tooling-setup.lock'),
+    machineRatesPath: join(dataDirectory, 'machine-rates.yaml'),
     secretsDirectory: join(dataDirectory, 'secrets'),
     ncbiApiKeyPath: join(dataDirectory, 'secrets', 'ncbi-api-key'),
     // Research metadata sits beside, not inside, the tooling directory, so resetting or

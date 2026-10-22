@@ -1,3 +1,4 @@
+import {arch, availableParallelism, cpus, platform, totalmem} from 'node:os';
 import {isAbsolute} from 'node:path';
 import {isVersionedAssemblyAccession, ncbiAccessionFormatMessage} from '../accessions/accession.js';
 import type {BuildInfo} from '../build-info.js';
@@ -16,7 +17,30 @@ export type ResourceSettings = {
   cpu_mode: CpuMode;
   manual_limit?: number;
   effective_cpus: number;
+  machine: MachineDetails;
 };
+
+/** The machine that saved a configuration, so resource use is compared only between runs on it. */
+export type MachineDetails = {
+  platform: string;
+  architecture: string;
+  cpu_model: string;
+  /** Logical CPUs. */
+  cpus: number;
+  memory_bytes: number;
+};
+
+/** The running machine, as a configuration records it. */
+export function machineDetails(): MachineDetails {
+  const processors = cpus();
+  return {
+    platform: platform(),
+    architecture: arch(),
+    cpu_model: processors[0]?.model.trim() || 'unknown',
+    cpus: processors.length || availableParallelism(),
+    memory_bytes: totalmem(),
+  };
+}
 
 export type RunDetails = {
   output_root: string;
@@ -238,7 +262,7 @@ export function validateResources(
   }
   rejectUnknownFields(
     resources,
-    ['cpu_mode', 'manual_limit', 'effective_cpus'],
+    ['cpu_mode', 'manual_limit', 'effective_cpus', 'machine'],
     '$.resources',
     issues,
   );
@@ -276,8 +300,28 @@ export function validateResources(
     });
     valid = false;
   }
+  valid = validateMachine(resources.machine, issues) && valid;
 
   return valid ? (resources as ResourceSettings) : undefined;
+}
+
+function validateMachine(value: unknown, issues: ConfigurationValidationIssue[]): boolean {
+  const machine = requireObject(value, '$.resources.machine', issues);
+  if (!machine) {
+    return false;
+  }
+  rejectUnknownFields(machine, ['platform', 'architecture', 'cpu_model', 'cpus', 'memory_bytes'], '$.resources.machine', issues);
+  let valid = true;
+  for (const field of ['platform', 'architecture', 'cpu_model'] as const) {
+    valid = requireNonEmptyString(machine[field], `$.resources.machine.${field}`, issues) && valid;
+  }
+  for (const field of ['cpus', 'memory_bytes'] as const) {
+    if (!Number.isSafeInteger(machine[field]) || (machine[field] as number) < 1) {
+      issues.push({path: `$.resources.machine.${field}`, message: 'must be a positive integer'});
+      valid = false;
+    }
+  }
+  return valid;
 }
 
 export function validateRun(
