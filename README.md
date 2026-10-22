@@ -84,6 +84,8 @@ Without it, a workflow's provenance lists its commands as unavailable.
 
 ## Development
 
+Planning: [concepts and status](resources/concepts/README.md), [release plans](resources/releases/README.md), and [unscheduled work](resources/later.md).
+
 Packaged workflow resources are stored separately from the TypeScript source:
 
 ```text

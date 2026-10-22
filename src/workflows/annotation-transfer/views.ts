@@ -10,7 +10,7 @@ import {runViewTitle, type BrowserDocument, type GenomeTrack, type GenomeView, t
 import type {AnnotationTransferConfiguration} from './configuration.js';
 import {geneFacts, type ReviewGene} from './proteins.js';
 
-/** The heading of the guide section in the workflow's `results.md`. */
+/** The heading of the workflow's result-guide section. */
 export const transferGuideHeading = 'Transfer genome views';
 /** The heading of the review view's guide section, which directly precedes the transfer guide. */
 export const proteinsGuideHeading = 'Proteins genome review';

@@ -1,18 +1,18 @@
 # Deferred and optional work
 
-Ideas that are intentionally outside the current task list in [`tasks.md`](tasks.md). Revisit them when a concrete requirement exists.
+Unscheduled, deferred, and optional work. Scheduled outcomes live in the [release plans](releases/README.md); implementation steps live with their [concepts](concepts/README.md). Move an item into its owning plan when it is selected.
 
 ## Browser view follow-up
 
-The current document and genome views are sufficient for the next release. Collect researcher requirements before resuming browser work. Remaining features, visual verification, and restoration of parked browser tests are deferred in the [follow-up checklist](concepts/browser-view-follow-up.md). Release bundling stays in the active packaging tasks.
+The current document and genome views are sufficient for the next release. Collect researcher requirements before resuming browser work. Remaining features, visual verification, and restoration of parked browser tests are deferred in the [follow-up checklist](concepts/browser-view-follow-up/concept.md). Release bundling stays in the active packaging tasks.
 
 ## Reruns of existing runs
 
-A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](concepts/reruns.md). Its release basics are tracked in consensus Tasks 5.1 and 5.3 and the task list; the rest waits for a concrete use case.
+A rerun action on existing runs, a link from a new run to the run it came from, reusing a source run's unchanged artifacts, forced recomputes of selected isolates, and a comparison view are designed in the [reruns concept](concepts/reruns/concept.md). Its implemented basics are recorded in consensus Tasks 5.1 and 5.3; the rest waits for a concrete use case.
 
 ## Cohort decision preview
 
-Consensus [Task 5.3](concepts/done/consensus/5c-review-and-rerun.md) saves and runs a cohort decision without previewing it. A preview would show, before saving, how many unresolved loci and `N` bases a proposed decision creates or resolves, computed from the support tables of an aggregated cohort whose voters include every proposed voter.
+Consensus [Task 5.3](concepts/completed/consensus/5c-review-and-rerun.md) saves and runs a cohort decision without previewing it. A preview would show, before saving, how many unresolved loci and `N` bases a proposed decision creates or resolves, computed from the support tables of an aggregated cohort whose voters include every proposed voter.
 
 - It needs the voting rule of `generate_consensus.py` a second time in TypeScript; share its test cases with the Python tests so the two cannot drift.
 - It cannot be exact at a locus where a removed voter's own variant joined overlapping records of others: without that voter, the locus may split. Count such loci as "computed by the rerun" instead of guessing.
@@ -21,7 +21,7 @@ Consensus [Task 5.3](concepts/done/consensus/5c-review-and-rerun.md) saves and r
 
 ## Performance review
 
-Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](concepts/done/systems-check.md).
+Performance is a non-functional requirement: a run should finish in a time and within a disk and memory budget a researcher can plan for, also on machines much slower than a developer's. The initial release needs no deep performance review; obvious problems are fixed when they show up, as in cohort aggregation (consensus Task 4.2), and expectations are set by the [systems check](concepts/completed/systems-check/concept.md).
 
 A later review should start from measurements, the job benchmarks every run already writes, on real cohorts and slower machines, and consider:
 
@@ -32,7 +32,7 @@ A later review should start from measurements, the job benchmarks every run alre
 
 ## Annotation formats other than GFF3
 
-Annotation-transfer reads GFF3 only. When a researcher needs GTF, GenBank, or another format, convert it to GFF3 at the input ([concept](concepts/annotation-formats.md#when-a-format-is-needed)).
+Annotation-transfer reads GFF3 only. When a researcher needs GTF, GenBank, or another format, convert it to GFF3 at the input ([concept](concepts/annotation-formats/concept.md#when-a-format-is-needed)).
 
 ## Comparing LiftOn GFF3 files
 
@@ -66,7 +66,7 @@ review_status
 
 ## Saved annotations in the isolate catalog
 
-Builds on the [saved isolate sequences](concepts/saved-isolate-sequences.md).
+Builds on the [saved isolate sequences](concepts/saved-isolate-sequences/concept.md).
 
 - **Saved sequence as a target.** Annotation transfer gains a third target source next to a local FASTA and an NCBI accession: a sequence saved in the isolate catalog. The run records the sequence's ID and checksum and resolves it like any other imported input, so it stays runnable without the TUI.
 - **Saving the GFF3.** From an annotation-transfer result whose target was a saved sequence, the transferred GFF3 can be saved back to the catalog. It belongs to that exact sequence, because its coordinates are only valid on that FASTA, so it is stored under the sequence rather than beside it:
@@ -78,11 +78,11 @@ Builds on the [saved isolate sequences](concepts/saved-isolate-sequences.md).
   with a record under the sequence's entry in `isolates.yaml`: its origin (`generated`), the producing run and workflow, the reference it was transferred from, its checksum, and the checksum of the sequence it annotates. Saving refuses a GFF3 whose run targeted another sequence or another checksum.
 - **One sequence, several annotations.** A sequence can hold annotations transferred from different references or with different settings, each named like a saved sequence.
 - **Removal.** Removing a sequence removes its annotations, after confirming both.
-- **Final IDs.** Take this up after the [GFF3 find-and-replace](concepts/annotation-id-rewriting.md), so a researcher can save an annotation with rewritten IDs rather than raw LiftOn IDs.
+- **Final IDs.** Take this up after the [GFF3 find-and-replace](concepts/annotation-id-rewriting/concept.md), so a researcher can save an annotation with rewritten IDs rather than raw LiftOn IDs.
 
 ## Sequence ID renaming
 
-The [GFF3 find-and-replace](concepts/annotation-id-rewriting.md) leaves sequence IDs (column 1) alone. Renaming them, for example assembler contig names to chromosome names or to a submission's naming rules, has to rewrite the FASTA header IDs and the GFF3 seqid column together, so the annotation keeps matching its genome.
+The [GFF3 find-and-replace](concepts/annotation-id-rewriting/concept.md) leaves sequence IDs (column 1) alone. Renaming them, for example assembler contig names to chromosome names or to a submission's naming rules, has to rewrite the FASTA header IDs and the GFF3 seqid column together, so the annotation keeps matching its genome.
 
 ## Reads without Illumina headers
 
@@ -96,13 +96,13 @@ Supporting such reads needs its own design: where the read group comes from (for
 
 Reference-consensus writes only `A`, `C`, `G`, `T`, and `N` into `results/isolates/{isolate}/consensus.fasta` (consensus Task 4.1). An ambiguous position (enough reads, but no allele reaching `min_allele_fraction`) and an uncallable position (too few reads) both become `N`, so the FASTA alone loses that distinction and the competing alleles: a biallelic SNP with `A=55%, G=45%` could be written as `R`. The run keeps this evidence in `all-sites.bcf` (per-allele depth) and `callable-mask.bed` (the reason for every `N`), and cohort aggregation reads those rather than the FASTA, so nothing is lost for voting. The gap only affects someone who uses the isolate FASTA on its own.
 
-Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. The cohort consensus already lets the researcher choose `N` or IUPAC codes for unresolved SNPs ([Task 4.3](concepts/done/consensus/4c-combined-consensus-generation.md#kickoff-decisions)); an isolate FASTA option would follow the same rule.
+Take this up only when a concrete downstream use needs it. A likely answer is a separate diagnostic `consensus.iupac.fasta` beside the unchanged `A/C/G/T/N` FASTA, restricted to biallelic ambiguous SNPs, because IUPAC cannot express indels, a three-allele code says little, and downstream tools treat IUPAC codes inconsistently in a haploid sequence. The cohort consensus already lets the researcher choose `N` or IUPAC codes for unresolved SNPs ([Task 4.3](concepts/completed/consensus/4c-combined-consensus-generation.md#kickoff-decisions)); an isolate FASTA option would follow the same rule.
 
 ## Per-vote evidence and per-locus overrides
 
 **Status:** waiting for requirements from researchers who have reviewed real unresolved loci.
 
-Two related extensions of the cohort review, discussed during the [browser view](concepts/done/browser-view/genome.md#reviewing-an-unresolved-locus) concept. Neither is needed for the genome view, which shows the reads themselves.
+Two related extensions of the cohort review, discussed during the [browser view](concepts/completed/browser-view/genome.md#reviewing-an-unresolved-locus) concept. Neither is needed for the genome view, which shows the reads themselves.
 
 **Per-vote evidence.** The support table records only which allele each voter chose, not how strongly. The values exist: every isolate's `all-sites.bcf` holds allele depths at every covered position, including where it voted for the backbone allele and has no variant record. A likely design: after aggregation has formed the loci, one step per voter reads its `all-sites.bcf` at those loci with the pinned `bcftools query`, and a join writes a separate `support-evidence.tsv.gz`, one row per locus and voter, so evidence never changes vote counting. Values: depth, the voted allele's fraction next to the threshold, and per-strand counts (`ADF`/`ADR`, which mpileup does not annotate today, so adding them reruns calling). Mapping quality per isolate is not available; reads below the minimum are already excluded. Loci of several bases take the indel record's depths where one exists and the weakest base otherwise. Shown in the Sites detail and the genome view's item card, without a new "weak vote" classification, which would be a hidden scientific rule.
 
@@ -123,7 +123,7 @@ The cohort consensus FASTA is shorter or longer than the backbone wherever a del
 
 ## Annotation transfer from a consensus result
 
-A result-page action on a consensus iteration that starts a new annotation transfer with the iteration's `consensus.fasta` as target and the backbone as reference, prefilled. It needs a way for one workflow to hand inputs to another without shared code naming either; until then the consensus documentation suggests the transfer ([concept](concepts/done/annotation-review.md#reference-consensus)).
+A result-page action on a consensus iteration that starts a new annotation transfer with the iteration's `consensus.fasta` as target and the backbone as reference, prefilled. It needs a way for one workflow to hand inputs to another without shared code naming either; until then the consensus documentation suggests the transfer ([concept](concepts/completed/annotation-review/concept.md#reference-consensus)).
 
 ## Advanced LiftOn controls
 
@@ -133,15 +133,15 @@ Potential controls include minimum alignment coverage, minimum sequence identity
 
 ## Genome-view controls and teaching aids
 
-Follow-ups to the read-only [genome view](concepts/done/browser-view/genome.md), deferred from its first release:
+Follow-ups to the read-only [genome view](concepts/completed/browser-view/genome.md), deferred from its first release:
 
 - [ ] **Codon wheel.** Amino-acid names/abbreviations and translation caveats are implemented in genome help. Add a codon wheel (the “coding sun”), identifying the genetic code it represents and its relationship to the viewer's translation; do not imply one code applies to every organism.
-- [ ] **IGV upgrade verification.** Before upgrading IGV, recheck the [documented canvas paint rules and geometry assumptions](concepts/done/browser-view/canvas-colors.md), discover additional paints with the opt-in local diagnostics, and visually verify nucleotide/quality cues and translation markers. Palette, glyph, geometry, and lifecycle separation is implemented; browser tests remain parked.
+- [ ] **IGV upgrade verification.** Before upgrading IGV, recheck the [documented canvas paint rules and geometry assumptions](concepts/completed/browser-view/canvas-colors.md), discover additional paints with the opt-in local diagnostics, and visually verify nucleotide/quality cues and translation markers. Palette, glyph, geometry, and lifecycle separation is implemented; browser tests remain parked.
 - [ ] **Circular-view overlay.** Offer a toggleable circular genome/gene-view overlay using the pinned IGV.js support where applicable. Verify that its API actually supports the desired annotation display, not just alignment or interaction chords, before promising it. Opening and closing the overlay should preserve the linear view's region and track choices; a circular layout must not imply that a chromosome or contig is biologically circular. Keep assets local and retain the existing CSP boundary.
 
 ## Browser-based HTML reports
 
-Interactive charts, tables, and genome views in a browser tab that the CLI opens and leads, with downloads, are designed in the [browser view](concepts/done/browser-view/README.md) concept. What stays deferred here is static, self-contained report files that open without GenoPilot.
+Interactive charts, tables, and genome views in a browser tab that the CLI opens and leads, with downloads, are designed in the [browser view](concepts/completed/browser-view/concept.md) concept. What stays deferred here is static, self-contained report files that open without GenoPilot.
 
 Static browser reports are deferred until workflow selection, configuration, execution, progress, live logs, completion metrics, and result presentation work reliably in the TUI.
 
@@ -153,7 +153,7 @@ Potential capabilities include:
 - LiftOn mapped, unmapped, duplicated, rescued, and validation summaries;
 - comparisons between compatible run directories;
 - report opening and export from the TUI;
-- links into the browser view's [genome kind](concepts/done/browser-view/genome.md) for specialist genome views.
+- links into the browser view's [genome kind](concepts/completed/browser-view/genome.md) for specialist genome views.
 
 ## Future TUI capabilities
 
@@ -162,7 +162,6 @@ Potential capabilities include:
 - [ ] Offer manual installation instructions followed by a `Check again` action.
 - [ ] Add a `Repair tooling` path for previously installed but missing or incompatible tooling.
 - [ ] Add explicit approval and coherent-bundle validation before supporting external tooling from `PATH`.
-- [ ] Shorten the run review's sections, such as Voting: show the chosen values in a few words, not full sentences. The explanations and worked examples belong in the workflow's help, which the review currently repeats.
 
 ### Workflow cancellation
 
@@ -185,7 +184,7 @@ interrupted run directory should look like when it is opened again.
 
 ### Interactive-decision manifest contract
 
-The first decision boundary, the reference-consensus cohort iterations, needed no manifest fields: a saved decision file and an explicit Snakemake target per iteration are enough ([consensus Task 5.1](concepts/done/consensus/5a-cohort-iterations.md)). Workflow-manifest schema version 1 therefore still contains no interactive-decision fields. Revisit this when a second workflow needs decisions and the TUI would otherwise hard-code its targets. Snakemake must remain the execution authority; the TUI must not become a second scheduler.
+The first decision boundary, the reference-consensus cohort iterations, needed no manifest fields: a saved decision file and an explicit Snakemake target per iteration are enough ([consensus Task 5.1](concepts/completed/consensus/5a-cohort-iterations.md)). Workflow-manifest schema version 1 therefore still contains no interactive-decision fields. Revisit this when a second workflow needs decisions and the TUI would otherwise hard-code its targets. Snakemake must remain the execution authority; the TUI must not become a second scheduler.
 
 Potential additions after the core run/resume/presentation interface works:
 
@@ -209,8 +208,6 @@ Interactive decisions remain outside Snakemake rules. The TUI saves decisions, a
 
 Follow-ups from the review of the first isolate-catalog implementation:
 
-- [ ] Make stale-lock recovery in `src/file-lock.ts` race-free. When two processes find the same stale lock, both remove it, and the slower one can delete the lock the faster one just created, so both proceed. The catalog's revision check narrows but does not close the window. Shared with tooling setup.
-- [ ] Reload the catalog automatically after a save is refused because another window changed it, instead of leaving the list stale until the researcher presses `r`.
 - [ ] Detect one read file reached through different paths across isolates, not only within one: symlinks and hard links, and differently cased paths on case-insensitive filesystems such as the macOS default.
 - [ ] Replace fixed keystroke delays in `tests/ui/isolates-screen.test.tsx` with waits on injected callbacks or rendered state, so the suite does not become flaky on slower CI runners.
 
@@ -233,7 +230,7 @@ Order warnings, unresolved loci, and genes listed for review by documented, visi
 
 ## AI-assisted interpretation
 
-A read-only MCP server lets AI assistants answer questions about runs from their recorded results and documentation, and later propose decisions for the researcher to save. Comparison and triage stay in GenoPilot. Designed in the [AI-assisted interpretation concept](concepts/ai-interpretation.md); it builds on the [run export](concepts/run-export.md) and the [workflow modules](concepts/workflow-modules.md).
+A read-only MCP server lets AI assistants answer questions about runs from their recorded results and documentation, and later propose decisions for the researcher to save. Comparison and triage stay in GenoPilot. Designed in the [AI-assisted interpretation concept](concepts/ai-interpretation/concept.md); it builds on the [run export](concepts/run-export/concept.md) and the [workflow modules](concepts/workflow-modules/concept.md).
 
 ## Run verification command
 
@@ -257,7 +254,7 @@ Any LiftOn-produced GFF3 may require review for genes that appear shifted, inser
 - short-read coverage loss is evidence but not proof of gene absence;
 - repetitive regions make gene and transposon placement difficult.
 
-The [annotation review](concepts/done/annotation-review.md) is the first step: a rating and review list, shown in the genome view. The [annotation review decision](concepts/annotation-review-decision.md) adds verdicts and a choice among LiftOn's candidate models. Drawing a new structure stays delegated to a specialist genome-annotation editor (see *Corrected gene model import*). Any correction workflow must preserve:
+The [annotation review](concepts/completed/annotation-review/concept.md) is the first step: a rating and review list, shown in the genome view. The [annotation review decision](concepts/annotation-review-decision/concept.md) adds verdicts and a choice among LiftOn's candidate models. Drawing a new structure stays delegated to a specialist genome-annotation editor (see *Corrected gene model import*). Any correction workflow must preserve:
 
 - the unmodified LiftOn output;
 - exact assembly and GFF3 checksums;
@@ -271,7 +268,7 @@ Manual corrections must never modify the nucleotide consensus without independen
 
 ## Corrected gene model import
 
-For genes the [annotation review decision](concepts/annotation-review-decision.md#deferred) marks *needs correction*: the researcher corrects the gene in a specialist editor, such as Apollo, and GenoPilot imports the replacement GFF3 for that gene into the next review decision. The import is validated like LiftOn's GFF3, recorded with its checksum as `imported`, and shown as a difference to the transferred model before it is saved.
+For genes the [annotation review decision](concepts/annotation-review-decision/concept.md#deferred) marks *needs correction*: the researcher corrects the gene in a specialist editor, such as Apollo, and GenoPilot imports the replacement GFF3 for that gene into the next review decision. The import is validated like LiftOn's GFF3, recorded with its checksum as `imported`, and shown as a difference to the transferred model before it is saved.
 
 ## Optional curated annotation from external workbooks
 
@@ -553,8 +550,47 @@ Already in place: the OSI license, tests and CI, a tagged release and changelog,
 - `paper.md` and `paper.bib` with a summary, statement of need, state of the field (compared with nf-core, Galaxy, the Snakemake workflow catalog, and similar), software design and its trade-offs, a research impact statement, and references;
 - an AI usage disclosure naming the tools and models with versions, where they were used, and that the author reviewed and validated their output;
 - a statement of need and the target audience in the README;
-- usage examples on real data: the [worked examples](concepts/project-website.md#worked-examples-on-public-data);
+- usage examples on real data: the [worked examples](concepts/project-website/concept.md#worked-examples-on-public-data);
 - where to ask questions, for example GitHub Discussions, next to reporting problems in `CONTRIBUTING.md`;
-- at acceptance, a tagged release archived on Zenodo with a DOI ([Zenodo release archiving](concepts/zenodo-release-archiving.md)).
+- at acceptance, a tagged release archived on Zenodo with a DOI ([Zenodo release archiving](concepts/zenodo-release-archiving/concept.md)).
 
 Check the [submission requirements](https://joss.readthedocs.io/en/latest/submitting.html) and the [review checklist](https://joss.readthedocs.io/en/latest/review_checklist.html) again before starting; they change.
+
+## Unscheduled work
+
+Concept links below are pointers, not duplicate checklists. Their task files own progress and implementation order; unassigned work remains here without a release commitment.
+
+## Workflows
+
+- [Annotation-format validation](concepts/annotation-formats/tasks.md).
+- [Saved isolate sequences](concepts/saved-isolate-sequences/tasks.md).
+- [Annotation review decisions](concepts/annotation-review-decision/tasks.md).
+- [GFF3 find-and-replace](concepts/annotation-id-rewriting/tasks.md); required before INSDC submission.
+- [INSDC submission preparation](concepts/insdc-submission/tasks.md): genome and isolate reads.
+
+## Application
+
+- [ ] Add non-interactive `--help` and `--version` output.
+- [Incomplete-run resume](concepts/reruns/tasks.md), together with [workflow cancellation](#workflow-cancellation).
+- [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
+- [Workflow modules](concepts/workflow-modules/tasks.md).
+- [Run evidence export](concepts/run-export/tasks.md).
+
+## Integration and packaging
+
+- [ ] Add a direct-Snakemake cancellation test that checks cleanup and complete logs; success, failure, and resume are covered, and cancellation is covered only with an injected process.
+- [Public-release preparation](concepts/public-release/tasks.md).
+- [Remote execution](concepts/remote-execution/tasks.md).
+- [Project website and worked examples](concepts/project-website/tasks.md).
+
+## Tooling
+
+- [ ] Save complete tooling-check logs outside the Ink render output; setup logs are already preserved.
+- [ ] Pin LiftOn's pip dependencies with `==` in its rule environment; they are declared only as lower bounds upstream and installed from PyPI when the environment is created.
+- [ ] Record each rule environment's explicit conda package list and `pip freeze` in run provenance.
+- [ ] Lock the rule environments' conda dependencies with Snakemake's per-platform pin files (`<environment>.<platform>.pin.txt`).
+- [ ] Run real installation smoke tests on each supported platform/architecture and record the tested versions.
+
+## Windows support (last)
+
+- [ ] Add and validate Windows support through WSL2; native Windows execution is out of scope.

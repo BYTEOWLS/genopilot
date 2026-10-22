@@ -14,9 +14,10 @@ Keep the package independent of private research data, machine-specific paths, a
 - `runtime/` — the Pixi workspace (`pixi.toml` and `pixi.lock`) that guided setup installs Snakemake, Conda, and Python from.
 - `tests/` — TypeScript application tests plus Python tests for the workflow and shared scripts and for direct-Snakemake execution.
 - `tests/fixtures/` — small synthetic, redistributable FASTA/GFF3 fixtures with known expected results.
-- [`resources/tasks.md`](resources/tasks.md) — open work as checkboxes, in execution order.
-- [`resources/later.md`](resources/later.md) — deferred and optional ideas.
-- `resources/concepts/` — design notes; `done/` holds implemented designs. A concept directory may hold a `science-background.md` with design-time research, such as the tools considered; the science researchers need, with tool references, belongs in the workflow README.
+- [`resources/concepts/README.md`](resources/concepts/README.md) — concept index and status; completed designs live in `resources/concepts/completed/`.
+- [`resources/releases/README.md`](resources/releases/README.md) — release index; each version has its own scope and numbered work files.
+- [`resources/later.md`](resources/later.md) — unscheduled, deferred, and optional work.
+- A concept directory may hold a `science-background.md` with design-time research, such as the tools considered; the science researchers need, with tool references, belongs in the workflow README.
 
 ## Architecture boundaries
 
@@ -85,16 +86,34 @@ Validate imported artifacts and record their checksums, versions, configuration 
 
 In plan mode, discuss the approach in plain text first; call ExitPlanMode only when the user says the plan is ready.
 
+### Concepts
+
+- Read `resources/concepts/README.md`, the owning concept, and its tasks before work; follow existing step order.
+- Use `resources/concepts/<name>/{concept,tasks}.md`; completed folders live under `completed/`. Omit `tasks.md` only when there is no tracked work.
+- `concept.md`: durable ownership, contracts, scientific boundaries, invariants; current design, not history. `tasks.md`: ordered checkboxes, temporary details, implementation decisions, and links to supporting step files. State rules once; link rather than duplicate.
+- Update design, task checkboxes, and index status (**not started**, **in progress**, **done**) with each behavior change. A design alone is not implementation progress.
+- After the last required step, retain all files, move the folder to `completed/`, and update all references and its index row.
+- Optional ideas belong in an open concept's `nice-to-have.md`; on completion move them to `resources/later.md`, grouped by concept. Starting one moves it into `tasks.md` and reopens the folder. Unassigned debt stays in `later.md` until assigned.
+
+### Releases
+
+- Use `resources/releases/<version>/README.md` for goal, scope checkboxes, delivery order, and completion index; retain release records.
+- Every outcome gets a stable numbered file (`01_system_check.md`); never renumber when priorities change. README delivery order wins.
+- Concept-backed files only state included steps, dependencies, exclusions, and links to authoritative concept/tasks. Other files cover one independently deliverable outcome.
+- Detail-file order: title, `## Outcome`, `## Scope and contract` (or `## Investigation and ownership`), `## Acceptance criteria` with observable checkboxes.
+- Name authoritative owners/values, compatibility and migration boundaries, unresolved decisions, and relevant failure/retry/cancellation cases. Do not repeat repository rules or require issues; link existing issues only for useful context.
+- Read release README, detail file, and linked concepts before work. On delivery, tick the release entry, prefix its file with `done_`, and update links together. Already-finished work is also checked and uses `done_`.
+- Move selected work out of `later.md`; concept tasks own implementation order, releases own scope/acceptance. No parallel global task list.
+
 ## Package and documentation
 
 - Keep all texts short: documentation, changelog entries, comments, plans, and replies. Be precise and readable; cut what the reader does not need.
 - Treat `package.json` as the source for the displayed command name, description, author, and version.
 - Keep installation and developer documentation in [`README.md`](README.md), user documentation in `docs/`, and package changes in [`CHANGELOG.md`](CHANGELOG.md).
-- Keep all documentation a researcher reads in Markdown that GitHub and the application render alike, using only the subset in [`resources/concepts/done/workflow-documentation.md`](resources/concepts/done/workflow-documentation.md); do not write help texts in TypeScript.
+- Keep all documentation a researcher reads in Markdown that GitHub and the application render alike, using only the subset in [`resources/concepts/completed/workflow-documentation/concept.md`](resources/concepts/completed/workflow-documentation/concept.md); do not write help texts in TypeScript.
 - Document TUI usage (screens, keys, navigation) in `docs/`, not in the README.
 - Workflows document themselves by convention: each workflow's inputs, parameters, steps, scientific decisions, outputs, and a `## Tools` table in its `workflows/<id>/README.md`, and its result page in `workflows/<id>/results.md`, updated in the same change as the workflow. Its `citation/references.json` lists the README's references and maps each `## Tools` row to them; a test keeps the two equal. The README only lists the supported workflows with a link; `docs/` and shared code never name a workflow, so a new workflow changes nothing shared.
 - Write version numbers only where they are pinned (`src/tooling/policy.ts`, `runtime/pixi.toml` and its lock, `package.json`, and `workflows/*/envs/`); documentation names tools and links those files instead of repeating versions.
-- Track open work as concise checkboxes in [`resources/tasks.md`](resources/tasks.md), linking to a concept instead of repeating its checklist, and remove items once done. Keep rationale in design documentation rather than the task list.
 - Use pnpm to build and pack locally, and npm for global test installation.
 - Ensure packed artifacts contain the compiled CLI, packaged workflows, and package documentation, but not source data, private files, tests, or development-only configuration.
 
@@ -102,6 +121,7 @@ In plan mode, discuss the approach in plain text first; call ExitPlanMode only w
 
 - Develop trunk-based on `main`, which must always pass CI.
 - Make every change on a short-lived `feat/…` or `fix/…` branch unless told otherwise; one branch holds a whole feature. Never commit directly to `main`.
+- Do not commit automatically. Commit only when explicitly requested.
 - Release by tagging `vX.Y.Z` on `main`; versions stay in the `0.x.x` range while contracts are unstable. Published npm versions are immutable.
 - Keep commit messages concise and use scoped Conventional Commit prefixes: `docs(<scope>):` for documentation and design concepts, `feat(<scope>):` for new features, and the corresponding `fix`, `refactor`, `test`, or `chore` prefix for other changes. Use a meaningful scope, such as `docs(concepts):` or `feat(browser):`.
 - Do not add `Co-Authored-By` trailers or any AI/tool attribution.
@@ -113,6 +133,8 @@ In plan mode, discuss the approach in plain text first; call ExitPlanMode only w
 - Commit only small synthetic fixtures with documented origin, schemas, workflow definitions, environment files, and documentation.
 
 ## Verification
+
+Include proportionate tests with each change. Add integration tests for meaningful process, filesystem, package, or Snakemake contracts; do not duplicate covered behavior merely for crossing a boundary.
 
 Before considering a change complete, run:
 

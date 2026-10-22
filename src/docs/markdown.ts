@@ -1,7 +1,6 @@
 /**
- * Parser for the Markdown subset GenoPilot's documentation uses (see
- * `resources/concepts/done/workflow-documentation.md`). Anything outside the subset is kept as plain
- * text, so no content is lost; `unsupportedMarkdown` reports it for the packaged-docs test.
+ * Parser for GenoPilot's Markdown subset. Unsupported syntax stays as plain text,
+ * so no content is lost; `unsupportedMarkdown` reports it for the packaged-docs test.
  */
 
 export type Inline =

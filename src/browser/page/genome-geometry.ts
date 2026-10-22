@@ -1,5 +1,4 @@
-// Native IGV members omitted from its declarations. Renderer assumptions are documented in
-// resources/concepts/browser-view/canvas-colors.md; this module changes y geometry only.
+// Native IGV members omitted from its declarations; this module changes y geometry only.
 export type DrawOptions = {
   context: CanvasRenderingContext2D;
   bpPerPixel?: number;

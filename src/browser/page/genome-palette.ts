@@ -88,7 +88,7 @@ function codonShade(value: CanvasPaint, lighter: boolean, fallback: string): str
   return `rgb(${channels.slice(0, 3).map(channel => Math.round(lighter ? channel + (255 - channel) * 0.22 : channel * 0.78)).join(',')})`;
 }
 
-// Semantic evidence colors stay native. See resources/concepts/browser-view/canvas-colors.md.
+// Semantic evidence colors stay native.
 const evidenceProperties: Record<string, string[]> = {
   variant: ['color', 'noGenotypeColor', 'noCallColor', 'nonRefColor', 'mixedColor', 'homrefColor', 'homvarColor', 'hetvarColor', 'refColor', 'altColor', 'refColorFiltered', 'altColorFiltered'],
   alignment: ['color', 'negStrandColor', 'posStrandColor', 'baseModPosStrandColor', 'baseModNegStrandColor', 'insertionColor', 'skippedColor', 'pairConnectorColor', 'smallTLENColor', 'largeTLENColor', 'rlColor', 'rrColor', 'llColor', 'highlightColor'],
