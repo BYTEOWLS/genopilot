@@ -66,7 +66,7 @@ import {useProteinReview} from './protein-review.js';
 import {readReviewGenes as defaultReadReviewGenes} from '../../workflows/annotation-transfer/proteins.js';
 import {cohortConsensusView, consensusIsolateView, consensusSitesView, siteItemId} from '../../workflows/reference-consensus/views.js';
 
-/** `16 CPUs, 64 GB · Apple M3 Max · darwin arm64` */
+/** Builds a spec summary of machine containing CPUs, memory, platform and architecture */
 function machineSummary(machine: MachineDetails): string {
   return `${String(machine.cpus)} CPUs, ${formatMemory(machine.memory_bytes)} · ${machine.cpu_model} · ${machine.platform} ${machine.architecture}`;
 }
