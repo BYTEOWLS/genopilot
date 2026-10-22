@@ -18,7 +18,7 @@ The reference-consensus workflow selects compatible sets explicitly. Similar rea
 - A read set represents one library, platform, and layout. It can contain multiple file groups across lanes/chunks; each currently holds one R1/R2 pair. Lane-merged files are supported without invented lane metadata.
 - Separate deliveries can become separate sets with the same library ID. User confirmation on saving, not filenames or headers, establishes library identity. New sets receive editable isolate-based suggestions that avoid existing library IDs; top-ups share an existing ID only by explicit choice. Saved values and manual edits are preserved. IDs permit letters, digits, dot, underscore, plus, and hyphen for safe read-group values.
 - Each group records absolute plain/gzip FASTQ paths and `trimmed`: `true`, `false`, or `null` for unknown prior processing. Duplicate file paths are rejected across the catalog; filesystem checks also detect linked files.
-- Illumina metadata records reviewed `chemistry` (`four-colour`, `two-colour`, `one-channel`, `unknown`) and `poly_g` (`auto`, `on`, `off`). Unknown metadata can be stored without implying execution compatibility.
+- Illumina metadata records editable `chemistry` (`four-colour`, `two-colour`, `one-channel`, `unknown`) and `poly_g` (`auto`, `on`, `off`). Unknown metadata can be stored without implying execution compatibility.
 
 This concept owns read contracts. [Saved sequences](../../saved-isolate-sequences/concept.md) extends the catalog without renaming read fields. [Read submission](../../insdc-submission/concept.md#isolate-reads) consumes selected read sets and owns node-specific mappings, not another sequencing schema.
 
@@ -34,7 +34,7 @@ This concept owns read contracts. [Saved sequences](../../saved-isolate-sequence
 
 ## Illumina preprocessing
 
-- Resolve poly-G per read set: Auto enables it for confirmed two-colour chemistry and disables it for confirmed four-colour chemistry. One-channel has no validated Auto default; it and unknown chemistry require an explicit On/Off choice when trimming will run; do not infer chemistry from platform or filenames.
+- New Illumina read sets default to two-colour chemistry and poly-G Auto (On), an editable assumption for newly sequenced deliveries, not detected metadata. Existing saved settings remain unchanged. Auto enables poly-G for recorded two-colour chemistry and disables it for four-colour. One-channel has no validated Auto default; it and unknown chemistry require an explicit On/Off choice when trimming will run. Do not infer chemistry from filenames.
 - Keep the existing Illumina baseline: poly-G minimum 10 bases when enabled, retained length 30 bp, paired adapter detection, and no read-quality filtering. Only poly-G is configurable; these are not defaults for other technologies. Caller base-quality filtering remains separate.
 - Off explicitly disables fastp's automatic poly-G detection.
 - Known provider-trimmed groups bypass fastp and link original inputs unchanged. Their reports identify the skip and imported origin, with no invented fastp measurements. Unknown processing state requires review before execution.
@@ -43,7 +43,7 @@ This concept owns read contracts. [Saved sequences](../../saved-isolate-sequence
 
 ## Discovery, metadata, and validation
 
-- Illumina delivery discovery is an import convenience, not the definition of isolate identity or eligibility. Proposals are reviewed before saving; copies are chosen per lane/chunk group. Review displays a warning after the proposed-isolate rows to choose chemistry or explicit poly-G before executing untrimmed inputs; the folder chooser does not display it.
+- Illumina delivery discovery is an import convenience, not the definition of isolate identity or eligibility. Proposals are reviewed before saving; copies are chosen per lane/chunk group. Review displays an info alert after the proposed-isolate rows explaining the two-colour/Poly-G Auto defaults and that they can be changed in isolate details after import; the folder chooser does not display it.
 - Each imported sample becomes a new read set containing its selected groups. Confirm that they share one library; otherwise import separately. Review the prefilled library suggestion, including when extending an existing isolate. Changing an import target refreshes unedited suggestions against that target's libraries; manual edits remain intact.
 - Archive-renamed Illumina reads can be added manually with explicit library identity. Original Illumina headers are optional, not proof of platform or library identity.
 - Read groups use a generated unique `ID`, snapshot isolate `SM`, explicit library `LB`, and selected-platform `PL`. Optional `PU` uses validated header flowcell, a single lane when known, and a consistent barcode. Never fabricate unknown optional fields.

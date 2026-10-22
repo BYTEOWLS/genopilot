@@ -117,7 +117,7 @@ function limitProblems(problems: readonly string[]): string[] {
 }
 
 const importTitle = 'Import isolates from an Illumina delivery';
-const preprocessingWarning = 'After import, set chemistry or poly-G On/Off in Edit isolate before running untrimmed reads.';
+const preprocessingInfo = 'Defaults: two-colour chemistry and poly-G Auto (On). Change these in isolate details after import.';
 const importIntro =
   'Illumina names FASTQ files and read headers the same way across instruments and delivery ' +
   'formats, so GenoPilot can find each sample\'s read pairs in a delivery folder and propose ' +
@@ -383,8 +383,8 @@ export function IsolateImport({
   // Below the rows: path lines of the selected copy, the saving note, and the problem box.
   const shownProblems = limitProblems(problems);
   const belowRows = 2 + (shownProblems.length > 0 ? shownProblems.length + 4 : 0) + (saving ? 1 : 0);
-  const warningRows = 2 + Math.ceil(preprocessingWarning.length / Math.max(1, columns - 6));
-  const reviewPageSize = Math.max(1, terminalRows - 15 - belowRows - warningRows);
+  const infoRows = 2 + Math.ceil(preprocessingInfo.length / Math.max(1, columns - 6));
+  const reviewPageSize = Math.max(1, terminalRows - 15 - belowRows - infoRows);
   const lines = scan ? reportLines(scan) : [];
 
   useInput(
@@ -674,7 +674,7 @@ export function IsolateImport({
           <Text color={mutedColor}>Row {selectedIndex + 1} of {rows.length}</Text>
         ) : null}
       </Box>
-      <Alert variant="warning">{preprocessingWarning}</Alert>
+      <Alert variant="info">{preprocessingInfo}</Alert>
       {selectedVariant ? (
         <Box marginTop={1} flexDirection="column">
           <Text color={mutedColor} wrap="truncate-start">R1: {sanitizeTerminalText(selectedVariant.r1)}</Text>

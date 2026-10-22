@@ -19,7 +19,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 ### Application
 
 - Isolates now own stable read sets with multiple file groups and confirmed library identities. Runs explicitly select read sets and snapshot effective Illumina preprocessing; poly-G is Auto / On / Off, and provider-trimmed groups skip fastp. Archive-renamed paired-end Illumina reads are supported. Old catalog/run structures are unsupported; re-import catalogs and create new runs. Schema versions remain at 1, with no migration.
-- Empty isolate lists use warning alerts. Import review reminds users to choose chemistry or poly-G for untrimmed reads after presenting the proposed isolates, not during folder selection.
+- Empty isolate lists use warning alerts. New Illumina read sets default to two-colour chemistry and poly-G Auto (On); import review shows an info message pointing to isolate details to change these settings. Existing saved settings are unchanged.
 - Illumina chemistry distinguishes four-colour, two-colour, one-channel, and unknown. Poly-G Auto is On for two-colour and Off for four-colour; one-channel and unknown require an explicit choice when trimming runs. The old `other` value is unsupported.
 - Isolate editing groups pairs within read sets, shows technique once in its details, and uses spaced, bracketed action buttons.
 - Isolate management opens general Help beside one Markdown file/tab per supported technique, currently Illumina, in the documentation index and via `?` in list/edit screens. Chemistry choices, common instruments, and poly-G behaviour are explained without losing unsaved edits.

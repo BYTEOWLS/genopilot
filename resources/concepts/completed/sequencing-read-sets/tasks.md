@@ -56,6 +56,8 @@
 
 - [x] Use a warning alert for empty isolate lists and place the chemistry/poly-G reminder after proposed import rows, not in the folder chooser; account for alert height in review pagination.
 
+- [x] Default new Illumina sets to two-colour and Poly-G Auto (On), with two-colour first in the chemistry choices; replace the import reminder with info pointing to isolate details. Preserve saved settings, document the editable assumption, and test defaults and alert placement.
+
 ## Verification record
 
 Verification passed. Opt-in Conda integration was skipped; browser tests remain paused.

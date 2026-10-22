@@ -1,6 +1,6 @@
 # Import review
 
-The import review proposes isolates from a sequencing delivery's FASTQ files. After the proposed isolates appear, a warning reminds you to set chemistry or choose poly-G On/Off in Edit isolate before running untrimmed reads. This warning is not shown in the folder chooser. Nothing is saved until you choose to save the import. This page explains every row of the review and what saving does.
+The import review proposes isolates from a sequencing delivery's FASTQ files. New Illumina read sets default to two-colour chemistry and poly-G Auto (On). After the proposed isolates appear, an info message explains that you can change these settings in isolate details after import. This message is not shown in the folder chooser. Nothing is saved until you choose to save the import. This page explains every row of the review and what saving does.
 
 ## Samples
 
@@ -53,7 +53,7 @@ Whether the provider already trimmed or filtered the chosen copy. It is preset f
 
 After import, edit read-set metadata under Manage isolates; [Managing isolates](isolates.md) explains the list and form, also available with `?` on non-text rows. A read set's ID stays fixed; its name and file paths may change. Add more file groups or read sets there, including archive-renamed reads that delivery discovery cannot recognize. Library IDs are prefilled as editable suggestions for new sets; existing saved IDs are preserved. Confirm or replace the suggestion before saving. Original read headers are not required for execution.
 
-Record known Illumina chemistry and choose poly-G Auto, On, or Off. Auto resolves for two-colour or four-colour chemistry; one-channel and unknown require an explicit On/Off choice when trimming will run. Review unknown previous processing before execution. Provider-trimmed groups skip further trimming. [Illumina help](illumina.md), available beside general isolate help, explains the chemistry options and poly-G behaviour. A workflow's documentation explains its fixed preprocessing defaults.
+Review the two-colour chemistry and poly-G Auto defaults in isolate details; change them when the provider's instrument information calls for another setting. Auto resolves for two-colour or four-colour chemistry; one-channel and unknown require an explicit On/Off choice when trimming will run. Review unknown previous processing before execution. Provider-trimmed groups skip further trimming. [Illumina help](illumina.md), available beside general isolate help, explains the chemistry options and poly-G behaviour. A workflow's documentation explains its fixed preprocessing defaults.
 
 The run chooser shows the isolate name once, adds a read-set name only when different, and omits read-set UUIDs and lineage. Equally named sets get short set numbers; an isolate ID appears only to distinguish otherwise identical names. It marks incompatible sets with `!` and shows the highlighted set's reasons below the list. Only explicitly selected compatible sets enter a run snapshot; unselected data is not silently included.
 

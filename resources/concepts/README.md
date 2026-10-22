@@ -40,7 +40,7 @@ Existing supporting step files are retained as contract and implementation histo
 | [Citing runs](completed/citing-runs/concept.md) | done | Version and citation contract |
 | [Community files](completed/community-files/concept.md) | done | Contribution and security policies |
 | [Cohort consensus](completed/consensus/concept.md) | done | [Tasks](completed/consensus/tasks.md) and retained step files |
-| [Sequencing read sets](completed/sequencing-read-sets/concept.md) | done | [Tasks](completed/sequencing-read-sets/tasks.md); delivered in [0.0.3](../releases/0.0.3/done_02_sequencing_read_sets.md) |
+| [Sequencing read sets](completed/sequencing-read-sets/concept.md) | done | [Tasks](completed/sequencing-read-sets/tasks.md); delivered in [0.0.3](../releases/0.0.3/done_02_sequencing_read_sets.md); editable two-colour import defaults |
 | [Systems check](completed/systems-check/concept.md) | done | [Tasks](completed/systems-check/tasks.md); included in [0.0.3](../releases/0.0.3/done_01_system_check.md) |
 | [Transfer genome view](completed/transfer-genome-view/concept.md) | done | [Tasks](completed/transfer-genome-view/tasks.md) |
 | [Workflow documentation](completed/workflow-documentation/concept.md) | done | [Tasks](completed/workflow-documentation/tasks.md) |

@@ -132,7 +132,7 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
           updateSet(prefix, current => ({...current, library_id: value}));
         }},
       {id: `${prefix}:chemistry`, label: 'Chemistry', kind: 'choice', value: entry.illumina.chemistry,
-        options: ['unknown', 'two-colour', 'four-colour', 'one-channel'],
+        options: ['two-colour', 'four-colour', 'one-channel', 'unknown'],
         change: value => updateSet(prefix, current => ({...current, illumina: {...current.illumina, chemistry: value as ReadSet['illumina']['chemistry']}}))},
       {id: `${prefix}:poly-g`, label: 'Poly-G', kind: 'choice', value: entry.illumina.poly_g,
         options: ['auto', 'on', 'off'],

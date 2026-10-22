@@ -565,7 +565,7 @@ test('an empty isolate list uses a warning alert and still opens manual creation
   assert.equal(updates, 0);
 });
 
-test('the chemistry warning appears after proposed isolates in import review, not during folder selection', async context => {
+test('the defaults info appears after proposed isolates in import review, not during folder selection', async context => {
   const input = new Input();
   const output = new Output();
   output.columns = 80;
@@ -600,10 +600,10 @@ test('the chemistry warning appears after proposed isolates in import review, no
   await waitFor(() => scans === 1 && output.lastFrame().includes(scan.root));
   assert.ok(!output.lastFrame().includes('⚠'));
   input.write('\r'); await pause();
-  await waitFor(() => output.lastFrame().includes(scan.candidates[0]!.sample) && output.lastFrame().includes('⚠'));
+  await waitFor(() => output.lastFrame().includes(scan.candidates[0]!.sample) && output.lastFrame().includes('ℹ'));
   const frame = output.lastFrame();
-  assert.ok(frame.indexOf(scan.candidates[0]!.sample) < frame.indexOf('⚠'));
-  assert.ok(frame.includes('poly-G'));
+  assert.ok(frame.indexOf(scan.candidates[0]!.sample) < frame.indexOf('ℹ'));
+  assert.ok(!frame.includes('⚠'));
   assert.ok(frame.split('\n').length <= output.rows, frame);
   assert.equal(saved, false);
 });

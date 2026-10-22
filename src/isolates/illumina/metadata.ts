@@ -20,7 +20,7 @@ export function validateIlluminaMetadata(value: unknown, path: string, issues: I
 }
 
 export function createIlluminaReadSet(fields: Pick<ReadSet, 'id' | 'name' | 'library_id' | 'read_pairs'>): ReadSet {
-  return {...fields, platform: 'illumina', layout: 'paired-end', illumina: {chemistry: 'unknown', poly_g: 'auto'}};
+  return {...fields, platform: 'illumina', layout: 'paired-end', illumina: {chemistry: 'two-colour', poly_g: 'auto'}};
 }
 
 /** Illumina policy, not a platform-independent preprocessing profile. */

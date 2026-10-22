@@ -137,7 +137,7 @@ test('creates new isolates and extends existing ones in one catalog', () => {
     wildtype: true,
     derived_from: 'known',
     read_sets: [{...testReadSet([{r1: '/delivery/raw/new-one_S1_L001_R1_001.fastq.gz', r2: '/delivery/raw/new-one_S1_L001_R2_001.fastq.gz', trimmed: false}]),
-      id: result.catalog.isolates[1]!.read_sets[0]!.id, name: 'new-one', illumina: {chemistry: 'unknown', poly_g: 'auto'}}],
+      id: result.catalog.isolates[1]!.read_sets[0]!.id, name: 'new-one', illumina: {chemistry: 'two-colour', poly_g: 'auto'}}],
   });
   assert.equal(result.pairs.length, 2);
   assert.doesNotThrow(() => validateIsolateCatalog(result.catalog));

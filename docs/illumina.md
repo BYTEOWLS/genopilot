@@ -14,7 +14,7 @@ Illumina uses sequencing by synthesis (SBS): DNA bases are incorporated and iden
 
 Labs usually choose an instrument and sequencing service, rather than choosing a detection scheme independently. Throughput, cost, read length, available equipment, and turnaround influence that choice; the instrument determines which chemistries it supports.
 
-Choose the detection scheme confirmed by the sequencing provider. Instrument families below are examples, not a substitute for checking the exact model; ordinary FASTQ filenames do not establish chemistry.
+New Illumina read sets default to `two-colour` with poly-G Auto (On), reflecting common newly sequenced deliveries. This is an editable default, not detected instrument metadata. Review it against the sequencing provider's information and change it in isolate details when needed. Instrument families below are examples, not a substitute for checking the exact model; ordinary FASTQ filenames do not establish chemistry.
 
 | Option | Meaning and common examples | Poly-G Auto |
 |---|---|---|
