@@ -31,29 +31,10 @@ export type WorkflowArtifact = {
 };
 
 /**
- * Default factors of the disk a run needs, measured on a real run; see `estimateDisk`. Bytes are
- * those of the input files: each isolate's read files and the genome FASTA.
+ * Default factors of the disk a run needs, measured on a real run. Their names and meaning are the
+ * workflow's own: its disk estimate reads and checks them.
  */
-export type DiskEstimateFactors = {
-  /** Kept per byte of an isolate's reads. */
-  isolate_read_bytes: number;
-  /** Kept per genome byte, for each isolate. */
-  isolate_genome_bytes: number;
-  /** Kept per genome byte, once per run. */
-  run_genome_bytes: number;
-  /** Temporary, per byte of the reads of each isolate processed at the same time. */
-  temporary_read_bytes: number;
-  /** CPUs one isolate's processing uses, which bounds how many run at the same time. */
-  cpus_per_isolate: number;
-};
-
-const diskEstimateFields = [
-  'isolate_read_bytes',
-  'isolate_genome_bytes',
-  'run_genome_bytes',
-  'temporary_read_bytes',
-  'cpus_per_isolate',
-] as const;
+export type DiskEstimateFactors = Readonly<Record<string, number>>;
 
 export type WorkflowManifest = {
   schema_version: typeof WORKFLOW_MANIFEST_SCHEMA_VERSION;
@@ -411,12 +392,9 @@ export function validateWorkflowManifest(value: unknown): WorkflowManifest {
   const artifacts = validateArtifacts(value.artifacts, stageIds, issues);
   if ('disk_estimate' in value) {
     if (isRecord(value.disk_estimate)) {
-      const factors = value.disk_estimate;
-      rejectUnknownFields(factors, [...diskEstimateFields], '$.disk_estimate', issues);
-      for (const field of diskEstimateFields) {
-        const factor = factors[field];
-        if (typeof factor !== 'number' || !Number.isFinite(factor) || factor < 0 || (field === 'cpus_per_isolate' && factor < 1)) {
-          issues.push({path: `$.disk_estimate.${field}`, message: field === 'cpus_per_isolate' ? 'must be a number of at least 1' : 'must be a non-negative number'});
+      for (const [field, factor] of Object.entries(value.disk_estimate)) {
+        if (typeof factor !== 'number' || !Number.isFinite(factor) || factor < 0) {
+          issues.push({path: `$.disk_estimate.${field}`, message: 'must be a non-negative number'});
         }
       }
     } else {

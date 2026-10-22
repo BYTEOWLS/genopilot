@@ -1,6 +1,6 @@
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
-import {basename, join, resolve} from 'node:path';
+import {basename, resolve} from 'node:path';
 import {normalizeAccession} from '../../accessions/accession.js';
 import {
   conflictingCopiesMessage,
@@ -26,7 +26,6 @@ import {
   discoverSavedRuns,
   effectiveCpuCount,
   hasNcbiCacheEntry,
-  ncbiCacheDirectory,
   resolveDraftPath,
   stringifyRunFile,
   type PathInspection,
@@ -44,7 +43,6 @@ import {
   type UnresolvedSnp,
   type VotingMethod,
 } from './configuration.js';
-import type {DiskEstimateInputs} from '../systems-check.js';
 import {ISOLATE_SNAPSHOT_SCHEMA_VERSION, validateIsolateSnapshot, type IsolateSnapshot} from './snapshot.js';
 
 export type ReferenceConsensusDraft = {
@@ -173,30 +171,6 @@ function hasBraces(path: string): boolean {
 }
 
 const bracesMessage = "path contains '{' or '}', which Snakemake cannot use as an input; rename the file or its folder";
-
-/**
- * The input sizes the disk estimate scales with. A file that cannot be read counts as empty: the
- * inspection reports it. An NCBI backbone counts once it is in the download cache.
- */
-export async function diskEstimateInputs(
-  prepared: PreparedReferenceConsensusRun,
-  fileSize: (path: string) => Promise<number> = async path => (await stat(path)).size,
-): Promise<{inputs: DiskEstimateInputs; note?: string}> {
-  const size = (path: string) => fileSize(path).catch(() => 0);
-  const isolateReadBytes = await Promise.all(prepared.snapshot.isolates.map(async isolate =>
-    (await Promise.all(isolate.read_pairs.flatMap(pair => [size(pair.r1), size(pair.r2)])))
-      .reduce((sum, bytes) => sum + bytes, 0)));
-  const {backbone} = prepared.configuration.inputs;
-  const effectiveCpus = prepared.configuration.resources.effective_cpus;
-  if (backbone.source === 'local') {
-    return {inputs: {isolateReadBytes, genomeBytes: await size(backbone.fasta), effectiveCpus}};
-  }
-  const cached = join(ncbiCacheDirectory(prepared.configuration.run.output_root, backbone.accession), 'genomic.fna');
-  const genomeBytes = await fileSize(cached).catch(() => undefined);
-  return genomeBytes === undefined
-    ? {inputs: {isolateReadBytes, effectiveCpus}, note: 'without the backbone, which is not downloaded yet'}
-    : {inputs: {isolateReadBytes, genomeBytes, effectiveCpus}};
-}
 
 /** What checking the prepared run found out that the review shows. */
 export type RunInspection = {

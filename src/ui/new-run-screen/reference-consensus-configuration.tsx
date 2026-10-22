@@ -28,7 +28,6 @@ import {
   discoverReferenceConsensusRuns,
   hasBackboneCacheEntry,
   inspectPreparedRun,
-  diskEstimateInputs,
   reviewWarnings,
   savePreparedRun,
   type PreparedReferenceConsensusRun,
@@ -43,8 +42,14 @@ import WorkflowConfigurationScreen, {
   type ReviewSection,
   type WorkflowFormValues,
 } from './workflow-configuration.js';
-import {checkMachine, estimateDisk, systemsCheckReview} from '../../workflows/systems-check.js';
-import {estimateFromRate, rateForMachine, readMachineRates, recordMachineRate} from '../../workflows/machine-rates.js';
+import {referenceConsensusDiskEstimate} from '../../workflows/reference-consensus/disk-estimate.js';
+import {
+  checkRunSystem,
+  recordRunRate,
+  recordsRunRates,
+  systemsCheckRun,
+  type SystemsCheck,
+} from '../../workflows/systems-check.js';
 
 export type IsolateCatalogSnapshotLoader = () => Promise<IsolateCatalog>;
 export type ReferenceConsensusRunInspector = (prepared: PreparedReferenceConsensusRun) => Promise<RunInspection>;
@@ -293,36 +298,8 @@ export function ReferenceConsensusConfigurationScreen({
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
   registerAccessionCaches = defaultRegisterAccessionCaches,
-  checkSystem = async prepared => {
-    const machine = await checkMachine(prepared.outputDirectory);
-    if (!manifest?.disk_estimate) {
-      return systemsCheckReview(machine);
-    }
-    const {inputs, note} = await diskEstimateInputs(prepared);
-    const disk = estimateDisk(manifest.disk_estimate, inputs);
-    const {resources} = prepared.configuration;
-    const rate = rateForMachine(await readMachineRates(resolveToolingPaths().machineRatesPath), manifest.id, resources.machine);
-    return systemsCheckReview(machine, {
-      disk,
-      ...(note ? {note} : {}),
-      ...(rate ? {measured: estimateFromRate(rate, disk.keptBytes), effectiveCpus: resources.effective_cpus} : {}),
-    });
-  },
-  recordRate = async prepared => {
-    if (!manifest?.disk_estimate) {
-      return;
-    }
-    const {resources, run} = prepared.configuration;
-    await recordMachineRate({
-      ratesPath: resolveToolingPaths().machineRatesPath,
-      workflowId: manifest.id,
-      runId: run.id,
-      runDirectory: prepared.outputDirectory,
-      machine: resources.machine,
-      effectiveCpus: resources.effective_cpus,
-      estimatedBytes: estimateDisk(manifest.disk_estimate, (await diskEstimateInputs(prepared)).inputs).keptBytes,
-    });
-  },
+  checkSystem = prepared => checkRunSystem(manifest, systemsCheckRun(prepared, referenceConsensusDiskEstimate)),
+  recordRate = prepared => recordRunRate(manifest, systemsCheckRun(prepared, referenceConsensusDiskEstimate)),
 }: {
   currentDirectory: string;
   onBack: () => void;
@@ -348,9 +325,9 @@ export function ReferenceConsensusConfigurationScreen({
   executeSnakemakeRun?: typeof defaultExecuteSnakemakeRun;
   registerAccessionCaches?: AccessionCacheRegistration;
   /** Free disk, CPUs, and memory, with the disk estimate and a warning when the run may not fit. */
-  checkSystem?: (prepared: PreparedReferenceConsensusRun) => Promise<ReturnType<typeof systemsCheckReview>>;
-  /** Measures a completed run for the next run's estimates on this machine. */
-  recordRate?: (prepared: PreparedReferenceConsensusRun) => Promise<void>;
+  checkSystem?: (prepared: PreparedReferenceConsensusRun) => Promise<SystemsCheck>;
+  /** Measures a completed run for the next run's estimates on this machine; resolves to a note when that failed. */
+  recordRate?: (prepared: PreparedReferenceConsensusRun) => Promise<string | undefined>;
 }): React.JSX.Element {
   const [previousRuns, setPreviousRuns] = useState<Awaited<ReturnType<PreviousRunsLoader>>>([]);
 
@@ -470,11 +447,11 @@ export function ReferenceConsensusConfigurationScreen({
       )}
       onRunSucceeded={prepared => {
         const ncbi = prepared.configuration.inputs.backbone.source === 'ncbi';
-        // A failed measurement only means the next estimate uses the defaults.
-        const measured = recordRate(prepared).then(
-          () => undefined,
-          (error: unknown) => `This run was not measured for the next estimate: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        const measures = recordsRunRates(manifest);
+        if (!ncbi && !measures) {
+          return undefined;
+        }
+        const measured = measures ? recordRate(prepared) : Promise.resolve(undefined);
         const registered = ncbi
           ? registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory)
           : Promise.resolve(undefined);

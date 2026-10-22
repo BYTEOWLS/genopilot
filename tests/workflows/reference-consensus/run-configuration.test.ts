@@ -13,13 +13,13 @@ import {
   applyBackboneCacheMode,
   buildReferenceConsensusRun,
   discoverReferenceConsensusRuns,
-  diskEstimateInputs,
   hasBackboneCacheEntry,
   inspectPreparedRun,
   reviewWarnings,
   savePreparedRun,
   type ReferenceConsensusDraft,
 } from '../../../src/workflows/reference-consensus/run-configuration.js';
+import {diskEstimateInputs} from '../../../src/workflows/reference-consensus/disk-estimate.js';
 import {parseIsolateSnapshot} from '../../../src/workflows/reference-consensus/snapshot.js';
 import {createRunWorkspace, ncbiCacheDirectory} from '../../../src/workflows/run-preparation.js';
 import {machineDetails} from '../../../src/workflows/configuration-validation.js';

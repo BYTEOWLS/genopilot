@@ -25,6 +25,7 @@ import {
   parseParameterDefinitions,
   type WorkflowParameterDefinition,
 } from '../../src/workflows/parameter-definitions.js';
+import {parseWorkflowManifest} from '../../src/workflows/manifest.js';
 import {testMachine} from '../workflows/machine.js';
 
 const packagedParameterDefinitions = parseParameterDefinitions(
@@ -32,6 +33,10 @@ const packagedParameterDefinitions = parseParameterDefinitions(
     new URL('../../workflows/annotation-transfer/manifest.parameters.yaml', import.meta.url),
     'utf8',
   ),
+);
+
+const packagedManifest = parseWorkflowManifest(
+  readFileSync(new URL('../../workflows/annotation-transfer/manifest.yaml', import.meta.url), 'utf8'),
 );
 
 // Named key sequences instead of raw escape bytes, so a test reads as "press ENTER" rather than
@@ -191,6 +196,7 @@ function renderConfiguration(
     findCacheEntries?: NcbiCacheEntryFinder;
     executeSnakemakeRun?: typeof executeSnakemakeRun;
     registerAccessionCaches?: AccessionCacheRegistration;
+    recordRate?: (prepared: PreparedAnnotationTransferRun) => Promise<string | undefined>;
     rows?: number;
   } = {},
 ): {input: TestInput; output: TestOutput; instance: ReturnType<typeof render>} {
@@ -218,6 +224,9 @@ function renderConfiguration(
       registerAccessionCaches={options.registerAccessionCaches ?? (async () => 'Recorded.')}
       // Never the test machine's disks or hardware.
       checkSystem={async () => ({rows: [{label: 'Free disk', value: 'system-check-row'}], warnings: []})}
+      manifest={packagedManifest}
+      // Never the real rates file.
+      recordRate={options.recordRate ?? (async () => undefined)}
     />,
     {
       exitOnCtrlC: false,
@@ -439,17 +448,22 @@ test('edits all required fields and confirms effective options before saving', a
   assert.deepEqual(registrations, []);
 });
 
-test('records the NCBI cache in the accession catalog after a successful NCBI-sourced run', async context => {
+test('records the NCBI cache and measures the run after a successful NCBI-sourced run', async context => {
   let reviewed: PreparedAnnotationTransferRun | undefined;
   let saves = 0;
   const executedModes: string[] = [];
   const registrations: string[] = [];
+  const measured: PreparedAnnotationTransferRun[] = [];
   const {input, output, instance} = renderConfiguration('/research', {
     // Tall enough to show the whole review without scrolling.
     rows: 60,
     registerAccessionCaches: async outputRoot => {
       registrations.push(outputRoot);
       return 'Test registration note';
+    },
+    recordRate: async prepared => {
+      measured.push(prepared);
+      return 'Test measurement note';
     },
     validatePreparedRun: async prepared => {
       reviewed = prepared;
@@ -484,7 +498,9 @@ test('records the NCBI cache in the accession catalog after a successful NCBI-so
   assert.equal(saves, 1);
   assert.deepEqual(executedModes, ['execute']);
   assert.deepEqual(registrations, ['/research/runs']);
-  await waitForFrame(output, frame => frame.includes('Test registration note'));
+  // The completed run is also measured for the next estimate; both notes are shown.
+  assert.equal(measured[0], reviewed);
+  await waitForFrame(output, frame => frame.includes('Test registration note') && frame.includes('Test measurement note'));
 });
 
 test('shows a failed dry run with its live output, then offers execution again', async context => {

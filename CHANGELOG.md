@@ -28,7 +28,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 - The list of existing runs shows how many runs each workflow has and how long each run took.
 - GenoPilot samples a run's peak memory while it executes and shows it with the run's timing.
 - A new run is saved when its first dry run or execution starts, so leaving the start page without starting one no longer leaves a run in the list of existing runs.
-- Before a run, its review shows free disk, available CPUs, and installed memory; a reference-consensus run also shows its estimated disk need and warns when it may not fit. After a completed run on the same machine, the estimate uses its measurement and adds the expected duration and peak memory.
+- Before a run, its review shows free disk, available CPUs, and installed memory, with the run's estimated disk need and a warning when it may not fit. After a completed run on the same machine, the estimate uses its measurement and adds the expected duration and peak memory.
 
 ## [0.0.2] - 2026-10-08
 

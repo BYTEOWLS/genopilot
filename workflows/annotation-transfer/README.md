@@ -88,6 +88,18 @@ Paths are inside the run directory.
 | `citation/` | how to cite the run: `CITATION.md` with the GenoPilot version, the tools that ran with their versions and references, a draft methods paragraph built from the configuration, and the references as BibTeX and RIS, also as `references.bib` and `references.ris` |
 | `logs/` | the log and benchmark of every step |
 
+## Disk space
+
+Before a run, the start page estimates its disk need from the size of the reference FASTA and GFF3 and the target FASTA, with the factors in [`manifest.yaml`](manifest.yaml). They were measured on one run with genomes of about 30 Mb and a reference GFF3 of 31 MB, which kept 506 MB:
+
+| Part | Kept |
+|---|---|
+| Resolved target with its minimap2 index | about 4.4 × the target FASTA's bytes |
+| Resolved reference genome | 1 × the reference FASTA's bytes |
+| Resolved reference annotation, the LiftOff, miniprot, and LiftOn annotations with their databases, the extracted gene, transcript, and protein sequences, and the alignment | about 11 × the reference GFF3's bytes |
+
+No step declares temporary files, so the estimated peak equals what the run keeps; scratch files a tool writes and deletes while it runs are not measured. An NCBI input counts once it is in the download cache; before its first download, the estimate says it leaves it out. Once a run has completed on the same machine, its measured size, duration, and peak memory replace these factors, scaled by the size of the new run.
+
 ## Tools
 
 The versions are pinned only in the files linked below and recorded in every run's provenance.

@@ -1,37 +1,22 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import type {DiskEstimateFactors} from '../../src/workflows/manifest.js';
+import {mkdtemp, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import test, {type TestContext} from 'node:test';
+import {writeMachineRate} from '../../src/workflows/machine-rates.js';
+import type {WorkflowManifest} from '../../src/workflows/manifest.js';
 import {
   checkMachine,
-  estimateDisk,
+  checkRunSystem,
   formatBytes,
   formatMemory,
   formatRoughDuration,
+  recordRunRate,
+  recordsRunRates,
   systemsCheckReview,
+  type SystemsCheckRun,
 } from '../../src/workflows/systems-check.js';
-
-const factors: DiskEstimateFactors = {
-  isolate_read_bytes: 0.5,
-  isolate_genome_bytes: 9,
-  run_genome_bytes: 3,
-  temporary_read_bytes: 2,
-  cpus_per_isolate: 8,
-};
-
-test('adds what each isolate and the run keep, and the temporary files of isolates processed at once', () => {
-  const estimate = estimateDisk(factors, {isolateReadBytes: [1000, 3000, 2000], genomeBytes: 100, effectiveCpus: 16});
-  // Kept: 0.5 × 6000 reads + 3 isolates × 9 × 100 + 3 × 100.
-  assert.equal(estimate.keptBytes, 3000 + 2700 + 300);
-  // Two isolates at once (16 ÷ 8): the two largest, 3000 and 2000 bytes of reads.
-  assert.equal(estimate.peakBytes, 6000 + 2 * 5000);
-});
-
-test('processes at least one isolate at a time and leaves out a genome still to be downloaded', () => {
-  const estimate = estimateDisk(factors, {isolateReadBytes: [1000, 3000], effectiveCpus: 2});
-  assert.equal(estimate.keptBytes, 2000);
-  assert.equal(estimate.peakBytes, 2000 + 2 * 3000);
-  assert.deepEqual(estimateDisk(factors, {isolateReadBytes: [], genomeBytes: 100, effectiveCpus: 4}), {keptBytes: 300, peakBytes: 300});
-});
+import {testMachine} from './machine.js';
 
 test('reads free space from the nearest existing folder of a run directory not created yet', async () => {
   const asked: string[] = [];
@@ -107,4 +92,83 @@ test('rounds an estimated duration to minutes, or hours and minutes', () => {
   assert.equal(formatRoughDuration(10), '1 min');
   assert.equal(formatRoughDuration(42 * 60 + 20), '42 min');
   assert.equal(formatRoughDuration(3 * 3600 + 5 * 60), '3 h 5 min');
+});
+
+const manifest: WorkflowManifest = {
+  schema_version: 1,
+  workflow_version: 1,
+  id: 'workflow-a',
+  label: 'Workflow A',
+  description: 'A workflow.',
+  entry_snakefile: 'Snakefile',
+  'parameter-definitions': 'manifest.parameters.yaml',
+  stages: [],
+  artifacts: [],
+  disk_estimate: {kept_per_input_byte: 2},
+};
+
+const run: SystemsCheckRun = {
+  runId: 'run-b',
+  outputDirectory: '/runs/run-b',
+  machine: testMachine,
+  effectiveCpus: 8,
+  // The workflow's own estimate from its factors: 2 × 1600 input bytes.
+  diskEstimate: async factors => {
+    const keptBytes = (factors.kept_per_input_byte ?? 0) * 1600;
+    return {disk: {keptBytes, peakBytes: keptBytes}};
+  },
+};
+
+const machine = {freeBytes: 100e9, availableCpus: 8, installedMemoryBytes: 16 * 2 ** 30};
+
+async function tempDir(context: TestContext): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), 'systems-check-'));
+  context.after(() => rm(directory, {recursive: true, force: true}));
+  return directory;
+}
+
+test('checks any workflow\'s run: the machine only without disk factors, with estimates when declared', async context => {
+  const ratesPath = join(await tempDir(context), 'machine-rates.yaml');
+  const check = async () => machine;
+  const labels = async (checkedManifest: WorkflowManifest | undefined, checkedRun: SystemsCheckRun) =>
+    (await checkRunSystem(checkedManifest, checkedRun, {check, ratesPath})).rows.map(row => row.value);
+
+  const machineOnly = (await labels(undefined, run)).length;
+  assert.equal((await labels({...manifest, disk_estimate: undefined}, run)).length, machineOnly);
+  assert.equal((await labels(manifest, {...run, diskEstimate: undefined})).length, machineOnly);
+  // The default estimate, then a rate measured on this machine adds its duration.
+  assert.ok((await labels(manifest, run)).some(value => value.startsWith('3.2 kB') && !value.includes('while running')));
+  await writeMachineRate(ratesPath, 'workflow-a', {
+    machine: testMachine, run: {id: 'run-a', directory: '/runs/run-a'}, effective_cpus: 8,
+    estimated_bytes: 3200, kept_bytes: 6400, duration_seconds: 600,
+  });
+  const measured = await labels(manifest, run);
+  assert.ok(measured.some(value => value.startsWith('6.4 kB') && value.includes('run-a')));
+  assert.ok(measured.some(value => value.includes('7 min') && value.includes('15 min')));
+  // Another machine's rate is not used.
+  assert.ok(!(await labels(manifest, {...run, machine: {...testMachine, cpus: 2}})).some(value => value.includes('run-a')));
+});
+
+test('records nothing for a workflow without disk factors, and turns a failed measurement into a note', async context => {
+  const ratesPath = join(await tempDir(context), 'machine-rates.yaml');
+  assert.equal(await recordRunRate({...manifest, disk_estimate: undefined}, run, ratesPath), undefined);
+  const note = await recordRunRate(manifest, {...run, diskEstimate: async () => {
+    throw new Error('size-failure-message');
+  }}, ratesPath);
+  assert.ok(note?.includes('size-failure-message'));
+});
+
+test('warns instead of failing when the workflow\'s disk estimate fails', async () => {
+  const review = await checkRunSystem(manifest, {...run, diskEstimate: async () => {
+    throw new Error('factor-failure-message');
+  }}, {check: async () => machine, ratesPath: '/nonexistent/machine-rates.yaml'});
+  assert.equal(review.rows.length, (await checkRunSystem(undefined, run, {check: async () => machine})).rows.length);
+  assert.equal(review.warnings.length, 1);
+  assert.ok(review.warnings[0]!.includes('factor-failure-message'));
+});
+
+test('measures completed runs only of a workflow with disk factors', () => {
+  assert.equal(recordsRunRates(manifest), true);
+  assert.equal(recordsRunRates({...manifest, disk_estimate: undefined}), false);
+  assert.equal(recordsRunRates(undefined), false);
 });

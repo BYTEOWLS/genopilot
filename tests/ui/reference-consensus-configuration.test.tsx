@@ -19,9 +19,10 @@ const packagedParameterDefinitions = parseParameterDefinitions(
   readFileSync(new URL('../../workflows/reference-consensus/manifest.parameters.yaml', import.meta.url), 'utf8'),
 );
 
-const packagedStages = parseWorkflowManifest(
+const packagedManifest = parseWorkflowManifest(
   readFileSync(new URL('../../workflows/reference-consensus/manifest.yaml', import.meta.url), 'utf8'),
-).stages;
+);
+const packagedStages = packagedManifest.stages;
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -200,6 +201,7 @@ function renderScreen(
       snakefilePath={packagedPath('workflows/reference-consensus/Snakefile')}
       parameterDefinitions={packagedParameterDefinitions}
       stages={packagedStages}
+      manifest={packagedManifest}
       loadIsolateCatalogSnapshot={async () => {
         snapshotLoads += 1;
         return options.catalog ?? catalog;
@@ -271,6 +273,7 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
     rows: 80,
     recordRate: async prepared => {
       measured.push(prepared);
+      return undefined;
     },
     checkSystem: async prepared => {
       checked.push(prepared);
@@ -394,9 +397,7 @@ test('reports a run that could not be measured without failing it, next to the N
       executed.push(run.mode);
       return {...run, exitCode: 0};
     },
-    recordRate: async () => {
-      throw new Error('measure-failure-message');
-    },
+    recordRate: async () => 'measure-failure-message',
   });
   await waitForFrame(output, frame => selectedLine(frame) !== undefined);
   await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
