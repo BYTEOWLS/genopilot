@@ -57,7 +57,7 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Do not describe tooling as ready until its compatibility has been validated against configured requirements.
 - Let Snakemake provision pinned per-rule environments; do not run bioinformatics tools directly as an alternative execution path.
 - Show exact commands. Capture complete Snakemake stdout and stderr separately from the Ink dashboard.
-- Propagate cancellation to Snakemake and wait for cleanup before exiting.
+- Propagate cancellation to Snakemake and wait for cleanup before exiting. Recheck cancellation after asynchronous setup and before spawning; cancelled setup must close any opened logs without starting a process.
 - Keep unavailable commands visibly marked as placeholders; never imply incomplete behavior works.
 - Keep layouts responsive to terminal resizing and usable without color.
 - Use the alternate-screen buffer for the interactive application to avoid polluting terminal history during rerenders.

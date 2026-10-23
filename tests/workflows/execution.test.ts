@@ -218,7 +218,7 @@ test('keeps the peak memory of a cancelled execution on its error', async contex
   assert.ok(((error as {peakMemoryBytes?: number}).peakMemoryBytes ?? 0) > 0);
 });
 
-test('cancels the detached process and still closes its log files', async context => {
+test('does not spawn after cancellation during setup and still closes its log files', async context => {
   const {tempDir, paths} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
   const runDirectory = join(tempDir, 'run');
@@ -233,17 +233,50 @@ test('cancels the detached process and still closes its log files', async contex
   prepared.executable = process.execPath;
   prepared.arguments = ['--eval', "process.stdout.write('started\\n'); setInterval(() => {}, 1000)"];
   const controller = new AbortController();
+  let spawned = false;
 
   await assert.rejects(
     executeSnakemakeRun(prepared, undefined, controller.signal, {
       paths,
+      spawnProcess: () => {spawned = true; throw new Error('must not spawn');},
       readApiKey: async () => {
-        // Exercise cancellation before executeSnakemakeDryRun has registered its child listener.
+        // Cancel while setup is awaiting dependencies, before there is a child to signal.
         controller.abort();
         return undefined;
       },
     }),
     /Snakemake run cancelled\./,
   );
+  assert.equal(spawned, false);
   assert.equal(await readFile(prepared.stdoutLogPath, 'utf8'), '');
+  assert.equal(await readFile(prepared.stderrLogPath, 'utf8'), '');
+});
+
+test('cancels a running detached process and drains both logs before rejecting', async context => {
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const prepared = prepareSnakemakeRun({
+    mode: 'execute', runDirectory: join(tempDir, 'run'),
+    configurationPath: join(tempDir, 'run', 'config.yaml'),
+    snakefilePath: join(tempDir, 'Snakefile'), cores: 1, paths,
+  });
+  prepared.executable = process.execPath;
+  prepared.arguments = ['--eval', `
+    process.on('SIGTERM', () => {process.stderr.write('stopped\\n', () => process.exit(0));});
+    process.stdout.write('started\\n');
+    setInterval(() => {}, 1000);
+  `];
+  const controller = new AbortController();
+  const guard = setTimeout(() => controller.abort(), 5000);
+  context.after(() => clearTimeout(guard));
+  let started = false;
+  await assert.rejects(executeSnakemakeRun(prepared, output => {
+    if (output.stream === 'stdout' && output.text.includes('started')) {
+      started = true;
+      controller.abort();
+    }
+  }, controller.signal, {paths, readApiKey: async () => undefined, readProcesses: async () => []}), /Snakemake run cancelled\./);
+  assert.equal(started, true);
+  assert.equal(await readFile(prepared.stdoutLogPath, 'utf8'), 'started\n');
+  assert.equal(await readFile(prepared.stderrLogPath, 'utf8'), 'stopped\n');
 });
