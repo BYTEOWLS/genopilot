@@ -263,6 +263,23 @@ async function ready(screen: {scansCompleted: number}): Promise<void> {
   await effectsSettled();
 }
 
+test('shows all metadata sections together without changing or submitting the entry', async context => {
+  const facts = {...metadata('Synthetic detail organism'), release_date: '2025-04-03', total_sequence_length: 1234567, biosample_accession: 'SAMN123'};
+  const screen = renderScreen(context, {fetch: async () => ({state: 'retrieved', metadata: facts})});
+  await ready(screen);
+  await press(screen.input, 'n');
+  await press(screen.input, typed);
+  await lookUp(screen.input);
+  await waitForOutput(screen.output, value => value.includes('2025-04-03')
+    && value.includes('1,234,567 bp')
+    && value.includes('https://www.ncbi.nlm.nih.gov/biosample/SAMN123'));
+  await press(screen.input, ENTER);
+  assert.equal(screen.writes, 0);
+  await saveDetails(screen.input);
+  await waitFor(() => screen.writes === 1, 'explicit save');
+  assert.deepEqual(screen.catalog.accessions[0]?.ncbi, facts);
+});
+
 test('records verified caches on open and shows damaged copies without trusting them', async context => {
   const screen = renderScreen(context, {
     copies: [

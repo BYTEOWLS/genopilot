@@ -38,7 +38,7 @@
 
 - [x] Prefill editable, unused library suggestions while preserving manual/saved identities; group Illumina helpers under `src/isolates/illumina/`.
 
-- [x] Group editing fields into bordered isolate/read-set sections with persistent context; shorten chooser rows without losing selection identity or name disambiguation.
+- [x] Group editing fields into isolate/read-set sections with persistent context; shorten chooser rows without losing selection identity or name disambiguation.
 
 - [x] Keep isolate-list summaries compact: omit successful read-check status and false/unknown wild-type badges, retaining read problems and parent lineage.
 
@@ -48,7 +48,7 @@
 
 - [x] Bracket edit-form action buttons, pad read-set actions, and show technique once in isolate details; include the extra rows in viewport budgeting and test pair removal/navigation.
 
-- [x] Group file pairs inside read-set sections with local mate/processing labels and persistent pair context; budget nested borders and compact headings for short terminals.
+- [x] Group file pairs inside read-set sections with local mate/processing labels and persistent pair context; budget nested headings for short terminals.
 
 - [x] Give each supported technique its own help file (`docs/illumina.md` currently), beside general isolate help in separate tabs; explain chemistry options and rationale, keep shared identity/library guidance general, and omit unsupported-technique placeholders. Test tab switching without changing the edit draft.
 
@@ -57,6 +57,10 @@
 - [x] Use a warning alert for empty isolate lists and place the chemistry/poly-G reminder after proposed import rows, not in the folder chooser; account for alert height in review pagination.
 
 - [x] Default new Illumina sets to two-colour and Poly-G Auto (On), with two-colour first in the chemistry choices; replace the import reminder with info pointing to isolate details. Preserve saved settings, document the editable assumption, and test defaults and alert placement.
+
+- [x] Share `Section` with accession editing and other headed views: bold single-line title, borderless by default, optional rounded border, existing row/field/nested-section children, and automatic two-space indentation per nested section. Remove border overhead from isolate viewport budgeting and verify focus/navigation across resizing. The API and reuse rules live in `AGENTS.md`. Render isolate details, read sets, and nested pairs explicitly in JSX; retain the flat row order only for focus and viewport calculations.
+
+- [x] Reject non-string Illumina metadata without coercion; keep accession editing within terminal height while paging metadata and cache details; synchronize the snapshot package's citation version.
 
 ## Verification record
 

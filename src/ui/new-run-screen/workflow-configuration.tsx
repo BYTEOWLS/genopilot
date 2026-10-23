@@ -28,6 +28,7 @@ import {mutedColor} from '../theme.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {EditPage, Page} from '../components/page.js';
 import {ParameterList, parameterLabelWidth} from '../components/parameter-list.js';
+import {Section} from '../components/section.js';
 import {NcbiCacheDecisionPage, type NcbiCacheEntry, type NcbiCacheModes} from './ncbi-cache-decision.js';
 import type {CohortRerun} from '../run-results-screen/screen.js';
 
@@ -107,7 +108,7 @@ type ScreenState<T> =
 const reservedReviewChromeLines = 10;
 
 type ReviewItem =
-  | {kind: 'heading'; key: string; text: string; color?: string}
+  | {kind: 'heading'; key: string; text: string}
   | {kind: 'row'; key: string; label: string; value: string}
   | {kind: 'text'; key: string; text: string; color?: string; indent?: number};
 
@@ -125,7 +126,7 @@ function reviewItems<T>(
   const items: ReviewItem[] = [];
   const warnings = prepared.warnings ?? [];
   if (warnings.length > 0) {
-    items.push({kind: 'heading', key: 'warnings', text: 'Warnings', color: 'yellow'});
+    items.push({kind: 'heading', key: 'warnings', text: 'Warnings'});
     warnings.forEach((warning, index) =>
       items.push({kind: 'text', key: `warning:${String(index)}`, text: `⚠ ${warning}`, color: 'yellow'}));
   }
@@ -644,6 +645,17 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   if (screen.state === 'review' || screen.state === 'saving') {
     const {items, labelWidth} = review;
     const {start, end} = reviewWindow;
+    const groups: {key: string; title?: string; items: Exclude<ReviewItem, {kind: 'heading'}>[]}[] = [];
+    for (const item of items.slice(start, end)) {
+      if (item.kind === 'heading') {
+        groups.push({key: item.key, title: item.text, items: []});
+      } else {
+        if (groups.length === 0) {
+          groups.push({key: item.key, items: []});
+        }
+        groups.at(-1)!.items.push(item);
+      }
+    }
     return (
       <EditPage
         title={`Review workflow "${title}"`}
@@ -656,29 +668,27 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         savingLabel="Saving configuration…"
       >
         {reviewWindow.windowed && start > 0 ? <Text color={mutedColor}>↑ more above</Text> : null}
-        {items.slice(start, end).map((item, index) => {
-          if (item.kind === 'heading') {
+        {groups.map((group, index) => {
+          const content = group.items.map(item => {
+            if (item.kind === 'text') {
+              return (
+                <Box key={item.key} paddingLeft={item.indent ?? 0}>
+                  <Text color={item.color} wrap="wrap">{sanitizeTerminalText(item.text)}</Text>
+                </Box>
+              );
+            }
             return (
-              <Box key={item.key} marginTop={index === 0 ? 0 : 1}>
-                <Text bold color={item.color}>{sanitizeTerminalText(item.text)}</Text>
-              </Box>
+              <ParameterList
+                key={item.key}
+                rows={[{id: item.key, label: item.label, value: item.value}]}
+                labelWidth={labelWidth}
+                inputActive={false}
+              />
             );
-          }
-          if (item.kind === 'text') {
-            return (
-              <Box key={item.key} paddingLeft={item.indent ?? 0}>
-                <Text color={item.color} wrap="wrap">{sanitizeTerminalText(item.text)}</Text>
-              </Box>
-            );
-          }
-          return (
-            <ParameterList
-              key={item.key}
-              rows={[{id: item.key, label: item.label, value: item.value}]}
-              labelWidth={labelWidth}
-              inputActive={false}
-            />
-          );
+          });
+          return group.title !== undefined ? (
+            <Section key={group.key} title={group.title} marginTop={index === 0 ? 0 : 1}>{content}</Section>
+          ) : <Box key={group.key} flexDirection="column">{content}</Box>;
         })}
         {reviewWindow.windowed && end < items.length ? <Text color={mutedColor}>↓ more below</Text> : null}
       </EditPage>
@@ -720,6 +730,17 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
     );
   }
 
+  const formGroups: {key: string; title?: string; rows: Extract<FormRow, {kind: 'field'}>[]}[] = [];
+  for (const row of visibleFormRows) {
+    if (row.kind === 'section') {
+      formGroups.push({key: row.key, title: row.section, rows: []});
+    } else {
+      if (formGroups.length === 0) {
+        formGroups.push({key: row.key, rows: []});
+      }
+      formGroups.at(-1)!.rows.push(row);
+    }
+  }
   return (
     <EditPage
       title={`Configure workflow "${title}"`}
@@ -750,102 +771,100 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       problemsTitle="Fix these fields before continuing:"
     >
       {isFormWindowed && formScrollTop > 0 ? <Text color={mutedColor}>↑ more above</Text> : null}
-      {visibleFormRows.map((row, rowIndex) => {
-        if (row.kind === 'section') {
-          return (
-            <Box key={row.key} marginTop={rowIndex === 0 ? 0 : 1}>
-              <Text bold>{sanitizeTerminalText(row.section)}</Text>
-            </Box>
-          );
-        }
-        const {definition} = row;
-        const value = values[definition.id] ?? '';
-        const selected = definition.id === selectedId;
-        if (definition.kind === 'choice') {
-          return (
-            <Box key={row.key} flexDirection="column">
-              <Text color={selected ? 'cyan' : undefined}>
-                {selected ? '›' : ' '} {sanitizeTerminalText(definition.label)}
-                {definition.required ? '*' : ''}:
-              </Text>
-              {definition.options?.map(option => (
-                <Text key={option.value} color={value === option.value ? undefined : mutedColor}>
-                  {'    '}({value === option.value ? '●' : ' '}){' '}
-                  {sanitizeTerminalText(option.label)}
+      {formGroups.map((group, index) => {
+        const content = group.rows.map(row => {
+          const {definition} = row;
+          const value = values[definition.id] ?? '';
+          const selected = definition.id === selectedId;
+          if (definition.kind === 'choice') {
+            return (
+              <Box key={row.key} flexDirection="column">
+                <Text color={selected ? 'cyan' : undefined}>
+                  {selected ? '›' : ' '} {sanitizeTerminalText(definition.label)}
+                  {definition.required ? '*' : ''}:
                 </Text>
-              ))}
-            </Box>
-          );
-        } else if (definition.kind === 'file') {
+                {definition.options?.map(option => (
+                  <Text key={option.value} color={value === option.value ? undefined : mutedColor}>
+                    {'    '}({value === option.value ? '●' : ' '}){' '}
+                    {sanitizeTerminalText(option.label)}
+                  </Text>
+                ))}
+              </Box>
+            );
+          } else if (definition.kind === 'file') {
+            return (
+              <PathField
+                key={`${row.key}:${runApplyGeneration}`}
+                label={definition.label}
+                required={definition.required}
+                selected={selected}
+                // While the configuration is checked, Enter must not open the browser over it.
+                inputActive={inputActive && screen.state !== 'validating'}
+                value={value}
+                onChange={value => updateValue(definition.id, value)}
+                browsing={false}
+                onBrowsingChange={browse => setBrowserId(browse ? definition.id : undefined)}
+                startDirectory={currentDirectory}
+                {...(definition.placeholder ? {placeholder: definition.placeholder} : {})}
+              />
+            );
+          } else if (definition.kind === 'isolates') {
+            return (
+              <IsolatesField
+                compatibility={readSetCompatibility}
+                key={`${row.key}:${runApplyGeneration}`}
+                label={definition.label}
+                required={definition.required}
+                selected={selected}
+                // While the configuration is checked, Enter must not open the picker over it.
+                inputActive={inputActive && screen.state !== 'validating'}
+                value={value}
+                onChange={value => updateValue(definition.id, value)}
+                choosing={false}
+                onChoosingChange={choose => {
+                  if (choose) {
+                    setIsolatePickerOpenings(openings => openings + 1);
+                  }
+                  setBrowserId(choose ? definition.id : undefined);
+                }}
+                choices={isolateChoices}
+              />
+            );
+          } else if (definition.kind === 'accession') {
+            return (
+              <AccessionField
+                key={`${row.key}:${runApplyGeneration}`}
+                label={definition.label}
+                required={definition.required}
+                selected={selected}
+                // While the configuration is checked, Enter must not open the picker over it.
+                inputActive={inputActive && screen.state !== 'validating'}
+                value={value}
+                onChange={value => updateValue(definition.id, value)}
+                choosing={false}
+                onChoosingChange={choose => setBrowserId(choose ? definition.id : undefined)}
+                {...(definition.placeholder ? {placeholder: definition.placeholder} : {})}
+              />
+            );
+          }
           return (
-            <PathField
+            <TextField
               key={`${row.key}:${runApplyGeneration}`}
               label={definition.label}
               required={definition.required}
               selected={selected}
-              // While the configuration is checked, Enter must not open the browser over it.
-              inputActive={inputActive && screen.state !== 'validating'}
-              value={value}
+              inputActive={inputActive}
+              defaultValue={value}
+              displayValue={displayValue(definition, value)}
+              placeholder={definition.placeholder}
+              preview={definition.preview?.replaceAll('{value}', value || '<value>')}
               onChange={value => updateValue(definition.id, value)}
-              browsing={false}
-              onBrowsingChange={browse => setBrowserId(browse ? definition.id : undefined)}
-              startDirectory={currentDirectory}
-              {...(definition.placeholder ? {placeholder: definition.placeholder} : {})}
             />
           );
-        } else if (definition.kind === 'isolates') {
-          return (
-            <IsolatesField
-              compatibility={readSetCompatibility}
-              key={`${row.key}:${runApplyGeneration}`}
-              label={definition.label}
-              required={definition.required}
-              selected={selected}
-              // While the configuration is checked, Enter must not open the picker over it.
-              inputActive={inputActive && screen.state !== 'validating'}
-              value={value}
-              onChange={value => updateValue(definition.id, value)}
-              choosing={false}
-              onChoosingChange={choose => {
-                if (choose) {
-                  setIsolatePickerOpenings(openings => openings + 1);
-                }
-                setBrowserId(choose ? definition.id : undefined);
-              }}
-              choices={isolateChoices}
-            />
-          );
-        } else if (definition.kind === 'accession') {
-          return (
-            <AccessionField
-              key={`${row.key}:${runApplyGeneration}`}
-              label={definition.label}
-              required={definition.required}
-              selected={selected}
-              // While the configuration is checked, Enter must not open the picker over it.
-              inputActive={inputActive && screen.state !== 'validating'}
-              value={value}
-              onChange={value => updateValue(definition.id, value)}
-              choosing={false}
-              onChoosingChange={choose => setBrowserId(choose ? definition.id : undefined)}
-              {...(definition.placeholder ? {placeholder: definition.placeholder} : {})}
-            />
-          );
-        }
-        return (
-          <TextField
-            key={`${row.key}:${runApplyGeneration}`}
-            label={definition.label}
-            required={definition.required}
-            selected={selected}
-            inputActive={inputActive}
-            defaultValue={value}
-            displayValue={displayValue(definition, value)}
-            placeholder={definition.placeholder}
-            preview={definition.preview?.replaceAll('{value}', value || '<value>')}
-            onChange={value => updateValue(definition.id, value)}
-          />
-        );
+        });
+        return group.title !== undefined ? (
+          <Section key={group.key} title={group.title} marginTop={index === 0 ? 0 : 1}>{content}</Section>
+        ) : <Box key={group.key} flexDirection="column">{content}</Box>;
       })}
       {isFormWindowed && formScrollTop + availableFormLines < totalFormLines ? (
         <Text color={mutedColor}>↓ more below</Text>

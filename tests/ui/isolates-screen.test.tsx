@@ -85,7 +85,7 @@ test('windows a large form around focus after navigation, resize, and validation
   {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
   const selected = () => {
-    const line = output.lastFrame().split('\n').find(line => /^(?:│ )*› /.test(line)) ?? '';
+    const line = output.lastFrame().split('\n').find(line => /^\s*› /.test(line)) ?? '';
     return line.slice(Math.max(0, line.indexOf('› ')));
   };
   const waitFor = async (condition: () => boolean) => {
@@ -513,18 +513,22 @@ test('edit groups pairs with padded buttons and displays technique only in isola
   const technique = isolateTechnique(editing);
   assert.equal(frame.split(technique).length - 1, 1);
   const lines = frame.split('\n');
+  const libraryLine = lines.find(line => line.includes(editing.read_sets[0]!.library_id));
+  assert.ok(libraryLine);
+  const readSetIndent = libraryLine.match(/^ */)![0].length;
   for (const pair of editing.read_sets[0]!.read_pairs) {
     for (const mate of ['r1', 'r2'] as const) {
       const line = lines.find(value => value.includes(pair[mate]));
       assert.ok(line, `${mate} is visible in its pair section`);
-      assert.equal((line.match(/│/g) ?? []).length, 4, 'Both the read-set and pair frames contain the path.');
+      assert.ok(!/[│╭╮╰╯┌┐└┘]/.test(line), 'Pair paths use the shared borderless section layout.');
+      assert.equal(line.match(/^ */)![0].length, readSetIndent + 2, 'Pair fields are indented inside their read set.');
     }
   }
-  const buttons = lines.flatMap((line, index) => line.startsWith('│') && /^\[.+\]$/.test(line.replaceAll('│', '').trim()) ? [index] : []);
+  const buttons = lines.flatMap((line, index) => /^\[.+\]$/.test(line.trim()) ? [index] : []).slice(0, 3);
   assert.equal(buttons.length, 3);
   for (const index of buttons) {
-    assert.equal(lines[index - 1]!.replaceAll('│', '').trim(), '');
-    assert.equal(lines[index + 1]!.replaceAll('│', '').trim(), '');
+    assert.equal(lines[index - 1]!.trim(), '');
+    assert.equal(lines[index + 1]!.trim(), '');
   }
   assert.equal(lines.filter(line => /\[.+\]/.test(line)).length, 5);
   // Four isolate fields, four set fields, three pair fields, then the first remove action.
@@ -561,7 +565,7 @@ test('an empty isolate list uses a warning alert and still opens manual creation
     await new Promise(resolve => setTimeout(resolve, 10));
   }
   assert.ok(!output.lastFrame().includes('⚠'));
-  assert.ok(output.lastFrame().split('\n').some(line => /^│ › /.test(line)));
+  assert.ok(output.lastFrame().split('\n').some(line => /^› /.test(line)));
   assert.equal(updates, 0);
 });
 

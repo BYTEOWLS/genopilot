@@ -11,6 +11,7 @@ import {TextField} from '../components/text-field.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {EditPage} from '../components/page.js';
+import {Section} from '../components/section.js';
 import {isolateDocumentNames, readGeneralDocuments, type DocumentsLoader} from '../../docs/documents.js';
 import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 
@@ -117,11 +118,9 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
       options: ['', ...catalog.isolates.filter(entry => entry.id !== editing?.id).map(entry => entry.id)], change: setParent},
   ];
   rows.forEach(row => {row.section = 'isolate';});
-  const sectionTitles = new Map([['isolate', 'Isolate details']]);
-  readSets.forEach((entry, setIndex) => {
+  readSets.forEach(entry => {
     const prefix = entry.id;
     const section = `read-set:${prefix}`;
-    sectionTitles.set(section, `Read set ${setIndex + 1}${entry.name ? ` · ${entry.name}` : ''}`);
     const sectionRows: Row[] = [];
     sectionRows.push(
       {id: `${prefix}:name`, label: 'Name', kind: 'text', value: entry.name,
@@ -237,21 +236,20 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
   // Reserve the title, save action, scroll indicator, wrapped shortcuts, and error preview.
   const availableLines = Math.max(selected?.section === 'isolate' || selected?.pair !== undefined ? 5 : 4,
     terminalRows - 8 - Math.ceil(110 / Math.max(1, columns)) - problemLines);
-  const pairBorders = availableLines >= 7;
-  const readSetButtonPadding = availableLines >= (pairBorders ? 9 : 7) ? 1 : 0;
+  const readSetButtonPadding = availableLines >= 7 ? 1 : 0;
   const fields = rows.filter(row => row.id !== 'save');
   const rangeHeight = (start: number, end: number): number => {
     let height = 0;
     for (let index = start; index < end; index++) {
       const newSection = index === start || fields[index]?.section !== fields[index - 1]?.section;
       if (newSection) {
-        height += (index > start ? 1 : 0) + (fields[index]?.section ? 3 : 0);
+        height += (index > start ? 1 : 0) + (fields[index]?.section ? 1 : 0);
         if (fields[index]?.section === 'isolate') {
           height++;
         }
       }
       if (newSection || fields[index]?.pair !== fields[index - 1]?.pair) {
-        height += (!newSection ? 1 : 0) + (fields[index]?.pair !== undefined ? (pairBorders ? 3 : 1) : 0);
+        height += (!newSection ? 1 : 0) + (fields[index]?.pair !== undefined ? 1 : 0);
       }
       height += 1 + (fields[index]?.kind === 'button' && fields[index]?.section?.startsWith('read-set:')
         ? 2 * readSetButtonPadding : 0);
@@ -270,34 +268,26 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
   while (visibleStart > 0 && rangeHeight(visibleStart - 1, visibleEnd) <= availableLines) {
     visibleStart--;
   }
-  const visibleGroups: {section?: string; rows: Row[]}[] = [];
-  for (const row of fields.slice(visibleStart, visibleEnd)) {
-    const previous = visibleGroups.at(-1);
-    if (previous && previous.section === row.section) {
-      previous.rows.push(row);
-    } else {
-      visibleGroups.push({section: row.section, rows: [row]});
+  const visibleRows = fields.slice(visibleStart, visibleEnd);
+  const isolateFields = visibleRows.filter(row => row.section === 'isolate');
+  const readSetSections = readSets.flatMap((entry, setIndex) => {
+    const setRows = visibleRows.filter(row => row.section === `read-set:${entry.id}`);
+    if (setRows.length === 0) {
+      return [];
     }
-  }
+    return [{
+      id: entry.id,
+      title: `Read set ${setIndex + 1}${entry.name ? ` · ${entry.name}` : ''}`,
+      fields: setRows.filter(row => row.pair === undefined && row.kind !== 'button'),
+      pairs: entry.read_pairs.flatMap((_pair, pairIndex) => {
+        const pairRows = setRows.filter(row => row.pair === pairIndex);
+        return pairRows.length > 0 ? [{index: pairIndex, rows: pairRows}] : [];
+      }),
+      actions: setRows.filter(row => row.pair === undefined && row.kind === 'button'),
+    }];
+  });
+  const formActions = visibleRows.filter(row => row.section === undefined);
   const windowed = visibleStart > 0 || visibleEnd < fields.length;
-  const renderSection = (sectionRows: Row[]): React.JSX.Element[] => {
-    const blocks: {pair?: number; rows: Row[]}[] = [];
-    for (const row of sectionRows) {
-      const previous = blocks.at(-1);
-      if (previous && previous.pair === row.pair) {
-        previous.rows.push(row);
-      } else {
-        blocks.push({pair: row.pair, rows: [row]});
-      }
-    }
-    return blocks.map((block, index) => <Box key={block.pair === undefined ? `fields-${index}` : `pair-${block.pair}`}
-      flexDirection="column" marginTop={index > 0 ? 1 : 0}
-      borderStyle={block.pair !== undefined && pairBorders ? 'single' : undefined}
-      paddingX={block.pair !== undefined && pairBorders ? 1 : 0}>
-      {block.pair !== undefined ? <Text bold wrap="truncate">Pair {block.pair + 1}</Text> : null}
-      {block.rows.map(render)}
-    </Box>);
-  };
 
   if (showHelp) {
     return <MarkdownDocumentPage title="Managing isolates" load={loadHelp}
@@ -311,13 +301,32 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
     shortcuts={['Tab/↑/↓ — Field', selected?.kind === 'choice' ? 'Space/←/→ — Change' : 'Enter — Activate button or browse', !typing && '? — Help']}
     back="Cancel" saveLabel="Save isolate" saveSelected={selected?.id === 'save'} saving={saving}
     problems={shownProblems}>
-    {visibleGroups.map((group, index) => <Box key={group.section ?? 'actions'} flexDirection="column"
-      marginTop={index > 0 ? 1 : 0} borderStyle={group.section ? 'round' : undefined}
-      paddingX={group.section ? 1 : 0}>
-      {group.section ? <Text bold wrap="truncate">{sanitizeTerminalText(sectionTitles.get(group.section) ?? '')}</Text> : null}
-      {group.section === 'isolate' ? <Text wrap="truncate">Technique: {sanitizeTerminalText(isolateTechnique({read_sets: readSets}))}</Text> : null}
-      {renderSection(group.rows)}
-    </Box>)}
+    {isolateFields.length > 0 ? (
+      <Section title="Isolate details" marginTop={0}>
+        <Text wrap="truncate">  Technique: <Text bold>{sanitizeTerminalText(isolateTechnique({read_sets: readSets}))}</Text></Text>
+        {isolateFields.map(render)}
+      </Section>
+    ) : null}
+    {readSetSections.map((readSet, setIndex) => (
+      <Section key={readSet.id} title={readSet.title} marginTop={isolateFields.length > 0 || setIndex > 0 ? 1 : 0}>
+        {readSet.fields.map(render)}
+        {readSet.pairs.map((pair, pairIndex) => (
+          <Section key={pair.index} title={`Pair ${pair.index + 1}`} marginTop={readSet.fields.length > 0 || pairIndex > 0 ? 1 : 0}>
+            {pair.rows.map(render)}
+          </Section>
+        ))}
+        {readSet.actions.length > 0 ? (
+          <Box flexDirection="column" marginTop={readSet.fields.length > 0 || readSet.pairs.length > 0 ? 1 : 0}>
+            {readSet.actions.map(render)}
+          </Box>
+        ) : null}
+      </Section>
+    ))}
+    {formActions.length > 0 ? (
+      <Box flexDirection="column" marginTop={isolateFields.length > 0 || readSetSections.length > 0 ? 1 : 0}>
+        {formActions.map(render)}
+      </Box>
+    ) : null}
     {windowed ? <Text wrap="truncate">
       {visibleStart > 0 ? '↑ ' : ''}{visibleStart + 1}–{visibleEnd} / {fields.length}
       {visibleEnd < fields.length ? ' ↓' : ''}

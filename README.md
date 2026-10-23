@@ -271,7 +271,7 @@ Versioned NCBI assembly accessions (`GCA_…`/`GCF_…` with a version suffix) a
 $HOME/.byteowlsGenopilot/accessions/accessions.yaml
 ```
 
-Each entry keeps an optional local name and description apart from the facts NCBI reports (organism, taxon, assembly name, level, status, and type such as haploid, submitter, and the RefSeq category and strain only when NCBI provides them), which record when and from where they were retrieved: the NCBI Datasets v2 API, or the report cached with a download. Cataloging an accession never downloads its assembly; workflows download it on demand. Metadata lookups use the optional NCBI API key when one is configured and work without it at NCBI's lower rate limit.
+Each entry keeps an optional local name and description apart from the facts NCBI reports (organism, taxon, assembly name, level, status, and type such as haploid, submitter, assembly release date, genome size, GC percentage, contig/scaffold counts and N50, BioProject/BioSample accessions, and the RefSeq category and strain only when NCBI provides them), which record when and from where they were retrieved: the NCBI Datasets v2 API, or the report cached with a download. Details group these facts into Assembly, Genome statistics, and Linked records. Missing facts are marked as not reported; refresh metadata to populate new fields on existing entries. The assembly release date is not a submission date. These optional fields retain the catalog schema version and require no migration. Cataloging an accession never downloads its assembly; workflows download it on demand. Metadata lookups use the optional NCBI API key when one is configured and work without it at NCBI's lower rate limit.
 
 ```yaml
 schema_version: 1

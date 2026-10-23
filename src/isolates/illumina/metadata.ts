@@ -11,10 +11,10 @@ export function validateIlluminaMetadata(value: unknown, path: string, issues: I
       issues.push({path: `${path}.${key}`, message: 'unknown field'});
     }
   }
-  if (!['four-colour', 'two-colour', 'one-channel', 'unknown'].includes(String(metadata.chemistry))) {
+  if (typeof metadata.chemistry !== 'string' || !['four-colour', 'two-colour', 'one-channel', 'unknown'].includes(metadata.chemistry)) {
     issues.push({path: `${path}.chemistry`, message: 'must be four-colour, two-colour, one-channel, or unknown'});
   }
-  if (!['auto', 'on', 'off'].includes(String(metadata.poly_g))) {
+  if (typeof metadata.poly_g !== 'string' || !['auto', 'on', 'off'].includes(metadata.poly_g)) {
     issues.push({path: `${path}.poly_g`, message: 'must be auto, on, or off'});
   }
 }

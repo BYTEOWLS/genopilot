@@ -1,5 +1,5 @@
-import React, {useState} from 'react';
-import {Box, Text, useInput} from 'ink';
+import React, {useLayoutEffect, useRef, useState} from 'react';
+import {Box, measureElement, Text, useInput, useWindowSize, type DOMElement} from 'ink';
 import {
   isVersionedAssemblyAccession,
   ncbiAccessionFormatMessage,
@@ -20,8 +20,9 @@ import {EditPage} from '../components/page.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
-import {metadataProvenance, metadataRows} from './metadata-summary.js';
+import {metadataSections} from './metadata-summary.js';
 import {ParameterList} from '../components/parameter-list.js';
+import {Section} from '../components/section.js';
 import {formatLocalDateTime} from '../utils.js';
 
 type DetailRow = 'name' | 'description' | 'save';
@@ -86,18 +87,37 @@ export function AccessionForm({
   onCancel: () => void;
   inputActive: boolean;
 }): React.JSX.Element {
+  const {rows: terminalRows, columns} = useWindowSize();
+  const pageRef = useRef<DOMElement>(null);
+  const viewportRef = useRef<DOMElement>(null);
+  const detailsRef = useRef<DOMElement>(null);
+  const [layout, setLayout] = useState({details: 0, chrome: 12});
+  const [detailsScroll, setDetailsScroll] = useState(0);
   const [stage, setStage] = useState<'accession' | 'details'>(editing ? 'details' : 'accession');
   const [accession, setAccession] = useState(editing?.accession ?? '');
   const [lookup, setLookup] = useState<MetadataFetchResult>();
   const [name, setName] = useState(editing?.name ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [selectedRow, setSelectedRow] = useState<DetailRow>('name');
+  const metadata = editing ? editing.ncbi : lookup?.state === 'retrieved' ? lookup.metadata : null;
+  const sections = metadata ? metadataSections(metadata) : [];
   // In the lookup step, the accession field or its look-up button.
   const [lookupSelected, setLookupSelected] = useState(false);
   const [busy, setBusy] = useState<'looking-up' | 'saving'>();
   const [problems, setProblems] = useState<string[]>([]);
-  const typing = stage === 'accession' ? !lookupSelected : selectedRow !== 'save';
+  const typing = stage === 'accession' ? !lookupSelected : selectedRow === 'name' || selectedRow === 'description';
   useHomeSuspension(busy ? 'busy' : typing ? 'typing' : undefined);
+  const viewportHeight = Math.min(layout.details || 1, Math.max(1, terminalRows - layout.chrome));
+  const maximumScroll = Math.max(0, layout.details - viewportHeight);
+  const scrollOffset = Math.min(detailsScroll, maximumScroll);
+  // Measure wrapped metadata and page chrome instead of estimating their line counts.
+  useLayoutEffect(() => {
+    if (pageRef.current && viewportRef.current && detailsRef.current) {
+      const details = measureElement(detailsRef.current).height;
+      const chrome = measureElement(pageRef.current).height - measureElement(viewportRef.current).height;
+      setLayout(current => current.details === details && current.chrome === chrome ? current : {details, chrome});
+    }
+  });
 
   const lookUp = (): void => {
     const candidate = normalizeAccession(accession);
@@ -179,13 +199,17 @@ export function AccessionForm({
         }
         return;
       }
+      if (key.pageUp || key.pageDown) {
+        setDetailsScroll(Math.max(0, Math.min(maximumScroll, scrollOffset + (key.pageUp ? -viewportHeight : viewportHeight))));
+        return;
+      }
       const index = detailRows.indexOf(selectedRow);
       if (key.tab || key.upArrow || key.downArrow) {
         const offset = key.upArrow || (key.tab && key.shift) ? -1 : 1;
         setSelectedRow(detailRows[(index + offset + detailRows.length) % detailRows.length] ?? 'name');
         return;
       }
-      // Enter acts only on the save button; Tab and the arrows move between fields.
+      // Enter never submits from a text field.
       if (key.return && selectedRow === 'save') {
         submit();
       }
@@ -193,7 +217,6 @@ export function AccessionForm({
     {isActive: inputActive},
   );
 
-  const metadata = editing ? editing.ncbi : lookup?.state === 'retrieved' ? lookup.metadata : null;
   const unavailable = lookupProblem(lookup);
 
   const pageDescription =
@@ -227,76 +250,83 @@ export function AccessionForm({
     );
   }
 
+  const shownProblems = problems.slice(0, 1).map(problem => {
+    const text = sanitizeTerminalText(problem).replace(/\s+/g, ' ');
+    const limit = Math.max(12, columns - 8);
+    return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+  });
+  if (problems.length > 1) {
+    shownProblems.push(`${problems.length - 1} more; fix this first.`);
+  }
+
   return (
-    <EditPage
-      title={editing ? `Edit ${editing.accession}` : 'Add accession'}
-      description={pageDescription}
-      shortcuts={['Tab/↑/↓ — Field', selectedRow === 'save' && 'Enter — Save']}
-      back="Cancel"
-      saveLabel={editing ? 'Save changes' : 'Add to catalog'}
-      saveSelected={selectedRow === 'save'}
-      saving={busy === 'saving'}
-      problems={problems}
-    >
-      <ParameterList
-        inputActive={inputActive && !busy}
-        selectedId={selectedRow}
-        rows={[
-          {id: 'accession', label: 'Accession', value: accession},
-          {
-            id: 'name',
-            label: 'Name',
-            value: name.length > 0 ? name : `not set, shown as ${accession}`,
-            muted: name.length === 0,
-            edit: {defaultValue: name, onChange: setName},
-          },
-          {
-            id: 'description',
-            label: 'Description',
-            value: description.length > 0 ? description : 'not set',
-            muted: description.length === 0,
-            edit: {defaultValue: description, onChange: setDescription},
-          },
-          ...(metadata ? metadataRows(metadata) : []),
-        ]}
-      />
-      <Box marginTop={1}>
-        {metadata ? (
-          <Text color={mutedColor} wrap="wrap">{metadataProvenance(metadata)}</Text>
-        ) : (
-          <Text color="yellow" wrap="wrap">
-            NCBI metadata was not retrieved{unavailable ? `: ${sanitizeTerminalText(unavailable)}` : '.'}
-            {' '}You can save now and refresh the metadata later.
-          </Text>
-        )}
-      </Box>
-      {editing ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>Local copies</Text>
-          {editing.cached_copies.length === 0 && unverifiedCopies.length === 0 ? (
-            <Text color={mutedColor} wrap="wrap">
-              None. A workflow that needs this accession downloads it.
-            </Text>
-          ) : null}
-          {editing.cached_copies.map(copy => (
-            <Text key={copy.path} wrap="wrap">
-              ✔ {sanitizeTerminalText(copy.path)}
-              <Text color={mutedColor}> · verified since {formatLocalDateTime(copy.verified_at)}</Text>
-            </Text>
-          ))}
-          {unverifiedCopies.map(copy => (
-            <Text key={copy.path} color="red" wrap="wrap">
-              ✖ {sanitizeTerminalText(copy.path)} · not trusted: {sanitizeTerminalText(copy.problem ?? '')}
-            </Text>
-          ))}
-          {recordedCacheState(editing) === 'conflict' ? (
-            <Text color="yellow" wrap="wrap">
-              The verified copies hold different files for the same versioned accession. Inspect
-              them before a workflow uses this accession; none is preferred automatically.
-            </Text>
-          ) : null}
+    <Box ref={pageRef} flexDirection="column">
+      <EditPage
+        title={editing ? `Edit ${editing.accession}` : 'Add accession'}
+        description={terminalRows >= 20 ? pageDescription : undefined}
+        shortcuts={['Tab/↑/↓ — Field', 'PageUp/PageDown — Details', selectedRow === 'save' && 'Enter — Save']}
+        back="Cancel"
+        saveLabel={editing ? 'Save changes' : 'Add to catalog'}
+        saveSelected={selectedRow === 'save'}
+        saving={busy === 'saving'}
+        problems={shownProblems}
+      >
+        <ParameterList inputActive={false} rows={[{id: 'accession', label: 'Accession', value: accession}]} />
+        <TextField
+          label="Name" selected={selectedRow === 'name'} inputActive={inputActive && !busy}
+          defaultValue={name} displayValue={name || `not set, shown as ${accession}`} onChange={setName}
+        />
+        <TextField
+          label="Description" selected={selectedRow === 'description'} inputActive={inputActive && !busy}
+          defaultValue={description} displayValue={description || 'not set'} onChange={setDescription}
+        />
+        <Box ref={viewportRef} height={viewportHeight} overflow="hidden" flexDirection="column" marginTop={1}>
+          <Box ref={detailsRef} marginTop={-scrollOffset} flexDirection="column" flexShrink={0}>
+            {sections.map((section, index) => (
+              <Section key={section.id} title={section.title} marginTop={index === 0 ? 0 : 1}>
+                <ParameterList rows={section.rows} inputActive={false} />
+              </Section>
+            ))}
+            {!metadata ? (
+              <Box flexShrink={0}>
+                <Text color="yellow" wrap="wrap">
+                  NCBI metadata was not retrieved{unavailable ? `: ${sanitizeTerminalText(unavailable)}` : '.'}
+                  {' '}You can save now and refresh the metadata later.
+                </Text>
+              </Box>
+            ) : null}
+            {editing ? (
+              <Section title="Local copies">
+                {editing.cached_copies.length === 0 && unverifiedCopies.length === 0 ? (
+                  <Text color={mutedColor} wrap="wrap">
+                    None. A workflow that needs this accession downloads it.
+                  </Text>
+                ) : null}
+                {editing.cached_copies.map(copy => (
+                  <Text key={copy.path} wrap="wrap">
+                    ✔ {sanitizeTerminalText(copy.path)}
+                    <Text color={mutedColor}> · verified since {formatLocalDateTime(copy.verified_at)}</Text>
+                  </Text>
+                ))}
+                {unverifiedCopies.map(copy => (
+                  <Text key={copy.path} color="red" wrap="wrap">
+                    ✖ {sanitizeTerminalText(copy.path)} · not trusted: {sanitizeTerminalText(copy.problem ?? '')}
+                  </Text>
+                ))}
+                {recordedCacheState(editing) === 'conflict' ? (
+                  <Text color="yellow" wrap="wrap">
+                    The verified copies hold different files for the same versioned accession. Inspect
+                    them before a workflow uses this accession; none is preferred automatically.
+                  </Text>
+                ) : null}
+              </Section>
+            ) : null}
+          </Box>
         </Box>
-      ) : null}
-    </EditPage>
+        <Text color={mutedColor} wrap="truncate">
+          {maximumScroll > 0 ? `${scrollOffset > 0 ? '↑ ' : ''}${scrollOffset + 1}–${Math.min(layout.details, scrollOffset + viewportHeight)} / ${layout.details}${scrollOffset < maximumScroll ? ' ↓' : ''}` : ' '}
+        </Text>
+      </EditPage>
+    </Box>
   );
 }

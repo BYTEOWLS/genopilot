@@ -4,6 +4,7 @@ import {Box, Text} from 'ink';
 import {groupCommands, type CommandDefinition} from './definitions.js';
 import {sanitizeTerminalText} from '../../sanitize.js';
 import {mutedColor} from '../../theme.js';
+import {Section} from '../../components/section.js';
 
 type MessageVariant = 'info' | 'success' | 'error' | 'warning';
 
@@ -29,14 +30,12 @@ export function CommandMenu<Id extends string>({
   };
 
   return (
-    <Box marginTop={1} flexDirection="column">
-      <Text bold>Commands</Text>
+    <Section title="Commands">
       {grouped.primary.map(renderCommand)}
       {grouped.secondary.length > 0 ? (
-        <Box flexDirection="column" marginTop={1}>
-          <Text bold>Other commands</Text>
+        <Section title="Other commands">
           {grouped.secondary.map(renderCommand)}
-        </Box>
+        </Section>
       ) : null}
       <Text color={mutedColor}>↑/↓ — Select · Enter — Open</Text>
       {message ? (
@@ -44,6 +43,6 @@ export function CommandMenu<Id extends string>({
           <Alert variant={messageVariant}>{sanitizeTerminalText(message)}</Alert>
         </Box>
       ) : null}
-    </Box>
+    </Section>
   );
 }

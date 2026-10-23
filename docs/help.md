@@ -15,7 +15,7 @@ Files copied into a run from outside are marked **imported**. Files the run comp
 ## Catalogs
 
 - **Isolates** store identity and lineage independently of sequencing data. Their read sets record a library, platform, layout, and multiple file groups. Confirm library identity during import; workflows explicitly select compatible read sets and snapshot their effective settings.
-- **NCBI accessions** store versioned assembly accessions, NCBI metadata, and locations of download caches. Workflows download an assembly only when a run needs it.
+- **NCBI accessions** store versioned assembly accessions, NCBI metadata, and locations of download caches. Workflows download an assembly only when a run needs it. Accession details show Assembly, Genome statistics, and Linked records as consecutive sections. PageUp/PageDown (or fn + ↑/↓) scrolls the details and local copies; editable fields and Save stay visible. Assembly includes the metadata retrieval date and source as labelled rows. The release date is not a submission date; missing facts are marked as not reported. Refresh metadata from the accession list to fill new fields on existing entries.
 
 See [Managing isolates](isolates.md) for the list, edit form, read sets, and library identity. Each supported sequencing technique has its own help file and tab, currently [Illumina](illumina.md). Press `?` in the list or on an edit-form choice or button to open these tabs.
 

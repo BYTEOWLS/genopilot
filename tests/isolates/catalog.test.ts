@@ -49,6 +49,17 @@ test('records explicit Illumina detection schemes and rejects the old other cate
   assert.ok(issuesFor(catalogOf(entry)).some(issue => issue.path.endsWith('.illumina.chemistry')));
 });
 
+test('rejects non-string Illumina settings rather than coercing YAML values', () => {
+  for (const field of ['chemistry', 'poly_g'] as const) {
+    for (const value of [undefined, null, true, 1, ['two-colour'], ['on'], {value: 'on'}]) {
+      const entry = isolate('sample');
+      Object.assign(entry.read_sets[0]!.illumina, {[field]: value});
+      assert.ok(issuesFor(catalogOf(entry)).some(issue => issue.path.endsWith(`.illumina.${field}`)));
+      assert.throws(() => parseIsolateCatalog(stringify(catalogOf(entry))), IsolateCatalogValidationError);
+    }
+  }
+});
+
 test('validates read-set identity, explicit library, platform, layout, and processing', () => {
   for (const change of [{id: 'Bad ID'}, {name: ''}, {library_id: ''}, {platform: 'nanopore'},
     {layout: 'single-end'}, {illumina: {chemistry: 'unknown', poly_g: 'guess'}}, {read_pairs: []}]) {

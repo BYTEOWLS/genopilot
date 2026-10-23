@@ -25,7 +25,7 @@ Removing an isolate removes its catalog entry, not its sequencing files. An isol
 
 ## Editing
 
-The form separates isolate details and each read set into bordered sections. Within a read set, each pair has its own section for its files, previous processing, and removal. Long forms keep the current read-set and pair headings visible while scrolling and resizing; pair borders compact to headings on very short terminals.
+The form separates isolate details and each read set with borderless headings and spacing, like accession details. Within a read set, each pair has its own indented section for its files, previous processing, and removal. Long forms keep the current read-set and pair headings visible while scrolling and resizing.
 
 | Field | Meaning |
 |---|---|
