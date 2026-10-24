@@ -46,7 +46,9 @@ class ValidateReadPairTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             exit_code = validate_read_pair.main(
                 ["--isolate-id", isolate, "--pair", "1", "--r1", str(r1), "--r2", str(r2),
-                 "--trimmed", trimmed, "--report", str(report), "--read-group", str(read_group)]
+                 "--trimmed", trimmed, "--library-id", "confirmed-library", "--read-set-id", "reads",
+                 "--read-group-id", "group-1", "--preprocessing-json", "{}",
+                 "--report", str(report), "--read-group", str(read_group)]
             )
         return exit_code, json.loads(report.read_text(encoding="utf-8")), read_group
 
@@ -60,13 +62,14 @@ class ValidateReadPairTests(unittest.TestCase):
         self.assertEqual(report["sequencing"]["lanes"], [1])
         self.assertEqual(
             report["read_group"],
-            {"id": "FCA0001.1.CTAGCTAG+GGTTAACC", "pu": "FCA0001.1.CTAGCTAG+GGTTAACC", "sm": "iso-c",
-             "lb": "IsoC.CTAGCTAG+GGTTAACC", "pl": "ILLUMINA", "library_source": "illumina-file-name"},
+            {"id": "group-1", "pu": "FCA0001.1.CTAGCTAG+GGTTAACC", "sm": "iso-c",
+             "lb": "confirmed-library", "pl": "ILLUMINA", "library_source": "explicit",
+             "id_source": "generated", "sequencing_source": "headers"},
         )
         self.assertEqual(
             read_group.read_text(encoding="utf-8"),
-            "@RG\\tID:FCA0001.1.CTAGCTAG+GGTTAACC\\tPU:FCA0001.1.CTAGCTAG+GGTTAACC"
-            "\\tSM:iso-c\\tLB:IsoC.CTAGCTAG+GGTTAACC\\tPL:ILLUMINA\n",
+            "@RG\\tID:group-1\\tPU:FCA0001.1.CTAGCTAG+GGTTAACC"
+            "\\tSM:iso-c\\tLB:confirmed-library\\tPL:ILLUMINA\n",
         )
 
     def test_a_lane_merged_pair_leaves_the_lane_out_of_its_read_group(self) -> None:
@@ -78,7 +81,7 @@ class ValidateReadPairTests(unittest.TestCase):
         exit_code, report, _ = self.run_script(r1, r2)
         self.assertEqual(exit_code, 0)
         self.assertEqual(report["sequencing"]["lanes"], [1, 2])
-        self.assertEqual(report["read_group"]["id"], "FCX.ACGTACGT+TTGCAGCA")
+        self.assertEqual(report["read_group"]["pu"], "FCX.ACGTACGT+TTGCAGCA")
 
     def test_reads_plain_fastq_and_a_file_name_that_is_not_illumina(self) -> None:
         r1, r2 = self.write_pair(record(illumina_name(1), 1), record(illumina_name(1), 2),
@@ -86,8 +89,8 @@ class ValidateReadPairTests(unittest.TestCase):
         exit_code, report, _ = self.run_script(r1, r2, trimmed="trimmed")
         self.assertEqual(exit_code, 0)
         self.assertTrue(report["trimmed"])
-        self.assertEqual(report["read_group"]["lb"], "isolate-a.ACGTACGT+TTGCAGCA")
-        self.assertEqual(report["read_group"]["library_source"], "isolate-id")
+        self.assertEqual(report["read_group"]["lb"], "confirmed-library")
+        self.assertEqual(report["read_group"]["library_source"], "explicit")
 
     def test_a_record_without_a_barcode_keeps_the_read_group_without_one(self) -> None:
         r1, r2 = self.write_pair(record(illumina_name(1), 1, comment="1:N:0:"),
@@ -95,8 +98,8 @@ class ValidateReadPairTests(unittest.TestCase):
         exit_code, report, _ = self.run_script(r1, r2)
         self.assertEqual(exit_code, 0)
         self.assertIsNone(report["sequencing"]["barcode"])
-        self.assertEqual(report["read_group"]["id"], "FCX.1")
-        self.assertEqual(report["read_group"]["lb"], "Sample1")
+        self.assertEqual(report["read_group"]["pu"], "FCX.1")
+        self.assertEqual(report["read_group"]["lb"], "confirmed-library")
 
     def test_a_differing_barcode_does_not_reject_the_pair(self) -> None:
         r1, r2 = self.write_pair(
@@ -105,7 +108,7 @@ class ValidateReadPairTests(unittest.TestCase):
         )
         exit_code, report, _ = self.run_script(r1, r2)
         self.assertEqual(exit_code, 0)
-        self.assertEqual(report["sequencing"]["barcode"], "ACGTACGT+TTGCAGCA")
+        self.assertIsNone(report["sequencing"]["barcode"])
 
     def assert_fails(self, r1_text: str, r2_text: str, message: str) -> dict:
         r1, r2 = self.write_pair(r1_text, r2_text)
@@ -117,8 +120,14 @@ class ValidateReadPairTests(unittest.TestCase):
         self.assertTrue(any(message in error for error in report["errors"]), report["errors"])
         return report
 
-    def test_rejects_a_read_name_that_is_not_illumina(self) -> None:
-        self.assert_fails(record("SRR1234567.1", 1), record("SRR1234567.1", 2), "not an Illumina read name")
+    def test_accepts_archive_headers_without_inventing_sequencing_metadata(self) -> None:
+        r1, r2 = self.write_pair(record("SRR1234567.1/1", 1), record("SRR1234567.1/2", 2), compress=False)
+        exit_code, report, read_group = self.run_script(r1, r2)
+        self.assertEqual(exit_code, 0)
+        self.assertIsNone(report["sequencing"])
+        self.assertNotIn("pu", report["read_group"])
+        self.assertEqual(report["read_group"]["library_source"], "explicit")
+        self.assertNotIn("PU:", read_group.read_text())
 
     def test_rejects_a_record_from_another_flowcell_but_not_another_lane(self) -> None:
         self.assert_fails(
@@ -131,11 +140,24 @@ class ValidateReadPairTests(unittest.TestCase):
         self.assert_fails(
             record(illumina_name(1), 1) + record(illumina_name(2), 1),
             record(illumina_name(1), 2),
-            "R1 holds 2 records but R2 holds 1",
+            "mate record counts differ",
         )
 
     def test_rejects_an_empty_pair(self) -> None:
         self.assert_fails("", "", "holds no records")
+
+    def test_rejects_archive_mate_disagreements_and_malformed_provider_processed_records(self) -> None:
+        self.assert_fails(record("SRR1.1", 1), record("SRR1.2", 2), "mate names differ")
+        r1, r2 = self.write_pair(record("SRR1.1", 1), "@SRR1.1\nACGT\n+\nI\n", compress=False)
+        exit_code, report, _ = self.run_script(r1, r2, trimmed="trimmed")
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any("quality" in error for error in report["errors"]))
+        self.assertFalse(report["files"]["r1"]["checksum_complete"])
+
+    def test_rejects_mixed_header_evidence_and_wrong_mate_labels(self) -> None:
+        self.assert_fails(record(illumina_name(1), 1) + record("SRR1.2", 1),
+                          record(illumina_name(1), 2) + record("SRR1.2", 2), "mixed original and archive")
+        self.assert_fails(record("SRR1.1/2", 1), record("SRR1.1/2", 2), "wrong mate suffix")
 
 
 if __name__ == "__main__":

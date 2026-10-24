@@ -117,6 +117,9 @@ def build_metrics(isolate_id: str, directory: Path, pair_count: int, calling: di
         pairs.append({
             "pair": number,
             "trimmed": validation["trimmed"],
+            "read_set_id": validation["read_set_id"],
+            "preprocessing": {**validation["preprocessing"], "status": "skipped-provider-trimmed" if validation["trimmed"] else "completed",
+                              "origin": "imported" if validation["trimmed"] else "generated"},
             "read_group": validation["read_group"]["id"],
             "library": validation["read_group"]["lb"],
             "before_trimming": fastp["before_filtering"],
@@ -204,9 +207,12 @@ def main(argv: list[str] | None = None) -> int:
             "trimmed": validation["trimmed"],
             "sequencing": validation["sequencing"],
             "read_group": validation["read_group"],
-            "reads": fastp["total_reads"],
-            "read1_mean_length": fastp["read1_mean_length"],
-            "read2_mean_length": fastp["read2_mean_length"],
+            "read_set_id": validation["read_set_id"],
+            "preprocessing": {**validation["preprocessing"], "status": "skipped-provider-trimmed" if validation["trimmed"] else "completed",
+                              "origin": "imported" if validation["trimmed"] else "generated"},
+            "reads": fastp["total_reads"] if fastp else None,
+            "read1_mean_length": fastp["read1_mean_length"] if fastp else None,
+            "read2_mean_length": fastp["read2_mean_length"] if fastp else None,
         })
     own_outputs = {str(args.metrics), str(args.provenance), str(args.candidate)}
     artifacts = [
@@ -221,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         "workflow": {"id": config["workflow_id"], "version": config["workflow_version"]},
         "run": {"id": config["run"]["id"], "created_at": config["run"]["created_at"]},
         "calling": calling,
+        "read_sets": isolate["read_sets"],
         "read_pairs": pairs,
         "tool_versions": tool_versions(),
         "artifacts": artifacts,

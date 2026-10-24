@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {validateIsolateCatalog, type Isolate, type IsolateCatalog} from '../../src/isolates/catalog.js';
-import type {DeliveryReadSet, DeliveryScan, DeliveryVariant} from '../../src/isolates/illumina-delivery.js';
+import {testReadSet} from '../read-sets.js';
+import {validateIsolateCatalog, readPairs, type Isolate, type IsolateCatalog} from '../../src/isolates/catalog.js';
+import type {DeliveryReadSet, DeliveryScan, DeliveryVariant} from '../../src/isolates/illumina/delivery.js';
 import {
   applyImportDecisions,
   chooseVariant,
@@ -9,7 +10,7 @@ import {
   initialDecisions,
   initialReadSetDecision,
   type CandidateDecision,
-} from '../../src/isolates/illumina-import.js';
+} from '../../src/isolates/illumina/import.js';
 
 function variant(folder: string, sample: string, suggestedTrimmed = false): DeliveryVariant {
   return {
@@ -25,7 +26,7 @@ function variant(folder: string, sample: string, suggestedTrimmed = false): Deli
 }
 
 function readSet(variants: DeliveryVariant[], lane: number | null = 1, run = 7): DeliveryReadSet {
-  return {instrument: 'A00001', run, flowcell: 'HFLOWAAXX', lane, variants};
+  return {instrument: 'A00001', run, flowcell: 'HFLOWAAXX', lane, chunk: 1, variants};
 }
 
 function scanOf(...candidates: DeliveryScan['candidates']): DeliveryScan {
@@ -38,7 +39,7 @@ function isolate(id: string, overrides: Partial<Isolate> = {}): Isolate {
     name: id,
     wildtype: null,
     derived_from: null,
-    read_pairs: [{r1: `/data/${id}_R1.fq`, r2: `/data/${id}_R2.fq`, trimmed: false}],
+    read_sets: [testReadSet([{r1: `/data/${id}_R1.fq`, r2: `/data/${id}_R2.fq`, trimmed: false}])],
     ...overrides,
   };
 }
@@ -93,6 +94,25 @@ test('proposes adding to an existing isolate with the sample\'s name or ID, and 
   assert.deepEqual(decisions[2]?.newIsolate, {name: 'strain x', id: 'strain-x', wildtype: null, derivedFrom: null});
 });
 
+test('prefills distinct editable library suggestions without treating top-ups as the same preparation', () => {
+  const existing = isolate('known', {name: 'Known Name'});
+  existing.read_sets[0]!.library_id = 'known-library-1';
+  const catalog = catalogOf(existing);
+  const scan = scanOf(
+    {sample: 'known', readSets: [readSet([variant('delivery', 'known')])]},
+    {sample: 'Known Name', readSets: [readSet([variant('delivery', 'Known Name')])]},
+    {sample: 'New One', readSets: [readSet([variant('delivery', 'New One')])]},
+  );
+  const decisions = initialDecisions(scan, catalog);
+  assert.deepEqual(decisions.map(decision => decision.libraryId), ['known-library-2', 'known-library-3', 'new-one-library-1']);
+  const saved = applyImportDecisions(catalog, scan, decisions).catalog;
+  assert.deepEqual(saved.isolates[0]!.read_sets.map(set => set.library_id), ['known-library-1', 'known-library-2', 'known-library-3']);
+  decisions[0]!.libraryId = 'known-library-1';
+  assert.equal(applyImportDecisions(catalog, scan, decisions).catalog.isolates[0]!.read_sets[1]!.library_id, 'known-library-1');
+  decisions[0]!.libraryId = '';
+  assert.throws(() => applyImportDecisions(catalog, scan, decisions), ImportDecisionError);
+});
+
 test('creates new isolates and extends existing ones in one catalog', () => {
   const scan = scanOf(
     {sample: 'new-one', readSets: [readSet([variant('raw', 'new-one'), variant('processed', 'new-one', true)])]},
@@ -100,7 +120,7 @@ test('creates new isolates and extends existing ones in one catalog', () => {
     {sample: 'ignored', readSets: [readSet([variant('raw', 'ignored')])]},
   );
   const catalog = catalogOf(isolate('known'));
-  const decisions: CandidateDecision[] = initialDecisions(scan, catalog);
+  const decisions: CandidateDecision[] = initialDecisions(scan, catalog).map(decision => ({...decision, libraryId: 'library-a'}));
   decisions[0] = {...decisions[0]!, newIsolate: {name: 'New One', id: 'new-one', wildtype: true, derivedFrom: 'known'}};
   // Leave lane 2 of the top-up out and skip the third sample entirely.
   decisions[1] = {...decisions[1]!, readSets: [decisions[1]!.readSets[0]!, {variant: 'none', trimmed: false}]};
@@ -110,18 +130,19 @@ test('creates new isolates and extends existing ones in one catalog', () => {
 
   assert.equal(result.created, 1);
   assert.equal(result.extended, 1);
-  assert.deepEqual(result.catalog.isolates.map(entry => [entry.id, entry.read_pairs.length]), [['known', 2], ['new-one', 1]]);
+  assert.deepEqual(result.catalog.isolates.map(entry => [entry.id, readPairs(entry).length]), [['known', 2], ['new-one', 1]]);
   assert.deepEqual(result.catalog.isolates[1], {
     id: 'new-one',
     name: 'New One',
     wildtype: true,
     derived_from: 'known',
-    read_pairs: [{r1: '/delivery/raw/new-one_S1_L001_R1_001.fastq.gz', r2: '/delivery/raw/new-one_S1_L001_R2_001.fastq.gz', trimmed: false}],
+    read_sets: [{...testReadSet([{r1: '/delivery/raw/new-one_S1_L001_R1_001.fastq.gz', r2: '/delivery/raw/new-one_S1_L001_R2_001.fastq.gz', trimmed: false}]),
+      id: result.catalog.isolates[1]!.read_sets[0]!.id, name: 'new-one', illumina: {chemistry: 'two-colour', poly_g: 'auto'}}],
   });
   assert.equal(result.pairs.length, 2);
   assert.doesNotThrow(() => validateIsolateCatalog(result.catalog));
   // The input catalog is left unchanged.
-  assert.equal(catalog.isolates[0]?.read_pairs.length, 1);
+  assert.equal(readPairs(catalog.isolates[0]!).length, 1);
 });
 
 test('refuses open choices, empty selections, and vanished targets', () => {
@@ -130,7 +151,7 @@ test('refuses open choices, empty selections, and vanished targets', () => {
     {sample: 'empty', readSets: [readSet([variant('raw', 'empty')])]},
     {sample: 'gone', readSets: [readSet([variant('raw', 'gone')])]},
   );
-  const decisions: CandidateDecision[] = initialDecisions(scan, catalogOf());
+  const decisions: CandidateDecision[] = initialDecisions(scan, catalogOf()).map(decision => ({...decision, libraryId: 'library-a'}));
   decisions[1] = {...decisions[1]!, readSets: [{variant: 'none', trimmed: false}]};
   decisions[2] = {...decisions[2]!, target: {existingId: 'gone'}};
 
@@ -151,10 +172,10 @@ test('counts an existing isolate once when several samples add to it', () => {
     {sample: 'known-topup', readSets: [readSet([variant('run-11', 'known-topup')], 1, 11)]},
   );
   const catalog = catalogOf(isolate('known'));
-  const decisions = initialDecisions(scan, catalog).map(decision => ({...decision, target: {existingId: 'known'}}));
+  const decisions = initialDecisions(scan, catalog).map(decision => ({...decision, libraryId: 'library-a', target: {existingId: 'known'}}));
 
   const result = applyImportDecisions(catalog, scan, decisions);
 
   assert.equal(result.extended, 1);
-  assert.equal(result.catalog.isolates[0]?.read_pairs.length, 3);
+  assert.equal(readPairs(result.catalog.isolates[0]!).length, 3);
 });

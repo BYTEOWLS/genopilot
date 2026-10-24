@@ -2,6 +2,7 @@ import {UnorderedList} from "@inkjs/ui";
 import {Box, Text} from "ink";
 import React from "react";
 import {mutedColor} from '../theme.js';
+import {Section} from '../components/section.js';
 
 export type SectionListProps = {
     title: string,
@@ -27,8 +28,7 @@ export function SectionList({
                                 children,
                             }: SectionListProps): React.JSX.Element {
     return (
-        <Box marginTop={1} flexDirection="column" flexShrink={0}>
-            <Text bold>{title}</Text>
+        <Section title={title}>
             {description && (<Text italic>{description}</Text>)}
             <UnorderedList>
                 {items.map(i => (<UnorderedList.Item key={i.id}>
@@ -43,7 +43,7 @@ export function SectionList({
                 }
             </UnorderedList>
             {children}
-        </Box>
+        </Section>
     )
 
 }
