@@ -8,4 +8,4 @@ dependencies:
   - bwa=0.7.19
   - samtools=1.24
   - bcftools=1.24
-  - htslib=1.24
+  - htslib=1.25
