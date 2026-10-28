@@ -7,5 +7,5 @@ dependencies:
   - fastp=1.4.0
   - bwa=0.7.19
   - samtools=1.24
-  - bcftools=1.24
+  - bcftools=1.25
   - htslib=1.24
