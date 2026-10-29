@@ -4,7 +4,7 @@ import {formatLocalDateTime} from '../utils.js';
 
 const sourceLabels: Record<NcbiAssemblyMetadata['source'], string> = {
   'datasets-v2-rest': 'NCBI Datasets API',
-  'cached-download-report': 'Report cached with a download',
+  'cached-download-report': 'NCBI assembly report from a previous download',
 };
 
 const notReported = 'not reported by NCBI';
