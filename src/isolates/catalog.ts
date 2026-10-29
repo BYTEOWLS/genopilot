@@ -1,5 +1,6 @@
 import {isAbsolute, resolve} from 'node:path';
 import {parse} from 'yaml';
+import {validateIlluminaMetadata} from './illumina/metadata.js';
 
 export const ISOLATE_CATALOG_SCHEMA_VERSION = 1 as const;
 
@@ -7,9 +8,27 @@ export const ISOLATE_CATALOG_SCHEMA_VERSION = 1 as const;
 export type ReadPair = {
   r1: string;
   r2: string;
-  /** Whether the reads were already trimmed or filtered before reaching GenoPilot. */
-  trimmed: boolean;
+  /** Previous trimming/filtering: true, false, or null when unknown. */
+  trimmed: boolean | null;
 };
+
+export type ReadSet = {
+  id: string;
+  name: string;
+  platform: 'illumina';
+  layout: 'paired-end';
+  /** Confirmed by the researcher; shared across resequencing of the same library. */
+  library_id: string;
+  illumina: {
+    chemistry: 'four-colour' | 'two-colour' | 'one-channel' | 'unknown';
+    poly_g: 'auto' | 'on' | 'off';
+  };
+  read_pairs: ReadPair[];
+};
+
+export function readPairs(isolate: Pick<Isolate, 'read_sets'>): ReadPair[] {
+  return isolate.read_sets.flatMap(readSet => readSet.read_pairs);
+}
 
 export type Isolate = {
   id: string;
@@ -18,7 +37,7 @@ export type Isolate = {
   /** Researcher-supplied lineage metadata; null when not recorded. */
   wildtype: boolean | null;
   derived_from: string | null;
-  read_pairs: ReadPair[];
+  read_sets: ReadSet[];
 };
 
 export type IsolateCatalog = {
@@ -107,8 +126,39 @@ function validateReadPair(
   rejectUnknownFields(value, ['r1', 'r2', 'trimmed'], path, issues);
   validateReadPath(value.r1, `${path}.r1`, issues);
   validateReadPath(value.r2, `${path}.r2`, issues);
-  if (typeof value.trimmed !== 'boolean') {
-    issues.push({path: `${path}.trimmed`, message: 'must be true or false'});
+  if (value.trimmed !== null && typeof value.trimmed !== 'boolean') {
+    issues.push({path: `${path}.trimmed`, message: 'must be true, false, or null (unknown)'});
+  }
+}
+
+export const libraryIdPattern = /^[A-Za-z0-9._+-]+$/;
+
+function validateReadSet(value: unknown, path: string, issues: IsolateCatalogValidationIssue[]): void {
+  if (!isRecord(value)) {
+    issues.push({path, message: 'must be a mapping'});
+    return;
+  }
+  rejectUnknownFields(value, ['id', 'name', 'platform', 'layout', 'library_id', 'illumina', 'read_pairs'], path, issues);
+  if (typeof value.id !== 'string' || !isolateIdPattern.test(value.id)) {
+    issues.push({path: `${path}.id`, message: 'must be a stable lowercase ID using letters, numbers and hyphens'});
+  }
+  if (typeof value.name !== 'string' || !value.name.trim() || hasControlCharacters(value.name)) {
+    issues.push({path: `${path}.name`, message: 'must be a non-empty display name without control characters'});
+  }
+  if (value.platform !== 'illumina') {
+    issues.push({path: `${path}.platform`, message: 'only illumina is currently supported'});
+  }
+  if (value.layout !== 'paired-end') {
+    issues.push({path: `${path}.layout`, message: 'only paired-end is currently supported'});
+  }
+  if (typeof value.library_id !== 'string' || !libraryIdPattern.test(value.library_id)) {
+    issues.push({path: `${path}.library_id`, message: 'confirm a library ID using letters, numbers, dot, underscore, plus or hyphen'});
+  }
+  validateIlluminaMetadata(value.illumina, `${path}.illumina`, issues);
+  if (!Array.isArray(value.read_pairs) || value.read_pairs.length === 0) {
+    issues.push({path: `${path}.read_pairs`, message: 'must be a non-empty list'});
+  } else {
+    value.read_pairs.forEach((pair, index) => validateReadPair(pair, `${path}.read_pairs[${index}]`, issues));
   }
 }
 
@@ -122,7 +172,7 @@ export function validateIsolate(
     issues.push({path, message: 'must be a mapping'});
     return;
   }
-  rejectUnknownFields(value, ['id', 'name', 'description', 'wildtype', 'derived_from', 'read_pairs'], path, issues);
+  rejectUnknownFields(value, ['id', 'name', 'description', 'wildtype', 'derived_from', 'read_sets'], path, issues);
   if (typeof value.id !== 'string' || !isolateIdPattern.test(value.id)) {
     issues.push({
       path: `${path}.id`,
@@ -146,31 +196,42 @@ export function validateIsolate(
   if (value.derived_from !== null && typeof value.derived_from !== 'string') {
     issues.push({path: `${path}.derived_from`, message: 'must be an isolate ID or null'});
   }
-  if (!Array.isArray(value.read_pairs) || value.read_pairs.length === 0) {
-    issues.push({path: `${path}.read_pairs`, message: 'must be a non-empty list'});
+  if (!Array.isArray(value.read_sets) || value.read_sets.length === 0) {
+    issues.push({path: `${path}.read_sets`, message: 'must be a non-empty list; old catalog entries must be discarded and re-imported'});
     return;
   }
-  value.read_pairs.forEach((pair, index) => validateReadPair(pair, `${path}.read_pairs[${index}]`, issues));
+  const ids = new Set<unknown>();
+  value.read_sets.forEach((readSet, index) => {
+    const setPath = `${path}.read_sets[${index}]`;
+    validateReadSet(readSet, setPath, issues);
+    if (isRecord(readSet)) {
+      if (ids.has(readSet.id)) {
+        issues.push({path: `${setPath}.id`, message: 'is already used by another read set of this isolate'});
+      }
+      ids.add(readSet.id);
+    }
+  });
 }
 
 /** Checks what only the whole catalog can reveal: a read file used twice. */
 function validateReadFileUse(isolates: readonly Isolate[], issues: IsolateCatalogValidationIssue[]): void {
   const firstUse = new Map<string, {isolateId: string; mate: string}>();
   isolates.forEach((isolate, isolateIndex) => {
-    const path = `$.isolates[${isolateIndex}].read_pairs`;
-    isolate.read_pairs.forEach((pair, pairIndex) => {
-      for (const mate of ['r1', 'r2'] as const) {
-        const matePath = `${path}[${pairIndex}].${mate}`;
-        const file = resolve(pair[mate]);
-        const previous = firstUse.get(file);
-        if (previous === undefined) {
-          firstUse.set(file, {isolateId: isolate.id, mate: `pair ${String(pairIndex + 1)} ${mate.toUpperCase()}`});
-        } else {
-          // Name the earlier use by isolate ID rather than catalog position, which researchers never see.
-          const owner = previous.isolateId === isolate.id ? '' : `isolate "${previous.isolateId}", `;
-          issues.push({path: matePath, message: `uses the same file as ${owner}${previous.mate}`});
+    isolate.read_sets.forEach((readSet, setIndex) => {
+      const path = `$.isolates[${isolateIndex}].read_sets[${setIndex}].read_pairs`;
+      readSet.read_pairs.forEach((pair, pairIndex) => {
+        for (const mate of ['r1', 'r2'] as const) {
+          const matePath = `${path}[${pairIndex}].${mate}`;
+          const file = resolve(pair[mate]);
+          const previous = firstUse.get(file);
+          if (previous === undefined) {
+            firstUse.set(file, {isolateId: isolate.id, mate: `read set ${readSet.id}, pair ${pairIndex + 1} ${mate.toUpperCase()}`});
+          } else {
+            const owner = previous.isolateId === isolate.id ? '' : `isolate "${previous.isolateId}", `;
+            issues.push({path: matePath, message: `uses the same file as ${owner}${previous.mate}`});
+          }
         }
-      }
+      });
     });
   });
 }
@@ -224,7 +285,7 @@ export function validateIsolateCatalog(value: unknown): IsolateCatalog {
   if (value.schema_version !== ISOLATE_CATALOG_SCHEMA_VERSION) {
     issues.push({
       path: '$.schema_version',
-      message: `must be ${String(ISOLATE_CATALOG_SCHEMA_VERSION)}`,
+      message: `unsupported catalog; discard it and re-import using schema ${String(ISOLATE_CATALOG_SCHEMA_VERSION)} (no migration)`,
     });
   }
   if (!Array.isArray(value.isolates)) {
@@ -267,6 +328,18 @@ export function suggestIsolateId(name: string, existingIds: Iterable<string>): s
   }
   for (let suffix = 2; ; suffix += 1) {
     const candidate = `${base}-${String(suffix)}`;
+    if (!existing.has(candidate)) {
+      return candidate;
+    }
+  }
+}
+
+/** Suggest a new preparation, never silently reuse an existing library's identity. */
+export function suggestLibraryId(isolateName: string, existingIds: Iterable<string>): string {
+  const base = suggestIsolateId(isolateName, []);
+  const existing = new Set(existingIds);
+  for (let index = 1; ; index++) {
+    const candidate = `${base}-library-${index}`;
     if (!existing.has(candidate)) {
       return candidate;
     }

@@ -57,13 +57,23 @@ Validate imported artifacts and record their checksums, versions, configuration 
 - Do not describe tooling as ready until its compatibility has been validated against configured requirements.
 - Let Snakemake provision pinned per-rule environments; do not run bioinformatics tools directly as an alternative execution path.
 - Show exact commands. Capture complete Snakemake stdout and stderr separately from the Ink dashboard.
-- Propagate cancellation to Snakemake and wait for cleanup before exiting.
+- Propagate cancellation to Snakemake and wait for cleanup before exiting. Recheck cancellation after asynchronous setup and before spawning; cancelled setup must close any opened logs without starting a process.
 - Keep unavailable commands visibly marked as placeholders; never imply incomplete behavior works.
 - Keep layouts responsive to terminal resizing and usable without color.
 - Use the alternate-screen buffer for the interactive application to avoid polluting terminal history during rerenders.
 - The mouse wheel acts like ↑/↓ everywhere, through the shared input translation in `src/ui/mouse-wheel.ts`; screens never handle mouse input themselves.
 - A user-requested interactive exit requires two `Ctrl+C` presses within two seconds. Do not bind `q`, Escape, or a menu command to exit.
+- Before changing a screen, inspect comparable screens and `src/ui/components/`; reuse their interaction patterns and shared components rather than inventing screen-specific equivalents. Keep navigation, focus, selection, actions, validation, and shortcuts consistent across screens.
+- Group related information with the shared `Section` component (see below) or the shared `TabBar` and its existing key bindings. Do not introduce alternate section switchers, cycling controls, or new navigation gestures without explicit agreement. Tabs must not compete with form-field navigation for the same keys.
+- Use shared field, parameter-list, table, and validation components where they fit. When a demonstrated need requires changing a shared pattern, update its component and affected callers together; do not create a parallel implementation or a speculative abstraction.
 - Build every screen on the shared `Page` component (title, optional description, content, shortcut line ending in Esc and `h — Home`) and forms on `EditPage`, whose save button is a selectable row. In forms, Tab and the arrow keys move between fields; Enter only activates the selected button (or opens the file browser on a path field) and never moves on or submits from a text field. Validation runs when the save button is pressed and its problems are shown by `EditPage`.
+
+### Shared sections
+
+- Use `Section` from `src/ui/components/section.tsx` for headed content groups on new or changed pages; do not hand-build another heading/container component. Existing content renderers such as `SectionList` compose it rather than duplicating its layout.
+- API: required `title` (string) and `children`; optional `border` (default `false`) and `marginTop` (default `1`, use `0` for a first/flush section). The heading is bold, sanitized, and truncated to one line. Borders use one shared rounded style and horizontal padding; nested sections do not inherit them. Each nested `Section` automatically adds two spaces of indentation, including through ordinary wrapper components; callers must not add their own nesting offset.
+- Children compose existing `ParameterList`, fields, choosers, tables, lists, or nested `Section`s. Nest read-pair sections inside their read-set section. Keep input, focus, validation, and data handling in the existing components/caller, not in `Section`; do not introduce a parallel row/form schema.
+- Prefer borderless sections. Use `border` only for an intentional panel, not to distinguish every group. Account for the heading, spacing, and, when enabled, two border lines and horizontal padding in viewport sizing. Keep focused fields, current headings, and save actions visible across resizing. Specialized table/log/Markdown borders are not section layouts.
 
 ## Data contracts
 

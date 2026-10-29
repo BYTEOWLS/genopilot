@@ -1,5 +1,18 @@
 import {sanitizeTerminalText} from "./sanitize.js";
 
+/** Formats a date in the host locale, preserving date-only values across timezones. */
+export function formatLocalDate(value: string): string {
+    const sanitized = sanitizeTerminalText(value);
+    const date = new Date(sanitized);
+    if (Number.isNaN(date.valueOf())) {
+        return value;
+    }
+    return new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(sanitized) ? {timeZone: 'UTC'} : {}),
+    }).format(date);
+}
+
 /**
  * Formats a timestamp in the environment's locale and timezone.
  *

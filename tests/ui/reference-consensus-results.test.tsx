@@ -80,6 +80,7 @@ const configuration = validateReferenceConsensusConfiguration({
     backbone: {source: 'ncbi', accession: 'GCF_000000001.1'},
     isolates_file: 'isolates.yaml',
     selected_isolates: isolateIds,
+    selected_read_sets: isolateIds.map(id => `${id}/reads`),
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
   consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
@@ -532,7 +533,7 @@ function recorder(): Recorded {
   return {drafts: [], prepared: [], executed: [], reloads: 0};
 }
 
-async function waitFor(condition: () => boolean, description: string): Promise<void> {
+async function waitFor(condition: () => boolean, description: string, frame?: () => string): Promise<void> {
   const timeoutAt = Date.now() + 2000;
   while (Date.now() < timeoutAt) {
     if (condition()) {
@@ -540,7 +541,7 @@ async function waitFor(condition: () => boolean, description: string): Promise<v
     }
     await settle(10);
   }
-  assert.fail(`Timed out waiting until ${description}`);
+  assert.fail(`Timed out waiting until ${description}${frame ? `\n${frame()}` : ''}`);
 }
 
 /** Moves from the first isolate row to a later form row: isolates, then the settings, the reason, and save. */
@@ -550,7 +551,16 @@ function down(times: number): string[] {
 
 test('saves a reasoned exclusion with changed settings, then dry-runs and executes only the iteration', async () => {
   const recorded = recorder();
-  const screen = renderScreen({cohortRerun: rerun(recorded)});
+  const capability = rerun(recorded);
+  const loadResult = capability.loadResult!;
+  let releaseReload!: () => void;
+  const reload = new Promise<void>(resolve => {releaseReload = resolve;});
+  capability.loadResult = async (...args) => {
+    const result = await loadResult(...args);
+    await reload;
+    return result;
+  };
+  const screen = renderScreen({cohortRerun: capability});
   try {
     await settle();
     await screen.press('r');
@@ -583,10 +593,13 @@ test('saves a reasoned exclusion with changed settings, then dry-runs and execut
 
     // Back on the results, reloaded, with the new iteration selected.
     await settle();
-    frame = await screen.press(ESCAPE);
-    await waitFor(() => recorded.reloads === 1, 'the result is reloaded');
-    frame = await screen.press(ARROW_UP, ARROW_DOWN);
-    assert.match(selectedLine(frame) ?? '', /^.*4.*active/);
+    await screen.press(ESCAPE);
+    await waitFor(() => recorded.reloads === 1, 'the result reload starts');
+    releaseReload();
+    const consensusPath = cohort('iteration-4', 4).paths['consensus-fasta']!.path;
+    await waitFor(() => /^\W*4\b/.test(selectedLine(screen.output.readOutput()) ?? '') &&
+      screen.output.readOutput().includes(consensusPath), 'the reloaded result renders with the new iteration selected', () => screen.output.readOutput());
+    assert.equal(recorded.reloads, 1);
   } finally {
     screen.unmount();
   }

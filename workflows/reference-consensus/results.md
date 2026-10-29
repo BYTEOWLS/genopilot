@@ -79,7 +79,7 @@ Shown once the active iteration's consensus FASTA exists. The consensus is not a
 | Item | Meaning |
 |---|---|
 | Name | The isolate's name as recorded when the run was created. |
-| Reads trimmed by the provider | Whether the read files were already adapter-trimmed by the provider, as recorded per read pair. |
+| Reads trimmed by the provider | Recorded per file group; known provider-trimmed groups skip further trimming. Unknown state must be reviewed before execution. |
 | Covered backbone bases | Share of backbone bases with at least one read. |
 | Unreadable records | Records of this isolate that exist but cannot be read by this application version. |
 

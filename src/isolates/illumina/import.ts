@@ -1,5 +1,7 @@
-import {suggestIsolateId, type IsolateCatalog, type ReadPair} from './catalog.js';
-import type {DeliveryCandidate, DeliveryReadSet, DeliveryScan} from './illumina-delivery.js';
+import {randomUUID} from 'node:crypto';
+import {suggestIsolateId, suggestLibraryId, libraryIdPattern, type IsolateCatalog, type ReadPair} from '../catalog.js';
+import {createIlluminaReadSet} from './metadata.js';
+import type {DeliveryCandidate, DeliveryReadSet, DeliveryScan} from './delivery.js';
 
 /**
  * The researcher's choice for one read set: one variant by index, none of them, or no choice yet
@@ -18,6 +20,8 @@ export type CandidateDecision = {
   target: 'new' | 'skip' | {existingId: string};
   /** Kept while another target is chosen, so switching back does not lose edits. */
   newIsolate: NewIsolateFields;
+  /** Editable suggestion; saving confirms it, not an inferred biological identity. */
+  libraryId: string;
   readSets: ReadSetDecision[];
 };
 
@@ -59,13 +63,22 @@ export function chooseVariant(readSet: DeliveryReadSet, variant: number | 'none'
  */
 export function initialDecisions(scan: DeliveryScan, catalog: IsolateCatalog): CandidateDecision[] {
   const usedIds = new Set(catalog.isolates.map(isolate => isolate.id));
+  const librariesByIsolate = new Map(catalog.isolates.map(isolate => [
+    isolate.id, new Set(isolate.read_sets.map(readSet => readSet.library_id)),
+  ]));
   return scan.candidates.map(candidate => {
     const existing = catalog.isolates.find(isolate => isolate.name === candidate.sample || isolate.id === candidate.sample);
     const id = suggestIsolateId(candidate.sample, usedIds);
     usedIds.add(id);
+    const targetId = existing?.id ?? id;
+    const libraryIds = librariesByIsolate.get(targetId) ?? new Set<string>();
+    const libraryId = suggestLibraryId(targetId, libraryIds);
+    libraryIds.add(libraryId);
+    librariesByIsolate.set(targetId, libraryIds);
     return {
       target: existing ? {existingId: existing.id} : 'new',
       newIsolate: {name: candidate.sample, id, wildtype: null, derivedFrom: null},
+      libraryId,
       readSets: candidate.readSets.map(initialReadSetDecision),
     };
   });
@@ -73,7 +86,7 @@ export function initialDecisions(scan: DeliveryScan, catalog: IsolateCatalog): C
 
 function describeReadSet(readSet: DeliveryReadSet): string {
   const lane = readSet.lane === null ? 'merged lanes' : `lane ${String(readSet.lane)}`;
-  return `run ${String(readSet.run)}, flowcell ${readSet.flowcell}, ${lane}`;
+  return `run ${String(readSet.run)}, flowcell ${readSet.flowcell}, ${lane}, chunk ${readSet.chunk}`;
 }
 
 function chosenPairs(candidate: DeliveryCandidate, decision: CandidateDecision): ReadPair[] {
@@ -117,10 +130,18 @@ export function applyImportDecisions(
       problems.push(`${sample}: include at least one read set, or skip the sample`);
       return;
     }
+    if (!libraryIdPattern.test(decision.libraryId)) {
+      problems.push(`${sample}: enter a confirmed library ID (letters, numbers, dot, underscore, plus or hyphen)`);
+      return;
+    }
+    const readSet = createIlluminaReadSet({
+      id: `reads-${randomUUID()}`, name: candidate.sample,
+      library_id: decision.libraryId, read_pairs: chosen,
+    });
     pairs.push(...chosen);
     if (decision.target === 'new') {
       const {name, id, wildtype, derivedFrom} = decision.newIsolate;
-      isolates.push({id, name: name.trim(), wildtype, derived_from: derivedFrom, read_pairs: chosen});
+      isolates.push({id, name: name.trim(), wildtype, derived_from: derivedFrom, read_sets: [readSet]});
       created += 1;
       return;
     }
@@ -130,7 +151,7 @@ export function applyImportDecisions(
       problems.push(`${sample}: isolate ${existingId} no longer exists`);
       return;
     }
-    existing.read_pairs.push(...chosen);
+    existing.read_sets.push(readSet);
     extendedIds.add(existingId);
   });
   if (problems.length > 0) {

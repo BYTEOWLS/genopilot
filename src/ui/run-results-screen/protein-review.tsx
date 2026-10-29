@@ -17,6 +17,7 @@ import {
 } from '../../workflows/annotation-transfer/proteins.js';
 import {ParameterList, parameterLabelWidth} from '../components/parameter-list.js';
 import {Table} from '../components/table.js';
+import {Section} from '../components/section.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 import {selectableTableHeaderLines} from './reference-consensus-results.js';
@@ -145,10 +146,9 @@ export function useProteinReview({result, active, readGenes = readReviewGenes}: 
     if (detail && selected) {
       const rows = geneFacts(selected);
       return (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>Gene</Text>
+        <Section title="Gene">
           <ParameterList rows={rows.map(row => ({...row, value: sanitizeTerminalText(row.value)}))} inputActive={false} labelWidth={parameterLabelWidth(rows)} />
-        </Box>
+        </Section>
       );
     }
     const categories = proteinCategories.map(category => `${categoryLabels[category]} ${String(proteins.genesByCategory[category])}`);

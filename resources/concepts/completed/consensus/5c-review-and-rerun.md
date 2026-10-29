@@ -53,6 +53,7 @@ Annotation transfer, legacy-reference comparison, repeat analysis, antiSMASH, an
 - [x] Save the reasoned decision before preparing the rerun.
 - [x] Invoke the iteration target without implementing a scheduler in TypeScript, refusing when per-isolate jobs would run.
 - [x] Add tests for exclusion, excluding a failed isolate, setting changes, no-op decisions, a refused per-isolate recompute, cancellation, resume, and complete logs.
+- [x] Wait for the rendered iteration selection after a deliberately delayed result reload, not merely the loader callback or a fixed delay; distinguish setup cancellation from cancellation of a running process and verify closed logs.
 
 ## Acceptance
 

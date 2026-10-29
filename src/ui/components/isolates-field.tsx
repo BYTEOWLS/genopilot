@@ -1,7 +1,9 @@
 import React, {useEffect, useState} from 'react';
-import {Box, Text, useInput} from 'ink';
-import type {Isolate} from '../../isolates/catalog.js';
-import {lineage, readPairsLabel} from '../../isolates/presentation.js';
+import {Box, Text, useInput, useWindowSize} from 'ink';
+import type {Isolate, ReadSet} from '../../isolates/catalog.js';
+
+export type ReadSetCompatibility = (readSet: ReadSet) => readonly string[];
+import {readPairsLabel} from '../../isolates/presentation.js';
 import {loadIsolateCatalog} from '../../isolates/store.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import {useHomeSuspension} from '../home-navigation.js';
@@ -55,7 +57,7 @@ export function useIsolateChoices(
   return choices;
 }
 
-/** A form keeps the selection as comma-separated isolate IDs, in the order they were chosen. */
+/** A form keeps explicit isolate/read-set keys in selection order. */
 export function parseIsolateSelection(value: string): string[] {
   return value.split(',').map(id => id.trim()).filter(id => id.length > 0);
 }
@@ -78,24 +80,46 @@ export function isolateSelectionHint(
   if (choices.isolates.length === 0) {
     return {text: 'No isolates cataloged yet — add them under Manage isolates', color: 'yellow'};
   }
-  const stale = ids.filter(id => !choices.isolates.some(isolate => isolate.id === id));
+  const stale = ids.filter(id => !choices.isolates.some(isolate => isolate.read_sets.some(set => `${isolate.id}/${set.id}` === id)));
   if (stale.length > 0) {
     return {text: `No longer cataloged: ${stale.join(', ')} — press Enter to choose again`, color: 'yellow'};
   }
-  return {text: `${String(choices.isolates.length)} cataloged — press Enter to choose`};
+  return {text: `${String(choices.isolates.reduce((count, isolate) => count + isolate.read_sets.length, 0))} cataloged — press Enter to choose`};
+}
+
+function catalogReadSets(isolates: readonly Isolate[]) {
+  const entries = isolates.flatMap(isolate => {
+    const labels = isolate.read_sets.map(set => set.name.trim().toLowerCase() === isolate.name.trim().toLowerCase()
+      ? isolate.name : `${isolate.name} / ${set.name}`);
+    const counts = new Map<string, number>();
+    for (const label of labels) {
+      counts.set(label.toLowerCase(), (counts.get(label.toLowerCase()) ?? 0) + 1);
+    }
+    return isolate.read_sets.map((readSet, index) => ({
+      id: `${isolate.id}/${readSet.id}`, isolate, readSet,
+      name: (counts.get(labels[index]!.toLowerCase()) ?? 0) > 1
+        ? `${labels[index]} · set ${index + 1}` : labels[index]!,
+    }));
+  });
+  const nameCounts = new Map<string, number>();
+  for (const entry of entries) {
+    nameCounts.set(entry.name.toLowerCase(), (nameCounts.get(entry.name.toLowerCase()) ?? 0) + 1);
+  }
+  return entries.map(entry => (nameCounts.get(entry.name.toLowerCase()) ?? 0) > 1
+    ? {...entry, name: `${entry.name} (${entry.isolate.id})`} : entry);
 }
 
 function selectionSummary(ids: readonly string[], choices: IsolateChoices): string {
   if (ids.length === 0) {
     return 'None selected';
   }
-  const names = ids.map(id =>
-    choices.state === 'ready' ? choices.isolates.find(isolate => isolate.id === id)?.name ?? id : id);
+  const namesById = new Map(catalogReadSets(choices.state === 'ready' ? choices.isolates : []).map(entry => [entry.id, entry.name]));
+  const names = ids.map(id => namesById.get(id) ?? id);
   return `${String(ids.length)} selected: ${names.join(', ')}`;
 }
 
 /**
- * One or more isolates chosen with Enter from the isolate catalog, which its form loads (see
+ * Read sets chosen with Enter from the isolate catalog, which its form loads (see
  * `useIsolateChoices`). The selection is derived from the chosen IDs; there is no count to enter.
  *
  * While `choosing`, the field renders only the picker, so its form shows nothing else and ignores
@@ -111,6 +135,7 @@ export function IsolatesField({
   choosing,
   onChoosingChange,
   choices,
+  compatibility,
 }: {
   label: string;
   required?: boolean;
@@ -121,6 +146,7 @@ export function IsolatesField({
   choosing: boolean;
   onChoosingChange: (choosing: boolean) => void;
   choices: IsolateChoices;
+  compatibility?: ReadSetCompatibility;
 }): React.JSX.Element {
   const ids = parseIsolateSelection(value);
   useInput(
@@ -135,6 +161,7 @@ export function IsolatesField({
   if (choosing) {
     return (
       <IsolatePicker
+        compatibility={compatibility}
         fieldLabel={label}
         choices={choices}
         initialIds={ids}
@@ -170,8 +197,8 @@ function searchable(value: string): string {
 }
 
 /**
- * Lists the cataloged isolates to choose several: typing filters by name or ID, Space toggles
- * the highlighted isolate, Ctrl+A toggles every listed one, and Enter confirms. Esc keeps the
+ * Lists cataloged read sets: typing filters by name or ID, Space toggles a compatible
+ * set, Ctrl+A toggles every compatible listed set, and Enter confirms. Esc keeps the
  * previous selection.
  */
 export function IsolatePicker({
@@ -181,6 +208,7 @@ export function IsolatePicker({
   onConfirm,
   onCancel,
   inputActive,
+  compatibility,
 }: {
   fieldLabel: string;
   choices: IsolateChoices;
@@ -188,10 +216,14 @@ export function IsolatePicker({
   onConfirm: (ids: string[]) => void;
   onCancel: () => void;
   inputActive: boolean;
+  compatibility?: ReadSetCompatibility;
 }): React.JSX.Element {
+  const {rows: terminalRows, columns} = useWindowSize();
   // Typed letters go to the search, including `h`.
   useHomeSuspension('typing');
-  const isolates = choices.state === 'ready' ? choices.isolates : [];
+  const isolates = catalogReadSets(choices.state === 'ready' ? choices.isolates : []).map(({isolate, readSet, id, name}) => ({
+    ...isolate, id, name, read_sets: [readSet], reasons: compatibility?.(readSet) ?? [],
+  }));
   // Selected IDs no longer in the catalog are dropped here, so confirming never keeps them.
   const [chosen, setChosen] = useState<string[]>(() => [...initialIds]);
   const [query, setQuery] = useState('');
@@ -200,7 +232,7 @@ export function IsolatePicker({
     searchable(isolate.name).includes(searchable(query)) || searchable(isolate.id).includes(searchable(query)));
   const highlightedIndex = Math.min(highlighted, Math.max(0, filtered.length - 1));
   const highlightedIsolate = filtered[highlightedIndex];
-  const cataloged = chosen.filter(id => isolates.some(isolate => isolate.id === id));
+  const cataloged = chosen.filter(id => isolates.some(isolate => isolate.id === id && isolate.reasons.length === 0));
 
   useInput(
     (input, key) => {
@@ -220,13 +252,13 @@ export function IsolatePicker({
           setHighlighted((highlightedIndex + offset + filtered.length) % filtered.length);
         }
       } else if (input === ' ') {
-        if (highlightedIsolate) {
+        if (highlightedIsolate && highlightedIsolate.reasons.length === 0) {
           const id = highlightedIsolate.id;
           setChosen(current => current.includes(id) ? current.filter(candidate => candidate !== id) : [...current, id]);
         }
       } else if (key.ctrl && input === 'a') {
         // Selects every listed isolate, or deselects them once all are selected.
-        const listed = filtered.map(isolate => isolate.id);
+        const listed = filtered.filter(isolate => isolate.reasons.length === 0).map(isolate => isolate.id);
         setChosen(current => listed.every(id => current.includes(id))
           ? current.filter(id => !listed.includes(id))
           : [...current, ...listed.filter(id => !current.includes(id))]);
@@ -241,13 +273,17 @@ export function IsolatePicker({
     {isActive: inputActive},
   );
 
+  const reasonLines = (highlightedIsolate?.reasons ?? []).map(reason => `Unavailable: ${sanitizeTerminalText(reason)}`);
+  const reasonRows = reasonLines.reduce((count, reason) => count + Math.ceil(reason.length / Math.max(1, columns)), 0);
+  const chromeRows = 9 + Math.ceil(160 / Math.max(1, columns)) + Math.ceil(130 / Math.max(1, columns));
+  const visibleCount = Math.max(1, Math.min(visibleIsolateCount, terminalRows - chromeRows - reasonRows));
   const visibleStart = Math.max(
     0,
-    Math.min(highlightedIndex - Math.floor(visibleIsolateCount / 2), filtered.length - visibleIsolateCount),
+    Math.min(highlightedIndex - Math.floor(visibleCount / 2), filtered.length - visibleCount),
   );
   return (
     <Page
-      title="Choose isolates"
+      title="Choose read sets"
       detail={`${String(cataloged.length)} selected`}
       description={`For ${sanitizeTerminalText(fieldLabel)}, from the isolate catalog. To add or edit isolates, use Manage isolates.`}
       shortcuts={isolates.length > 0 ? ['Type — Search', '↑/↓ — Move', 'Space — Select', 'Ctrl+A — Select all listed', 'Enter — Done'] : []}
@@ -270,22 +306,23 @@ export function IsolatePicker({
       ) : null}
       {isolates.length > 0 && filtered.length === 0 ? <Text color={mutedColor}>No isolate matches.</Text> : null}
       <Box flexDirection="column" marginTop={isolates.length > 0 ? 1 : 0}>
-        {filtered.slice(visibleStart, visibleStart + visibleIsolateCount).map((isolate, offset) => {
+        {filtered.slice(visibleStart, visibleStart + visibleCount).map((isolate, offset) => {
           const isHighlighted = visibleStart + offset === highlightedIndex;
           const isChosen = chosen.includes(isolate.id);
           return (
             <Text key={isolate.id} color={isHighlighted ? 'cyan' : undefined} wrap="truncate">
-              {isHighlighted ? '› ' : '  '}[{isChosen ? '✔' : ' '}] {sanitizeTerminalText(isolate.name)}
-              <Text color={mutedColor}> ({sanitizeTerminalText(isolate.id)})</Text>
+              {isHighlighted ? '› ' : '  '}[{isChosen ? '✔' : ' '}] {isolate.reasons.length > 0 ? '! ' : ''}{sanitizeTerminalText(isolate.name)}
               {' · '}{sanitizeTerminalText(readPairsLabel(isolate))}
-              {' · '}{sanitizeTerminalText(lineage(isolate))}
             </Text>
           );
         })}
       </Box>
-      {filtered.length > visibleIsolateCount ? (
+      {filtered.length > visibleCount ? (
         <Text color={mutedColor}>{highlightedIndex + 1} of {filtered.length}</Text>
       ) : null}
+      {reasonLines.length > 0 ? <Box marginTop={1} flexDirection="column">
+        {reasonLines.map((reason, index) => <Text key={index} color="yellow" wrap="wrap">{reason}</Text>)}
+      </Box> : null}
     </Page>
   );
 }

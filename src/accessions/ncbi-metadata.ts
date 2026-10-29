@@ -46,6 +46,14 @@ function text(value: unknown): string | undefined {
   return cleaned.length > 0 ? cleaned : undefined;
 }
 
+function nonnegativeNumber(value: unknown, integer: boolean): number | undefined {
+  const number = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  if (typeof number !== 'number' || !Number.isFinite(number) || number < 0 || (integer && !Number.isSafeInteger(number))) {
+    return undefined;
+  }
+  return number;
+}
+
 /**
  * Maps one NCBI Assembly Data Report to the catalog's minimal metadata. Returns undefined when the
  * report names a different accession or lacks the organism. Absent optional facts stay absent.
@@ -66,6 +74,8 @@ export function parseAssemblyReport(
   }
   const taxId = field(organism, 'tax_id');
   const assemblyInfo = field(report, 'assembly_info');
+  const stats = field(report, 'assembly_stats');
+  const gc = nonnegativeNumber(field(stats, 'gc_percent'), false);
   const optional = {
     assembly_name: text(field(assemblyInfo, 'assembly_name')),
     assembly_level: text(field(assemblyInfo, 'assembly_level')),
@@ -74,6 +84,15 @@ export function parseAssemblyReport(
     refseq_category: text(field(assemblyInfo, 'refseq_category')),
     strain: text(field(field(organism, 'infraspecific_names'), 'strain')),
     submitter: text(field(assemblyInfo, 'submitter')),
+    release_date: text(field(assemblyInfo, 'release_date')),
+    total_sequence_length: nonnegativeNumber(field(stats, 'total_sequence_length'), true),
+    gc_percent: gc !== undefined && gc <= 100 ? gc : undefined,
+    number_of_contigs: nonnegativeNumber(field(stats, 'number_of_contigs'), true),
+    number_of_scaffolds: nonnegativeNumber(field(stats, 'number_of_scaffolds'), true),
+    contig_n50: nonnegativeNumber(field(stats, 'contig_n50'), true),
+    scaffold_n50: nonnegativeNumber(field(stats, 'scaffold_n50'), true),
+    bioproject_accession: text(field(assemblyInfo, 'bioproject_accession')),
+    biosample_accession: text(field(field(assemblyInfo, 'biosample'), 'accession')),
   };
   return {
     organism: organismName,

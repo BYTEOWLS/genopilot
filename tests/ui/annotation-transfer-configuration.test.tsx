@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {formatLocalDateTime} from '../../src/ui/utils.js';
 import {readFileSync} from 'node:fs';
 import {mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -868,7 +869,7 @@ test('labels a previous run by its name and creation time, not its run ID', () =
 
   const named = previousRunLabel(configuration);
   assert.ok(named.includes('Baseline transfer'));
-  assert.ok(named.includes('2026-09-05 08:34:12'));
+  assert.ok(named.includes(formatLocalDateTime(configuration.run.created_at)));
   assert.ok(named.includes('Initial T2T annotation'));
   assert.ok(!named.includes(configuration.run.id));
 
@@ -880,7 +881,7 @@ test('labels a previous run by its name and creation time, not its run ID', () =
       created_at: '2026-09-05T08:34:12.123Z',
     },
   });
-  assert.ok(unnamed.includes('2026-09-05 08:34:12'));
+  assert.ok(unnamed.includes(formatLocalDateTime(configuration.run.created_at)));
   assert.ok(!unnamed.includes('annotation-transfer'));
 });
 

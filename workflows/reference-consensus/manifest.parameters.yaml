@@ -33,7 +33,7 @@ parameters:
       parameter: backbone-source
       equals: ncbi
   - id: isolates
-    label: Isolates
+    label: Read sets
     section: Inputs
     kind: isolates
     required: true

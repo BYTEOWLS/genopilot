@@ -4,6 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test, {type TestContext} from 'node:test';
 import type {Isolate} from '../../src/isolates/catalog.js';
+import {testReadSet} from '../read-sets.js';
 import {
   IsolateCatalogChangedError,
   IsolateCatalogLoadError,
@@ -23,7 +24,7 @@ function isolate(id: string, overrides: Partial<Isolate> = {}): Isolate {
     name: `Isolate ${id}`,
     wildtype: false,
     derived_from: null,
-    read_pairs: [{r1: `/data/${id}_R1.fq`, r2: `/data/${id}_R2.fq`, trimmed: false}],
+    read_sets: [testReadSet([{r1: `/data/${id}_R1.fq`, r2: `/data/${id}_R2.fq`, trimmed: false}])],
     ...overrides,
   };
 }

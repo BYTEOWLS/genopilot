@@ -4,7 +4,8 @@ import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
 import {accessionDisplayName, recordedCacheState} from '../../accessions/catalog.js';
 import {refreshAccessionCaches} from '../../accessions/registration.js';
 import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
-import type {IsolateCatalog} from '../../isolates/catalog.js';
+import {readPairs, type IsolateCatalog} from '../../isolates/catalog.js';
+import {illuminaCompatibility} from '../../isolates/illumina/metadata.js';
 import {lineage, trimmedStatus} from '../../isolates/presentation.js';
 import {loadIsolateCatalog} from '../../isolates/store.js';
 import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
@@ -85,12 +86,12 @@ async function defaultRegisterAccessionCaches(outputRoot: string, currentDirecto
 }
 
 function previousRunFormValues(configuration: ReferenceConsensusConfiguration): WorkflowFormValues {
-  const {backbone, selected_isolates} = configuration.inputs;
+  const {backbone} = configuration.inputs;
   return {
     'backbone-source': backbone.source,
     'backbone-fasta': backbone.source === 'local' ? backbone.fasta : '',
     'backbone-accession': backbone.source === 'ncbi' ? backbone.accession : '',
-    isolates: selected_isolates.join(','),
+    isolates: configuration.inputs.selected_read_sets.join(','),
     'voting-method': configuration.consensus.voting_method,
     'include-backbone-vote': configuration.consensus.include_backbone_vote ? 'yes' : 'no',
     'min-callable-isolates': String(configuration.consensus.min_callable_isolates),
@@ -121,7 +122,7 @@ function draftFromValues(values: WorkflowFormValues, currentDirectory: string): 
     backboneSource: values['backbone-source'] === 'local' ? 'local' : 'ncbi',
     backboneFasta: values['backbone-fasta'] ?? '',
     backboneAccession: values['backbone-accession'] ?? '',
-    isolateIds: parseIsolateSelection(values.isolates ?? ''),
+    readSetIds: parseIsolateSelection(values.isolates ?? ''),
     votingMethod: values['voting-method'] === 'plurality' ? 'plurality' : 'strict-majority',
     includeBackboneVote: values['include-backbone-vote'] !== 'no',
     minCallableIsolates: values['min-callable-isolates'] ?? '',
@@ -140,12 +141,12 @@ function draftFromValues(values: WorkflowFormValues, currentDirectory: string): 
 
 /** Values the review shows for the form's own fields, where they differ from what was typed. */
 function resolvedValues(prepared: PreparedReferenceConsensusRun): WorkflowFormValues {
-  const {configuration, snapshot} = prepared;
+  const {configuration} = prepared;
   const {backbone} = configuration.inputs;
   return {
     'backbone-fasta': backbone.source === 'local' ? backbone.fasta : '',
     'backbone-accession': backbone.source === 'ncbi' ? backbone.accession : '',
-    isolates: `${String(snapshot.isolates.length)} selected, listed below`,
+    isolates: `${String(configuration.inputs.selected_read_sets.length)} selected, listed below`,
     'min-allele-fraction': String(configuration.calling.min_allele_fraction),
     'output-root': configuration.run.output_root,
   };
@@ -193,17 +194,21 @@ function backboneSection(prepared: PreparedReferenceConsensusRun, inspection: Ru
 
 function isolatesSection(prepared: PreparedReferenceConsensusRun): ReviewSection {
   const {isolates} = prepared.snapshot;
-  const pairCount = isolates.reduce((total, isolate) => total + isolate.read_pairs.length, 0);
+  const pairCount = isolates.reduce((total, isolate) => total + readPairs(isolate).length, 0);
   return {
     id: 'isolates',
     title: `Isolates (${String(isolates.length)}, ${String(pairCount)} read pair${pairCount === 1 ? '' : 's'})`,
     rows: isolates.flatMap(isolate => [
       {
         label: `${isolate.name} (${isolate.id})`,
-        value: `${String(isolate.read_pairs.length)} read pair${isolate.read_pairs.length === 1 ? '' : 's'} · ` +
+        value: `${String(readPairs(isolate).length)} read pair${readPairs(isolate).length === 1 ? '' : 's'} · ` +
           `${trimmedStatus(isolate)} · ${lineage(isolate)}`,
       },
-      ...isolate.read_pairs.map((pair, index) => ({
+      ...isolate.read_sets.flatMap(readSet => [{
+        label: `  ${readSet.name} (${readSet.id})`,
+        value: `Library ${readSet.library_id} · Illumina paired-end · poly-G ${readSet.effective_preprocessing.poly_g ? 'on' : 'off'} (${readSet.effective_preprocessing.poly_g_source})`,
+      }]),
+      ...readPairs(isolate).map((pair, index) => ({
         label: `  pair ${String(index + 1)}`,
         value: `${basename(pair.r1)} / ${basename(pair.r2)}${pair.trimmed ? ' · trimmed' : ''}`,
       })),
@@ -421,6 +426,7 @@ export function ReferenceConsensusConfigurationScreen({
 
   return (
     <WorkflowConfigurationScreen
+      readSetCompatibility={illuminaCompatibility}
       title={manifest?.label ?? 'Unnamed Workflow'}
       currentDirectory={currentDirectory}
       parameterDefinitions={parameterDefinitions}
@@ -439,7 +445,7 @@ export function ReferenceConsensusConfigurationScreen({
       executionIsolates={prepared => prepared.snapshot.isolates.map(isolate => ({
         id: isolate.id,
         label: isolate.name,
-        readPairs: isolate.read_pairs.length,
+        readPairs: readPairs(isolate).length,
       }))}
       completedIsolates={prepared => completedIsolates(
         prepared.outputDirectory,
