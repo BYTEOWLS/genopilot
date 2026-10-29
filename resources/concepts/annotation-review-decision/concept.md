@@ -14,7 +14,7 @@ Curation is a person checking a flagged gene model against evidence and deciding
 - **corrects** it: another exon boundary, start, or stop, or split or merged models;
 - **rejects** the gene as a misplacement or an artifact of the data.
 
-The decision and its evidence are recorded, and a curated GFF3 is written next to the unmodified LiftOn output. GenoPilot supports confirming, rejecting, and correcting by choosing a model LiftOn already built; drawing a new structure stays in specialist editors ([Deferred](#deferred)).
+The decision and its evidence are recorded, and a curated GFF3 is written next to the unmodified LiftOn output. GenoPilot's planned initial decision supports confirming, rejecting, and correcting by choosing a model LiftOn already built. Drawing a new structure remains deferred; the [JBrowse genome workspace](../jbrowse-migration/concept.md#embedded-plugins-and-apollo-investigation) explores embedding Apollo rather than requiring the researcher to leave GenoPilot. This concept retains ownership of acceptance and reviewed outputs.
 
 ## What the researcher checks
 
@@ -22,7 +22,7 @@ The browser shows evidence only; the verdict is set in the CLI's review form, wh
 
 | Reason | What to look at | Points to |
 |---|---|---|
-| disrupted (frameshift or stop) | Zoom into the CDS: IGV translates the transferred model and marks start and stop codons, so a premature stop shows inside an exon. The reference's three-frame translation, in the display settings, shows which frame the sequence continues in after a frameshift. | a real change: *confirmed* |
+| disrupted (frameshift or stop) | Zoom into the CDS: the current viewer translates the transferred model and marks start and stop codons, so a premature stop shows inside an exon. The JBrowse migration must verify equivalent evidence. The reference's three-frame translation, in the display settings, shows which frame the sequence continues in after a frameshift. | a real change: *confirmed* |
 | disrupted, on or next to an unresolved base | The unresolved-bases track marks an `N` or IUPAC code at or beside the break. | an artifact of the data: *rejected*, or resolve the target first, such as through a consensus iteration |
 | LiftOn status not `Liftoff` (information, not a reason) | Compare the exons of the transferred, miniprot, and Liftoff models. Where miniprot follows the reference protein better, a splice site, start, or stop has moved in the target. | *corrected* with the fitting candidate, or *confirmed* |
 | below threshold | The *Region* preset: does the gene sit among others of its family, so the copy may sit at the wrong member? | a misplacement: *rejected*; otherwise *confirmed* |
@@ -76,7 +76,7 @@ The decision extends the [review view](../completed/annotation-review/concept.md
 
 - **Verdict actions in the browser**: *Confirm*, *Reject*, and *Needs correction* on the item, and *Use this model for the gene* on a candidate track, drafting into the review instead of the CLI form. This concept owns those actions and their verdict semantics; they wait for shared [decision-drafting infrastructure](../browser-view-follow-up/nice-to-have.md), which is held until researchers ask for it. When they come, the review draft moves from the review form into the result screen, which stays mounted while the view is open, as the [genome design](../completed/browser-view/genome.md#decision-drafting) describes for the cohort review.
 - **Linked reference view**: the reviewed gene in the reference genome with its source GFF3, opened from the item card or the gene detail. Take it up when looking the gene up by its reference position in the Reference view proves too slow, and design how one screen offers two views under the one `v` key.
-- **Importing a corrected model** for genes marked *needs correction*: the researcher fixes the gene in a specialist editor, such as Apollo, and GenoPilot imports its replacement GFF3, validates it, records its checksum as `imported`, and shows the difference ([later](../../later.md#corrected-gene-model-import)). Take it up when a researcher needs a structure LiftOn did not build.
+- **Accepting a corrected model** for genes marked *needs correction*: the [JBrowse concept](../jbrowse-migration/concept.md#embedded-plugins-and-apollo-investigation) explores embedded Apollo drafts. This concept must define acceptance into the saved decision before editing ships: validate the replacement GFF3, record its checksum as `imported`, show the difference, and produce reviewed outputs through Snakemake. [External corrected-model import](../../later.md#corrected-gene-model-import) remains the fallback; the initial candidate-choice decision does not depend on Apollo.
 - **Typing a structure** in a CLI form, with CDS phases recalculated and validated: not planned; the import covers it.
 - **Read evidence** for a consensus target, through the consensus run's backbone view.
 - **Reviewing genes off the list**, such as an additional copy or an unchanged gene a researcher distrusts.

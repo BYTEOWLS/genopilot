@@ -16,6 +16,7 @@ After the last required step, retain the folder under `completed/` and update al
 | [Annotation review decision](annotation-review-decision/concept.md) | not started | [Tasks](annotation-review-decision/tasks.md) |
 | [Browser view follow-up](browser-view-follow-up/concept.md) | not started | [Tasks](browser-view-follow-up/tasks.md); deferred, browser tests remain parked |
 | [INSDC submission](insdc-submission/concept.md) | not started | [Tasks](insdc-submission/tasks.md); read preparation depends on sequencing read sets |
+| [JBrowse genome workspace](jbrowse-migration/concept.md) | not started | [Tasks](jbrowse-migration/tasks.md); IGV replacement, circular overview, Apollo exploration |
 | [Project website](project-website/concept.md) | not started | [Tasks](project-website/tasks.md) |
 | [Public release](public-release/concept.md) | in progress | [Tasks](public-release/tasks.md); foundations shipped, environment locks remain |
 | [Remote execution](remote-execution/concept.md) | not started | [Tasks](remote-execution/tasks.md) |

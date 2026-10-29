@@ -137,7 +137,7 @@ Follow-ups to the read-only [genome view](concepts/completed/browser-view/genome
 
 - [ ] **Codon wheel.** Amino-acid names/abbreviations and translation caveats are implemented in genome help. Add a codon wheel (the “coding sun”), identifying the genetic code it represents and its relationship to the viewer's translation; do not imply one code applies to every organism.
 - [ ] **IGV upgrade verification.** Before upgrading IGV, recheck the [documented canvas paint rules and geometry assumptions](concepts/completed/browser-view/canvas-colors.md), discover additional paints with the opt-in local diagnostics, and visually verify nucleotide/quality cues and translation markers. Palette, glyph, geometry, and lifecycle separation is implemented; browser tests remain parked.
-- [ ] **Circular-view overlay.** Offer a toggleable circular genome/gene-view overlay using the pinned IGV.js support where applicable. Verify that its API actually supports the desired annotation display, not just alignment or interaction chords, before promising it. Opening and closing the overlay should preserve the linear view's region and track choices; a circular layout must not imply that a chromosome or contig is biologically circular. Keep assets local and retain the existing CSP boundary.
+Circular annotation overview exploration has moved to the [JBrowse genome workspace](concepts/jbrowse-migration/concept.md#circular-overview-investigation). It no longer targets an IGV overlay.
 
 ## Browser-based HTML reports
 
@@ -254,7 +254,7 @@ Any LiftOn-produced GFF3 may require review for genes that appear shifted, inser
 - short-read coverage loss is evidence but not proof of gene absence;
 - repetitive regions make gene and transposon placement difficult.
 
-The [annotation review](concepts/completed/annotation-review/concept.md) is the first step: a rating and review list, shown in the genome view. The [annotation review decision](concepts/annotation-review-decision/concept.md) adds verdicts and a choice among LiftOn's candidate models. Drawing a new structure stays delegated to a specialist genome-annotation editor (see *Corrected gene model import*). Any correction workflow must preserve:
+The [annotation review](concepts/completed/annotation-review/concept.md) is the first step: a rating and review list, shown in the genome view. The [annotation review decision](concepts/annotation-review-decision/concept.md) adds verdicts and a choice among LiftOn's candidate models. The [JBrowse genome workspace](concepts/jbrowse-migration/concept.md) explores embedding Apollo for new structures; external specialist editing and corrected-model import remain the fallback. Any correction workflow must preserve:
 
 - the unmodified LiftOn output;
 - exact assembly and GFF3 checksums;
@@ -268,7 +268,7 @@ Manual corrections must never modify the nucleotide consensus without independen
 
 ## Corrected gene model import
 
-For genes the [annotation review decision](concepts/annotation-review-decision/concept.md#deferred) marks *needs correction*: the researcher corrects the gene in a specialist editor, such as Apollo, and GenoPilot imports the replacement GFF3 for that gene into the next review decision. The import is validated like LiftOn's GFF3, recorded with its checksum as `imported`, and shown as a difference to the transferred model before it is saved.
+For genes the [annotation review decision](concepts/annotation-review-decision/concept.md#deferred) marks *needs correction*: the researcher corrects the gene in an external specialist editor, and GenoPilot imports the replacement GFF3 for that gene into the next review decision. Embedded Apollo exploration belongs to the [JBrowse concept](concepts/jbrowse-migration/concept.md#embedded-plugins-and-apollo-investigation); this external-file route remains deferred and is its fallback. The import is validated like LiftOn's GFF3, recorded with its checksum as `imported`, and shown as a difference to the transferred model before it is saved.
 
 ## Optional curated annotation from external workbooks
 
