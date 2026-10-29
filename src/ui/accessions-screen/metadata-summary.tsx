@@ -1,6 +1,6 @@
 import type {NcbiAssemblyMetadata} from '../../accessions/catalog.js';
 import type {ParameterRow} from '../components/parameter-list.js';
-import {formatLocalDateTime} from '../utils.js';
+import {formatLocalDate, formatLocalDateTime} from '../utils.js';
 
 const sourceLabels: Record<NcbiAssemblyMetadata['source'], string> = {
   'datasets-v2-rest': 'NCBI Datasets API',
@@ -33,7 +33,8 @@ export function metadataSections(metadata: NcbiAssemblyMetadata): {id: string; t
           : `${metadata.organism} (taxon ${String(metadata.tax_id)})`,
       },
       reportedRow('ncbi.assembly', 'Assembly', assembly || undefined),
-      reportedRow('ncbi.release_date', 'Release date', metadata.release_date),
+      reportedRow('ncbi.release_date', 'Release date', metadata.release_date === undefined
+        ? undefined : formatLocalDate(metadata.release_date)),
       reportedRow('ncbi.assembly_type', 'Assembly type', metadata.assembly_type),
       reportedRow('ncbi.refseq_category', 'RefSeq category', metadata.refseq_category),
       reportedRow('ncbi.strain', 'Strain', metadata.strain),

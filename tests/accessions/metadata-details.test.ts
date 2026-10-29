@@ -4,7 +4,7 @@ import {parse, stringify} from 'yaml';
 import {emptyAccessionCatalog, validateAccessionCatalog} from '../../src/accessions/catalog.js';
 import {parseAssemblyReport} from '../../src/accessions/ncbi-metadata.js';
 import {metadataSections} from '../../src/ui/accessions-screen/metadata-summary.js';
-import {formatLocalDateTime} from '../../src/ui/utils.js';
+import {formatLocalDate, formatLocalDateTime} from '../../src/ui/utils.js';
 
 const accession = 'GCA_000000001.1';
 const retrievedAt = '2026-01-01T12:00:00.000Z';
@@ -26,6 +26,7 @@ test('REST and cached reports preserve assembly dates, statistics and linked rec
     const sections = metadataSections(metadata);
     assert.deepEqual(sections.map(section => section.id), ['assembly', 'statistics', 'records']);
     const assemblyRows = new Map(sections.find(section => section.id === 'assembly')!.rows.map(row => [row.id, row]));
+    assert.equal(assemblyRows.get('ncbi.release_date')?.value, formatLocalDate('2025-04-03'));
     assert.equal(assemblyRows.get('ncbi.retrieved_at')?.value, formatLocalDateTime(retrievedAt));
     assert.ok(assemblyRows.get('ncbi.source')?.value);
     const rows = new Map(sections.flatMap(section => section.rows).map(row => [row.id, row]));
@@ -45,6 +46,7 @@ test('absent facts remain unavailable and zero is displayed rather than treated 
   assert.equal(metadata.release_date, undefined);
   assert.equal(metadata.total_sequence_length, undefined);
   const sections = metadataSections(metadata);
+  assert.equal(sections.flatMap(section => section.rows).find(row => row.id === 'ncbi.release_date')?.muted, true);
   assert.ok(sections.find(section => section.id === 'statistics')?.rows.every(row => row.muted));
   assert.ok(sections.find(section => section.id === 'records')?.rows.every(row => row.muted));
   assert.equal(metadataSections({...metadata, gc_percent: 0}).flatMap(section => section.rows).find(row => row.id === 'ncbi.gc_percent')?.value, '0%');

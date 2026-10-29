@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {formatLocalDate} from '../../src/ui/utils.js';
 import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
 import React from 'react';
@@ -270,7 +271,7 @@ test('shows all metadata sections together without changing or submitting the en
   await press(screen.input, 'n');
   await press(screen.input, typed);
   await lookUp(screen.input);
-  await waitForOutput(screen.output, value => value.includes('2025-04-03')
+  await waitForOutput(screen.output, value => value.includes(formatLocalDate(facts.release_date))
     && value.includes('1,234,567 bp')
     && value.includes('https://www.ncbi.nlm.nih.gov/biosample/SAMN123'));
   await press(screen.input, ENTER);
