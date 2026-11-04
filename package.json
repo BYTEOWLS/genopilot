@@ -55,8 +55,8 @@
   },
   "devDependencies": {
     "@inkjs/ui": "2.0.0",
-    "@mantine/core": "9.7.3",
-    "@mantine/hooks": "9.7.3",
+    "@mantine/core": "9.7.4",
+    "@mantine/hooks": "9.7.4",
     "@types/jsdom": "30.0.0",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
