@@ -21,7 +21,7 @@ import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 import {metadataSections} from './metadata-summary.js';
-import {ParameterList} from '../components/parameter-list.js';
+import {ParameterList, parameterLabelWidth, type ParameterRow} from '../components/parameter-list.js';
 import {Section} from '../components/section.js';
 import {formatLocalDateTime} from '../utils.js';
 
@@ -259,6 +259,34 @@ export function AccessionForm({
     shownProblems.push(`${problems.length - 1} more; fix this first.`);
   }
 
+  // One label column for the editable rows and every section of facts.
+  const labelWidth = parameterLabelWidth([
+    {label: 'Description'}, ...sections.flatMap(section => section.rows),
+  ]);
+  // The editable rows stay one line each, so a long note cannot push Save off a short terminal.
+  const oneLine = (value: string): string => {
+    const text = sanitizeTerminalText(value).replace(/\s+/g, ' ');
+    const limit = Math.max(12, columns - labelWidth - 1);
+    return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+  };
+  const localRows: ParameterRow[] = [
+    {id: 'accession', label: 'Accession', value: accession},
+    {
+      id: 'name',
+      label: 'Name',
+      value: oneLine(name.length > 0 ? name : `not set, shown as ${accession}`),
+      muted: name.length === 0,
+      edit: {defaultValue: name, onChange: setName},
+    },
+    {
+      id: 'description',
+      label: 'Description',
+      value: oneLine(description.length > 0 ? description : 'not set'),
+      muted: description.length === 0,
+      edit: {defaultValue: description, onChange: setDescription},
+    },
+  ];
+
   return (
     <Box ref={pageRef} flexDirection="column">
       <EditPage
@@ -271,20 +299,12 @@ export function AccessionForm({
         saving={busy === 'saving'}
         problems={shownProblems}
       >
-        <ParameterList inputActive={false} rows={[{id: 'accession', label: 'Accession', value: accession}]} />
-        <TextField
-          label="Name" selected={selectedRow === 'name'} inputActive={inputActive && !busy}
-          defaultValue={name} displayValue={name || `not set, shown as ${accession}`} onChange={setName}
-        />
-        <TextField
-          label="Description" selected={selectedRow === 'description'} inputActive={inputActive && !busy}
-          defaultValue={description} displayValue={description || 'not set'} onChange={setDescription}
-        />
+        <ParameterList rows={localRows} selectedId={selectedRow} inputActive={inputActive && !busy} labelWidth={labelWidth} />
         <Box ref={viewportRef} height={viewportHeight} overflow="hidden" flexDirection="column" marginTop={1}>
           <Box ref={detailsRef} marginTop={-scrollOffset} flexDirection="column" flexShrink={0}>
             {sections.map((section, index) => (
               <Section key={section.id} title={section.title} marginTop={index === 0 ? 0 : 1}>
-                <ParameterList rows={section.rows} inputActive={false} />
+                <ParameterList rows={section.rows} inputActive={false} labelWidth={labelWidth} />
               </Section>
             ))}
             {!metadata ? (

@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {dirname, isAbsolute} from 'node:path';
 import React, {useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {IsolateCatalogValidationError, readPairs, suggestIsolateId, suggestLibraryId, validateIsolateCatalog, type Isolate, type IsolateCatalog, type ReadSet} from '../../isolates/catalog.js';
@@ -26,6 +27,30 @@ function newReadSet(): ReadSet {
     read_pairs: [{r1: '', r2: '', trimmed: null}]});
 }
 
+const isolateFieldLabels: Record<string, string> = {
+  id: 'ID', name: 'Name', description: 'Description', wildtype: 'Wild type', derived_from: 'Derived from', read_sets: 'Read sets',
+};
+const readSetFieldLabels: Record<string, string> = {
+  name: 'Name', library_id: 'Library ID', 'illumina.chemistry': 'Chemistry', 'illumina.poly_g': 'Poly-G', read_pairs: 'Read pairs',
+};
+const pairFieldLabels: Record<string, string> = {r1: 'R1', r2: 'R2', trimmed: 'Provider trimmed'};
+
+function pairLabel(setIndex: number, pairIndex: number): string {
+  return `Read set ${setIndex + 1}, pair ${pairIndex + 1}`;
+}
+
+/** Turns a catalog issue path such as `read_sets[0].read_pairs[1].r2` into the form's field name. */
+function fieldLabel(field: string): string {
+  const match = /^read_sets\[(\d+)\](?:\.read_pairs\[(\d+)\])?(?:\.(.+))?$/.exec(field);
+  if (!match) {
+    return isolateFieldLabels[field] ?? field;
+  }
+  const [, set, pair, rest] = match;
+  const owner = pair === undefined ? `Read set ${Number(set) + 1}` : pairLabel(Number(set), Number(pair));
+  const labels = pair === undefined ? readSetFieldLabels : pairFieldLabels;
+  return rest === undefined ? owner : `${owner} ${labels[rest] ?? rest}`;
+}
+
 type Row = {
   id: string;
   label: string;
@@ -35,6 +60,7 @@ type Row = {
   value?: string;
   change?: (value: string) => void;
   options?: string[];
+  startDirectory?: string;
   activate?: () => void;
 };
 
@@ -87,12 +113,15 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
         read_pairs: entry.read_pairs.map(pair => ({...pair,
           r1: expandHomeDirectory(pair.r1.trim()), r2: expandHomeDirectory(pair.r2.trim())}))})),
     };
+    const candidate = withIsolate(catalog, isolate, editing?.id);
     try {
-      validateIsolateCatalog(withIsolate(catalog, isolate, editing?.id));
+      validateIsolateCatalog(candidate);
       setSaving(true);
       const checks = await checkReads(readPairs(isolate));
+      // The checker sees one flat list; name each pair as the form numbers it, per read set.
+      const pairLabels = isolate.read_sets.flatMap((set, setIndex) => set.read_pairs.map((_pair, pairIndex) => pairLabel(setIndex, pairIndex)));
       const errors = checks.pairs.flatMap((pair, index) => (['r1', 'r2'] as const).flatMap(mate =>
-        pair[mate].state === 'ok' ? [] : [`Pair ${index + 1} ${mate}: ${pair[mate].reason}`]));
+        pair[mate].state === 'ok' ? [] : [`${pairLabels[index] ?? `Pair ${index + 1}`} ${mate.toUpperCase()}: ${pair[mate].reason}`]));
       errors.push(...checks.sameFiles.map(pair => `${pair.second}: same file as ${pair.first}`));
       if (errors.length > 0) {
         setProblems(errors);
@@ -101,7 +130,16 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
       }
     } catch (error) {
       setProblems(error instanceof IsolateCatalogValidationError
-        ? error.issues.map(issue => `${issue.message} (${issue.path})`)
+        ? error.issues.map(issue => {
+          const located = /^\$\.isolates\[(\d+)\]\.(.+)$/.exec(issue.path);
+          if (!located) {
+            return `${issue.path}: ${issue.message}`;
+          }
+          // A conflict can be recorded on another isolate, e.g. a read file it already uses; name it.
+          const other = candidate.isolates[Number(located[1])];
+          const owner = other === isolate ? '' : `Isolate "${other?.id ?? ''}" `;
+          return `${owner}${fieldLabel(located[2] ?? '')}: ${issue.message}`;
+        })
         : [error instanceof Error ? error.message : String(error)]);
     } finally {
       setSaving(false);
@@ -139,7 +177,10 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
     );
     entry.read_pairs.forEach((pair, pairIndex) => {
       for (const mate of ['r1', 'r2'] as const) {
+        // Mates are normally delivered side by side, so an empty field browses beside its partner.
+        const partner = expandHomeDirectory(pair[mate === 'r1' ? 'r2' : 'r1'].trim());
         sectionRows.push({id: `${prefix}:${pairIndex}:${mate}`, label: mate.toUpperCase(), pair: pairIndex,
+          startDirectory: isAbsolute(partner) ? dirname(partner) : currentDirectory,
           kind: 'path', value: pair[mate], change: value => updateSet(prefix, current => ({...current,
             read_pairs: current.read_pairs.map((item, index) => index === pairIndex ? {...item, [mate]: value} : item)}))});
       }
@@ -197,7 +238,7 @@ export function IsolateForm({catalog, editing, onSubmit, onCancel, checkReads, i
     if (row.kind === 'path') {
       return <PathField key={row.id} label={row.label} required selected={active} inputActive={inputActive && !saving}
         value={row.value ?? ''} onChange={value => row.change?.(value)} browsing={browsing === row.id}
-        onBrowsingChange={open => setBrowsing(open ? row.id : undefined)} startDirectory={currentDirectory} readDirectory={readDirectory} />;
+        onBrowsingChange={open => setBrowsing(open ? row.id : undefined)} startDirectory={row.startDirectory ?? currentDirectory} readDirectory={readDirectory} />;
     }
     if (row.kind === 'text') {
       return <TextField key={row.id} label={row.label} selected={active} inputActive={inputActive && !saving}

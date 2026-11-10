@@ -127,7 +127,7 @@ Its fields are instrument (`A00123`), run (`45`), flowcell (`HXYZ7DSX2`), lane (
 
 A lane-merged group has no single lane in `PU`. A barcode is used only when all header index comments agree; sequencing errors can make it unknown. Archive-renamed reads have no fabricated flowcell, lane, barcode, or platform unit. The report records whether metadata came from headers, explicit input, or generated identity.
 
-A group fails on malformed FASTQ records, invalid qualities, mate-name/count disagreements, mixed original/archive formats, or inconsistent instrument/run/flowcell evidence. These checks also run for provider-trimmed groups. Libraries shared across read sets retain the same `LB`, so duplicate marking works across resequencing.
+A group fails on malformed FASTQ records, invalid qualities, mate-name/count disagreements, mixed original/archive formats, or inconsistent instrument/run/flowcell evidence. These checks also run for provider-trimmed groups. Empty records, which some trimmers leave behind, pass only in groups that fastp processes, because it drops them; a provider-trimmed group holding one fails. Libraries shared across read sets retain the same `LB`, so duplicate marking works across resequencing.
 
 ## Duplicates
 

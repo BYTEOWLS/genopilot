@@ -621,3 +621,31 @@ test('catalog replacement retains other isolates and validates cross-isolate fil
   assert.deepEqual(withIsolate(catalog, updated, first.id).isolates, [updated]);
   assert.equal(catalog.isolates[0]!.name, first.name);
 });
+
+test('save problems name the field and the pair within its read set, not catalog positions', async context => {
+  const input = new Input();
+  const output = new Output();
+  const entry = fixture();
+  entry.read_sets.push(testReadSet([{r1: '/reads/b1.fq', r2: '/reads/b2.fq', trimmed: false}], {id: 'reads-b'}));
+  const failing = async (pairs: readonly unknown[]) => ({pairs: pairs.map((_pair, index) => ({
+    r1: index === 1 ? {state: 'missing' as const, reason: 'reason-marker'} : {state: 'ok' as const},
+    r2: {state: 'ok' as const},
+  })), sameFiles: []});
+  const app = render(<IsolateForm catalog={{schema_version: 1, isolates: [entry]}} editing={entry}
+    onSubmit={async () => {}} onCancel={() => {}} inputActive currentDirectory="/" checkReads={failing} />,
+  {stdin: input, stdout: output, stderr: output, debug: true, exitOnCtrlC: false});
+  context.after(() => app.unmount());
+  await pause(); input.write('\x1b[A'); await pause(); input.write('\r'); await pause();
+  // The second checked pair is the first pair of the second read set.
+  const problem = output.output.split('\n').filter(line => line.includes('reason-marker')).at(-1) ?? '';
+  assert.match(problem, /2\D+1\D.*reason-marker/, output.output.slice(-1500));
+
+  const invalid = fixture();
+  invalid.read_sets[0]!.library_id = '';
+  app.rerender(<IsolateForm key="invalid" catalog={{schema_version: 1, isolates: [invalid]}} editing={invalid}
+    onSubmit={async () => {}} onCancel={() => {}} inputActive currentDirectory="/" checkReads={failing} />);
+  await pause(); input.write('\x1b[A'); await pause(); input.write('\r'); await pause();
+  const frames = stripVTControlCharacters(output.output);
+  assert.ok(frames.includes('library ID'), frames.slice(-1500));
+  assert.ok(!frames.includes('$.'), 'Catalog paths are not shown to the researcher.');
+});

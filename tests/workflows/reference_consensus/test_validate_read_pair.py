@@ -154,6 +154,14 @@ class ValidateReadPairTests(unittest.TestCase):
         self.assertTrue(any("quality" in error for error in report["errors"]))
         self.assertFalse(report["files"]["r1"]["checksum_complete"])
 
+    def test_accepts_empty_records_only_where_fastp_drops_them(self) -> None:
+        reads = (record("SRR1.1", 1) + record("SRR1.2", 1, bases=""), record("SRR1.1", 2) + record("SRR1.2", 2))
+        exit_code, report, _ = self.run_script(*self.write_pair(*reads))
+        self.assertEqual((exit_code, report["status"]), (0, "passed"))
+        exit_code, report, _ = self.run_script(*self.write_pair(*reads), trimmed="trimmed")
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any("empty FASTQ record" in error for error in report["errors"]))
+
     def test_rejects_mixed_header_evidence_and_wrong_mate_labels(self) -> None:
         self.assert_fails(record(illumina_name(1), 1) + record("SRR1.2", 1),
                           record(illumina_name(1), 2) + record("SRR1.2", 2), "mixed original and archive")

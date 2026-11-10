@@ -44,7 +44,7 @@ class HashingReader(io.RawIOBase):
         return len(data)
 
 
-def records(hasher: HashingReader) -> Iterator[tuple[str, str]]:
+def records(hasher: HashingReader, allow_empty: bool) -> Iterator[tuple[str, str]]:
     raw = io.BufferedReader(hasher)
     stream = gzip.GzipFile(fileobj=raw) if raw.peek(2)[:2] == b"\x1f\x8b" else raw
     lines = io.TextIOWrapper(stream, encoding="ascii", errors="strict", newline=None)
@@ -55,16 +55,15 @@ def records(hasher: HashingReader) -> Iterator[tuple[str, str]]:
         sequence, plus, quality = (lines.readline().rstrip("\r\n") for _ in range(3))
         if not header.startswith("@") or not header[1:].strip() or not plus.startswith("+"):
             raise ValueError("invalid FASTQ header or separator, or incomplete record")
-        if not sequence or not re.fullmatch(r"[ACGTNacgtn]+", sequence):
-            raise ValueError("invalid or empty FASTQ sequence")
+        if not re.fullmatch(r"[ACGTNacgtn]*", sequence):
+            raise ValueError("invalid FASTQ sequence")
+        if not sequence and not allow_empty:
+            # fastp drops empty records, but provider-trimmed files reach the aligner unchanged.
+            raise ValueError("empty FASTQ record in a provider-trimmed file, which skips fastp: "
+                             "remove empty records, or record the pair as not provider-trimmed")
         if len(sequence) != len(quality) or any(ord(char) < 33 or ord(char) > 126 for char in quality):
             raise ValueError("FASTQ sequence and quality lengths differ or qualities are invalid")
         yield header.rstrip("\r\n"), sequence
-
-
-def headers(hasher: HashingReader) -> Iterator[str]:
-    for header, _ in records(hasher):
-        yield header
 
 
 def parse_illumina_name(header: str) -> dict | None:
@@ -95,7 +94,7 @@ def mate_name(header: str, expected: int) -> str:
     return name.removesuffix("/1").removesuffix("/2")
 
 
-def check(r1: Path, r2: Path) -> tuple[dict, dict | None, str | None, set[int], list[str]]:
+def check(r1: Path, r2: Path, allow_empty: bool) -> tuple[dict, dict | None, str | None, set[int], list[str]]:
     errors: list[str] = []
     first = None
     barcode = None
@@ -106,7 +105,7 @@ def check(r1: Path, r2: Path) -> tuple[dict, dict | None, str | None, set[int], 
     with r1.open("rb") as h1, r2.open("rb") as h2:
         hashers = {"r1": HashingReader(h1), "r2": HashingReader(h2)}
         try:
-            for number, pair in enumerate(zip_longest(records(hashers["r1"]), records(hashers["r2"])), 1):
+            for number, pair in enumerate(zip_longest(records(hashers["r1"], allow_empty), records(hashers["r2"], allow_empty)), 1):
                 left, right = pair
                 counts["r1"] += int(left is not None)
                 counts["r2"] += int(right is not None)
@@ -142,7 +141,7 @@ def check(r1: Path, r2: Path) -> tuple[dict, dict | None, str | None, set[int], 
 
 def validate(isolate_id: str, pair: int, r1: Path, r2: Path, trimmed: bool,
              library_id: str, read_set_id: str, read_group_id: str, preprocessing: dict | None = None) -> dict:
-    files, first, barcode, lanes, errors = check(r1, r2)
+    files, first, barcode, lanes, errors = check(r1, r2, allow_empty=not trimmed)
     for label, value in (("library ID", library_id), ("read-group ID", read_group_id), ("isolate ID", isolate_id)):
         if not READ_GROUP_VALUE.fullmatch(value):
             errors.append(f"invalid {label}")
