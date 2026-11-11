@@ -25,7 +25,7 @@ Pinned versions are not the same as available packages. Zenodo archives the code
 
 ## Community files
 
-The contributing guide, the Contributor License Agreement, the security policy, the code of conduct, and the issue forms are in place ([community files](../completed/community-files/concept.md)).
+The contributing guide, the security policy, the code of conduct, and the issue forms are in place ([community files](../completed/community-files/concept.md)).
 
 ## Sharing a run
 

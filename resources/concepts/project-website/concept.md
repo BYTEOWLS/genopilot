@@ -30,7 +30,7 @@ Each highlight is a short heading, two or three sentences, and one screenshot wi
 8. **Workflows**: one short section per workflow with a screenshot of its result page and a link to its README.
 9. **Runs without GenoPilot**: every workflow stays runnable directly through Snakemake. A code block instead of a screenshot, linking to the README's *Running a workflow directly*.
 
-The footer links the GitHub repository, the npm package, the license (AGPL-3.0-or-later), and how to cite GenoPilot. The concept DOI appears there once [Zenodo release archiving](../zenodo-release-archiving/concept.md) is set up.
+The footer links the GitHub repository, the npm package, the license (MIT), and how to cite GenoPilot. The concept DOI appears there once [Zenodo release archiving](../zenodo-release-archiving/concept.md) is set up.
 
 ## Worked examples on public data
 

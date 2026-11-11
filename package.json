@@ -3,7 +3,7 @@
   "label": "GenoPilot",
   "description": "Guided, reproducible genome workflows in your terminal.",
   "author": "Michael Oberwasserlechner",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/BYTEOWLS/genopilot.git"

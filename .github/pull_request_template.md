@@ -8,6 +8,6 @@ Issue: #
 
 ## Checklist
 
-- [ ] I have read the Contributor License Agreement in `CLA.md` and agree to it.
+- [ ] I agree to publish this contribution under the MIT License in `LICENSE`.
 - [ ] The verification steps in the README's Development section pass.
 - [ ] The change contains no private research data, credentials, or collaborator data.

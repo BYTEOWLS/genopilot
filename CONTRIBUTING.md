@@ -22,7 +22,7 @@ Open a [workflow proposal](https://github.com/BYTEOWLS/genopilot/issues/new/choo
 
 ## Pull requests
 
-Pull requests are accepted on invitation only, after an issue has agreed on the change. Before an invited pull request is merged, its author agrees to the [Contributor License Agreement](CLA.md). GenoPilot is published under the [GNU Affero General Public License v3.0 or later](LICENSE) and also offered under other terms; the agreement lets the project owner license contributions under both, while you remain their author.
+Pull requests are accepted on invitation only, after an issue has agreed on the change. GenoPilot is published under the [MIT License](LICENSE), and a merged contribution is published under it too; you remain its author.
 
 An invited change follows [`AGENTS.md`](AGENTS.md), which holds the project's architecture and conventions, and passes the verification steps in the README's [Development](README.md#development) section.
 

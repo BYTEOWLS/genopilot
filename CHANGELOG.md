@@ -6,6 +6,10 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+### License
+
+- GenoPilot is licensed under the MIT License again instead of `AGPL-3.0-or-later`; version 0.0.2 remains available under the AGPL.
+
 ### Runtime
 
 - Pixi 0.82.1, Snakemake 9.27.1, and Python 3.13.16, also in the rule environments; existing installations are asked to run setup again. Conda stays at 26.7.3: newer versions require a `packaging` release that Snakemake does not yet allow.
