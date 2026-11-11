@@ -122,6 +122,8 @@ export function countRows(counts: CohortCounts): {id: string; label: string; val
   return [
     {id: 'counts.loci_selected', label: 'Selected loci', value: counts.lociSelected},
     {id: 'counts.loci_changed', label: 'Selected loci differing from the backbone', value: counts.lociChanged},
+    {id: 'counts.loci_settled.tie_broken', label: 'Selected loci: tie broken', value: counts.lociSettledTies.tie_broken},
+    {id: 'counts.loci_settled.tie_overruled', label: 'Selected loci: tie overruled', value: counts.lociSettledTies.tie_overruled},
     ...unresolvedReasons.map(reason => ({
       id: `counts.loci_unresolved.${reason}`,
       label: reasonLabels[reason],
@@ -139,6 +141,14 @@ export function countRows(counts: CohortCounts): {id: string; label: string; val
   ];
 }
 
+function tieSettling(settings: NonNullable<CohortResult['settings']>): string {
+  if (settings.tie_source === 'none') {
+    return 'ties left unresolved';
+  }
+  const base = settings.tie_source === 'backbone' ? "the backbone's base" : `the base of isolate ${settings.tie_isolate ?? ''}`;
+  return settings.tie_scope === 'any-allele' ? `${base}, always` : `${base}, only among the tied bases`;
+}
+
 function settingsRows(cohort: CohortResult): ParameterRow[] {
   if (!cohort.settings || !cohort.voters) {
     return [];
@@ -147,7 +157,8 @@ function settingsRows(cohort: CohortResult): ParameterRow[] {
     {id: 'cohort.voting_method', label: 'Voting method', value: votingMethod(cohort.settings.voting_method)},
     {id: 'backbone.vote', label: 'Backbone votes', value: yesNo(cohort.settings.include_backbone_vote)},
     {id: 'cohort.min_callable_isolates', label: 'Minimum callable isolates', value: String(cohort.settings.min_callable_isolates)},
-    {id: 'cohort.unresolved_snp', label: 'Unresolved SNPs written as', value: cohort.settings.unresolved_snp === 'n' ? 'N' : 'IUPAC code'},
+    {id: 'cohort.unresolved_single_base', label: 'Unresolved single-base positions written as', value: cohort.settings.unresolved_single_base === 'n' ? 'N' : 'IUPAC code'},
+    {id: 'cohort.tie_settling', label: 'Tie resolution', value: tieSettling(cohort.settings)},
     {id: 'cohort.voters', label: `Voting isolates (${String(cohort.voters.length)})`, value: cohort.voters.join(', ')},
   ];
 }
@@ -216,7 +227,7 @@ const isolateColumns: readonly {id: string; label: string}[] = [
   {id: 'isolates.state', label: 'State'},
   {id: 'isolates.mean_depth', label: 'Depth'},
   {id: 'isolates.callable_fraction', label: 'Callable'},
-  {id: 'isolates.snps', label: 'SNPs'},
+  {id: 'isolates.snps', label: 'Single-base changes'},
   {id: 'isolates.indels', label: 'Indels'},
   {id: 'isolates.votes', label: 'Votes'},
   {id: 'isolates.candidate', label: 'Candidate'},
@@ -277,7 +288,7 @@ function isolateDetailSections(isolate: IsolateResult, result: ReferenceConsensu
     {id: 'isolates.mean_depth', label: 'Mean depth (reads per base)', value: metrics.meanDepth.toFixed(1)},
     {id: 'isolate.covered_fraction', label: 'Covered backbone bases', value: share(metrics.coveredFraction)},
     {id: 'isolates.callable_fraction', label: 'Callable backbone bases', value: share(metrics.callableFraction)},
-    {id: 'isolates.snps', label: 'PASS SNPs', value: integer(metrics.snps)},
+    {id: 'isolates.snps', label: 'PASS single-base changes', value: integer(metrics.snps)},
     {id: 'isolates.indels', label: 'PASS indels', value: integer(metrics.indels)},
   ] : [];
   const sections: RowSection[] = [{id: 'isolate', title: 'Isolate', rows: summary}];
@@ -392,6 +403,8 @@ function consensusFileSections(result: ReferenceConsensusResult): RowSection[] {
 export const siteFilterLabels: Record<SiteFilter, string> = {
   tie: 'ties',
   no_majority: 'no majority',
+  tie_broken: 'ties broken',
+  tie_overruled: 'ties overruled',
   competing_indel: 'competing indels',
   unresolved: 'all unresolved loci',
 };
@@ -419,7 +432,8 @@ function position(site: CohortSite): string {
 
 function outcome(site: CohortSite): string {
   if (site.status === 'selected') {
-    return `selected ${site.allele === site.backboneAllele ? 'backbone allele' : shortAllele(site.allele)}`;
+    const allele = site.allele === site.backboneAllele ? 'backbone allele' : shortAllele(site.allele);
+    return site.reason === '.' ? `selected ${allele}` : `${site.reason.replace('_', ' ')}: ${allele}`;
   }
   return site.reason.replace('_', ' ');
 }

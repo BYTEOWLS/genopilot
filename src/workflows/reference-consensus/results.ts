@@ -23,10 +23,16 @@ export type RecordIssue = {path: string; message: string};
 export type UnresolvedReason = 'tie' | 'no_majority' | 'no_votes' | 'few_callable';
 export const unresolvedReasons: readonly UnresolvedReason[] = ['tie', 'no_majority', 'no_votes', 'few_callable'];
 
+/** Why a tie was settled: the tie source's allele was one of the tied alleles, or it overruled them. */
+export type SettledTieReason = 'tie_broken' | 'tie_overruled';
+export const settledTieReasons: readonly SettledTieReason[] = ['tie_broken', 'tie_overruled'];
+
 /** Counts of one cohort's consensus, from its `consensus-summary.json`. */
 export type CohortCounts = {
   /** Loci of the support table, by decision. */
   lociSelected: number;
+  /** Selected loci whose tie the tie source settled; they are part of `lociSelected`. */
+  lociSettledTies: Record<SettledTieReason, number>;
   lociUnresolved: Record<UnresolvedReason, number>;
   /** Selected loci whose written allele differs from the backbone's. */
   lociChanged: number;
@@ -318,6 +324,9 @@ function parseCounts(value: RecordValue): {counts: CohortCounts; problems: Field
   };
   const counts: CohortCounts = {
     lociSelected: fields.count(field(value, 'loci', 'selected'), 'loci.selected'),
+    lociSettledTies: Object.fromEntries(settledTieReasons.map(reason =>
+      [reason, fields.count(field(value, 'loci', 'settled_ties', reason), `loci.settled_ties.${reason}`)])) as
+      Record<SettledTieReason, number>,
     lociUnresolved: reasons(field(value, 'loci', 'unresolved'), 'loci.unresolved'),
     lociChanged: fields.count(field(value, 'loci', 'changed'), 'loci.changed'),
     multiallelicLoci: lociOfFlag('multiallelic'),

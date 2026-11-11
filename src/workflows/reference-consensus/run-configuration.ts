@@ -42,7 +42,9 @@ import {
   parseReferenceConsensusConfiguration,
   validateReferenceConsensusConfiguration,
   type ReferenceConsensusConfiguration,
-  type UnresolvedSnp,
+  type TieScope,
+  type TieSource,
+  type UnresolvedSingleBase,
   type VotingMethod,
 } from './configuration.js';
 import {ISOLATE_SNAPSHOT_SCHEMA_VERSION, validateIsolateSnapshot, type IsolateSnapshot} from './snapshot.js';
@@ -56,7 +58,11 @@ export type ReferenceConsensusDraft = {
   votingMethod: VotingMethod;
   includeBackboneVote: boolean;
   minCallableIsolates: string;
-  unresolvedSnp: UnresolvedSnp;
+  unresolvedSingleBase: UnresolvedSingleBase;
+  tieSource: TieSource;
+  tieScope: TieScope;
+  /** The trusted isolate's ID; used only with the `isolate` tie source. */
+  tieIsolate: string;
   minDepth: string;
   minMappingQuality: string;
   minBaseQuality: string;
@@ -154,7 +160,10 @@ export function buildReferenceConsensusRun(
       include_backbone_vote: draft.includeBackboneVote,
       voting_method: draft.votingMethod,
       min_callable_isolates: parseThreshold(draft.minCallableIsolates),
-      unresolved_snp: draft.unresolvedSnp,
+      unresolved_single_base: draft.unresolvedSingleBase,
+      tie_source: draft.tieSource,
+      ...(draft.tieSource === 'none' ? {} : {tie_scope: draft.tieScope}),
+      ...(draft.tieSource === 'isolate' ? {tie_isolate: draft.tieIsolate} : {}),
     },
     resources: {
       cpu_mode: draft.cpuMode,

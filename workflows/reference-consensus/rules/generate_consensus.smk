@@ -3,14 +3,16 @@
 What it does
   generate_consensus  the support tables interpreted with the cohort's voting
                       method, minimum of callable isolates, and representation
-                      of unresolved SNPs
+                      of unresolved single-base positions
                       -> results/cohort/{cohort}/consensus.fasta(.fai),
                          consensus-sites.tsv.gz(.tbi), consensus-summary.json
 
   The settings are the configuration's for the `initial` cohort and the saved
-  decision's for an `iteration-<n>`. Only the support outputs and the backbone
-  are read (see scripts/generate_consensus.py), so changing one of the three
-  consensus settings reruns this rule alone and reuses the support tables.
+  decision's for an `iteration-<n>`: the voting method, the minimum of
+  callable isolates, the representation of unresolved single-base positions,
+  and how ties are settled. Only the support outputs and the backbone are read (see
+  scripts/generate_consensus.py), so changing one of these settings reruns
+  this rule alone and reuses the support tables.
   The sites table is bgzip-compressed and indexed with tabix like the support
   tables.
 
@@ -38,8 +40,13 @@ def _consensus_args(wildcards):
     args = [
         "--voting-method", consensus["voting_method"],
         "--min-callable-isolates", consensus["min_callable_isolates"],
-        "--unresolved-snp", consensus["unresolved_snp"],
+        "--unresolved-single-base", consensus["unresolved_single_base"],
+        "--tie-source", consensus["tie_source"],
     ]
+    if consensus["tie_source"] != "none":
+        args += ["--tie-scope", consensus["tie_scope"]]
+    if consensus["tie_source"] == "isolate":
+        args += ["--tie-isolate", consensus["tie_isolate"]]
     return " ".join(shlex.quote(str(arg)) for arg in args)
 
 

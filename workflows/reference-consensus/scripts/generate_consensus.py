@@ -5,7 +5,7 @@ Inputs are cohort support aggregation's outputs (aggregate_support.py): the
 sites table (one row per locus), the intervals table (every backbone base in
 runs of constant votes), the support summary, and the backbone FASTA with its
 index. Only these are read, so the consensus is reproducible from them and
-the three policies below.
+the policies below.
 
 Decisions, at a locus of the sites table or a run of bases outside every
 locus (where every vote is for the backbone base), in this order:
@@ -18,13 +18,21 @@ locus (where every vote is for the backbone base), in this order:
                                                            the top alleles are tied,
                                                            else `no_majority`
 
+A tie can be settled by a tie source (--tie-source): the backbone's allele
+(only when it is all A, C, G, and T), or the allele a trusted isolate
+(--tie-isolate, its `isolate:<id>` column) voted for. When that allele is one
+of the tied alleles, it is selected with reason `tie_broken`; otherwise, with
+--tie-scope any-allele, it is selected with reason `tie_overruled`, also
+without any vote. Without a source allele the locus stays a `tie`. Only ties
+are settled, and a settled tie skips the majority check.
+
 A selected allele replaces the locus's whole backbone span; a base of it that
 is not A, C, G, or T (only the backbone's own, such as an assembly gap) is
 written as N. An unresolved locus is written as N for every base of its
 backbone allele, so no concrete base is invented and the consensus stays
-aligned with the backbone there. The one exception is an unresolved SNP, a
-tie or no majority between single-base alleles only: with
---unresolved-snp iupac it is written as the IUPAC code of every allele that
+aligned with the backbone there. The one exception is an unresolved single-base
+position, a tie or no majority between single-base alleles only: with
+--unresolved-single-base iupac it is written as the IUPAC code of every allele that
 received a vote (A=5, G=5 -> R).
 
 Writes (1-based, inclusive coordinates; contigs in backbone order):
@@ -34,8 +42,10 @@ Writes (1-based, inclusive coordinates; contigs in backbone order):
   --consensus-sites  TSV, one row per locus of the sites table (`kind` locus)
                      and per run of unresolved bases outside the loci (`kind`
                      region, written as N throughout): its backbone and
-                     consensus span, status, reason, selected allele, the
-                     sequence written, and the locus's votes and flags
+                     consensus span, status, reason (`.` for a vote winner,
+                     `tie_broken` or `tie_overruled` for a settled tie),
+                     selected allele, the sequence written, and the locus's
+                     votes and flags
   --summary          JSON: the policies, voters, input and FASTA checksums,
                      sequence lengths, loci by status and reason (in total and
                      per support flag) and by total votes, and bases written
@@ -68,8 +78,12 @@ SCHEMA_VERSION = 1
 INTERVAL_COLUMNS = ("chrom", "start", "end", "backbone_votes", "callable_isolates")
 T = TypeVar("T")
 VOTING_METHODS = ("strict-majority", "plurality")
-UNRESOLVED_SNP = ("n", "iupac")
+UNRESOLVED_SINGLE_BASE = ("n", "iupac")
 REASONS = ("tie", "no_majority", "no_votes", "few_callable")
+TIE_SOURCES = ("none", "backbone", "isolate")
+TIE_SCOPES = ("tied-alleles", "any-allele")
+SETTLED_TIES = ("tie_broken", "tie_overruled")
+ACGT_ALLELE = re.compile(r"^[ACGT]+$")
 LINE_WIDTH = 60
 NOT_ACGT = re.compile(r"[^ACGT]")
 ACGT_BASE = re.compile(r"^[ACGT]$")
@@ -88,7 +102,10 @@ CONSENSUS_SITE_COLUMNS = (
 class Policy:
     voting_method: str
     min_callable_isolates: int
-    unresolved_snp: str
+    unresolved_single_base: str
+    tie_source: str = "none"
+    tie_scope: str | None = None
+    tie_isolate: str | None = None
 
 
 @dataclass(frozen=True)
@@ -103,6 +120,7 @@ class Locus:
     callable_isolates: int
     total_votes: int
     flags: tuple[str, ...]
+    trusted_call: str = "."
 
 
 @dataclass(frozen=True)
@@ -122,23 +140,35 @@ def open_text(path: Path) -> TextIO:
     return path.open(encoding="utf-8")
 
 
-def table_rows(path: Path, columns: tuple[str, ...]) -> Iterator[dict[str, str]]:
+def table_rows(path: Path, columns: tuple[str, ...], extra: str | None = None) -> Iterator[dict[str, str]]:
     """The given leading columns of a support table's rows; `##` lines are metadata and `#` the header.
 
-    Only these columns are split off, so the per-isolate columns of the sites table cost nothing.
+    Only these columns, and the one `extra` column if named, are split off, so the other
+    per-isolate columns of the sites table cost nothing. The extra column's value is `extra`.
     """
+    extra_index = 0
     with open_text(path) as table:
         for line in table:
             if line.startswith("##") or line == "\n":
                 continue
             if line.startswith("#"):
-                if tuple(line[1:].rstrip("\n").split("\t")[:len(columns)]) != columns:
+                header = line[1:].rstrip("\n").split("\t")
+                if tuple(header[:len(columns)]) != columns:
                     raise ValueError(f"{path} does not start with the columns {', '.join(columns)}")
+                if extra is not None:
+                    if extra not in header:
+                        raise ValueError(f"{path} has no column {extra}")
+                    extra_index = header.index(extra)
                 break
         else:
             raise ValueError(f"{path} has no header line")
+        split = max(len(columns), extra_index + 1)
         for line in table:
-            yield dict(zip(columns, line.rstrip("\n").split("\t", len(columns))))
+            fields = line.rstrip("\n").split("\t", split)
+            row = dict(zip(columns, fields))
+            if extra is not None:
+                row["extra"] = fields[extra_index]
+            yield row
 
 
 class ContigRows:
@@ -171,6 +201,7 @@ def parse_locus(row: dict[str, str]) -> Locus:
         callable_isolates=int(row["callable_isolates"]),
         total_votes=int(row["total_votes"]),
         flags=() if row["flags"] == "." else tuple(row["flags"].split(",")),
+        trusted_call=row.get("extra", "."),
     )
 
 
@@ -178,8 +209,15 @@ def parse_interval(row: dict[str, str]) -> Interval:
     return Interval(int(row["start"]) - 1, int(row["end"]), int(row["backbone_votes"]), int(row["callable_isolates"]))
 
 
-def decide(votes: dict[str, int], total_votes: int, callable_isolates: int, policy: Policy) -> tuple[str, str | None]:
-    """(reason, selected allele): the reason is `.` when an allele is selected, which is then not None."""
+def decide(
+    votes: dict[str, int],
+    total_votes: int,
+    callable_isolates: int,
+    policy: Policy,
+    source_allele: str | None = None,
+) -> tuple[str, str | None]:
+    """(reason, selected allele): the allele is not None when one is selected, with reason `.`
+    for a vote winner or a settled tie's reason; `source_allele` is the tie source's allele."""
     if total_votes == 0:
         return "no_votes", None
     if callable_isolates < policy.min_callable_isolates:
@@ -187,10 +225,23 @@ def decide(votes: dict[str, int], total_votes: int, callable_isolates: int, poli
     top = max(votes.values())
     leaders = [allele for allele, count in votes.items() if count == top]
     if len(leaders) > 1:
+        if source_allele in leaders:
+            return "tie_broken", source_allele
+        if source_allele is not None and policy.tie_scope == "any-allele":
+            return "tie_overruled", source_allele
         return "tie", None
     if policy.voting_method == "strict-majority" and top * 2 <= total_votes:
         return "no_majority", None
     return ".", leaders[0]
+
+
+def source_allele(locus: Locus, policy: Policy) -> str | None:
+    """The tie source's allele at a locus, or None when the source has none there."""
+    if policy.tie_source == "backbone":
+        return locus.backbone_allele if ACGT_ALLELE.match(locus.backbone_allele) else None
+    if policy.tie_source == "isolate" and locus.trusted_call.isdigit():
+        return locus.alleles[int(locus.trusted_call)]
+    return None
 
 
 def written_for(locus: Locus, reason: str, allele: str | None, policy: Policy) -> str:
@@ -199,7 +250,7 @@ def written_for(locus: Locus, reason: str, allele: str | None, policy: Policy) -
         return NOT_ACGT.sub("N", allele)
     voted = sorted(a for a, count in zip(locus.alleles, locus.votes) if count > 0)
     snp = len(locus.backbone_allele) == 1 and all(ACGT_BASE.match(a) for a in voted)
-    if policy.unresolved_snp == "iupac" and reason in ("tie", "no_majority") and snp:
+    if policy.unresolved_single_base == "iupac" and reason in ("tie", "no_majority") and snp:
         return IUPAC["".join(voted)]
     return "N" * len(locus.backbone_allele)
 
@@ -271,7 +322,10 @@ def consensus_contig(
         close_region()
         if sequence[locus.start:locus.end] != locus.backbone_allele:
             raise ValueError(f"the sites table's backbone allele at {chrom}:{locus.start + 1} does not match the backbone")
-        reason, allele = decide(dict(zip(locus.alleles, locus.votes)), locus.total_votes, locus.callable_isolates, policy)
+        reason, allele = decide(
+            dict(zip(locus.alleles, locus.votes)), locus.total_votes, locus.callable_isolates, policy,
+            source_allele(locus, policy),
+        )
         written = written_for(locus, reason, allele, policy)
         status = "selected" if allele is not None else "unresolved"
         consensus_start = locus.start + delta + 1
@@ -281,6 +335,10 @@ def consensus_contig(
         tally.loci[status if allele is not None else reason] += 1
         for flag in locus.flags:
             tally.loci_by_flag[flag][status if allele is not None else reason] += 1
+        if reason in SETTLED_TIES:
+            tally.loci[reason] += 1
+            for flag in locus.flags:
+                tally.loci_by_flag[flag][reason] += 1
         tally.loci_by_votes[status][locus.total_votes] += 1
         if allele is not None:
             tally.changed_loci += allele != locus.backbone_allele
@@ -341,10 +399,16 @@ def generate(
     sites.write(f"## schema_version: {SCHEMA_VERSION}\n")
     sites.write(f"## voting_method: {policy.voting_method}\n")
     sites.write(f"## min_callable_isolates: {policy.min_callable_isolates}\n")
-    sites.write(f"## unresolved_snp: {policy.unresolved_snp}\n")
+    sites.write(f"## unresolved_single_base: {policy.unresolved_single_base}\n")
+    sites.write(f"## tie_source: {policy.tie_source}\n")
+    if policy.tie_scope is not None:
+        sites.write(f"## tie_scope: {policy.tie_scope}\n")
+    if policy.tie_isolate is not None:
+        sites.write(f"## tie_isolate: {policy.tie_isolate}\n")
     sites.write("#" + "\t".join(CONSENSUS_SITE_COLUMNS) + "\n")
 
-    site_rows = ContigRows(table_rows(sites_path, SITE_COLUMNS), parse_locus)
+    trusted = f"isolate:{policy.tie_isolate}" if policy.tie_source == "isolate" else None
+    site_rows = ContigRows(table_rows(sites_path, SITE_COLUMNS, trusted), parse_locus)
     interval_rows = ContigRows(table_rows(intervals_path, INTERVAL_COLUMNS), parse_interval)
     sequences = read_fasta(backbone)
     tally = Tally.empty()
@@ -362,13 +426,20 @@ def generate(
     interval_rows.finish(intervals_path)
 
     def by_reason(counts: Counter) -> dict:
-        return {"selected": counts["selected"], "unresolved": {reason: counts[reason] for reason in REASONS}}
+        return {
+            "selected": counts["selected"],
+            "settled_ties": {reason: counts[reason] for reason in SETTLED_TIES},
+            "unresolved": {reason: counts[reason] for reason in REASONS},
+        }
 
     return {
         "schema_version": SCHEMA_VERSION,
         "voting_method": policy.voting_method,
         "min_callable_isolates": policy.min_callable_isolates,
-        "unresolved_snp": policy.unresolved_snp,
+        "unresolved_single_base": policy.unresolved_single_base,
+        "tie_source": policy.tie_source,
+        "tie_scope": policy.tie_scope,
+        "tie_isolate": policy.tie_isolate,
         "include_backbone_vote": support_summary["include_backbone_vote"],
         "voters": support_summary["voters"],
         "inputs": {
@@ -406,13 +477,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--support-summary", type=Path, required=True)
     parser.add_argument("--voting-method", choices=VOTING_METHODS, required=True)
     parser.add_argument("--min-callable-isolates", type=int, required=True)
-    parser.add_argument("--unresolved-snp", choices=UNRESOLVED_SNP, required=True)
+    parser.add_argument("--unresolved-single-base", choices=UNRESOLVED_SINGLE_BASE, required=True)
+    parser.add_argument("--tie-source", choices=TIE_SOURCES, default="none")
+    parser.add_argument("--tie-scope", choices=TIE_SCOPES)
+    parser.add_argument("--tie-isolate")
     parser.add_argument("--fasta", type=Path, required=True)
     parser.add_argument("--consensus-sites", type=Path, required=True)
     parser.add_argument("--summary", type=Path, required=True)
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
-    policy = Policy(args.voting_method, args.min_callable_isolates, args.unresolved_snp)
+    if (args.tie_source != "none") != (args.tie_scope is not None):
+        parser.error("--tie-scope is given with, and only with, a tie source")
+    if (args.tie_source == "isolate") != (args.tie_isolate is not None):
+        parser.error("--tie-isolate is given with, and only with, --tie-source isolate")
+    policy = Policy(
+        args.voting_method, args.min_callable_isolates, args.unresolved_single_base,
+        args.tie_source, args.tie_scope, args.tie_isolate,
+    )
     for path in (args.fasta, args.consensus_sites, args.summary):
         path.parent.mkdir(parents=True, exist_ok=True)
     with args.fasta.open("w", encoding="utf-8") as fasta, args.consensus_sites.open("w", encoding="utf-8") as sites:

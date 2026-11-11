@@ -21,10 +21,10 @@ Votes
 Loci
   `PASS` records of all isolates whose backbone spans overlap form one locus.
   Every voter's allele at a locus is the locus's backbone sequence with its
-  own records applied, so a SNP inside another isolate's deletion, competing
-  indels, and different SNPs at one base are all one ballot with at most one
+  own records applied, so a base change inside another isolate's deletion,
+  competing indels, and different base changes at one base are all one ballot with at most one
   vote per voter. The caller reports a base change and an indel at the same
-  position as two records; they are combined into one allele (a SNP `G>T` and
+  position as two records; they are combined into one allele (a change `G>T` and
   an insertion `G>GGAT` become `G>TGAT`). An isolate whose own records
   otherwise overlap within a locus, or whose allele has another base than A,
   C, G, or T, is `unsupported` there and casts no vote.
@@ -217,7 +217,7 @@ def loci(voters: list[Voter], chrom: str) -> list[tuple[int, int, dict[str, list
 
 
 def combine_anchor_records(records: list[Record]) -> list[Record] | None:
-    """One voter's records with a SNP and an indel at the same position combined into one record.
+    """One voter's records with a base change and an indel at the same position combined into one record.
 
     Returns None when records share a position in any other way.
     """

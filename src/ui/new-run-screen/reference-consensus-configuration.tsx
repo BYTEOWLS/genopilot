@@ -95,7 +95,10 @@ function previousRunFormValues(configuration: ReferenceConsensusConfiguration): 
     'voting-method': configuration.consensus.voting_method,
     'include-backbone-vote': configuration.consensus.include_backbone_vote ? 'yes' : 'no',
     'min-callable-isolates': String(configuration.consensus.min_callable_isolates),
-    'unresolved-snp': configuration.consensus.unresolved_snp,
+    'unresolved-single-base': configuration.consensus.unresolved_single_base,
+    'tie-source': configuration.consensus.tie_source,
+    'tie-scope': configuration.consensus.tie_scope ?? 'tied-alleles',
+    'tie-isolate': configuration.consensus.tie_isolate ?? '',
     'min-depth': String(configuration.calling.min_depth),
     'min-mapping-quality': String(configuration.calling.min_mapping_quality),
     'min-base-quality': String(configuration.calling.min_base_quality),
@@ -126,7 +129,10 @@ function draftFromValues(values: WorkflowFormValues, currentDirectory: string): 
     votingMethod: values['voting-method'] === 'plurality' ? 'plurality' : 'strict-majority',
     includeBackboneVote: values['include-backbone-vote'] !== 'no',
     minCallableIsolates: values['min-callable-isolates'] ?? '',
-    unresolvedSnp: values['unresolved-snp'] === 'iupac' ? 'iupac' : 'n',
+    unresolvedSingleBase: values['unresolved-single-base'] === 'iupac' ? 'iupac' : 'n',
+    tieSource: values['tie-source'] === 'backbone' || values['tie-source'] === 'isolate' ? values['tie-source'] : 'none',
+    tieScope: values['tie-scope'] === 'any-allele' ? 'any-allele' : 'tied-alleles',
+    tieIsolate: values['tie-isolate'] ?? '',
     minDepth: values['min-depth'] ?? '',
     minMappingQuality: values['min-mapping-quality'] ?? '',
     minBaseQuality: values['min-base-quality'] ?? '',
@@ -222,7 +228,7 @@ const votingExplanations: Record<VotingMethod, string> = {
   plurality: 'The allele (a base, or an inserted or deleted sequence) with the unique highest vote count wins.',
 };
 
-/** Outcome of a set of votes under a voting method; a tie for first place is never resolved. */
+/** Outcome of a set of votes under a voting method; a tie for first place stays unresolved here. */
 function votingOutcome(votes: readonly string[], method: VotingMethod): string {
   const counts = new Map<string, number>();
   for (const vote of votes) {
@@ -245,6 +251,29 @@ const votingExamples: readonly (readonly string[])[] = [
   ['A', 'A', 'G', 'T', 'C'],
   ['A', 'A', 'G', 'G', 'T'],
 ];
+
+/** What the tie settings do, with a tie that is settled and one that is overruled or stays. */
+function tieRows({tie_source: source, tie_scope: scope, tie_isolate: isolate}: ReferenceConsensusConfiguration['consensus']): {label: string; value: string}[] {
+  if (source === 'none') {
+    return [{label: 'Ties', value: 'A tie (bases with the same, highest number of votes) stays unresolved.'}];
+  }
+  const base = source === 'backbone' ? "the backbone's base" : `the base of isolate ${isolate ?? ''}`;
+  const anyAllele = scope === 'any-allele';
+  // Every vote is in the counts, the trusted isolate's own included, so each example is a real tie.
+  const examples = source === 'backbone'
+    ? [`Votes A=2, G=2; the backbone's base is A → A`, `Votes A=2, G=2; the backbone's base is T`]
+    : [`Votes A=2, G=2; ${isolate ?? ''} voted A → A`, `Votes A=2, G=2, T=1; ${isolate ?? ''} voted T`];
+  return [
+    {
+      label: 'Ties',
+      value: `A tie is resolved with ${base}` + (anyAllele
+        ? ', even when few or no isolates voted for it.'
+        : ' when it is one of the tied bases; otherwise the tie stays unresolved.'),
+    },
+    {label: 'Tie example 1', value: examples[0]!},
+    {label: 'Tie example 2', value: `${examples[1]!} → ${anyAllele ? 'T' : 'unresolved'}`},
+  ];
+}
 
 function votingSection(configuration: ReferenceConsensusConfiguration): ReviewSection {
   const method = configuration.consensus.voting_method;
@@ -269,9 +298,9 @@ function votingSection(configuration: ReferenceConsensusConfiguration): ReviewSe
       },
       {
         label: 'Unresolved',
-        value: (configuration.consensus.unresolved_snp === 'iupac'
-          ? 'An unresolved SNP is written as the IUPAC code of its voted alleles (A or G is R); '
-          : 'An unresolved SNP is written as N; ') +
+        value: (configuration.consensus.unresolved_single_base === 'iupac'
+          ? 'An unresolved single-base position is written as the IUPAC code of its voted bases (A or G is R); '
+          : 'An unresolved single-base position is written as N; ') +
           'an unresolved indel as N over its backbone span.',
       },
       ...votingExamples.map((votes, index) => ({
@@ -279,6 +308,7 @@ function votingSection(configuration: ReferenceConsensusConfiguration): ReviewSe
         value: `${votes.map((vote, position) => includeBackbone && position === 0 ? `${vote} (backbone)` : vote).join(', ')}` +
           ` → strict majority: ${votingOutcome(votes, 'strict-majority')}, plurality: ${votingOutcome(votes, 'plurality')}`,
       })),
+      ...tieRows(configuration.consensus),
     ],
   };
 }

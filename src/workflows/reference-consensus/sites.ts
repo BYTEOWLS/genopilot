@@ -11,8 +11,11 @@ import {createGunzip} from 'node:zlib';
  * reviewing are kept. Both are bgzip files, which gunzip reads as concatenated gzip members.
  */
 
-export type SiteFilter = 'tie' | 'no_majority' | 'competing_indel' | 'unresolved';
-export const siteFilters: readonly SiteFilter[] = ['tie', 'no_majority', 'competing_indel', 'unresolved'];
+export type SiteFilter = 'tie' | 'no_majority' | 'tie_broken' | 'tie_overruled' | 'competing_indel' | 'unresolved';
+export const siteFilters: readonly SiteFilter[] = [
+  'tie', 'no_majority', 'competing_indel', 'unresolved', 'tie_broken', 'tie_overruled',
+];
+const settledTies: readonly string[] = ['tie_broken', 'tie_overruled'];
 
 export type CohortSite = {
   chrom: string;
@@ -20,7 +23,10 @@ export type CohortSite = {
   start: number;
   end: number;
   status: 'selected' | 'unresolved';
-  /** `tie`, `no_majority`, `no_votes`, or `few_callable` when unresolved; `.` when selected. */
+  /**
+   * `tie`, `no_majority`, `no_votes`, or `few_callable` when unresolved; when selected, `.` for a
+   * vote winner, or `tie_broken` or `tie_overruled` for a tie the tie source settled.
+   */
   reason: string;
   /** The selected allele, or `.`. */
   allele: string;
@@ -57,6 +63,9 @@ export function matchesSiteFilter(site: CohortSite, filter: SiteFilter): boolean
     case 'tie':
     case 'no_majority':
       return site.status === 'unresolved' && site.reason === filter;
+    case 'tie_broken':
+    case 'tie_overruled':
+      return site.status === 'selected' && site.reason === filter;
     case 'competing_indel':
       return site.flags.includes('competing_indel');
     case 'unresolved':
@@ -161,7 +170,7 @@ export async function readCohortSites({
       }
       const flags = list(row[15]);
       const status = row[6] === 'unresolved' ? 'unresolved' : 'selected';
-      if (status !== 'unresolved' && !flags.includes('competing_indel')) {
+      if (status !== 'unresolved' && !flags.includes('competing_indel') && !settledTies.includes(row[7] ?? '.')) {
         continue;
       }
       sites.push({

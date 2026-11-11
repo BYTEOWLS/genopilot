@@ -46,7 +46,7 @@ const configuration = validateReferenceConsensusConfiguration({
     selected_read_sets: isolateIds.map(id => `${id}/reads`),
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
-  consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
+  consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_single_base: 'n', tie_source: 'none'},
   resources: {cpu_mode: 'automatic', effective_cpus: 3, machine: testMachine},
   run: {output_root: '/analysis/runs', id: 'run-a', created_at: '2026-01-01T12:00:00.000Z'},
 });
@@ -70,7 +70,7 @@ function reasons(tie: number, noMajority = 0, noVotes = 0, fewCallable = 0) {
 function consensusSummary(tie: number) {
   return {
     schema_version: 1,
-    loci: {selected: 40, changed: 12, unresolved: reasons(tie, 1)},
+    loci: {selected: 40, changed: 12, settled_ties: {tie_broken: 2, tie_overruled: 1}, unresolved: reasons(tie, 1)},
     loci_by_flag: {
       multiallelic: {selected: 2, unresolved: reasons(1)},
       competing_indel: {selected: 0, unresolved: reasons(0, 1)},
@@ -227,6 +227,7 @@ test('reads a completed run: backbone, isolates, and the initial cohort', async 
   assert.equal(initial.state, 'completed');
   assert.deepEqual(initial.voters, isolateIds);
   assert.deepEqual(initial.counts?.lociUnresolved, reasons(3, 1));
+  assert.deepEqual(initial.counts?.lociSettledTies, {tie_broken: 2, tie_overruled: 1});
   assert.equal(initial.counts?.multiallelicLoci, 3);
   assert.equal(initial.counts?.competingIndelLoci, 1);
   assert.deepEqual(loaded.shell.runStatus, 'completed');

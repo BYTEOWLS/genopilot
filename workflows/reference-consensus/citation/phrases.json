@@ -11,8 +11,22 @@
     "0": "",
     "*": " Positions with fewer than {} callable isolates were written as N."
   },
-  "config.consensus.unresolved_snp": {
+  "config.consensus.unresolved_single_base": {
     "n": "written as N",
     "iupac": "written as the IUPAC code of the alleles that received votes"
+  },
+  "config.consensus.tie_source": {
+    "none": "",
+    "backbone": " A tie was settled by the backbone allele",
+    "isolate": " A tie was settled by the allele of isolate"
+  },
+  "config.consensus.tie_isolate": {
+    "": "",
+    "*": " {}"
+  },
+  "config.consensus.tie_scope": {
+    "": "",
+    "tied-alleles": " when it was one of the tied alleles; otherwise the tie stayed unresolved.",
+    "any-allele": ", also when it was not one of the tied alleles or received no vote."
   }
 }

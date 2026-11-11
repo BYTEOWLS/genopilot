@@ -26,6 +26,8 @@ export type WorkflowParameterDefinition = {
   placeholder?: string;
   preview?: string;
   options?: WorkflowParameterOption[];
+  /** A choice whose options are the isolates currently chosen in this `isolates` parameter. */
+  options_from?: string;
   visible_when?: WorkflowParameterCondition;
 };
 
@@ -169,6 +171,7 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
           'placeholder',
           'preview',
           'options',
+          'options_from',
           'visible_when',
         ],
         path,
@@ -208,7 +211,17 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
         visibleWhen = validateCondition(candidate.visible_when, `${path}.visible_when`, issues);
       }
       let options: WorkflowParameterOption[] | undefined;
-      if (kind === 'choice') {
+      const optionsFrom = candidate.options_from;
+      if ('options_from' in candidate) {
+        if (kind !== 'choice') {
+          issues.push({path: `${path}.options_from`, message: 'is only allowed for a choice'});
+        } else if (nonEmptyString(optionsFrom, `${path}.options_from`, issues) && 'options' in candidate) {
+          issues.push({path: `${path}.options`, message: 'is not allowed together with options_from'});
+        }
+        if (defaultValue !== null && defaultValue !== undefined) {
+          issues.push({path: `${path}.default`, message: 'must be null for options from a selection'});
+        }
+      } else if (kind === 'choice') {
         if (!Array.isArray(candidate.options) || candidate.options.length === 0) {
           issues.push({path: `${path}.options`, message: 'must be a non-empty array for a choice'});
         } else {
@@ -289,6 +302,7 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
           ...('placeholder' in candidate ? {placeholder: candidate.placeholder as string} : {}),
           ...('preview' in candidate ? {preview: candidate.preview as string} : {}),
           ...(options ? {options} : {}),
+          ...(typeof optionsFrom === 'string' && kind === 'choice' ? {options_from: optionsFrom} : {}),
           ...(visibleWhen ? {visible_when: visibleWhen} : {}),
         });
       }
@@ -297,6 +311,15 @@ export function validateParameterDefinitions(value: unknown): WorkflowParameterD
 
   const definitionIds = new Set(definitions.map(definition => definition.id));
   definitions.forEach((definition, index) => {
+    if (
+      definition.options_from !== undefined &&
+      definitions.find(candidate => candidate.id === definition.options_from)?.kind !== 'isolates'
+    ) {
+      issues.push({
+        path: `$.parameters[${index}].options_from`,
+        message: `must name an isolates parameter, not '${definition.options_from}'`,
+      });
+    }
     if (definition.visible_when && !definitionIds.has(definition.visible_when.parameter)) {
       issues.push({
         path: `$.parameters[${index}].visible_when.parameter`,

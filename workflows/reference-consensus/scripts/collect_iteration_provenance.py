@@ -105,7 +105,10 @@ def main(argv: list[str] | None = None) -> int:
         },
         "consensus": {
             key: consensus[key]
-            for key in ("include_backbone_vote", "voting_method", "min_callable_isolates", "unresolved_snp")
+            for key in (
+                "include_backbone_vote", "voting_method", "min_callable_isolates", "unresolved_single_base",
+                "tie_source", "tie_scope", "tie_isolate",
+            )
         },
         "voting_isolates": {
             isolate_id: {

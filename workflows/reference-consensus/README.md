@@ -18,7 +18,10 @@ Archive-renamed Illumina reads are supported using supplied library identity. Or
 | Voting method | strict majority | Strict majority needs more than half of the votes cast; plurality needs the unique highest vote count. |
 | Backbone vote | yes | Whether the backbone casts one vote next to the callable isolates. |
 | Minimum callable isolates | 0 | Voting isolates a position needs; below it the consensus writes `N`. At most the number of selected isolates. |
-| Unresolved SNPs | N | How an unresolved SNP (a tie or no majority) is written: `N`, or the IUPAC code of the alleles that received votes. |
+| Unresolved single-base positions | N | How an unresolved single-base position (a tie or no majority) is written: `N`, or the IUPAC code of the bases that received votes. |
+| Tie resolution | leave unresolved | How a tie is handled: left unresolved, or resolved with the backbone's base or the base of an isolate you trust. See *Ties*. |
+| Trusted isolate | — | Only when ties use a trusted isolate's base: one of the selected isolates. |
+| Tie resolution scope | only among the tied bases | Only when ties are resolved: whether that base must be one of the tied bases, or always wins. See *Ties*. |
 | Ploidy | 1 | Fixed: isolates are called haploid. |
 | Minimum read depth | 10 | Reads needed at a position, counted after the quality filters and without duplicates. |
 | Minimum mapping quality | 20 | Reads mapped with a lower quality are not counted. |
@@ -59,9 +62,16 @@ Isolates are called haploid: each has one copy of every position, so a clean iso
 
 Variant calling lists where an isolate differs from the backbone, in a VCF file [9]:
 
-- **SNP**: one base exchanged for another;
+- **single-base change**: one base exchanged for another, for example backbone `C`, isolate `A`;
 - **indel**: bases inserted or deleted;
 - **multiallelic site**: more than two alleles at one position across the cohort, for example backbone `C`, one isolate `A`, another `T`.
+
+Two related terms are often mixed up:
+
+- An **SNV** (single-nucleotide variant) is a single-base change in one genome against a reference. It says nothing about other genomes.
+- A **SNP** (single-nucleotide polymorphism) is a position that varies within a population: some members carry one base, others another.
+
+One isolate's difference from the backbone is therefore an SNV. Many tools, bcftools among them, still count it as a "SNP", so GenoPilot shows it as a *single-base change*. A position where the isolates of a cohort carry different bases is a polymorphism within the cohort; the support table flags it `snp` (see *Flags*). An indel is a variant of one genome or a polymorphism alike; the word does not distinguish them.
 
 The same deletion in a repeat, such as one `A` removed from `AAAA`, can be written at several positions. **Normalization** writes every variant in one canonical form: shifted as far left as possible, with one record per alternative allele [10]. The same event then looks the same in every isolate and can be counted.
 
@@ -186,7 +196,7 @@ position  2200 2201 2202 2203 2204
 backbone    A    T    C    C    T
 isolate 1   A    -    -    -    -     deletion of TCCT
 isolate 2   A    T    C    C    T     no variant
-isolate 3   A    T    G    C    T     SNP C to G at 2202
+isolate 3   A    T    G    C    T     single-base change C to G at 2202
 ```
 
 Counted base by base, isolate 1 has no base at 2202 at all, so it could neither vote for `C` nor for `G`, although its reads clearly show the deletion. Overlapping variants of different isolates therefore form one **locus**, and every voter chooses one complete version of it:
@@ -197,13 +207,13 @@ Counted base by base, isolate 1 has no base at 2202 at all, so it could neither 
 | `A` | isolate 1 | 1 |
 | `ATGCT` | isolate 3 | 1 |
 
-Every voter casts at most one vote at a locus, and it votes only when every base of the locus is callable for it. Such a locus is flagged, so it can be reviewed. Most loci are a single SNP and are unaffected. This is how the evidence is written down, not a choice between scientific methods, so it is not a parameter.
+Every voter casts at most one vote at a locus, and it votes only when every base of the locus is callable for it. Such a locus is flagged, so it can be reviewed. Most loci are a single base and are unaffected. This is how the evidence is written down, not a choice between scientific methods, so it is not a parameter.
 
 ### Flags
 
 | Flag | Meaning |
 |---|---|
-| `snp` | a single base, and no isolate's variant there is an indel |
+| `snp` | a single base where the voters differ, a polymorphism within the cohort; no isolate's variant there is an indel |
 | `indel` | at least one isolate's variant or allele is longer or shorter than the backbone allele |
 | `multiallelic` | more than two alleles, the backbone's included, for example backbone `C`, one isolate `A`, another `T` |
 | `overlapping` | variants of different isolates with different spans were merged into this locus |
@@ -217,7 +227,7 @@ The consensus counts the ballots of the support table. At every locus, and in ev
 
 1. **No votes**: nobody voted, because the backbone does not vote and no isolate is callable. The position is unresolved.
 2. **Too few callable isolates**: fewer isolates voted than the minimum of callable isolates. The position is unresolved, also when the backbone voted.
-3. **The voting method**: with strict majority, an allele wins with more than half of the votes cast; with plurality, the allele with the unique highest count wins. Otherwise the position is unresolved, as a tie when several alleles share the highest count, and as no majority otherwise.
+3. **The voting method**: with strict majority, an allele wins with more than half of the votes cast; with plurality, the allele with the unique highest count wins. Otherwise the position is unresolved, as a tie when several alleles share the highest count, and as no majority otherwise. A tie can be settled instead; see *Ties*.
 
 | Votes | Strict majority | Plurality |
 |---|---|---|
@@ -230,11 +240,33 @@ A winning allele replaces the locus's whole backbone span. When a deletion wins,
 
 An unresolved position never becomes a concrete base:
 
-- **An unresolved SNP**, where every allele that received a vote is one base, is written as `N`, or as the IUPAC ambiguity code of those alleles [16] when *Unresolved SNPs* is set so. For example, `A=5, G=5` becomes `R` (`A` or `G`), and `A=4, C=3, G=3` becomes `V` (`A`, `C`, or `G`). Some tools and submission checks do not accept every IUPAC code, so `N` is the default.
+- **An unresolved single-base position**, where every allele that received a vote is one base, is written as `N`, or as the IUPAC ambiguity code of those bases [16] when *Unresolved single-base positions* is set so. Each isolate's own call there is clear; it is the isolates that disagree. For example, `A=5, G=5` becomes `R` (`A` or `G`), and `A=4, C=3, G=3` becomes `V` (`A`, `C`, or `G`). Some tools and submission checks do not accept every IUPAC code, so `N` is the default.
 - **An unresolved indel** is always written as `N` for every backbone base of the locus, because no IUPAC code can say "`ATCCT` or `A`". The consensus therefore keeps the backbone's length there. For example, in the locus of *Overlapping variants* (backbone `ATCCT` at `chr1:2200–2204`), when the backbone does not vote, the three isolates vote `A`, `ATCCT`, and `ATGCT` once each, and the consensus holds `NNNNN` there.
 - **Positions without enough votes** are written as `N` for every base.
 
 A base where only the backbone voted keeps the backbone base when the minimum of callable isolates is 0. Such bases, for example in repeats no isolate can be called in, are counted as *backbone only* in the summary. With a minimum of 1 or more, they become `N` instead. A backbone base that is not `A`, `C`, `G`, or `T`, such as `N` in an assembly gap, stays `N`. Lowercase soft-masking is dropped, as in the isolate FASTA.
+
+### Ties
+
+A tie means two or more alleles got the same, highest number of votes, for example 5 voters say `A` and 5 say `G`. By default the position stays unresolved and is written as `N` (or an IUPAC code, see above). You can instead resolve ties with one of these bases:
+
+- **The backbone's base**, also when the backbone does not vote.
+- **The base of an isolate you trust**: the base it voted for, for example a well-characterized lab strain in the cohort. It must be one of the voting isolates.
+
+*Tie resolution scope* says when that base is used:
+
+- **Only among the tied bases**: the base wins only if it is one of the tied bases. Otherwise the tie stays.
+- **Always**: the base wins, even when it is not one of the tied bases, so with fewer votes or none at all.
+
+| Votes | Base used for ties | Only among the tied bases | Always |
+|---|---|---|---|
+| `A=5, G=5` | `A` | `A` (tie broken) | `A` (tie broken) |
+| `A=4, G=4, C=2` | `C` | unresolved (tie) | `C` (tie overruled) |
+| `A=4, G=4` | none: the trusted isolate is uncallable here, or the backbone has `N` | unresolved (tie) | unresolved (tie) |
+
+Only ties are settled. Positions with no votes, too few callable isolates, or no majority stay unresolved; plurality and a minimum of 0 callable isolates address those. A settled tie is selected even when its allele has half of the votes or fewer, also with strict majority.
+
+A settled tie is written like any other base. Later steps, such as the annotation transfer, cannot tell it apart and do not warn about it. The consensus sites table keeps its votes and its reason, `tie_broken` or `tie_overruled`, and the result page counts both.
 
 The result is a cohort consensus: the backbone's structure with the cohort's most supported alleles. It can combine alleles that no single isolate carries together. It is not the genome of one individual and not an assembly.
 
@@ -245,7 +277,7 @@ After a run, the researcher may decide that an isolate should not vote, for exam
 A decision is saved as `decisions/iteration-<n>.yaml`, numbered from 2, and names:
 
 - the isolates that vote and the isolates excluded from voting, which together are the run's selected isolates; at least one isolate votes;
-- the four cohort settings: the voting method, the backbone vote, the minimum of callable isolates (at most the number of voting isolates), and the representation of unresolved SNPs;
+- the cohort settings: the voting method, the backbone vote, the minimum of callable isolates (at most the number of voting isolates), the representation of unresolved single-base positions, and how ties are settled (a trusted isolate must vote);
 - the reason for the decision and when it was made.
 
 Excluding an isolate applies to the whole genome, never to single positions. Wild-type status and lineage can inform the decision but never make it. A change to the calling thresholds, the backbone, or the reads still needs a new run, because every isolate's results depend on them.
@@ -263,7 +295,7 @@ The consensus is not annotated: this workflow transfers no annotation and keeps 
 
 The consensus keeps the backbone's sequence names, but every winning insertion or deletion shifts the coordinates after it, so the backbone's GFF3 cannot be reused directly and has to be lifted.
 
-Unresolved positions carry over. Every base the consensus writes as `N` or as an IUPAC code is an unresolved base for the transfer: it warns about them before LiftOn runs, and every gene whose coding sequence contains one is listed for review, because a codon with such a base cannot be translated and looks changed without any real change. Resolving loci first, for example through an iteration that excludes a poorly covered isolate, or with deeper sequencing, gives a cleaner rating. A later iteration writes a new consensus, so an annotation transferred onto an earlier one describes that earlier sequence.
+Unresolved positions carry over. Settled ties do not: they are ordinary bases for the transfer. Every base the consensus writes as `N` or as an IUPAC code is an unresolved base for the transfer: it warns about them before LiftOn runs, and every gene whose coding sequence contains one is listed for review, because a codon with such a base cannot be translated and looks changed without any real change. Resolving loci first, for example through an iteration that excludes a poorly covered isolate, or with deeper sequencing, gives a cleaner rating. A later iteration writes a new consensus, so an annotation transferred onto an earlier one describes that earlier sequence.
 
 ## Outputs
 
@@ -291,8 +323,8 @@ Paths are inside the run directory. Positions in the support tables are 1-based 
 | `results/cohort/initial/support-intervals.tsv.gz` | every backbone base in runs with the same voters: the backbone vote, the number of callable, ambiguous, and uncallable isolates, and every isolate's state as one letter (`c` callable, `a` ambiguous, `u` uncallable) in the order of the `## isolates:` header line, so `cau` means the first isolate is callable, the second ambiguous, and the third uncallable; inside a locus, the sites table is authoritative; indexed with tabix |
 | `results/cohort/initial/support-summary.json` | voters, the backbone vote, input checksums, bases by number of votes, loci per flag, the allele frequency spectrum, and per-isolate counts |
 | `results/cohort/initial/consensus.fasta` | the cohort consensus, with the backbone's sequence names and order, and its index |
-| `results/cohort/initial/consensus-sites.tsv.gz` | one row per locus of the support table with its decision (`selected` or `unresolved`), reason (`tie`, `no_majority`, `no_votes`, `few_callable`), selected allele, the sequence written, its span in the backbone and in the consensus, votes, and flags; and one row per run of unresolved bases outside the loci (`kind` `region`), which are `N` throughout; indexed with tabix |
-| `results/cohort/initial/consensus-summary.json` | the voting method, the minimum, the SNP representation, voters, checksums of the inputs and the FASTA, sequence lengths, loci by decision and reason (also per support flag and by total votes), and bases written from the backbone alone, as IUPAC codes, and as `N` per reason |
+| `results/cohort/initial/consensus-sites.tsv.gz` | one row per locus of the support table with its decision (`selected` or `unresolved`), reason (`tie`, `no_majority`, `no_votes`, `few_callable` when unresolved; `tie_broken` or `tie_overruled` for a settled tie), selected allele, the sequence written, its span in the backbone and in the consensus, votes, and flags; and one row per run of unresolved bases outside the loci (`kind` `region`), which are `N` throughout; indexed with tabix |
+| `results/cohort/initial/consensus-summary.json` | the voting method, the minimum, the representation of unresolved single-base positions, the tie settings, voters, checksums of the inputs and the FASTA, sequence lengths, loci by decision and reason (also per support flag and by total votes), and bases written from the backbone alone, as IUPAC codes, and as `N` per reason |
 | `decisions/iteration-<n>.yaml` | a saved cohort decision (see *Iterations*) |
 | `results/cohort/iteration-<n>/` | the support tables, consensus, and summaries of iteration `n`, with the same files as `results/cohort/initial/` |
 | `provenance/cohort/iteration-<n>.json` | the GenoPilot that saved the configuration, the decision's checksum, the voting isolates with the checksums of what they voted with, every excluded isolate as `completed` or `incomplete`, whether the first cohort was aggregated, the iteration's checksummed outputs, and its commands |

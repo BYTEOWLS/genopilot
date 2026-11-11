@@ -21,6 +21,7 @@ const consensusRows = [
   'chr1\t30\t32\t30\t32\tlocus\tunresolved\tno_majority\t.\tNNN\tGAT\tGAT,G,GATT\t1,1,1\t3\t3\tindel,multiallelic,competing_indel',
   'chr2\t3\t3\t3\t3\tlocus\tselected\t.\tA\tA\tA\tA,AT,ATT\t3,1,0\t3\t4\tindel,multiallelic,competing_indel',
   'chr2\t9\t9\t9\t9\tlocus\tunresolved\tfew_callable\t.\tN\tC\tC\t1\t0\t1\tsnp',
+  'chr2\t15\t15\t15\t15\tlocus\tselected\ttie_broken\tG\tG\tG\tG,C\t2,2\t3\t4\tsnp',
 ];
 const supportRows = [
   'chr1\t5\t5\tA\t1\tA,T\t1,3\t3\t4\tsnp\t1\t1\t1',
@@ -28,6 +29,7 @@ const supportRows = [
   'chr1\t30\t32\tGAT\t0\tGAT,G,GATT\t1,1,1\t3\t3\tindel,multiallelic,competing_indel\t0\t1\t2',
   'chr2\t3\t3\tA\t1\tA,AT,ATT\t3,1,0\t3\t4\tindel,multiallelic,competing_indel\t0\t0\t1',
   'chr2\t9\t9\tC\t1\tC\t1\t0\t1\tsnp\tuncallable\tambiguous\tunsupported',
+  'chr2\t15\t15\tG\t1\tG,C\t2,2\t3\t4\tsnp\t0\t1\t1',
 ];
 
 /** bgzip writes concatenated gzip members; the reader must follow all of them. */
@@ -47,7 +49,7 @@ async function tables(context: TestContext, consensus: string[], support: string
   return {consensusSitesPath, supportSitesPath};
 }
 
-test('keeps unresolved and competing-indel loci with every voter\'s support', async context => {
+test('keeps unresolved, competing-indel, and settled-tie loci with every voter\'s support', async context => {
   const paths = await tables(
     context,
     [consensusHeader, ...consensusRows],
@@ -56,8 +58,12 @@ test('keeps unresolved and competing-indel loci with every voter\'s support', as
   const {voters, sites} = await readCohortSites(paths);
 
   assert.deepEqual(voters, ['isolate-a', 'isolate-b', 'isolate-c']);
-  // The selected SNP and the unresolved region are not kept; the selected competing indel is.
-  assert.deepEqual(sites.map(site => `${site.chrom}:${String(site.start)}`), ['chr1:20', 'chr1:30', 'chr2:3', 'chr2:9']);
+  // The selected SNP and the unresolved region are not kept; the selected competing indel and the
+  // settled tie are.
+  assert.deepEqual(
+    sites.map(site => `${site.chrom}:${String(site.start)}`),
+    ['chr1:20', 'chr1:30', 'chr2:3', 'chr2:9', 'chr2:15'],
+  );
   const tie = sites[0]!;
   assert.equal(tie.reason, 'tie');
   assert.equal(tie.backboneVotes, 1);
@@ -74,7 +80,7 @@ test('keeps unresolved and competing-indel loci with every voter\'s support', as
     filter,
     sites.filter(site => matchesSiteFilter(site, filter)).length,
   ]));
-  assert.deepEqual(counts, {tie: 1, no_majority: 1, competing_indel: 2, unresolved: 3});
+  assert.deepEqual(counts, {tie: 1, no_majority: 1, tie_broken: 1, tie_overruled: 0, competing_indel: 2, unresolved: 3});
 });
 
 test('rejects tables that do not belong together', async context => {

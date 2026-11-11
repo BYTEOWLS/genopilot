@@ -1,6 +1,12 @@
 import React, {useState} from 'react';
 import {Text, useInput, useWindowSize} from 'ink';
-import type {ReferenceConsensusConfiguration} from '../../workflows/reference-consensus/configuration.js';
+import {
+  tieScopes,
+  tieSources,
+  type ReferenceConsensusConfiguration,
+  type TieScope,
+  type TieSource,
+} from '../../workflows/reference-consensus/configuration.js';
 import {
   CohortDecisionError,
   type CohortDecisionDraft,
@@ -14,15 +20,57 @@ import {Table} from '../components/table.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {mutedColor} from '../theme.js';
 
-type SettingRow = 'backbone' | 'method' | 'min-callable' | 'unresolved' | 'reason';
+type SettingRow =
+  | 'backbone'
+  | 'method'
+  | 'min-callable'
+  | 'unresolved'
+  | 'tie-source'
+  | 'tie-isolate'
+  | 'tie-scope'
+  | 'reason';
 type RowId = `isolate:${string}` | SettingRow | 'save';
 
-const settingRows: readonly SettingRow[] = ['backbone', 'method', 'min-callable', 'unresolved', 'reason'];
 const votingMethods: readonly CohortSettings['voting_method'][] = ['strict-majority', 'plurality'];
-const unresolvedSnps: readonly CohortSettings['unresolved_snp'][] = ['n', 'iupac'];
+const unresolvedSingleBases: readonly CohortSettings['unresolved_single_base'][] = ['n', 'iupac'];
+const tieSourceLabels: Record<TieSource, string> = {
+  none: 'leave ties unresolved',
+  backbone: "use the backbone's base",
+  isolate: 'use the base of a trusted isolate',
+};
+const tieScopeLabels: Record<TieScope, string> = {
+  'tied-alleles': 'only when that base is one of the tied bases',
+  'any-allele': 'always, even when few or no isolates voted for that base',
+};
 // Rows the page needs besides the isolate list: title, description, the list's header and
 // markers, the settings, the button, the shortcut line, and room for a few problems.
-const reservedLines = 24;
+const reservedLines = 27;
+
+/** The setting rows that apply to these settings: the tie scope and isolate only with a source. */
+function settingRowsFor(settings: CohortSettings): SettingRow[] {
+  return [
+    'backbone',
+    'method',
+    'min-callable',
+    'unresolved',
+    'tie-source',
+    ...(settings.tie_source === 'isolate' ? ['tie-isolate' as const] : []),
+    ...(settings.tie_source === 'none' ? [] : ['tie-scope' as const]),
+    'reason',
+  ];
+}
+
+/** The settings as saved: the tie scope only with a source, the trusted isolate only with `isolate`. */
+function savedSettings(settings: CohortSettings, minCallable: number): CohortSettings {
+  const {tie_scope: scope, tie_isolate: isolate, ...rest} = settings;
+  return {
+    ...rest,
+    min_callable_isolates: minCallable,
+    ...(settings.tie_source === 'none' ? {} : {tie_scope: scope ?? 'tied-alleles'}),
+    // An empty isolate is passed on, so validation names the missing choice.
+    ...(settings.tie_source === 'isolate' ? {tie_isolate: isolate ?? ''} : {}),
+  };
+}
 
 function cycle<T>(values: readonly T[], current: T, offset: 1 | -1): T {
   const index = values.indexOf(current);
@@ -38,6 +86,8 @@ function problemText(issue: {path: string; message: string}): string {
   const fields: [string, string][] = [
     ['$.reason', 'Reason'],
     ['$.consensus.min_callable_isolates', 'Minimum callable isolates'],
+    ['$.consensus.tie_isolate', 'Trusted isolate'],
+    ['$.consensus.tie_scope', 'Tie resolution scope'],
     ['$.consensus', 'Cohort settings'],
     ['$.voting_isolates', 'Voting isolates'],
     ['$.excluded_from_voting', 'Voting isolates'],
@@ -99,7 +149,7 @@ export function CohortReviewScreen({
 
   const rowIds: RowId[] = [
     ...result.isolates.map(isolate => `isolate:${isolate.id}` as const),
-    ...settingRows,
+    ...settingRowsFor(settings),
     'save',
   ];
   const selectedIndex = Math.max(0, rowIds.indexOf(selected));
@@ -127,7 +177,17 @@ export function CohortReviewScreen({
     } else if (selected === 'method') {
       setSettings({...settings, voting_method: cycle(votingMethods, settings.voting_method, offset)});
     } else if (selected === 'unresolved') {
-      setSettings({...settings, unresolved_snp: cycle(unresolvedSnps, settings.unresolved_snp, offset)});
+      setSettings({...settings, unresolved_single_base: cycle(unresolvedSingleBases, settings.unresolved_single_base, offset)});
+    } else if (selected === 'tie-source') {
+      setSettings({...settings, tie_source: cycle(tieSources, settings.tie_source, offset)});
+    } else if (selected === 'tie-scope') {
+      setSettings({...settings, tie_scope: cycle(tieScopes, settings.tie_scope ?? 'tied-alleles', offset)});
+    } else if (selected === 'tie-isolate') {
+      // The trusted isolate is one of the voting isolates, in list order.
+      const voters = result.isolates.filter(isolate => voting.has(isolate.id)).map(isolate => isolate.id);
+      if (voters.length > 0) {
+        setSettings({...settings, tie_isolate: cycle(voters, settings.tie_isolate ?? '', offset)});
+      }
     }
   };
 
@@ -137,7 +197,7 @@ export function CohortReviewScreen({
       voting_isolates: result.isolates.filter(isolate => voting.has(isolate.id)).map(isolate => isolate.id),
       excluded_from_voting: result.isolates.filter(isolate => !voting.has(isolate.id)).map(isolate => isolate.id),
       // A value that is not a whole number is passed on as typed, so validation names it.
-      consensus: {...settings, min_callable_isolates: (/^[0-9]+$/.test(trimmed) ? Number(trimmed) : trimmed) as number},
+      consensus: savedSettings(settings, (/^[0-9]+$/.test(trimmed) ? Number(trimmed) : trimmed) as number),
       reason,
     };
     setSaving(true);
@@ -211,7 +271,20 @@ export function CohortReviewScreen({
       value: minCallable,
       edit: {defaultValue: minCallable, onChange: setMinCallable},
     },
-    {id: 'unresolved', label: 'Unresolved SNPs written as', value: settings.unresolved_snp === 'n' ? 'N' : 'IUPAC code', choice: true},
+    {id: 'unresolved', label: 'Unresolved single-base positions written as', value: settings.unresolved_single_base === 'n' ? 'N' : 'IUPAC code', choice: true},
+    {id: 'tie-source', label: 'Tie resolution', value: tieSourceLabels[settings.tie_source], choice: true},
+    ...(settings.tie_source === 'isolate'
+      ? [{
+        id: 'tie-isolate',
+        label: 'Trusted isolate',
+        value: settings.tie_isolate || 'Required: choose a voting isolate',
+        muted: !settings.tie_isolate,
+        choice: true,
+      }]
+      : []),
+    ...(settings.tie_source === 'none'
+      ? []
+      : [{id: 'tie-scope', label: 'Tie resolution scope', value: tieScopeLabels[settings.tie_scope ?? 'tied-alleles'], choice: true}]),
     {
       id: 'reason',
       label: 'Reason',
@@ -236,7 +309,7 @@ export function CohortReviewScreen({
     >
       <Section title="Voting isolates" marginTop={0}>
         <Table
-          header={['Votes', 'Isolate', 'Name', 'Wild type', 'Derived from', 'State', 'Depth', 'Covered', 'Callable', 'SNPs', 'Indels']}
+          header={['Votes', 'Isolate', 'Name', 'Wild type', 'Derived from', 'State', 'Depth', 'Covered', 'Callable', 'Single-base changes', 'Indels']}
           rows={isolateRows}
           selectedRow={selectedIsolateRow === undefined || selectedIsolateRow < 0 ? -1 : selectedIsolateRow}
         />

@@ -85,7 +85,7 @@ export function validateCohortDecision(value: unknown): CohortDecision {
   if (voting && voting.length === 0) {
     issues.push({path: '$.voting_isolates', message: 'must name at least one isolate'});
   }
-  validateConsensus(value.consensus, voting?.length, issues, 'voting isolates');
+  validateConsensus(value.consensus, voting, issues, 'voting isolates');
   if (requireNonEmptyString(value.reason, '$.reason', issues) && value.reason.trim().length === 0) {
     issues.push({path: '$.reason', message: 'must explain the decision'});
   }
@@ -145,7 +145,10 @@ function sameCohort(
     left.consensus.include_backbone_vote === right.consensus.include_backbone_vote &&
     left.consensus.voting_method === right.consensus.voting_method &&
     left.consensus.min_callable_isolates === right.consensus.min_callable_isolates &&
-    left.consensus.unresolved_snp === right.consensus.unresolved_snp;
+    left.consensus.unresolved_single_base === right.consensus.unresolved_single_base &&
+    left.consensus.tie_source === right.consensus.tie_source &&
+    left.consensus.tie_scope === right.consensus.tie_scope &&
+    left.consensus.tie_isolate === right.consensus.tie_isolate;
 }
 
 /**

@@ -25,7 +25,8 @@ Whether a cohort consensus is available, worked out from the records the workflo
 | Voting method | How a winner is chosen. Strict majority needs more than half of the votes cast; plurality needs the unique highest vote count. |
 | Backbone votes | Whether the backbone casts one vote of its own at every position of the active cohort, next to the callable isolates. It never votes where its own base is not A, C, G, or T, such as `N` in an assembly gap. |
 | Minimum callable isolates | How many isolates must vote at a position. Below it the position is unresolved and written as `N`, also when the backbone voted. 0 lets the backbone vote alone decide where no isolate is callable. |
-| Unresolved SNPs written as | How an unresolved single-base position is written: `N`, or the IUPAC code of every base that received a vote, such as `R` for A or G. |
+| Unresolved single-base positions written as | How an unresolved single-base position is written: `N`, or the IUPAC code of every base that received a vote, such as `R` for A or G. |
+| Tie resolution | How a tie is handled: left unresolved, or resolved with the backbone's base or a trusted isolate's base, and whether that base must be one of the tied bases or always wins. |
 | Voting isolates | The isolates whose calls vote in this cohort. An isolate votes at a position only where it is callable, and each isolate has one vote regardless of its read depth. |
 
 ### Consensus
@@ -36,6 +37,8 @@ Loci are counted in loci, bases in bases; a locus is explained under *Terms*.
 |---|---|
 | Selected loci | Loci where the voting method chose an allele. A locus is one row of the support table: a variant position, or several overlapping variants merged into one ballot. |
 | Selected loci differing from the backbone | Selected loci whose winning allele differs from the backbone's, so the consensus changes the backbone there. |
+| Selected loci: tie broken | Ties the backbone or the trusted isolate decided with one of the tied alleles. They count as selected loci. |
+| Selected loci: tie overruled | Ties the backbone or the trusted isolate decided with an allele that was not tied, possibly without any vote. They count as selected loci. |
 | Unresolved loci: tie | Loci where several alleles share the highest vote count. |
 | Unresolved loci: no majority | Loci where, with strict majority, no allele received more than half of the votes and the top allele is not tied. Plurality has no such loci. |
 | Unresolved loci: no votes | Loci where nobody voted: no isolate was callable there and the backbone did not vote. |
@@ -69,7 +72,7 @@ Shown once the active iteration's consensus FASTA exists. The consensus is not a
 | State | Whether the isolate's processing completed; see *Isolate states* under *Terms*. |
 | Depth | Average number of reads over every backbone base, after the quality filters and without duplicates, in reads per base. |
 | Callable | Share of backbone bases where the isolate is callable, so it can vote there. |
-| SNPs | Single-base changes against the backbone that passed every filter. |
+| Single-base changes | Positions where the isolate has another base than the backbone, counted after every filter. Variant callers often call these SNPs; see *Variants* in the workflow documentation. |
 | Indels | Insertions and deletions against the backbone that passed every filter. |
 | Votes | Whether the isolate votes in the active cohort. |
 | Candidate | Whether the isolate FASTA has a promotion candidate: the record needed to save it to the isolate catalog. Its checksums are verified only when it is saved. |
@@ -120,7 +123,7 @@ Shown once the active iteration's consensus FASTA exists. The consensus is not a
 | Decision saved | When the decision that created this iteration was saved, in local time. |
 | Started, Finished | When the iteration's Snakemake execution started and ended, in local time; *Attempts* appears when it was continued after an interruption. The initial cohort shows only Finished from its provenance record. Iterations omit duration because their execution covers only cohort processing, not the full run; full run and stage timings are on the overview. |
 | Reason | The reason the researcher saved with the decision that created this iteration. |
-| Voting method, backbone votes, minimum callable isolates, unresolved SNPs, voting isolates | The cohort's settings and voters, as explained under *Active cohort*. |
+| Voting method, backbone votes, minimum callable isolates, unresolved single-base positions, tie resolution, voting isolates | The cohort's settings and voters, as explained under *Active cohort*. |
 | Excluded isolates | Selected isolates that do not vote in this cohort, with whether their processing completed. Their results and logs stay in the run directory. |
 | Initial cohort existed | Whether the initial cohort of all selected isolates existed when this iteration ran. It does not when an isolate failed and the first decision excluded it. |
 | Comparison with the first completed cohort | The same counts for the first completed cohort and the inspected one, and the change. A negative change in unresolved loci means the decision resolved them. |
@@ -175,11 +178,11 @@ Inspect both sides of a disagreement. Mixed reads, strand bias, repeats, and map
 
 | Item | Meaning |
 |---|---|
-| Filter | Which loci of the iteration selected on the Iterations tab are listed: ties, no majority, loci with competing indels (also selected ones), or every unresolved locus. Runs of bases outside every locus that stayed unresolved, such as regions where no isolate is callable, are counted on the overview but not listed here. |
+| Filter | Which loci of the iteration selected on the Iterations tab are listed: ties, no majority, loci with competing indels (also selected ones), every unresolved locus, ties broken, or ties overruled. Runs of bases outside every locus that stayed unresolved, such as regions where no isolate is callable, are counted on the overview but not listed here. |
 | Position | Where the locus lies on the backbone: the sequence name and the 1-based position, or its first and last base when it spans several. |
 | Backbone | The backbone's own sequence at the locus. |
 | Alleles: votes | Every allele that received a vote, the backbone's first, each with its number of votes. The backbone's own vote, when it casts one, is counted for the backbone allele. Long alleles are shortened in the list; the detail shows them whole. |
-| Outcome | The allele the voting method selected, or why the locus stayed unresolved; see *Unresolved reasons* under *Terms*. |
+| Outcome | The allele the voting method selected, or why the locus stayed unresolved; see *Unresolved reasons* under *Terms*. A settled tie shows its allele and how it was settled; see *Settled ties*. |
 | Flags | The support flags of the locus; see *Support flags* under *Terms*. |
 
 ### Locus details
@@ -244,6 +247,17 @@ The consensus decides in this order and never invents a base where it cannot dec
 | `few_callable` | Fewer isolates voted than the minimum of callable isolates. |
 | `tie` | Several alleles share the highest vote count. |
 | `no_majority` | With strict majority, no allele received more than half of the votes. |
+
+### Settled ties
+
+A tie can be resolved with the backbone's base or a trusted isolate's base instead of staying unresolved. The locus is then selected, with one of these reasons:
+
+| Reason | Meaning |
+|---|---|
+| `tie_broken` | The base used for ties, the backbone's or the trusted isolate's, was one of the tied alleles. |
+| `tie_overruled` | The base used for ties was not one of the tied alleles; it won anyway, possibly without any vote. |
+
+A settled tie is written like any other base, so later steps such as the annotation transfer do not warn about it. Review these loci on the Sites tab.
 
 ### What an unresolved position becomes
 

@@ -31,7 +31,7 @@ const configuration = validateReferenceConsensusConfiguration({
     selected_read_sets: ['isolate-a/reads', 'isolate-b/reads', 'isolate-c/reads'],
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
-  consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
+  consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_single_base: 'n', tie_source: 'none'},
   resources: {cpu_mode: 'automatic', effective_cpus: 2, machine: testMachine},
   run: {output_root: '/analysis/runs', id: 'run-a', created_at: '2026-01-01T12:00:00.000Z'},
 });
@@ -125,8 +125,28 @@ test('refuses a decision that changes nothing or skips an iteration', () => {
   const saved = [decision()];
   assert.deepEqual(runIssues(decision({iteration: 3}), allCompleted, saved), ['$']);
   assert.deepEqual(
-    runIssues(decision({iteration: 3, consensus: {...decision().consensus, unresolved_snp: 'iupac'}}), allCompleted, saved),
+    runIssues(decision({iteration: 3, consensus: {...decision().consensus, unresolved_single_base: 'iupac'}}), allCompleted, saved),
     [],
+  );
+});
+
+test('lets only a voting isolate settle ties, and a tie change alone is a new iteration', () => {
+  const trusting = (isolate: string): CohortDecision =>
+    decision({consensus: {...decision().consensus, tie_source: 'isolate', tie_scope: 'tied-alleles', tie_isolate: isolate}});
+  assert.deepEqual(shapeIssues(trusting('isolate-b')), ['$.consensus.tie_isolate']);
+  assert.deepEqual(runIssues(trusting('isolate-c')), []);
+  const saved = [decision()];
+  const tieOnly = (consensus: Partial<CohortDecision['consensus']>): CohortDecision =>
+    decision({iteration: 3, consensus: {...decision().consensus, ...consensus}});
+  assert.deepEqual(runIssues(tieOnly({tie_source: 'backbone', tie_scope: 'tied-alleles'}), allCompleted, saved), []);
+  const backboneSaved = [...saved, tieOnly({tie_source: 'backbone', tie_scope: 'tied-alleles'})];
+  assert.deepEqual(
+    runIssues({...tieOnly({tie_source: 'backbone', tie_scope: 'any-allele'}), iteration: 4}, allCompleted, backboneSaved),
+    [],
+  );
+  assert.deepEqual(
+    runIssues({...tieOnly({tie_source: 'backbone', tie_scope: 'tied-alleles'}), iteration: 4}, allCompleted, backboneSaved),
+    ['$'],
   );
 });
 
@@ -139,12 +159,12 @@ test('saves a decision that round-trips and never replaces a saved one', async c
 
   const original = await readFile(path, 'utf8');
   await assert.rejects(
-    saveCohortDecision(directory, decision({consensus: {...decision().consensus, unresolved_snp: 'iupac'}})),
+    saveCohortDecision(directory, decision({consensus: {...decision().consensus, unresolved_single_base: 'iupac'}})),
     CohortDecisionError,
   );
   assert.equal(await readFile(path, 'utf8'), original);
 
-  await saveCohortDecision(directory, decision({iteration: 3, consensus: {...decision().consensus, unresolved_snp: 'iupac'}}));
+  await saveCohortDecision(directory, decision({iteration: 3, consensus: {...decision().consensus, unresolved_single_base: 'iupac'}}));
   assert.deepEqual((await listCohortDecisions(directory)).map(saved => saved.iteration), [2, 3]);
 });
 

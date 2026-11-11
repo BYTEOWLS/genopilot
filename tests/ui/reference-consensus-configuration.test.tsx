@@ -286,7 +286,8 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   assert.deepEqual(configuration.inputs.selected_isolates, ['mutant-one', 'wild-type']);
   // The consensus settings left alone keep the manifest's defaults.
   assert.deepEqual(configuration.consensus, {
-    include_backbone_vote: false, voting_method: 'plurality', min_callable_isolates: 0, unresolved_snp: 'n',
+    include_backbone_vote: false, voting_method: 'plurality', min_callable_isolates: 0, unresolved_single_base: 'n',
+    tie_source: 'none',
   });
   assert.equal(configuration.calling.min_depth, 105);
   assert.equal(configuration.calling.ploidy, 1);
@@ -330,6 +331,31 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   await waitFor(() => measured.length === 1, 'the run is measured');
   assert.equal(measured[0], prepared);
   await waitForFrame(output, next => next.includes(snapshot.isolates[0]!.name) && next.includes(snapshot.isolates[1]!.name));
+});
+
+test('lets one of the selected isolates settle ties', async context => {
+  const {input, output, reviewed} = renderScreen(context, {rows: 80});
+  await waitForFrame(output, frame => selectedLine(frame) !== undefined);
+  await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
+  await chooseIsolates(input, output, ['mutant-one', 'wild-type']);
+  await chooseOption(input, output, 'tie-source', 'isolate');
+  // The trusted isolate is chosen among the selected isolates.
+  await focusField(input, output, 'tie-isolate');
+  const marked = (frame: string): string | undefined => frame.split('\n').find(line => line.includes('(●)') && line.includes('(wild-type)'));
+  for (let attempt = 0; attempt < 2 && !marked(output.lastFrame()); attempt += 1) {
+    const before = output.lastFrame();
+    await press(input, SPACE);
+    await waitForFrame(output, frame => frame !== before);
+  }
+  assert.ok(marked(output.lastFrame()), 'Could not choose the trusted isolate.');
+  await chooseOption(input, output, 'tie-scope', 'any-allele');
+  await startReview(input, output);
+
+  await waitFor(() => reviewed.length === 1, 'the run is prepared');
+  assert.deepEqual(
+    [reviewed[0]!.configuration.consensus.tie_source, reviewed[0]!.configuration.consensus.tie_scope, reviewed[0]!.configuration.consensus.tie_isolate],
+    ['isolate', 'any-allele', 'wild-type'],
+  );
 });
 
 test('shows a save that fails as a run starts, and tries it again on the next start', async context => {

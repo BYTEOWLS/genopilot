@@ -11,7 +11,7 @@ Ship the implemented systems check, make sequencing technology explicit on read 
 - [ ] [Make stale-lock recovery race-free](03_stale_lock_recovery.md).
 - [ ] [Reload the isolate catalog after a save conflict](04_catalog_conflict_reload.md).
 - [ ] [Shorten run-review summaries](05_run_review_summaries.md).
-- [ ] [Settle reference-consensus ties](06_consensus_tie_handling.md).
+- [x] [Settle reference-consensus ties](done_06_consensus_tie_handling.md).
 
 ## Delivery order
 

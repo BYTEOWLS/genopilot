@@ -34,6 +34,8 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 - Forms, result views, tooling, and command sections share one headed `Section` layout, borderless by default with opt-in borders and visibly indented nested groups. Read-set forms follow the selected field on shorter terminals. Chooser rows omit UUIDs, lineage, and repeated names while keeping incompatibility reasons visible below the list. The isolate list groups entries by sequencing technique and omits successful read-check status and false/unknown wild-type badges.
 - Reference-consensus calling settings have clearer configuration hints and Help explanations, including Q20/Q30 and allele-fraction examples. Configuration reviews show the same parameter hints as the form.
 - Ctrl+A in the isolate picker selects every isolate matching the search, or all of them without one; pressing it again deselects them.
+- Reference-consensus ties can be resolved with the backbone's base or a trusted isolate's base, either only among the tied bases or always. Settled ties are counted, filterable on the Sites tab, and kept in the consensus sites table; a cohort iteration can change this setting alone.
+- The reference-consensus setting formerly called *Unresolved SNPs* is now *Unresolved single-base positions*, since such a position is a disagreement between isolates, not an uncertain SNP call.
 
 ### Results
 

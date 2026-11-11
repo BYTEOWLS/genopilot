@@ -54,18 +54,32 @@ class GenerateConsensusTests(unittest.TestCase):
             args += ["--voter", voter, str(self.temp_dir / f"{voter}.vcf.gz"), str(self.temp_dir / f"{voter}.bed")]
         self.assertEqual(aggregate_support.main(args), 0)
 
-    def write_support(self, sites: list[str], intervals: list[str]) -> None:
-        """Hand-written support tables, for vote counts that are tedious to simulate."""
+    def write_support(self, sites: list[str], intervals: list[str], isolates: tuple[str, ...] = ()) -> None:
+        """Hand-written support tables, for vote counts that are tedious to simulate; a site row
+        ends with one column per isolate in `isolates`."""
+        header = SITE_HEADER.rstrip("\n") + "".join(f"\tisolate:{isolate}" for isolate in isolates) + "\n"
         (self.temp_dir / "support-sites.tsv").write_text(
-            "## schema_version: 1\n" + SITE_HEADER + "".join(row + "\n" for row in sites), encoding="utf-8")
+            "## schema_version: 1\n" + header + "".join(row + "\n" for row in sites), encoding="utf-8")
         (self.temp_dir / "support-intervals.tsv").write_text(
             "## schema_version: 1\n## isolates: \n" + INTERVAL_HEADER + "".join(row + "\n" for row in intervals),
             encoding="utf-8")
         (self.temp_dir / "support-summary.json").write_text(
             json.dumps({"include_backbone_vote": True, "voters": []}), encoding="utf-8")
 
-    def generate(self, method: str = "strict-majority", minimum: int = 0, snp: str = "n", out: str = "out") -> dict:
+    def generate(
+        self,
+        method: str = "strict-majority",
+        minimum: int = 0,
+        snp: str = "n",
+        out: str = "out",
+        tie: tuple[str, ...] = (),
+    ) -> dict:
+        """`tie` is the tie source, then its scope, then the trusted isolate."""
+        tie_args = []
+        for flag, value in zip(("--tie-source", "--tie-scope", "--tie-isolate"), tie):
+            tie_args += [flag, value]
         self.assertEqual(generate_consensus.main([
+            *tie_args,
             "--fai", str(self.temp_dir / "backbone.fasta.fai"),
             "--backbone", str(self.temp_dir / "backbone.fasta"),
             "--sites", str(self.temp_dir / "support-sites.tsv"),
@@ -73,7 +87,7 @@ class GenerateConsensusTests(unittest.TestCase):
             "--support-summary", str(self.temp_dir / "support-summary.json"),
             "--voting-method", method,
             "--min-callable-isolates", str(minimum),
-            "--unresolved-snp", snp,
+            "--unresolved-single-base", snp,
             "--fasta", str(self.temp_dir / out / "consensus.fasta"),
             "--consensus-sites", str(self.temp_dir / out / "consensus-sites.tsv"),
             "--summary", str(self.temp_dir / out / "summary.json"),
@@ -125,6 +139,93 @@ class GenerateConsensusTests(unittest.TestCase):
                     self.assertEqual(self.fasta()["c1"][8], allele or "N")
                     self.generate(method=method, snp="iupac", out="iupac")
                     self.assertEqual(self.fasta("iupac")["c1"][8], allele or code)
+
+    def tied_locus(self, alleles: str, votes: str, backbone_votes: int = 1, trusted: str | None = None) -> None:
+        """One locus at c1:9 (backbone C) with these votes, and the trusted isolate's call if given."""
+        self.write_backbone({"c1": BACKBONE["c1"]})
+        total = sum(int(count) for count in votes.split(","))
+        callable_isolates = total - backbone_votes
+        row = f"c1\t9\t9\tC\t{backbone_votes}\t{alleles}\t{votes}\t{callable_isolates}\t{total}\tsnp"
+        self.write_support(
+            [row + (f"\t{trusted}" if trusted is not None else "")],
+            [f"c1\t1\t12\t{backbone_votes}\t{callable_isolates}\t0\t0\t."],
+            ("iso-t",) if trusted is not None else (),
+        )
+
+    def settled(self, out: str = "out") -> tuple[str, str, str]:
+        site = self.row("c1", 9, out)
+        return site["status"], site["reason"], self.fasta(out)["c1"][8]
+
+    def test_the_backbone_breaks_a_tie_it_is_part_of(self) -> None:
+        self.tied_locus("C,A", "5,5")
+        for scope in ("tied-alleles", "any-allele"):
+            with self.subTest(scope=scope):
+                summary = self.generate(tie=("backbone", scope))
+                self.assertEqual(self.settled(), ("selected", "tie_broken", "C"))
+                self.assertEqual(summary["loci"]["settled_ties"], {"tie_broken": 1, "tie_overruled": 0})
+                self.assertEqual(summary["loci"]["unresolved"]["tie"], 0)
+                self.assertEqual(summary["loci_by_flag"]["snp"]["settled_ties"]["tie_broken"], 1)
+                self.assertEqual((summary["tie_source"], summary["tie_scope"]), ("backbone", scope))
+        site = self.row("c1", 9)
+        self.assertEqual((site["alleles"], site["allele_votes"]), ("C,A", "5,5"))
+
+    def test_only_any_allele_lets_the_source_overrule_a_tie_it_is_not_part_of(self) -> None:
+        self.tied_locus("C,A,G", "2,4,4")
+        self.generate(tie=("backbone", "tied-alleles"))
+        self.assertEqual(self.settled(), ("unresolved", "tie", "N"))
+        summary = self.generate(tie=("backbone", "any-allele"))
+        self.assertEqual(self.settled(), ("selected", "tie_overruled", "C"))
+        self.assertEqual(summary["loci"]["settled_ties"], {"tie_broken": 0, "tie_overruled": 1})
+
+    def test_the_backbone_allele_overrules_a_tie_without_any_vote(self) -> None:
+        self.tied_locus("C,A,G", "0,3,3", backbone_votes=0)
+        self.generate(tie=("backbone", "any-allele"))
+        self.assertEqual(self.settled(), ("selected", "tie_overruled", "C"))
+
+    def test_a_backbone_allele_that_is_not_acgt_settles_no_tie(self) -> None:
+        self.write_backbone({"c1": "GATCCTGANGTA"})
+        self.write_support(
+            ["c1\t9\t9\tN\t0\tN,A,G\t0,3,3\t6\t6\tsnp,backbone_not_acgt"],
+            ["c1\t1\t12\t1\t6\t0\t0\t."],
+        )
+        self.generate(tie=("backbone", "any-allele"))
+        self.assertEqual(self.settled(), ("unresolved", "tie", "N"))
+
+    def test_a_trusted_isolate_settles_a_tie_with_the_allele_it_voted_for(self) -> None:
+        self.tied_locus("C,A,G", "4,4,2", trusted="1")
+        summary = self.generate(tie=("isolate", "tied-alleles", "iso-t"))
+        self.assertEqual(self.settled(), ("selected", "tie_broken", "A"))
+        self.assertEqual(summary["tie_isolate"], "iso-t")
+        self.tied_locus("C,A,G", "4,4,2", trusted="2")
+        self.generate(tie=("isolate", "tied-alleles", "iso-t"))
+        self.assertEqual(self.settled(), ("unresolved", "tie", "N"))
+        self.generate(tie=("isolate", "any-allele", "iso-t"))
+        self.assertEqual(self.settled(), ("selected", "tie_overruled", "G"))
+
+    def test_a_trusted_isolate_without_a_vote_settles_no_tie(self) -> None:
+        for call in ("ambiguous", "uncallable", "unsupported"):
+            with self.subTest(call=call):
+                self.tied_locus("C,A", "5,5", trusted=call)
+                self.generate(tie=("isolate", "any-allele", "iso-t"))
+                self.assertEqual(self.settled(), ("unresolved", "tie", "N"))
+
+    def test_a_tie_source_settles_only_ties(self) -> None:
+        # A settled tie skips the majority check; a lone leader without a majority stays unresolved.
+        self.tied_locus("C,A,G", "4,4,2")
+        self.generate(tie=("backbone", "tied-alleles"))
+        self.assertEqual(self.settled(), ("selected", "tie_broken", "C"))
+        self.tied_locus("C,A,G", "3,4,3")
+        self.generate(tie=("backbone", "any-allele"))
+        self.assertEqual(self.settled(), ("unresolved", "no_majority", "N"))
+        self.generate(minimum=10, tie=("backbone", "any-allele"))
+        self.assertEqual(self.settled(), ("unresolved", "few_callable", "N"))
+
+    def test_a_trusted_isolate_from_aggregated_support(self) -> None:
+        self.isolate("iso-a", pass_record(9, "C", "A"))
+        self.isolate("iso-b", pass_record(9, "C", "T"))
+        self.aggregate(backbone_vote="no")  # A=1, T=1
+        self.generate(tie=("isolate", "tied-alleles", "iso-b"))
+        self.assertEqual(self.settled(), ("selected", "tie_broken", "T"))
 
     def test_a_multiallelic_snp_tie_is_n_or_the_code_of_every_voted_allele(self) -> None:
         self.isolate("iso-a", pass_record(9, "C", "A"))
@@ -260,7 +361,7 @@ class GenerateConsensusTests(unittest.TestCase):
             "--sites", str(self.temp_dir / "support-sites.tsv.gz"),
             "--intervals", str(self.temp_dir / "support-intervals.tsv.gz"),
             "--support-summary", str(self.temp_dir / "support-summary.json"),
-            "--voting-method", "strict-majority", "--min-callable-isolates", "0", "--unresolved-snp", "n",
+            "--voting-method", "strict-majority", "--min-callable-isolates", "0", "--unresolved-single-base", "n",
             "--fasta", str(self.temp_dir / "out" / "consensus.fasta"),
             "--consensus-sites", str(self.temp_dir / "out" / "consensus-sites.tsv"),
             "--summary", str(self.temp_dir / "out" / "summary.json"),

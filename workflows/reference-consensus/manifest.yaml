@@ -116,7 +116,7 @@ artifacts:
     label: Cohort consensus FASTA
     description: >
       The backbone with the winning allele at every locus; unresolved positions are N, or an IUPAC
-      code for an unresolved SNP when configured.
+      code for an unresolved single-base position when configured.
     path: results/cohort/initial/consensus.fasta
     type: fasta
     produced_by: generate-consensus
