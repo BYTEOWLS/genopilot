@@ -655,7 +655,8 @@ test('shows the run\'s start, finish, duration, attempts, and stage durations am
   }
 });
 
-test('g on a finished run opens the find-and-replace for its GFF3 and Esc returns', async () => {
+test('g on a finished run opens the find-and-replace for its GFF3 and Esc returns to the results', async () => {
+  let leftResults = false;
   const input = new TestInput();
   const output = new TestOutput();
   const withGff3: WorkflowManifest = {...manifest, artifacts: [
@@ -663,7 +664,7 @@ test('g on a finished run opens the find-and-replace for its GFF3 and Esc return
   ]};
   const instance = render(
     <RunResultsScreen runDirectory="/runs/result-42" manifest={withGff3} loaded={refreshed(compatibleResult())} inputActive
-      pathExists={() => true} loadHelp={helpDocuments} readCitation={async () => undefined} />,
+      pathExists={() => true} loadHelp={helpDocuments} readCitation={async () => undefined} onBack={() => {leftResults = true;}} />,
     {exitOnCtrlC: false, interactive: true, patchConsole: false,
       stdin: input as unknown as NodeJS.ReadStream, stdout: output as unknown as NodeJS.WriteStream},
   );
@@ -677,6 +678,7 @@ test('g on a finished run opens the find-and-replace for its GFF3 and Esc return
     await pressKey(input, ESCAPE);
     await rendered(instance);
     assert.doesNotMatch(output.readOutput(), /gff3-source-marker/);
+    assert.equal(leftResults, false);
   } finally {
     instance.unmount();
   }

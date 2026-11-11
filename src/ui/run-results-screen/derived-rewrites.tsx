@@ -10,13 +10,23 @@ import {mutedColor} from '../theme.js';
 
 type Key = {return: boolean; escape: boolean};
 
-function rewriteValue(rewrite: DerivedRewrite): string {
+/** One rewrite's line: its search and replacement, its counts, and why it is outdated. */
+export function rewriteValue(rewrite: DerivedRewrite): string {
   if (!rewrite.record) {
     return `unreadable: ${rewrite.reason ?? ''}`;
   }
-  const {search, replacement, regular_expression: regex} = rewrite.record;
+  const {search, replacement, regular_expression: regex, statistics} = rewrite.record;
   const change = `${regex ? '/' : '"'}${search}${regex ? '/' : '"'} → "${replacement}"`;
-  return rewrite.state === 'outdated' ? `${change} · outdated: ${rewrite.reason ?? ''}` : change;
+  // The record is read leniently, so a summary is shown only for counts it holds.
+  const counts: [unknown, string, string][] = [
+    [statistics?.ids?.changed, 'ID changed', 'IDs changed'],
+    [statistics?.replacements, 'replacement', 'replacements'],
+    [statistics?.aliases_added, 'alias added', 'aliases added'],
+  ];
+  const summary = counts.flatMap(([value, one, many]) =>
+    typeof value === 'number' ? [`${String(value)} ${value === 1 ? one : many}`] : []);
+  const line = [change, ...summary].join(' · ');
+  return rewrite.state === 'outdated' ? `${line} · outdated: ${rewrite.reason ?? ''}` : line;
 }
 
 /**

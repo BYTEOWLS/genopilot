@@ -433,7 +433,8 @@ export function RunResultsScreen({
   };
 
   useInput((input, key) => {
-    if (!inputActive || mode.kind !== 'results' || view === 'help') {
+    // The find-and-replace screen shown in place of the results handles its own keys, Esc included.
+    if (!inputActive || mode.kind !== 'results' || view === 'help' || derived.opened) {
       return;
     }
     if (!transferViews.choosing && derived.handleInput(input, key)) {
@@ -601,7 +602,7 @@ export function RunResultsScreen({
       ) : null}
     </Box>
   );
-  const runFilesSection = <><SectionList title="Run Files" description="" items={runFileItems} />{derived.section}</>;
+  const runFilesSection = <SectionList title="Run Files" description="" items={runFileItems} />;
   const citationSection = citation === undefined ? <Text>Reading the citation…</Text> : citation === null ? (
     <Text wrap="wrap">
       This run has no citation yet. A run writes {runCitationPath} when it finishes.
@@ -781,7 +782,7 @@ export function RunResultsScreen({
               view={consensusView}
               formatDateTime={formatDateTime}
               overviewHeader={<>{outcomeSection}{statusSection}</>}
-              filesHeader={<>{runDirectorySection}{runFilesSection}</>}
+              filesHeader={<>{runDirectorySection}{derived.section}{runFilesSection}</>}
               runDetails={metadataSection}
               citation={citationSection}
               sites={sites}
@@ -794,7 +795,7 @@ export function RunResultsScreen({
               result={annotationTransfer}
               tab={annotationTab}
               overviewHeader={<>{outcomeSection}{statusSection}</>}
-              filesHeader={runDirectorySection}
+              filesHeader={<>{runDirectorySection}{derived.section}</>}
               filesFooter={runFilesSection}
               runDetails={metadataSection}
               citation={citationSection}
@@ -803,6 +804,7 @@ export function RunResultsScreen({
           ) : <>
           {metadataSection}
           {runDirectorySection}
+          {derived.section}
           {outcomeSection}
           {statusSection}
           {runFilesSection}

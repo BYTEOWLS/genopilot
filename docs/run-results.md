@@ -1,6 +1,6 @@
 # Run results
 
-Every workflow's result page has a **Run Details** tab with the run's technical metadata, a **Files** tab that starts with the run directory and the run's own files, and a **Citation** tab that shows how to cite the run. This page explains those items; each workflow's own results page explains the rest, including what its run status means.
+Every workflow's result page has a **Run Details** tab with the run's technical metadata, a **Files** tab that starts with the run directory, the [derived files](#derived-files) made from the run, and the run's own files, and a **Citation** tab that shows how to cite the run. This page explains those items; each workflow's own results page explains the rest, including what its run status means.
 
 ## Citation
 
@@ -44,4 +44,4 @@ Press `v` on the tab to open the citation in the browser view, where it can be c
 
 Files made from the run's results after it finished, kept in the run's `derived/` folder so they travel with the run. Snakemake never sees them, and the run's own results stay unchanged. Deleting the run deletes them too.
 
-Each [find-and-replace](gff3-find-and-replace.md) rewrite is listed with its search and replacement. A rewrite is **outdated** when its source changed since it was written, for example after a later iteration replaced the result: the checksum recorded for the source no longer matches the one the rewrite saw. On a finished run, `g` starts a new rewrite of one of its GFF3 files or current rewrites.
+Each [find-and-replace](gff3-find-and-replace.md) rewrite is listed with its search and replacement and how many IDs changed, replacements were made, and aliases were added; the full statistics are in its `replace.yaml`. A rewrite is **outdated** when its source changed since it was written, for example after a later iteration replaced the result: the checksum recorded for the source no longer matches the one the rewrite saw. On a finished run, `g` starts a new rewrite of one of its GFF3 files or current rewrites.
