@@ -8,7 +8,7 @@ export type RuntimeDownload = {
   sha256: string;
 };
 
-const pixiVersion = '0.82.1';
+const pixiVersion = '0.84.2';
 const pixiReleaseTag = `v${pixiVersion}`;
 
 /**
@@ -30,14 +30,14 @@ const pixiReleaseTag = `v${pixiVersion}`;
  */
 export const toolingPolicy = {
   node: {
-    minimumVersion: '24.0.0',
-    maximumVersionExclusive: '26.0.0',
+    minimumVersion: '24.15.0',
+    maximumVersionExclusive: '27.0.0',
     installationVersion: '24 LTS',
   },
   pixi: {
     command: 'pixi',
     minimumVersion: pixiVersion,
-    maximumVersionExclusive: '0.82.2',
+    maximumVersionExclusive: '0.84.3',
     managedVersion: pixiVersion,
     releaseTag: pixiReleaseTag,
     relativeExecutablePath: `runtimes/pixi/${pixiVersion}/bin/pixi`,
@@ -48,25 +48,25 @@ export const toolingPolicy = {
         platform: 'linux',
         architecture: 'x64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-x86_64-unknown-linux-musl.tar.gz`,
-        sha256: '7ac72af79c50653bfcfddb2473b6e9eff2654affe0057d19fe21b0d8556a7fe2',
+        sha256: '6d2a576bde0a7b26533a068fec0aea6e4ee21c36668efc1dc73fce90110906ae',
       },
       {
         platform: 'linux',
         architecture: 'arm64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-aarch64-unknown-linux-musl.tar.gz`,
-        sha256: '6f4c4a101b84b15f33440f39fe5889afb1b77a4e88f02962248240cdcab56966',
+        sha256: '0957b6352d077bb3ffcce913f90b1e6cfbc6b98888a45d59ee2910e8c4811110',
       },
       {
         platform: 'darwin',
         architecture: 'x64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-x86_64-apple-darwin.tar.gz`,
-        sha256: '249e92ad4254642ecc3dd2d498b082cfd417c4de219dc9b093750671d882f0e2',
+        sha256: 'a633a4f8276955b73248397c17ce77380eb7133dc96c54bc271239b7dc9b8837',
       },
       {
         platform: 'darwin',
         architecture: 'arm64',
         url: `https://github.com/prefix-dev/pixi/releases/download/${pixiReleaseTag}/pixi-aarch64-apple-darwin.tar.gz`,
-        sha256: 'cf02c669b8c4a3d7332b6aa30931d37587c299d906b30d9827b9d40cec9b0c47',
+        sha256: '039d4b48c7e17bc62a36faa2af1b13d0d187f5dd6e8fea17e0587302438df6e6',
       },
     ] satisfies RuntimeDownload[],
   },
@@ -86,9 +86,9 @@ export const toolingPolicy = {
   // It stays on 3.13 until bioconda's parasail-python, which LiftOn needs, is built for 3.14.
   python: {
     command: 'python',
-    minimumVersion: '3.13.16',
-    maximumVersionExclusive: '3.13.17',
-    managedVersion: '3.13.16',
+    minimumVersion: '3.13.18',
+    maximumVersionExclusive: '3.13.19',
+    managedVersion: '3.13.18',
   },
   managedRuntime: {
     // Pixi's own home, kept inside the data directory so the user's Pixi configuration and
