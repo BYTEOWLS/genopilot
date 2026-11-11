@@ -29,7 +29,7 @@ type DocumentSession = {owner: object; title: string; documents: Document[]; sel
 type Session = DocumentSession | {owner: object; view: GenomeView; select?: (id: string) => void};
 type BrowserContextValue = {
   application: {name: string; version: string};
-  genomeAvailable: boolean;
+  browserAvailable: boolean;
   /** Browser errors only; successful operations stay silent. */
   status?: string;
   show: (session: Session) => void;
@@ -47,7 +47,8 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
   assetsDirectory?: URL;
 }): React.JSX.Element {
   const [status, setStatus] = useState<string>();
-  const genomeAvailable = existsSync(new URL('igv.js', assetsDirectory));
+  // `pnpm build` writes the page and IGV together, so one file shows whether the browser is built.
+  const browserAvailable = existsSync(new URL('index.html', assetsDirectory));
   const server = useRef<Promise<BrowserServer> | undefined>(undefined);
   const opening = useRef<Promise<void> | undefined>(undefined);
   const current = useRef<Session | undefined>(undefined);
@@ -119,7 +120,7 @@ export function BrowserViewProvider({application, children, open = openBrowser, 
       }
     });
   };
-  return <BrowserContext.Provider value={{application, genomeAvailable, status, show,
+  return <BrowserContext.Provider value={{application, browserAvailable, status, show,
     update: session => {
       if (current.current?.owner === session.owner) {
         current.current = session;

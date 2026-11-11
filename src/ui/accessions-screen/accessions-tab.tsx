@@ -19,7 +19,7 @@ import type {AccessionsPageFrame} from './screen.js';
 import type {AccessionCatalogUpdater} from '../../accessions/registration.js';
 import {accessionGenomeView} from '../../accessions/views.js';
 import {useGenomeSession} from '../../browser/use-genome-session.js';
-import {browserViewShortcut} from '../../browser/contract.js';
+import {browserUnavailableShortcut, browserViewShortcut} from '../../browser/contract.js';
 
 type View =
   | {kind: 'list'}
@@ -100,7 +100,7 @@ export function AccessionsTab({
   useEffect(() => onLockChange(locked), [locked, onLockChange]);
 
   const selectedEntry = entries.find(entry => entry.accession === selected) ?? entries[0];
-  const canView = !!browser?.genomeAvailable && !verifying && !!selectedEntry && recordedCacheState(selectedEntry) === 'cached' &&
+  const canView = !!browser?.browserAvailable && !verifying && !!selectedEntry && recordedCacheState(selectedEntry) === 'cached' &&
     scan.copies.some(copy => copy.state === 'verified' && copy.path === selectedEntry.cached_copies[0]?.path);
   const openGenome = (entry: AccessionEntry): void => {
     if (!browser || !canView) {
@@ -244,14 +244,20 @@ export function AccessionsTab({
     ? scan.copies.filter(copy => copy.accession === view.accession)
     : [];
 
+  let browserShortcut = '';
+  if (canView) {
+    browserShortcut = browserViewShortcut;
+  } else if (browser && !browser.browserAvailable) {
+    browserShortcut = browserUnavailableShortcut;
+  }
   return (
     <Page
       {...page}
       description={`Catalog: ${sanitizeTerminalText(catalogPath)}`}
       shortcuts={view.kind === 'confirm-remove'
         ? ['y — Remove']
-        : ['↑/↓ — Select', 'Enter — Show and edit', 'n — Add', 'm — Refresh metadata', 'd — Remove', 'r — Rescan caches', canView && browserViewShortcut,
-            browser && !browser.genomeAvailable && `${browserViewShortcut} (unavailable: release bundling pending)`, 'Tab/←/→ — Tab']}
+        : ['↑/↓ — Select', 'Enter — Show and edit', 'n — Add', 'm — Refresh metadata', 'd — Remove', 'r — Rescan caches', browserShortcut,
+            'Tab/←/→ — Tab']}
       back={view.kind === 'confirm-remove' ? 'Keep' : 'Back'}
     >
       {notice}

@@ -59,7 +59,7 @@ import type {MachineDetails} from '../../workflows/configuration-validation.js';
 import {formatMemory} from '../../workflows/systems-check.js';
 import {SectionList, type SectionListItem} from "./section-list.js";
 import {useGenomeSession} from '../../browser/use-genome-session.js';
-import {browserViewShortcut, genoPilotSummary, runViewTitle} from '../../browser/contract.js';
+import {browserUnavailableShortcut, browserViewShortcut, genoPilotSummary, runViewTitle} from '../../browser/contract.js';
 import {documentView} from '../../browser/documents.js';
 import {useTransferGenomeViews} from './transfer-genome-views.js';
 import {useProteinReview} from './protein-review.js';
@@ -211,7 +211,7 @@ export function RunResultsScreen({
   const backboneAvailable = !!(consensus?.backbone.paths.fasta.available && consensus.backbone.sha256 && consensus.backbone.issues.length === 0);
   const genomeSourceAvailable = !!((selectedSite || selectedIsolate) && backboneAvailable) ||
     !!(selectedConsensus?.state === 'completed' && selectedConsensus.paths['consensus-fasta']?.available && selectedConsensus.paths['consensus-summary']?.available);
-  const canViewGenome = !!browser?.genomeAvailable && genomeSourceAvailable && !genome.busy;
+  const canViewGenome = !!browser?.browserAvailable && genomeSourceAvailable && !genome.busy;
   const selectBrowserSite = (id: string): void => {
     const index = listedSites.findIndex(site => siteItemId(site) === id);
     if (index >= 0) {
@@ -258,7 +258,7 @@ export function RunResultsScreen({
     onProteinsTab: !!annotationTransfer && annotationTab === 'proteins', citation: citation ?? undefined});
   const citationTab = consensusView?.tab === 'citation' || (!!annotationTransfer && annotationTab === 'citation');
   const openCitation = (): void => {
-    if (browser && citation) {
+    if (browser?.browserAvailable && citation) {
       browser.show({owner: citationOwner.current, title: runViewTitle(manifest, {id: metadata?.id ?? basename(resolve(runDirectory)), name: metadata?.name}, 'Citation'),
         documents: [citation], selectedId: citation.id, select: () => {}});
     }
@@ -658,6 +658,19 @@ export function RunResultsScreen({
   const listTab = consensusView && (consensusView.tab === 'cohorts' ||
     (consensusView.tab === 'isolates' && !consensusView.isolateDetail) ||
     (consensusView.tab === 'sites' && !consensusView.siteDetail));
+  // The browser shows the citation on its tab and the selected genome elsewhere.
+  let browserTarget = genomeSourceAvailable;
+  if (citationTab) {
+    browserTarget = !!citation;
+  }
+  let browserShortcut = '';
+  if (citationTab && browser?.browserAvailable && citation) {
+    browserShortcut = browserViewShortcut;
+  } else if (!citationTab && canViewGenome) {
+    browserShortcut = browserViewShortcut;
+  } else if (browserTarget && browser && !browser.browserAvailable) {
+    browserShortcut = browserUnavailableShortcut;
+  }
   const shortcuts = transferViews.choosing ? transferViews.shortcuts : [
     consensus || annotationTransfer ? 'Tab/←/→ — Switch tab' : '',
     listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 && !proteinReview.listing ? '↑/↓ — Scroll' : '',
@@ -670,10 +683,8 @@ export function RunResultsScreen({
     cohortRerun && consensusView?.tab === 'cohorts' && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending'
       ? 'c — Continue iteration'
       : '',
-    citationTab && browser && citation ? browserViewShortcut : '',
-    !citationTab && canViewGenome ? browserViewShortcut : '',
+    browserShortcut,
     ...(citationTab ? [] : transferViews.shortcuts),
-    genomeSourceAvailable && browser && !browser.genomeAvailable ? `${browserViewShortcut} (unavailable: release bundling pending)` : '',
     '? — Help',
   ];
   let back: string | false = onBack ? 'Back' : false;

@@ -1,7 +1,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {Alert} from '@inkjs/ui';
 import {Box, Text} from 'ink';
-import {browserViewShortcut} from '../../browser/contract.js';
+import {browserUnavailableShortcut, browserViewShortcut} from '../../browser/contract.js';
 import {documentView} from '../../browser/documents.js';
 import {useGenomeSession} from '../../browser/use-genome-session.js';
 import type {Document, DocumentsLoader} from '../../docs/documents.js';
@@ -57,7 +57,7 @@ export function useTransferGenomeViews({loaded, runDirectory, manifest, loadHelp
   const opened = useRef<typeof choices[number]['id']>(undefined);
   const reviewRef = useRef(review);
   reviewRef.current = review;
-  const canView = !!loaded && !!browser?.genomeAvailable && !genome.busy;
+  const canView = !!loaded && !!browser?.browserAvailable && !genome.busy;
   const selectFromBrowser = (id: string): void => reviewRef.current.select(id);
 
   // The Proteins view follows the tab's selection; the browser's previous and next move it back.
@@ -147,12 +147,16 @@ export function useTransferGenomeViews({loaded, runDirectory, manifest, loadHelp
       ))}
     </Box>
   ) : null;
-  const shortcuts = choice !== undefined
-    ? ['↑/↓ — Select', 'Enter — Open view']
-    : [
-      canView ? browserViewShortcut : '',
-      loaded && browser && !browser.genomeAvailable ? `${browserViewShortcut} (unavailable: release bundling pending)` : '',
-    ];
+  let browserShortcut = '';
+  if (canView) {
+    browserShortcut = browserViewShortcut;
+  } else if (loaded && browser && !browser.browserAvailable) {
+    browserShortcut = browserUnavailableShortcut;
+  }
+  let shortcuts = [browserShortcut];
+  if (choice !== undefined) {
+    shortcuts = ['↑/↓ — Select', 'Enter — Open view'];
+  }
   return {choosing: choice !== undefined, handleInput, status, choice: choiceElement, choiceRows: choice !== undefined ? choiceRows : 0, shortcuts,
     back: choice !== undefined ? 'Cancel' : undefined};
 }

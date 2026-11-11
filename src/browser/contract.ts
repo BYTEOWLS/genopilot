@@ -2,6 +2,8 @@ import type {Block} from '../docs/markdown.js';
 import type {FileSnapshot} from './fasta-index.js';
 
 export const browserViewShortcut = 'v — View in browser';
+/** Shown instead when the browser assets are not built, as in a source checkout before `pnpm build`. */
+export const browserUnavailableShortcut = `${browserViewShortcut} (unavailable: run pnpm build)`;
 /** A view's headline: the CLI place it was opened from, then what it shows, such as `Accession catalog: <genome>`. */
 export function viewTitle(...parts: string[]): string {
   return parts.join(': ');

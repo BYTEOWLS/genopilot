@@ -8,7 +8,7 @@ import {Markdown} from './markdown.js';
 import {Page} from './page.js';
 import {TabBar} from './tabs.js';
 import {useBrowserView} from '../../browser/provider.js';
-import {browserViewShortcut} from '../../browser/contract.js';
+import {browserUnavailableShortcut, browserViewShortcut} from '../../browser/contract.js';
 
 type LoadState =
   | {state: 'loading'}
@@ -101,7 +101,7 @@ export function MarkdownDocumentPage({
 
   useInput(
     (input, key) => {
-      if (input === 'v' && browser && documents.length > 0) {
+      if (input === 'v' && browser?.browserAvailable && documents.length > 0) {
         browser.show({owner: browserOwner.current, title, documents, selectedId: documentId, select: setActiveId});
       } else if (key.escape || input === '?') {
         onClose();
@@ -118,6 +118,13 @@ export function MarkdownDocumentPage({
     {isActive: inputActive},
   );
 
+  let browserShortcut = '';
+  if (browser && documents.length > 0) {
+    browserShortcut = browserUnavailableShortcut;
+    if (browser.browserAvailable) {
+      browserShortcut = browserViewShortcut;
+    }
+  }
   return (
     <Page
       title={title}
@@ -131,7 +138,7 @@ export function MarkdownDocumentPage({
         />
       ) : undefined}
       shortcuts={[
-        browser !== undefined && documents.length > 0 && browserViewShortcut,
+        browserShortcut,
         tabbed && 'Tab/←/→ — Switch document',
         maximumScrollOffset > 0 && '↑/↓ — Scroll · PageUp/PageDown (or fn + ↑/↓) — Page',
         `? — ${back}`,

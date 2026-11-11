@@ -38,6 +38,7 @@
   ],
   "scripts": {
     "dev": "tsx src/cli.tsx",
+    "dev:build": "pnpm build && pnpm dev",
     "dev:watch": "node --watch-path=src --watch-preserve-output --import tsx src/cli.tsx",
     "clean": "node --eval \"require('node:fs').rmSync('dist', {recursive: true, force: true})\"",
     "build": "pnpm clean && tsc -p tsconfig.json --noEmit && node scripts/build.mjs",

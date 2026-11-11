@@ -124,6 +124,12 @@ Run the CLI from source:
 pnpm dev
 ```
 
+Build first and then run from source, as needed after a fresh clone or a browser change:
+
+```bash
+pnpm dev:build
+```
+
 Restart the CLI from source whenever a file under `src/` changes:
 
 ```bash
