@@ -12,7 +12,7 @@ After the last required step, retain the folder under `completed/` and update al
 |---|---|---|
 | [AI-assisted interpretation](ai-interpretation/concept.md) | not started | [Tasks](ai-interpretation/tasks.md); deferred |
 | [Annotation formats](annotation-formats/concept.md) | not started | [Tasks](annotation-formats/tasks.md) |
-| [Annotation ID rewriting](annotation-id-rewriting/concept.md) | not started | [Tasks](annotation-id-rewriting/tasks.md) |
+| [Annotation ID rewriting](annotation-id-rewriting/concept.md) | not started | [Tasks](annotation-id-rewriting/tasks.md); placement and output decided |
 | [Annotation review decision](annotation-review-decision/concept.md) | not started | [Tasks](annotation-review-decision/tasks.md) |
 | [Browser view follow-up](browser-view-follow-up/concept.md) | not started | [Tasks](browser-view-follow-up/tasks.md); deferred, browser tests remain parked |
 | [INSDC submission](insdc-submission/concept.md) | not started | [Tasks](insdc-submission/tasks.md); read preparation depends on sequencing read sets |

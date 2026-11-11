@@ -14,7 +14,8 @@ From the run directory, unchanged:
 - `artifacts.yaml`, the checksum of every input, result, and log;
 - `provenance/`, the run's provenance and that of every iteration and resolved input;
 - `citation/`, how to cite the run;
-- `logs/`, every step's log and benchmark and each attempt's complete Snakemake stdout and stderr, and `events.jsonl`.
+- `logs/`, every step's log and benchmark and each attempt's complete Snakemake stdout and stderr, and `events.jsonl`;
+- from `derived/`, the records and ID mappings of [GFF3 find-and-replace](../annotation-id-rewriting/concept.md#placement-and-output) rewrites.
 
 A workflow can add files of its own by convention, for example a snapshot saved next to `config.yaml` or small result summaries such as JSON reports, so the shared export never names a workflow's files. Whether the workflow's manifest lists them or its result reader does is decided with the [workflow modules](../workflow-modules/concept.md).
 
