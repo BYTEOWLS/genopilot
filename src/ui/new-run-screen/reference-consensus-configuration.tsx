@@ -252,7 +252,7 @@ const votingExamples: readonly (readonly string[])[] = [
   ['A', 'A', 'G', 'G', 'T'],
 ];
 
-/** What the tie settings do, with a tie that is settled and one that is overruled or stays. */
+/** What the tie settings do, with a tie that is resolved and one that is overridden or stays. */
 function tieRows({tie_source: source, tie_scope: scope, tie_isolate: isolate}: ReferenceConsensusConfiguration['consensus']): {label: string; value: string}[] {
   if (source === 'none') {
     return [{label: 'Ties', value: 'A tie (bases with the same, highest number of votes) stays unresolved.'}];

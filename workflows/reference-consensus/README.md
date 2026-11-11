@@ -270,13 +270,13 @@ A tie means two or more alleles got the same, highest number of votes, for examp
 
 | Votes | Base used for ties | Only among the tied bases | Always |
 |---|---|---|---|
-| `A=5, G=5` | `A` | `A` (tie broken) | `A` (tie broken) |
-| `A=4, G=4, C=2` | `C` | unresolved (tie) | `C` (tie overruled) |
+| `A=5, G=5` | `A` | `A` (tie resolved) | `A` (tie resolved) |
+| `A=4, G=4, C=2` | `C` | unresolved (tie) | `C` (tie overridden) |
 | `A=4, G=4` | none: the trusted isolate is uncallable here, or the backbone has `N` | unresolved (tie) | unresolved (tie) |
 
 Only ties are settled. Positions with no votes, too few callable isolates, or no majority stay unresolved; plurality and a minimum of 0 callable isolates address those. A settled tie is selected even when its allele has half of the votes or fewer, also with strict majority.
 
-A settled tie is written like any other base. Later steps, such as the annotation transfer, cannot tell it apart and do not warn about it. The consensus sites table keeps its votes and its reason, `tie_broken` or `tie_overruled`, and the result page counts both.
+A settled tie is written like any other base. Later steps, such as the annotation transfer, cannot tell it apart and do not warn about it. The consensus sites table keeps its votes and its reason, `tie_resolved` or `tie_overridden`, and the result page counts both.
 
 The result is a cohort consensus: the backbone's structure with the cohort's most supported alleles. It can combine alleles that no single isolate carries together. It is not the genome of one individual and not an assembly.
 
@@ -333,7 +333,7 @@ Paths are inside the run directory. Positions in the support tables are 1-based 
 | `results/cohort/initial/support-intervals.tsv.gz` | every backbone base in runs with the same voters: the backbone vote, the number of callable, ambiguous, and uncallable isolates, and every isolate's state as one letter (`c` callable, `a` ambiguous, `u` uncallable) in the order of the `## isolates:` header line, so `cau` means the first isolate is callable, the second ambiguous, and the third uncallable; inside a locus, the sites table is authoritative; indexed with tabix |
 | `results/cohort/initial/support-summary.json` | voters, the backbone vote, input checksums, bases by number of votes, loci per flag, the allele frequency spectrum, and per-isolate counts |
 | `results/cohort/initial/consensus.fasta` | the cohort consensus, with the backbone's sequence names and order, and its index |
-| `results/cohort/initial/consensus-sites.tsv.gz` | one row per locus of the support table with its decision (`selected` or `unresolved`), reason (`tie`, `no_majority`, `no_votes`, `few_callable` when unresolved; `tie_broken` or `tie_overruled` for a settled tie), selected allele, the sequence written, its span in the backbone and in the consensus, votes, and flags; and one row per run of unresolved bases outside the loci (`kind` `region`), which are `N` throughout; indexed with tabix |
+| `results/cohort/initial/consensus-sites.tsv.gz` | one row per locus of the support table with its decision (`selected` or `unresolved`), reason (`tie`, `no_majority`, `no_votes`, `few_callable` when unresolved; `tie_resolved` or `tie_overridden` for a settled tie), selected allele, the sequence written, its span in the backbone and in the consensus, votes, and flags; and one row per run of unresolved bases outside the loci (`kind` `region`), which are `N` throughout; indexed with tabix |
 | `results/cohort/initial/consensus-summary.json` | the voting method, the minimum, the representation of unresolved single-base positions, the tie settings, voters, checksums of the inputs and the FASTA, sequence lengths, loci by decision and reason (also per support flag and by total votes), and bases written from the backbone alone, as IUPAC codes, and as `N` per reason |
 | `decisions/iteration-<n>.yaml` | a saved cohort decision (see *Iterations*) |
 | `results/cohort/iteration-<n>/` | the support tables, consensus, and summaries of iteration `n`, with the same files as `results/cohort/initial/` |

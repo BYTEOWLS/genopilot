@@ -21,8 +21,8 @@ locus (where every vote is for the backbone base), in this order:
 A tie can be settled by a tie source (--tie-source): the backbone's allele
 (only when it is all A, C, G, and T), or the allele a trusted isolate
 (--tie-isolate, its `isolate:<id>` column) voted for. When that allele is one
-of the tied alleles, it is selected with reason `tie_broken`; otherwise, with
---tie-scope any-allele, it is selected with reason `tie_overruled`, also
+of the tied alleles, it is selected with reason `tie_resolved`; otherwise, with
+--tie-scope any-allele, it is selected with reason `tie_overridden`, also
 without any vote. Without a source allele the locus stays a `tie`. Only ties
 are settled, and a settled tie skips the majority check.
 
@@ -43,7 +43,7 @@ Writes (1-based, inclusive coordinates; contigs in backbone order):
                      and per run of unresolved bases outside the loci (`kind`
                      region, written as N throughout): its backbone and
                      consensus span, status, reason (`.` for a vote winner,
-                     `tie_broken` or `tie_overruled` for a settled tie),
+                     `tie_resolved` or `tie_overridden` for a settled tie),
                      selected allele, the sequence written, and the locus's
                      votes and flags
   --summary          JSON: the policies, voters, input and FASTA checksums,
@@ -82,7 +82,7 @@ UNRESOLVED_SINGLE_BASE = ("n", "iupac")
 REASONS = ("tie", "no_majority", "no_votes", "few_callable")
 TIE_SOURCES = ("none", "backbone", "isolate")
 TIE_SCOPES = ("tied-alleles", "any-allele")
-SETTLED_TIES = ("tie_broken", "tie_overruled")
+SETTLED_TIES = ("tie_resolved", "tie_overridden")
 ACGT_ALLELE = re.compile(r"^[ACGT]+$")
 LINE_WIDTH = 60
 NOT_ACGT = re.compile(r"[^ACGT]")
@@ -226,9 +226,9 @@ def decide(
     leaders = [allele for allele, count in votes.items() if count == top]
     if len(leaders) > 1:
         if source_allele in leaders:
-            return "tie_broken", source_allele
+            return "tie_resolved", source_allele
         if source_allele is not None and policy.tie_scope == "any-allele":
-            return "tie_overruled", source_allele
+            return "tie_overridden", source_allele
         return "tie", None
     if policy.voting_method == "strict-majority" and top * 2 <= total_votes:
         return "no_majority", None

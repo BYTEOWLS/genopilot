@@ -11,11 +11,11 @@ import {createGunzip} from 'node:zlib';
  * reviewing are kept. Both are bgzip files, which gunzip reads as concatenated gzip members.
  */
 
-export type SiteFilter = 'tie' | 'no_majority' | 'tie_broken' | 'tie_overruled' | 'competing_indel' | 'unresolved';
+export type SiteFilter = 'tie' | 'no_majority' | 'tie_resolved' | 'tie_overridden' | 'competing_indel' | 'unresolved';
 export const siteFilters: readonly SiteFilter[] = [
-  'tie', 'no_majority', 'competing_indel', 'unresolved', 'tie_broken', 'tie_overruled',
+  'tie', 'no_majority', 'competing_indel', 'unresolved', 'tie_resolved', 'tie_overridden',
 ];
-const settledTies: readonly string[] = ['tie_broken', 'tie_overruled'];
+const settledTies: readonly string[] = ['tie_resolved', 'tie_overridden'];
 
 export type CohortSite = {
   chrom: string;
@@ -25,7 +25,7 @@ export type CohortSite = {
   status: 'selected' | 'unresolved';
   /**
    * `tie`, `no_majority`, `no_votes`, or `few_callable` when unresolved; when selected, `.` for a
-   * vote winner, or `tie_broken` or `tie_overruled` for a tie the tie source settled.
+   * vote winner, or `tie_resolved` or `tie_overridden` for a tie the tie source settled.
    */
   reason: string;
   /** The selected allele, or `.`. */
@@ -63,8 +63,8 @@ export function matchesSiteFilter(site: CohortSite, filter: SiteFilter): boolean
     case 'tie':
     case 'no_majority':
       return site.status === 'unresolved' && site.reason === filter;
-    case 'tie_broken':
-    case 'tie_overruled':
+    case 'tie_resolved':
+    case 'tie_overridden':
       return site.status === 'selected' && site.reason === filter;
     case 'competing_indel':
       return site.flags.includes('competing_indel');

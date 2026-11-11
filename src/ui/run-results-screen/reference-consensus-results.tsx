@@ -122,8 +122,8 @@ export function countRows(counts: CohortCounts): {id: string; label: string; val
   return [
     {id: 'counts.loci_selected', label: 'Selected loci', value: counts.lociSelected},
     {id: 'counts.loci_changed', label: 'Selected loci differing from the backbone', value: counts.lociChanged},
-    {id: 'counts.loci_settled.tie_broken', label: 'Selected loci: tie broken', value: counts.lociSettledTies.tie_broken},
-    {id: 'counts.loci_settled.tie_overruled', label: 'Selected loci: tie overruled', value: counts.lociSettledTies.tie_overruled},
+    {id: 'counts.loci_settled.tie_resolved', label: 'Selected loci: tie resolved', value: counts.lociSettledTies.tie_resolved},
+    {id: 'counts.loci_settled.tie_overridden', label: 'Selected loci: tie overridden', value: counts.lociSettledTies.tie_overridden},
     ...unresolvedReasons.map(reason => ({
       id: `counts.loci_unresolved.${reason}`,
       label: reasonLabels[reason],
@@ -403,8 +403,8 @@ function consensusFileSections(result: ReferenceConsensusResult): RowSection[] {
 export const siteFilterLabels: Record<SiteFilter, string> = {
   tie: 'ties',
   no_majority: 'no majority',
-  tie_broken: 'ties broken',
-  tie_overruled: 'ties overruled',
+  tie_resolved: 'ties resolved',
+  tie_overridden: 'ties overridden',
   competing_indel: 'competing indels',
   unresolved: 'all unresolved loci',
 };

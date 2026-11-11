@@ -23,9 +23,9 @@ export type RecordIssue = {path: string; message: string};
 export type UnresolvedReason = 'tie' | 'no_majority' | 'no_votes' | 'few_callable';
 export const unresolvedReasons: readonly UnresolvedReason[] = ['tie', 'no_majority', 'no_votes', 'few_callable'];
 
-/** Why a tie was settled: the tie source's allele was one of the tied alleles, or it overruled them. */
-export type SettledTieReason = 'tie_broken' | 'tie_overruled';
-export const settledTieReasons: readonly SettledTieReason[] = ['tie_broken', 'tie_overruled'];
+/** Why a tie was settled: the tie source's allele was one of the tied alleles, or it overrode them. */
+export type SettledTieReason = 'tie_resolved' | 'tie_overridden';
+export const settledTieReasons: readonly SettledTieReason[] = ['tie_resolved', 'tie_overridden'];
 
 /** Counts of one cohort's consensus, from its `consensus-summary.json`. */
 export type CohortCounts = {

@@ -92,7 +92,7 @@ function path(relative: string, available = true) {
 function counts(tie: number): CohortCounts {
   return {
     lociSelected: 40, lociChanged: 12, multiallelicLoci: 3, competingIndelLoci: 1, basesBackboneOnly: 7, basesIupac: 0,
-    lociSettledTies: {tie_broken: 2, tie_overruled: 0},
+    lociSettledTies: {tie_resolved: 2, tie_overridden: 0},
     lociUnresolved: {tie, no_majority: 1, no_votes: 0, few_callable: 0},
     basesN: {tie, no_majority: 1, no_votes: 5, few_callable: 0, backbone_not_acgt: 3},
   };

@@ -37,8 +37,8 @@ Loci are counted in loci, bases in bases; a locus is explained under *Terms*.
 |---|---|
 | Selected loci | Loci where the voting method chose an allele. A locus is one row of the support table: a variant position, or several overlapping variants merged into one ballot. |
 | Selected loci differing from the backbone | Selected loci whose winning allele differs from the backbone's, so the consensus changes the backbone there. |
-| Selected loci: tie broken | Ties the backbone or the trusted isolate decided with one of the tied alleles. They count as selected loci. |
-| Selected loci: tie overruled | Ties the backbone or the trusted isolate decided with an allele that was not tied, possibly without any vote. They count as selected loci. |
+| Selected loci: tie resolved | Ties resolved with the base used for ties, the backbone's or the trusted isolate's, which was one of the tied alleles. They count as selected loci. |
+| Selected loci: tie overridden | Ties where the base used for ties was not one of the tied alleles and won anyway, possibly without any vote. They count as selected loci. |
 | Unresolved loci: tie | Loci where several alleles share the highest vote count. |
 | Unresolved loci: no majority | Loci where, with strict majority, no allele received more than half of the votes and the top allele is not tied. Plurality has no such loci. |
 | Unresolved loci: no votes | Loci where nobody voted: no isolate was callable there and the backbone did not vote. |
@@ -178,7 +178,7 @@ Inspect both sides of a disagreement. Mixed reads, strand bias, repeats, and map
 
 | Item | Meaning |
 |---|---|
-| Filter | Which loci of the iteration selected on the Iterations tab are listed: ties, no majority, loci with competing indels (also selected ones), every unresolved locus, ties broken, or ties overruled. Runs of bases outside every locus that stayed unresolved, such as regions where no isolate is callable, are counted on the overview but not listed here. |
+| Filter | Which loci of the iteration selected on the Iterations tab are listed: ties, no majority, loci with competing indels (also selected ones), every unresolved locus, ties resolved, or ties overridden. Runs of bases outside every locus that stayed unresolved, such as regions where no isolate is callable, are counted on the overview but not listed here. |
 | Position | Where the locus lies on the backbone: the sequence name and the 1-based position, or its first and last base when it spans several. |
 | Backbone | The backbone's own sequence at the locus. |
 | Alleles: votes | Every allele that received a vote, the backbone's first, each with its number of votes. The backbone's own vote, when it casts one, is counted for the backbone allele. Long alleles are shortened in the list; the detail shows them whole. |
@@ -254,8 +254,8 @@ A tie can be resolved with the backbone's base or a trusted isolate's base inste
 
 | Reason | Meaning |
 |---|---|
-| `tie_broken` | The base used for ties, the backbone's or the trusted isolate's, was one of the tied alleles. |
-| `tie_overruled` | The base used for ties was not one of the tied alleles; it won anyway, possibly without any vote. |
+| `tie_resolved` | The base used for ties, the backbone's or the trusted isolate's, was one of the tied alleles. |
+| `tie_overridden` | The base used for ties was not one of the tied alleles; it won anyway, possibly without any vote. |
 
 A settled tie is written like any other base, so later steps such as the annotation transfer do not warn about it. Review these loci on the Sites tab.
 
