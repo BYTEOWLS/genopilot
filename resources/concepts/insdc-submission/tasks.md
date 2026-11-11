@@ -4,7 +4,7 @@
 
 ## Work
 
-- [ ] Kickoff: confirm the [GFF3 find-and-replace](../annotation-id-rewriting/concept.md) is done, choose the first node, resolve the open questions, and record the answers in this file.
+- [ ] Kickoff: confirm the [GFF3 find-and-replace](../completed/annotation-id-rewriting/concept.md) is done, choose the first node, resolve the open questions, and record the answers in this file.
 - [ ] Add the `insdc-submission` manifest, parameters, configuration schema, and form, with the node as an explicit choice.
 - [ ] Implement FASTA trimming with GFF3 coordinate shifting and the short/N-rich report.
 - [ ] Import a rewritten GFF3: follow the `replace.yaml` chain, verify checksums, refuse outdated rewrites, and join the mappings into one raw → final mapping.

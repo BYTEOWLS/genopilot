@@ -63,6 +63,8 @@ import {useGenomeSession} from '../../browser/use-genome-session.js';
 import {browserUnavailableShortcut, browserViewShortcut, genoPilotSummary, runViewTitle} from '../../browser/contract.js';
 import {documentView} from '../../browser/documents.js';
 import {useTransferGenomeViews} from './transfer-genome-views.js';
+import {useDerivedRewrites} from './derived-rewrites.js';
+import {Gff3ReplaceScreen} from '../gff3-replace-screen/screen.js';
 import {useProteinReview} from './protein-review.js';
 import {readReviewGenes as defaultReadReviewGenes} from '../../workflows/annotation-transfer/proteins.js';
 import {cohortConsensusView, consensusIsolateView, consensusSitesView, siteItemId} from '../../workflows/reference-consensus/views.js';
@@ -259,6 +261,10 @@ export function RunResultsScreen({
     review: {available: proteinReview.state?.state === 'ready' && proteinReview.listed.length > 0, listed: proteinReview.listed,
       selected: proteinReview.selected, select: proteinReview.select},
     onProteinsTab: !!annotationTransfer && annotationTab === 'proteins', citation: citation ?? undefined});
+  const finished = loaded.kind === 'compatible' &&
+    (loaded.shell.runStatus === 'completed' || loaded.shell.runStatus === 'completed-with-warnings');
+  const derived = useDerivedRewrites({runDirectory, manifest, finished, inputActive: inputActive && mode.kind === 'results' && view === 'results',
+    pathExists});
   const citationTab = consensusView?.tab === 'citation' || (!!annotationTransfer && annotationTab === 'citation');
   const openCitation = (): void => {
     if (browser?.browserAvailable && citation) {
@@ -290,7 +296,7 @@ export function RunResultsScreen({
     // The tables are derived from the cohort, so its ID is enough to decide when to read again.
   }, [sitesCohortId]);
   // The tab bar takes two more rows above the scrolled content.
-  const visibleRows = Math.max(5, rows - (consensus || annotationTransfer ? 17 : 15) - transferViews.choiceRows);
+  const visibleRows = Math.max(5, rows - (consensus || annotationTransfer ? 17 : 15) - transferViews.choiceRows - derived.choiceRows);
   const maximumScrollOffset = Math.max(0, contentHeight - visibleRows);
   const effectiveScrollOffset = Math.min(scrollOffsets.results, maximumScrollOffset);
 
@@ -298,7 +304,7 @@ export function RunResultsScreen({
     if (contentRef.current) {
       setContentHeight(measureElement(contentRef.current).height);
     }
-  }, [columns, rows, loaded, view, consensusView, annotationTab, sites, proteinReview.state, proteinReview.listing, citation]);
+  }, [columns, rows, loaded, view, consensusView, annotationTab, sites, proteinReview.state, proteinReview.listing, citation, derived.listed]);
 
   const scrollBy = (delta: number): void => {
     setScrollOffsets(current => ({
@@ -428,6 +434,9 @@ export function RunResultsScreen({
 
   useInput((input, key) => {
     if (!inputActive || mode.kind !== 'results' || view === 'help') {
+      return;
+    }
+    if (!transferViews.choosing && derived.handleInput(input, key)) {
       return;
     }
     if (input === 'v' && citationTab) {
@@ -592,7 +601,7 @@ export function RunResultsScreen({
       ) : null}
     </Box>
   );
-  const runFilesSection = <SectionList title="Run Files" description="" items={runFileItems} />;
+  const runFilesSection = <><SectionList title="Run Files" description="" items={runFileItems} />{derived.section}</>;
   const citationSection = citation === undefined ? <Text>Reading the citation…</Text> : citation === null ? (
     <Text wrap="wrap">
       This run has no citation yet. A run writes {runCitationPath} when it finishes.
@@ -604,6 +613,17 @@ export function RunResultsScreen({
     </Box>
   );
 
+  if (derived.opened) {
+    return (
+      <Gff3ReplaceScreen
+        currentDirectory={runDirectory}
+        source={derived.opened.path}
+        sourceFixed
+        onBack={derived.close}
+        inputActive={inputActive}
+      />
+    );
+  }
   if (mode.kind === 'review' && consensus && cohortRerun && isReferenceConsensusResult(loaded)) {
     const save = cohortRerun.saveDecision ?? saveNextCohortDecision;
     return (
@@ -663,7 +683,7 @@ export function RunResultsScreen({
   // A shown selectable list takes the arrow and page keys and adds its own shortcuts.
   const listShown = proteinReview.listing || (consensusView?.tab === 'isolates' && !consensusView.isolateDetail) ||
     (consensusView?.tab === 'sites' && !consensusView.siteDetail);
-  const listInputActive = inputActive && mode.kind === 'results' && !transferViews.choosing;
+  const listInputActive = inputActive && mode.kind === 'results' && !transferViews.choosing && !derived.choosing;
   const selectConsensusItem = (field: ConsensusListField, index: number): void => {
     setConsensusView(current => current ? {...current, [field]: index} : current);
   };
@@ -685,7 +705,8 @@ export function RunResultsScreen({
   const siteList = tab === 'sites' && !consensusView?.siteDetail;
   const scrolls = maximumScrollOffset > 0 && !listShown;
   const pendingCohort = tab === 'cohorts' && !!consensusView && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending';
-  const shortcuts: readonly Shortcut[] = transferViews.choosing ? transferViews.shortcuts : [
+  const choiceShortcuts = transferViews.choosing ? transferViews.shortcuts : derived.choosing ? derived.shortcuts : undefined;
+  const shortcuts: readonly Shortcut[] = choiceShortcuts ?? [
     (consensus || annotationTransfer) && 'Tab/←/→ — Switch tab',
     tab === 'cohorts' && '↑/↓ — Select',
     tab !== 'cohorts' && scrolls && '↑/↓ — Scroll',
@@ -698,6 +719,7 @@ export function RunResultsScreen({
     cohortRerun && pendingCohort && 'c — Continue iteration',
     browserShortcut,
     ...(citationTab ? [] : transferViews.shortcuts),
+    ...derived.shortcuts,
     '? — Help',
   ];
   let back: string | false = onBack ? 'Back' : false;
@@ -706,6 +728,9 @@ export function RunResultsScreen({
   }
   if (transferViews.back) {
     back = transferViews.back;
+  }
+  if (derived.back) {
+    back = derived.back;
   }
   if (consensusView?.isolateDetail) {
     back = 'Back to isolates';
@@ -785,6 +810,7 @@ export function RunResultsScreen({
         </Box>
       </Box>
       {transferViews.choice}
+      {derived.choice}
     </Page>
   );
 }

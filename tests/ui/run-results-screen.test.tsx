@@ -654,3 +654,30 @@ test('shows the run\'s start, finish, duration, attempts, and stage durations am
     untimed.unmount();
   }
 });
+
+test('g on a finished run opens the find-and-replace for its GFF3 and Esc returns', async () => {
+  const input = new TestInput();
+  const output = new TestOutput();
+  const withGff3: WorkflowManifest = {...manifest, artifacts: [
+    {id: 'annotation', label: 'Annotation', path: 'results/gff3-source-marker.gff3', type: 'gff3', produced_by: 'stage'},
+  ]};
+  const instance = render(
+    <RunResultsScreen runDirectory="/runs/result-42" manifest={withGff3} loaded={refreshed(compatibleResult())} inputActive
+      pathExists={() => true} loadHelp={helpDocuments} readCitation={async () => undefined} />,
+    {exitOnCtrlC: false, interactive: true, patchConsole: false,
+      stdin: input as unknown as NodeJS.ReadStream, stdout: output as unknown as NodeJS.WriteStream},
+  );
+  try {
+    await rendered(instance);
+    assert.doesNotMatch(output.readOutput(), /gff3-source-marker/);
+    await pressKey(input, 'g');
+    await rendered(instance);
+    assert.match(output.readOutput(), /\/runs\/result-42\/results\/gff3-source-marker\.gff3/);
+    output.clearOutput();
+    await pressKey(input, ESCAPE);
+    await rendered(instance);
+    assert.doesNotMatch(output.readOutput(), /gff3-source-marker/);
+  } finally {
+    instance.unmount();
+  }
+});

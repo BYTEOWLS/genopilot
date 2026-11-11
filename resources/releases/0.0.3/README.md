@@ -9,7 +9,7 @@ Ship the implemented systems check, make sequencing technology explicit on read 
 - [x] [Systems check: hardware facts, resource estimates, timing, and measured rates](done_01_system_check.md) — already implemented.
 - [x] [Sequencing read sets: catalog, workflow selection, snapshots, and preprocessing defaults](done_02_sequencing_read_sets.md).
 - [x] [Settle reference-consensus ties](done_06_consensus_tie_handling.md).
-- [ ] [GFF3 find-and-replace](07_gff3_find_and_replace.md).
+- [x] [GFF3 find-and-replace](done_07_gff3_find_and_replace.md).
 
 Items 03–05 (race-free stale-lock recovery, catalog reload after a save conflict, shorter run-review summaries) moved to the [backlog](../../backlog/).
 

@@ -6,7 +6,7 @@ Prepare a genome and the isolates' raw reads for submission to any node of the I
 
 The official validators (`table2asn` at NCBI, Webin-CLI at ENA, DDBJ's checking tools) report problems as text logs and leave the fixing to the researcher. GenoPilot runs the pinned validator of the chosen node, shows its findings, and guides the fixes that need a decision: each is saved as YAML, and the next target reads it. Mechanical preparation, such as trimming `N` at sequence ends, is recorded; nothing that changes the science is fixed silently.
 
-This concept depends on the [GFF3 find-and-replace](../annotation-id-rewriting/concept.md), a general application feature implemented first. This workflow uses it unchanged and adds only what the repositories need on top of it: locus tags and transcript and protein IDs (see [Identifier preparation](#identifier-preparation)).
+This concept depends on the [GFF3 find-and-replace](../completed/annotation-id-rewriting/concept.md), a general application feature implemented first. This workflow uses it unchanged and adds only what the repositories need on top of it: locus tags and transcript and protein IDs (see [Identifier preparation](#identifier-preparation)).
 
 ## Repositories
 
@@ -102,7 +102,7 @@ Every stage before the node packaging is repository-neutral and its outputs are 
 
 ## Identifier preparation
 
-ID rewriting is the [GFF3 find-and-replace](../annotation-id-rewriting/concept.md), with its contract, preview, validation, and `id-mapping.tsv`. It runs in the application before the submission workflow starts, which reads the rewritten GFF3 as an imported input; it is not a workflow stage. When the input GFF3 already has its final IDs, it is skipped.
+ID rewriting is the [GFF3 find-and-replace](../completed/annotation-id-rewriting/concept.md), with its contract, preview, validation, and `id-mapping.tsv`. It runs in the application before the submission workflow starts, which reads the rewritten GFF3 as an imported input; it is not a workflow stage. When the input GFF3 already has its final IDs, it is skipped.
 
 The application, while validating the configuration, follows a rewritten GFF3's `replace.yaml` back through chained rewrites to the first source, verifies each recorded checksum, refuses an outdated rewrite, and joins the `id-mapping.tsv` files into one raw → final mapping that the workflow snapshots.
 

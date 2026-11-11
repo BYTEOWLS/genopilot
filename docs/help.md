@@ -12,6 +12,8 @@ Open existing runs to view their results or delete them. The workflow list shows
 
 Files copied into a run from outside are marked **imported**. Files the run computes are **generated**. Stages whose results are reused from elsewhere instead of computed are **cached**.
 
+**Find and replace in GFF3** renames IDs and other attribute values in any GFF3 file, with a preview; see [Find and replace in GFF3](gff3-find-and-replace.md).
+
 ## Catalogs
 
 - **Isolates** store identity and lineage independently of sequencing data. Their read sets record a library, platform, layout, and multiple file groups. Confirm library identity during import; workflows explicitly select compatible read sets and snapshot their effective settings.

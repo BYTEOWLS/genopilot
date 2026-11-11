@@ -12,7 +12,6 @@ After the last required step, retain the folder under `completed/` and update al
 |---|---|---|---|
 | [AI-assisted interpretation](ai-interpretation/concept.md) | not started | — | [Tasks](ai-interpretation/tasks.md); deferred |
 | [Annotation formats](annotation-formats/concept.md) | not started | — | [Tasks](annotation-formats/tasks.md) |
-| [Annotation ID rewriting](annotation-id-rewriting/concept.md) | not started | [0.0.3](../releases/0.0.3/07_gff3_find_and_replace.md) | [Tasks](annotation-id-rewriting/tasks.md); placement and output decided |
 | [Annotation review decision](annotation-review-decision/concept.md) | not started | — | [Tasks](annotation-review-decision/tasks.md) |
 | [Browser view follow-up](browser-view-follow-up/concept.md) | not started | — | [Tasks](browser-view-follow-up/tasks.md); deferred, browser tests remain parked |
 | [INSDC submission](insdc-submission/concept.md) | not started | — | [Tasks](insdc-submission/tasks.md); read preparation depends on sequencing read sets |
@@ -41,6 +40,7 @@ Existing supporting step files are retained as contract and implementation histo
 | [Citing runs](completed/citing-runs/concept.md) | done | — | Version and citation contract |
 | [Community files](completed/community-files/concept.md) | done | — | Contribution and security policies |
 | [Cohort consensus](completed/consensus/concept.md) | done | — | [Tasks](completed/consensus/tasks.md) and retained step files |
+| [GFF3 find-and-replace](completed/annotation-id-rewriting/concept.md) | done | [0.0.3](../releases/0.0.3/done_07_gff3_find_and_replace.md) | [Tasks](completed/annotation-id-rewriting/tasks.md); run-export integration moved to run export |
 | [Sequencing read sets](completed/sequencing-read-sets/concept.md) | done | [0.0.3](../releases/0.0.3/done_02_sequencing_read_sets.md) | [Tasks](completed/sequencing-read-sets/tasks.md); editable two-colour import defaults; shared borderless edit sections |
 | [Systems check](completed/systems-check/concept.md) | done | [0.0.3](../releases/0.0.3/done_01_system_check.md) | [Tasks](completed/systems-check/tasks.md) |
 | [Transfer genome view](completed/transfer-genome-view/concept.md) | done | — | [Tasks](completed/transfer-genome-view/tasks.md) |
