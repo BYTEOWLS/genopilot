@@ -4,6 +4,6 @@ Each version folder keeps its scope, delivery order, numbered work files, and co
 
 | Release | Status | Scope |
 |---|---|---|
-| [0.0.3](0.0.3/README.md) | planned | Systems check, sequencing read sets, and selected reliability and review improvements |
+| [0.0.3](0.0.3/README.md) | planned | Systems check, sequencing read sets, reference-consensus ties, and GFF3 find-and-replace |
 
 This is the first release tracked in this structure, not the first published package version. Creating a plan does not change `package.json` or publish a release.

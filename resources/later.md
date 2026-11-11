@@ -565,7 +565,6 @@ Concept links below are pointers, not duplicate checklists. Their task files own
 - [Annotation-format validation](concepts/annotation-formats/tasks.md).
 - [Saved isolate sequences](concepts/saved-isolate-sequences/tasks.md).
 - [Annotation review decisions](concepts/annotation-review-decision/tasks.md).
-- [GFF3 find-and-replace](concepts/annotation-id-rewriting/tasks.md); required before INSDC submission.
 - [INSDC submission preparation](concepts/insdc-submission/tasks.md): genome and isolate reads.
 
 ## Application
@@ -575,6 +574,9 @@ Concept links below are pointers, not duplicate checklists. Their task files own
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
 - [Workflow modules](concepts/workflow-modules/tasks.md).
 - [Run evidence export](concepts/run-export/tasks.md).
+- [Race-free stale-lock recovery](backlog/03_stale_lock_recovery.md).
+- [Catalog reload after a save conflict](backlog/04_catalog_conflict_reload.md); depends on stale-lock recovery.
+- [Shorter run-review summaries](backlog/05_run_review_summaries.md).
 
 ## Integration and packaging
 
