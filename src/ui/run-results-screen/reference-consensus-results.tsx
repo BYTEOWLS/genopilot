@@ -288,8 +288,8 @@ function isolateDetailSections(isolate: IsolateResult, result: ReferenceConsensu
     {id: 'isolates.mean_depth', label: 'Mean depth (reads per base)', value: metrics.meanDepth.toFixed(1)},
     {id: 'isolate.covered_fraction', label: 'Covered backbone bases', value: share(metrics.coveredFraction)},
     {id: 'isolates.callable_fraction', label: 'Callable backbone bases', value: share(metrics.callableFraction)},
-    {id: 'isolates.snps', label: 'PASS single-base changes', value: integer(metrics.snps)},
-    {id: 'isolates.indels', label: 'PASS indels', value: integer(metrics.indels)},
+    {id: 'isolates.snps', label: 'Single-base changes (SNVs)', value: integer(metrics.snps)},
+    {id: 'isolates.indels', label: 'Indels', value: integer(metrics.indels)},
   ] : [];
   const sections: RowSection[] = [{id: 'isolate', title: 'Isolate', rows: summary}];
   if (quality.length > 0) {

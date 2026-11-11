@@ -72,8 +72,8 @@ Shown once the active iteration's consensus FASTA exists. The consensus is not a
 | State | Whether the isolate's processing completed; see *Isolate states* under *Terms*. |
 | Depth | Average number of reads over every backbone base, after the quality filters and without duplicates, in reads per base. |
 | Callable | Share of backbone bases where the isolate is callable, so it can vote there. |
-| Single-base changes | Positions where the isolate has another base than the backbone, counted after every filter. Variant callers often call these SNPs; see *Variants* in the workflow documentation. |
-| Indels | Insertions and deletions against the backbone that passed every filter. |
+| Single-base changes | Single-base changes (SNVs): positions where the isolate has another base than the backbone. Only variants that passed every filter (`PASS`) count, the same ones that vote and enter the isolate FASTA. Variant callers often call these SNPs; see *Variants* in the workflow documentation. |
+| Indels | Insertions and deletions against the backbone that passed every filter (`PASS`). |
 | Votes | Whether the isolate votes in the active cohort. |
 | Candidate | Whether the isolate FASTA has a promotion candidate: the record needed to save it to the isolate catalog. Its checksums are verified only when it is saved. |
 

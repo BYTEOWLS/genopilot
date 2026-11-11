@@ -62,7 +62,7 @@ Isolates are called haploid: each has one copy of every position, so a clean iso
 
 Variant calling lists where an isolate differs from the backbone, in a VCF file [9]:
 
-- **single-base change**: one base exchanged for another, for example backbone `C`, isolate `A`;
+- **single-base change (SNV)**: one base exchanged for another, for example backbone `C`, isolate `A`;
 - **indel**: bases inserted or deleted;
 - **multiallelic site**: more than two alleles at one position across the cohort, for example backbone `C`, one isolate `A`, another `T`.
 
@@ -72,6 +72,16 @@ Two related terms are often mixed up:
 - A **SNP** (single-nucleotide polymorphism) is a position that varies within a population: some members carry one base, others another.
 
 One isolate's difference from the backbone is therefore an SNV. Many tools, bcftools among them, still count it as a "SNP", so GenoPilot shows it as a *single-base change*. A position where the isolates of a cohort carry different bases is a polymorphism within the cohort; the support table flags it `snp` (see *Flags*). An indel is a variant of one genome or a polymorphism alike; the word does not distinguish them.
+
+Every variant is kept in the VCF with a filter result in its `FILTER` column. `PASS` means it passed every filter; otherwise the column names the filter it failed:
+
+| FILTER | Meaning |
+|---|---|
+| `PASS` | enough reads, and the variant's allele reaches the minimum allele fraction |
+| `LowDepth` | fewer reads than the minimum read depth |
+| `LowAlleleFraction` | the allele does not reach the minimum allele fraction |
+
+Only `PASS` variants enter the isolate FASTA, vote in the cohort, and are counted on the result page. Failed variants stay in the VCF as evidence. The filters use the same thresholds as the callable mask, so a `PASS` variant always lies on callable bases.
 
 The same deletion in a repeat, such as one `A` removed from `AAAA`, can be written at several positions. **Normalization** writes every variant in one canonical form: shifted as far left as possible, with one record per alternative allele [10]. The same event then looks the same in every isolate and can be counted.
 
