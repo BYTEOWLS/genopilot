@@ -1,6 +1,7 @@
 import {fileURLToPath} from 'node:url';
 import React, {useState} from 'react';
 import {Box, Text, useInput} from 'ink';
+import {Alert} from '@inkjs/ui';
 import {
   discoverPackagedWorkflows,
   type DiscoveredWorkflow,
@@ -108,7 +109,7 @@ export function NewRunScreen({
       <Page title="New run" detail={confirmedWorkflow.manifest.label} back="Back to workflows">
         <Text wrap="wrap">{sanitizeTerminalText(confirmedWorkflow.manifest.description)}</Text>
         <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Configuration is not available in this build.</Text>
+          <Alert variant="warning">Configuration is not available in this build.</Alert>
           <Text>The workflow has not been started.</Text>
         </Box>
       </Page>

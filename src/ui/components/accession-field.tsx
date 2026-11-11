@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
+import {Alert} from '@inkjs/ui';
 import {isVersionedAssemblyAccession, normalizeAccession} from '../../accessions/accession.js';
 import {
   accessionDisplayName,
@@ -188,16 +189,13 @@ export function AccessionField({
 function ConflictExplanation({entry}: {entry: AccessionEntry}): React.JSX.Element {
   return (
     <Box marginTop={1} flexDirection="column">
-      <Text color="yellow" bold>⚠ {sanitizeTerminalText(entry.accession)} cannot be used: its cached copies conflict</Text>
-      <Text wrap="wrap">
+      <Alert variant="warning" title={`${sanitizeTerminalText(entry.accession)} cannot be used: its cached copies conflict`}>
         A versioned accession always names the same assembly files, so every cached copy of it must
         have identical checksums. These copies differ, so at least one was damaged or changed after
-        it was downloaded, and GenoPilot cannot tell which one is right.
-      </Text>
-      <Text wrap="wrap">
-        Remove the entry under Manage NCBI accessions, which deletes its cached copies, and add it
-        again; the next run downloads a fresh copy.
-      </Text>
+        it was downloaded, and GenoPilot cannot tell which one is right. Remove the entry under
+        Manage NCBI accessions, which deletes its cached copies, and add it again; the next run
+        downloads a fresh copy.
+      </Alert>
       {entry.cached_copies.map(copy => (
         <Text key={copy.path} color={mutedColor} wrap="wrap">
           {'  '}{sanitizeTerminalText(copy.path)} · FASTA {copy.fasta_sha256.slice(0, 12)}

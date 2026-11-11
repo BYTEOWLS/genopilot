@@ -1,5 +1,6 @@
 import React, {useLayoutEffect, useRef, useState} from 'react';
 import {Box, measureElement, Text, useInput, useWindowSize, type DOMElement} from 'ink';
+import {Alert} from '@inkjs/ui';
 import {
   isVersionedAssemblyAccession,
   ncbiAccessionFormatMessage,
@@ -308,11 +309,11 @@ export function AccessionForm({
               </Section>
             ))}
             {!metadata ? (
-              <Box flexShrink={0}>
-                <Text color="yellow" wrap="wrap">
+              <Box flexShrink={0} flexDirection="column">
+                <Alert variant="warning">
                   NCBI metadata was not retrieved{unavailable ? `: ${sanitizeTerminalText(unavailable)}` : '.'}
                   {' '}You can save now and refresh the metadata later.
-                </Text>
+                </Alert>
               </Box>
             ) : null}
             {editing ? (
@@ -334,10 +335,10 @@ export function AccessionForm({
                   </Text>
                 ))}
                 {recordedCacheState(editing) === 'conflict' ? (
-                  <Text color="yellow" wrap="wrap">
+                  <Alert variant="warning">
                     The verified copies hold different files for the same versioned accession. Inspect
                     them before a workflow uses this accession; none is preferred automatically.
-                  </Text>
+                  </Alert>
                 ) : null}
               </Section>
             ) : null}

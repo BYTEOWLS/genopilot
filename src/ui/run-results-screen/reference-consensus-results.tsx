@@ -1,5 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import {Alert} from '@inkjs/ui';
 import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
 import {
   cohortPathKeys,
@@ -537,7 +538,7 @@ function SitesTab({
     return <Text>Reading the loci of iteration {cohortName(cohort)}…</Text>;
   }
   if (sites.state === 'failed') {
-    return <Text color="yellow" wrap="wrap">The loci of iteration {cohortName(cohort)} cannot be read: {sanitizeTerminalText(sites.message)}</Text>;
+    return <Alert variant="warning">The loci of iteration {cohortName(cohort)} cannot be read: {sanitizeTerminalText(sites.message)}</Alert>;
   }
   const shown = filteredSites(sites.sites, view.siteFilter);
   const selected = shown[Math.min(view.siteIndex, shown.length - 1)];
@@ -603,12 +604,9 @@ function Issues({issues}: {issues: readonly RecordIssue[]}): React.JSX.Element |
   }
   return (
     <Box marginTop={1} flexDirection="column" flexShrink={0}>
-      <Text color="yellow" bold>Records that cannot be interpreted</Text>
-      {issues.map(issue => (
-        <Text key={`${issue.path}:${issue.message}`} color="yellow" wrap="wrap">
-          {'! '}{sanitizeTerminalText(issue.path)}: {sanitizeTerminalText(issue.message)}
-        </Text>
-      ))}
+      <Alert variant="warning" title="Records that cannot be interpreted">
+        {issues.map(issue => `${sanitizeTerminalText(issue.path)}: ${sanitizeTerminalText(issue.message)}`).join('\n')}
+      </Alert>
     </Box>
   );
 }
@@ -672,11 +670,11 @@ export function ReferenceConsensusResults({
         <Box flexDirection="column">
           {overviewHeader}
           {result.initialNotAggregatedReason ? (
-            <Box marginTop={1}>
-              <Text color="yellow" wrap="wrap">
+            <Box marginTop={1} flexDirection="column">
+              <Alert variant="warning">
                 The initial cohort of all selected isolates was never aggregated. The first decision explains why:{' '}
                 {sanitizeTerminalText(result.initialNotAggregatedReason)}
-              </Text>
+              </Alert>
             </Box>
           ) : null}
           <Sections sections={overviewSections(result)} />
