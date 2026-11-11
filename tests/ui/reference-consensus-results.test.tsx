@@ -430,7 +430,7 @@ test('lists the reviewable loci of the selected cohort, filters them, and shows 
     assert.doesNotMatch(frame, /chr1:2,222/);
 
     await select(/chr1:2,222/, 'f');
-    frame = await select(/chr1:3,333/, 'f', ARROW_DOWN, ARROW_DOWN);
+    frame = await select(/chr1:3,333/, 'f', ARROW_DOWN);
     // Every unresolved locus: the tie and the one without a majority.
     await select(/chr1:2,222/, 'f', ARROW_DOWN);
 

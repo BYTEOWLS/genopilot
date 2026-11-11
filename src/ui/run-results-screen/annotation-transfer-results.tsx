@@ -55,21 +55,11 @@ function identitySummary(
   return `${String(value.count)} transcript models; min ${(value.minimum! * 100).toFixed(1)}%, mean ${(value.mean! * 100).toFixed(1)}%, max ${(value.maximum! * 100).toFixed(1)}%`;
 }
 
-function resultPathItem(
-    id: string,
-    label: string,
-    value: ResultPath & { recordedAvailable?: boolean },
-): SectionListItem {
-  const availability = value.available ? '' : ' (missing)';
-  const recordedAvailability = value.recordedAvailable === undefined || value.recordedAvailable === value.available
-    ? ''
-    : value.recordedAvailable
-      ? ' (available when summarized)'
-      : ' (unavailable when summarized; available now)';
+function resultPathItem(id: string, label: string, value: ResultPath): SectionListItem {
   return {
     id,
     label,
-    value: `${sanitizeTerminalText(value.path)}${availability}${recordedAvailability}`,
+    value: `${sanitizeTerminalText(value.path)}${value.available ? '' : ' (missing)'}`,
     color: value.available ? undefined : 'yellow',
   };
 }
@@ -77,7 +67,7 @@ function resultPathItem(
 function pathItems(
     idPrefix: string,
     labels: Record<string, string>,
-    paths: Record<string, (ResultPath & { recordedAvailable?: boolean }) | undefined>,
+    paths: Record<string, ResultPath | undefined>,
 ): SectionListItem[] {
   return Object.entries(labels).flatMap(([key, label]) => {
     const value = paths[key];

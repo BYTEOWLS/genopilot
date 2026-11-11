@@ -6,6 +6,10 @@ import {Box, Text, useInput} from 'ink';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 import {Page} from './page.js';
+import {SelectableList} from './selectable-list.js';
+
+/** Lines of the entry list, including its position line. */
+const listHeight = 13;
 
 export type DirectoryReader = (path: string) => Promise<Dirent[]>;
 
@@ -104,11 +108,7 @@ export function PathBrowser({
       if (rowCount === 0) {
         return;
       }
-      if (key.upArrow) {
-        setSelectedIndex(index => (index - 1 + rowCount) % rowCount);
-      } else if (key.downArrow) {
-        setSelectedIndex(index => (index + 1) % rowCount);
-      } else if (key.return || key.rightArrow) {
+      if (key.return || key.rightArrow) {
         if (selectFolder && selectedIndex === 0) {
           if (key.return) {
             onSelect(directory);
@@ -131,16 +131,14 @@ export function PathBrowser({
   );
 
   const rowCount = browser.state === 'ready' ? browser.entries.length + leadingRows : 0;
-  const visibleStart = Math.max(0, Math.min(selectedIndex - 5, rowCount - 12));
-  const visibleRows = Array.from({length: Math.max(0, Math.min(12, rowCount - visibleStart))}, (_, offset) => visibleStart + offset);
 
   return (
     <Page
       title={title ?? (selectFolder ? 'Select a folder' : 'Select a file')}
       description={[intro, sanitizeTerminalText(directory)].filter(Boolean).join('\n')}
       shortcuts={selectFolder
-        ? ['↑/↓ — Select', '→/Enter — Open folder', 'Enter on [ Use this folder ] — Choose', '← — Parent']
-        : ['↑/↓ — Select', '→ — Open folder', 'Enter — Choose', '← — Parent']}
+        ? ['→/Enter — Open folder', 'Enter on [ Use this folder ] — Choose', '← — Parent']
+        : ['→ — Open folder', 'Enter — Choose', '← — Parent']}
       back="Cancel"
     >
       <Box flexDirection="column">
@@ -154,32 +152,31 @@ export function PathBrowser({
         {browser.state === 'ready' && browser.entries.length === 0 ? (
           <Text>This directory is empty.</Text>
         ) : null}
-        {browser.state === 'ready'
-          ? visibleRows.map(index => {
-              const selected = index === selectedIndex;
+        {browser.state === 'ready' ? (
+          <SelectableList
+            count={rowCount}
+            selectedIndex={selectedIndex}
+            onSelect={setSelectedIndex}
+            active={inputActive}
+            height={listHeight}
+            noun="entries"
+            renderItem={(index, selected) => {
               if (selectFolder && index === 0) {
                 return (
-                  <Text key="use-this-folder" color={selected ? 'cyan' : undefined}>
+                  <Text color={selected ? 'cyan' : undefined} wrap="truncate">
                     {selected ? '›' : ' '} [ Use this folder ]
                   </Text>
                 );
               }
-              const entry = browser.entries[index - leadingRows];
-              if (!entry) {
-                return null;
-              }
+              const entry = browser.entries[index - leadingRows]!;
               return (
-                <Text key={entry.name} color={selected ? 'cyan' : mutedColor} dimColor={selectFolder && !entry.isDirectory()}>
+                <Text color={selected ? 'cyan' : mutedColor} dimColor={selectFolder && !entry.isDirectory()} wrap="truncate">
                   {selected ? '›' : ' '} {sanitizeTerminalText(entry.name)}
                   {entry.isDirectory() ? '/' : ''}
                 </Text>
               );
-            })
-          : null}
-        {rowCount > 12 ? (
-          <Text color={mutedColor}>
-            {selectedIndex + 1} of {rowCount}
-          </Text>
+            }}
+          />
         ) : null}
       </Box>
     </Page>

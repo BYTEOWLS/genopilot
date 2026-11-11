@@ -36,12 +36,13 @@ import {
   filteredSites,
   initialConsensusView,
   ReferenceConsensusResults,
-  selectableTableHeaderLines,
+  type ConsensusListField,
   type ConsensusView,
   type SitesState,
 } from './reference-consensus-results.js';
 import {CohortReviewScreen} from './cohort-review.js';
-import {Page} from '../components/page.js';
+import {Page, type Shortcut} from '../components/page.js';
+import {isListKey, selectableTableHeaderLines} from '../components/selectable-list.js';
 import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 import {Markdown} from '../components/markdown.js';
 import {mutedColor} from '../theme.js';
@@ -65,6 +66,8 @@ import {useTransferGenomeViews} from './transfer-genome-views.js';
 import {useProteinReview} from './protein-review.js';
 import {readReviewGenes as defaultReadReviewGenes} from '../../workflows/annotation-transfer/proteins.js';
 import {cohortConsensusView, consensusIsolateView, consensusSitesView, siteItemId} from '../../workflows/reference-consensus/views.js';
+
+type ListKey = {upArrow: boolean; downArrow: boolean; pageUp: boolean; pageDown: boolean; return: boolean; escape: boolean};
 
 /** Builds a spec summary of machine containing CPUs, memory, platform and architecture */
 function machineSummary(machine: MachineDetails): string {
@@ -321,7 +324,7 @@ export function RunResultsScreen({
   /** Handles a key of the Sites tab; false when the key is the shell's to handle. */
   const sitesKey = (
     input: string,
-    key: {upArrow: boolean; downArrow: boolean; return: boolean; escape: boolean},
+    key: ListKey,
     current: ConsensusView,
   ): boolean => {
     if (current.siteDetail) {
@@ -339,8 +342,8 @@ export function RunResultsScreen({
     const listed = sites?.state === 'ready' && sites.cohortId === sitesCohortId
       ? filteredSites(sites.sites, current.siteFilter).length
       : 0;
-    if (listed > 0 && (key.upArrow || key.downArrow)) {
-      setConsensusView({...current, siteIndex: Math.max(0, Math.min(listed - 1, current.siteIndex + (key.upArrow ? -1 : 1)))});
+    // The site list moves its selection itself; the shell must not also scroll.
+    if (listed > 0 && isListKey(key)) {
       return true;
     }
     if (listed > 0 && key.return) {
@@ -354,7 +357,7 @@ export function RunResultsScreen({
   /** Handles a key of the consensus tabs; false when the key is the shell's to handle. */
   const consensusKey = (
     input: string,
-    key: {upArrow: boolean; downArrow: boolean; return: boolean; escape: boolean},
+    key: ListKey,
   ): boolean => {
     if (!consensus || !consensusView) {
       return false;
@@ -372,25 +375,27 @@ export function RunResultsScreen({
       setMode({kind: 'rerun', iteration: selectedCohort.iteration});
       return true;
     }
-    const listed = tab === 'isolates' && !isolateDetail ? consensus.isolates.length
-      : tab === 'cohorts' ? consensus.cohorts.length
-        : 0;
-    if (listed > 0 && (key.upArrow || key.downArrow)) {
-      const field = tab === 'isolates' ? 'isolateIndex' : 'cohortIndex';
-      const index = Math.max(0, Math.min(listed - 1, consensusView[field] + (key.upArrow ? -1 : 1)));
+    const isolatesListed = tab === 'isolates' && !isolateDetail && consensus.isolates.length > 0;
+    // The isolate list moves its selection itself; the shell must not also scroll.
+    if (isolatesListed && isListKey(key)) {
+      return true;
+    }
+    // The Iterations table shares its tab with the selected iteration's details, which the page
+    // keys scroll, so only the arrows move its selection.
+    if (tab === 'cohorts' && consensus.cohorts.length > 0 && (key.upArrow || key.downArrow)) {
+      const index = Math.max(0, Math.min(consensus.cohorts.length - 1, consensusView.cohortIndex + (key.upArrow ? -1 : 1)));
       // The Sites tab follows the selected cohort, so its list starts over with another one.
-      setConsensusView({...consensusView, [field]: index, ...(field === 'cohortIndex' ? {siteIndex: 0, siteDetail: false} : {})});
+      setConsensusView({...consensusView, cohortIndex: index, siteIndex: 0, siteDetail: false});
       revealRow(index);
       return true;
     }
-    if (tab === 'isolates' && !isolateDetail && key.return && listed > 0) {
+    if (isolatesListed && key.return) {
       setConsensusView({...consensusView, isolateDetail: true});
       setScrollOffsets(current => ({...current, results: 0}));
       return true;
     }
     if (tab === 'isolates' && isolateDetail && key.escape) {
       setConsensusView({...consensusView, isolateDetail: false});
-      revealRow(consensusView.isolateIndex);
       return true;
     }
     return false;
@@ -655,9 +660,13 @@ export function RunResultsScreen({
     );
   }
 
-  const listTab = consensusView && (consensusView.tab === 'cohorts' ||
-    (consensusView.tab === 'isolates' && !consensusView.isolateDetail) ||
-    (consensusView.tab === 'sites' && !consensusView.siteDetail));
+  // A shown selectable list takes the arrow and page keys and adds its own shortcuts.
+  const listShown = proteinReview.listing || (consensusView?.tab === 'isolates' && !consensusView.isolateDetail) ||
+    (consensusView?.tab === 'sites' && !consensusView.siteDetail);
+  const listInputActive = inputActive && mode.kind === 'results' && !transferViews.choosing;
+  const selectConsensusItem = (field: ConsensusListField, index: number): void => {
+    setConsensusView(current => current ? {...current, [field]: index} : current);
+  };
   // The browser shows the citation on its tab and the selected genome elsewhere.
   let browserTarget = genomeSourceAvailable;
   if (citationTab) {
@@ -671,18 +680,22 @@ export function RunResultsScreen({
   } else if (browserTarget && browser && !browser.browserAvailable) {
     browserShortcut = browserUnavailableShortcut;
   }
-  const shortcuts = transferViews.choosing ? transferViews.shortcuts : [
-    consensus || annotationTransfer ? 'Tab/←/→ — Switch tab' : '',
-    listTab ? '↑/↓ — Select' : maximumScrollOffset > 0 && !proteinReview.listing ? '↑/↓ — Scroll' : '',
+  const tab = consensusView?.tab;
+  const isolateList = tab === 'isolates' && !consensusView?.isolateDetail;
+  const siteList = tab === 'sites' && !consensusView?.siteDetail;
+  const scrolls = maximumScrollOffset > 0 && !listShown;
+  const pendingCohort = tab === 'cohorts' && !!consensusView && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending';
+  const shortcuts: readonly Shortcut[] = transferViews.choosing ? transferViews.shortcuts : [
+    (consensus || annotationTransfer) && 'Tab/←/→ — Switch tab',
+    tab === 'cohorts' && '↑/↓ — Select',
+    tab !== 'cohorts' && scrolls && '↑/↓ — Scroll',
     ...proteinReview.shortcuts,
-    maximumScrollOffset > 0 ? 'PageUp/PageDown (or fn + ↑/↓) — Page' : '',
-    consensusView?.tab === 'isolates' && !consensusView.isolateDetail ? 'Enter — Isolate details' : '',
-    consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'f — Filter' : '',
-    consensusView?.tab === 'sites' && !consensusView.siteDetail ? 'Enter — Locus details' : '',
-    cohortRerun && consensus ? 'r — Review' : '',
-    cohortRerun && consensusView?.tab === 'cohorts' && consensus?.cohorts[consensusView.cohortIndex]?.state === 'pending'
-      ? 'c — Continue iteration'
-      : '',
+    scrolls && 'PageUp/PageDown (or fn + ↑/↓) — Page',
+    isolateList && 'Enter — Isolate details',
+    siteList && 'f — Filter',
+    siteList && 'Enter — Locus details',
+    cohortRerun && consensus && 'r — Review',
+    cohortRerun && pendingCohort && 'c — Continue iteration',
     browserShortcut,
     ...(citationTab ? [] : transferViews.shortcuts),
     '? — Help',
@@ -748,6 +761,8 @@ export function RunResultsScreen({
               citation={citationSection}
               sites={sites}
               visibleRows={visibleRows}
+              inputActive={listInputActive}
+              onSelect={selectConsensusItem}
             />
           ) : annotationTransfer ? (
             <AnnotationTransferResults
@@ -758,7 +773,7 @@ export function RunResultsScreen({
               filesFooter={runFilesSection}
               runDetails={metadataSection}
               citation={citationSection}
-              proteins={proteinReview.element(visibleRows)}
+              proteins={proteinReview.element(visibleRows, listInputActive)}
             />
           ) : <>
           {metadataSection}

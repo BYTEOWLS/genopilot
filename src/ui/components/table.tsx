@@ -11,6 +11,15 @@ function cellText(cell: TableCell | undefined): string {
   return cell === undefined ? '' : typeof cell === 'string' ? cell : inlineText(cell);
 }
 
+/** The longest text of a column; a loop rather than a spread, so long lists stay within the stack. */
+function columnWidth(title: TableCell | undefined, rows: readonly (readonly TableCell[])[], column: number): number {
+  let width = cellText(title).length;
+  for (const row of rows) {
+    width = Math.max(width, cellText(row[column]).length);
+  }
+  return width;
+}
+
 /** Widest a leading column may grow, so the last column keeps room to wrap. */
 const maximumLeadingColumnWidth = 30;
 
@@ -26,30 +35,33 @@ const minimumLastColumnWidth = 30;
  * wrapped, and the selected one carries the `›` marker and bold text, so it is visible without color.
  *
  * `align` sets a column's alignment, such as `right` for numbers; columns are left-aligned by default.
+ * `widthRows` sizes the columns from other rows than those shown, such as all rows of a paged list.
  */
 export function Table({
   header,
   rows,
   selectedRow,
   align = [],
+  widthRows = rows,
 }: {
   header: readonly TableCell[];
   rows: readonly (readonly TableCell[])[];
   selectedRow?: number;
   align?: readonly ('left' | 'right')[];
+  widthRows?: readonly (readonly TableCell[])[];
 }): React.JSX.Element {
   const selectable = selectedRow !== undefined;
   const widths = header.slice(0, -1).map((title, column) =>
     Math.min(
       maximumLeadingColumnWidth,
-      Math.max(cellText(title).length, ...rows.map(row => cellText(row[column]).length)) + 2,
+      columnWidth(title, widthRows, column) + 2,
     ));
   // When a wrapping table does not fit, its leading columns give up width in proportion to their
   // size, so the last column keeps room to wrap instead of shrinking to a single character.
   const lastColumn = header.length - 1;
   const lastColumnBasis = Math.min(
     minimumLastColumnWidth,
-    Math.max(cellText(header[lastColumn]).length, ...rows.map(row => cellText(row[lastColumn]).length)),
+    columnWidth(header[lastColumn], widthRows, lastColumn),
   );
   const renderRow = (cells: readonly TableCell[], bold: boolean, marker = ''): React.JSX.Element[] => header.map((_title, column) => {
     const cell = cells[column] ?? '';

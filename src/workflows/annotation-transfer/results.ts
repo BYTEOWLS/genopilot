@@ -70,7 +70,7 @@ export type AnnotationTransferResult = {
   /** Persisted one-line explanations keyed by metric and detail-column name. */
   definitions: {metrics: Record<string, string>; detailColumns: Record<string, string>};
   reports: Record<string, ResultPath>;
-  evidence: Record<string, ResultPath & {recordedAvailable: boolean}>;
+  evidence: Record<string, ResultPath>;
   metricsPath: ResultPath;
 };
 
@@ -493,7 +493,7 @@ export async function readAnnotationTransferResult(
   }
 
   const evidenceSource = record(summary.source_evidence, '$.source_evidence', issues);
-  const evidence: Record<string, ResultPath & {recordedAvailable: boolean}> = {};
+  const evidence: Record<string, ResultPath> = {};
   const evidenceKeys = ['raw_gff3', 'lifton_diagnostics', 'run_manifest', 'completeness_by_feature_type', 'mapped_features', 'mapped_transcripts', 'unmapped_features', 'extra_copy_features', 'selected_feature_types'];
   if (evidenceSource) {
     fields(evidenceSource, evidenceKeys, '$.source_evidence', issues);
@@ -508,7 +508,7 @@ export async function readAnnotationTransferResult(
       }
       const parsed = safeRelativePath(entry.path, `$.source_evidence.${key}.path`, runDirectory, issues);
       if (parsed && typeof entry.available === 'boolean') {
-        evidence[key] = {...parsed, recordedAvailable: entry.available};
+        evidence[key] = parsed;
       }
     }
   }
@@ -535,10 +535,7 @@ export async function readAnnotationTransferResult(
   }
 
   const checkedReports = Object.fromEntries(await Promise.all(Object.entries(reports).map(async ([key, path]) => [key, await checkPath(path)])));
-  const checkedEvidence = Object.fromEntries(await Promise.all(Object.entries(evidence).map(async ([key, path]) => {
-    const checked = await checkPath(path);
-    return [key, {...checked, recordedAvailable: path.recordedAvailable}];
-  })));
+  const checkedEvidence = Object.fromEntries(await Promise.all(Object.entries(evidence).map(async ([key, path]) => [key, await checkPath(path)])));
   return {
     generatedAt, run: runModel, status: summary.status as AnnotationTransferStatus,
     statusExplanation, transfer, validation, definitions, proteins,

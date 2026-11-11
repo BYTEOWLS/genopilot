@@ -33,8 +33,8 @@ The tooling page shows GenoPilot's version. Development builds also show the Git
 
 | Key | Action |
 |---|---|
-| ↑/↓ | Select a row, move between form fields, or scroll |
-| PageUp/PageDown (or fn + ↑/↓) | Scroll by a page |
+| ↑/↓ | Select a row, move between form fields, or scroll. In most lists the selection wraps from the last row to the first. |
+| PageUp/PageDown (or fn + ↑/↓) | Scroll by a page, or move a list's selection by a page |
 | Space, ←/→ | Change the selected choice in a form |
 | Ctrl+A | Select all compatible read sets matching the search in the chooser. Press again to deselect them. |
 | Tab, Shift+Tab | Switch tabs, or move between form fields |

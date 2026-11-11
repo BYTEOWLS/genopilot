@@ -17,10 +17,11 @@ import {
 } from '../../workflows/annotation-transfer/proteins.js';
 import {ParameterList, parameterLabelWidth} from '../components/parameter-list.js';
 import {Table} from '../components/table.js';
+import type {Shortcut} from '../components/page.js';
 import {Section} from '../components/section.js';
+import {isListKey, SelectableTable} from '../components/selectable-list.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
-import {selectableTableHeaderLines} from './reference-consensus-results.js';
 
 const filterLabels: Record<ProteinFilter, string> = {all: 'all listed genes', ...reasonLabels};
 
@@ -30,7 +31,7 @@ export type ProteinsState =
   | {state: 'ready'; genes: ReviewGene[]}
   | {state: 'failed'; message: string};
 
-type Key = {upArrow: boolean; downArrow: boolean; return: boolean; escape: boolean};
+type Key = {upArrow: boolean; downArrow: boolean; pageUp: boolean; pageDown: boolean; return: boolean; escape: boolean};
 
 const columns = ['Reference gene', 'Target position', 'Category', 'Identity', 'Reasons'];
 
@@ -117,8 +118,8 @@ export function useProteinReview({result, active, readGenes = readReviewGenes}: 
       setIndex(0);
       return true;
     }
-    if (listed.length > 0 && (key.upArrow || key.downArrow)) {
-      setIndex(Math.max(0, Math.min(listed.length - 1, index + (key.upArrow ? -1 : 1))));
+    // The gene list moves its selection itself; the screen must not also scroll.
+    if (genes?.state === 'ready' && isListKey(key)) {
       return true;
     }
     if (listed.length > 0 && key.return) {
@@ -129,7 +130,8 @@ export function useProteinReview({result, active, readGenes = readReviewGenes}: 
     return false;
   };
 
-  const element = (visibleRows: number): React.JSX.Element => {
+  /** The tab's content in `visibleRows` lines; the gene list takes its keys while `inputActive`. */
+  const element = (visibleRows: number, inputActive: boolean): React.JSX.Element => {
     if (!result) {
       return <></>;
     }
@@ -153,9 +155,6 @@ export function useProteinReview({result, active, readGenes = readReviewGenes}: 
     }
     const categories = proteinCategories.map(category => `${categoryLabels[category]} ${String(proteins.genesByCategory[category])}`);
     const counts = proteinFilters.map(item => `${filterLabels[item]} ${String(item === 'all' ? genes.genes.length : proteins.genesByReviewReason[item])}`);
-    const rowsShown = Math.max(1, visibleRows - headerLines - selectableTableHeaderLines - 1);
-    const first = Math.max(0, Math.min(index - Math.floor(rowsShown / 2), listed.length - rowsShown));
-    const window = listed.slice(first, first + rowsShown);
     return (
       <Box flexDirection="column">
         <Table header={['Summary', 'Genes', 'Share', 'Meaning']} rows={summaryTableRows(proteins)} align={['left', 'right', 'right']} />
@@ -174,34 +173,32 @@ export function useProteinReview({result, active, readGenes = readReviewGenes}: 
           {listed.length === 0 ? (
             <Text color={mutedColor}>No gene is listed with this reason.</Text>
           ) : (
-            <>
-              <Table
-                header={columns}
-                rows={window.map(gene => [
-                  sanitizeTerminalText(gene.referenceId),
-                  sanitizeTerminalText(geneLocus(gene)),
-                  categoryLabels[gene.category],
-                  identityText(gene),
-                  gene.reasons.map(reason => reasonLabels[reason]).join(', '),
-                ])}
-                selectedRow={Math.min(index, listed.length - 1) - first}
-                align={['left', 'left', 'left', 'right']}
-              />
-              {listed.length > window.length ? (
-                <Text color={mutedColor}>{'  '}genes {String(first + 1)}–{String(first + window.length)} of {String(listed.length)}</Text>
-              ) : null}
-            </>
+            <SelectableTable
+              header={columns}
+              rows={listed.map(gene => [
+                sanitizeTerminalText(gene.referenceId),
+                sanitizeTerminalText(geneLocus(gene)),
+                categoryLabels[gene.category],
+                identityText(gene),
+                gene.reasons.map(reason => reasonLabels[reason]).join(', '),
+              ])}
+              selectedIndex={index}
+              onSelect={setIndex}
+              active={inputActive && active}
+              height={Math.max(1, visibleRows - headerLines)}
+              noun="genes"
+              align={['left', 'left', 'left', 'right']}
+            />
           )}
         </Box>
       </Box>
     );
   };
 
-  const ready = active && genes?.state === 'ready';
-  const shortcuts = [
-    ready && !detail && listed.length > 0 ? '↑/↓ — Select' : '',
-    ready && !detail ? 'f — Filter' : '',
-    ready && !detail && listed.length > 0 ? 'Enter — Gene details' : '',
+  const listing = active && genes?.state === 'ready' && !detail;
+  const shortcuts: Shortcut[] = [
+    listing && 'f — Filter',
+    listing && listed.length > 0 && 'Enter — Gene details',
   ];
   return {
     handleInput,
@@ -212,7 +209,7 @@ export function useProteinReview({result, active, readGenes = readReviewGenes}: 
     select,
     filter,
     /** Whether the tab shows a list the arrow keys move through, rather than scrolled content. */
-    listing: ready && !detail,
+    listing,
     shortcuts,
     back: active && detail ? 'Back to genes' : undefined,
     state: genes,

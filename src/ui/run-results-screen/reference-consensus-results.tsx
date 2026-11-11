@@ -23,6 +23,7 @@ import {ParameterList, parameterLabelWidth, type ParameterRow} from '../componen
 import type {TabDefinition} from '../components/tabs.js';
 import {Table} from '../components/table.js';
 import {Section} from '../components/section.js';
+import {SelectableTable} from '../components/selectable-list.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {timingRows} from '../run-timing-rows.js';
 import {mutedColor} from '../theme.js';
@@ -81,9 +82,6 @@ export function cohortSiteTables(cohort: CohortResult | undefined): {consensusSi
   }
   return {consensusSitesPath: consensusSites.absolutePath, supportSitesPath: supportSites.absolutePath};
 }
-
-/** Lines above the first row of a selectable table: its header and the header's rule. */
-export const selectableTableHeaderLines = 2;
 
 export type RowSection = {id: string; title: string; rows: ParameterRow[]};
 
@@ -492,18 +490,25 @@ export function siteVoterRows(site: CohortSite, voters: readonly string[], resul
 /** Lines of the Sites tab above its table: the cohort and filter line with its margin. */
 const sitesHeaderLines = 2;
 
+/** Which selection of the view a selectable list moves. */
+export type ConsensusListField = 'isolateIndex' | 'siteIndex';
+
 function SitesTab({
   result,
   cohort,
   sites,
   view,
   visibleRows,
+  inputActive,
+  onSelect,
 }: {
   result: ReferenceConsensusResult;
   cohort: CohortResult | undefined;
   sites: SitesState | undefined;
   view: ConsensusView;
   visibleRows: number;
+  inputActive: boolean;
+  onSelect: (field: ConsensusListField, index: number) => void;
 }): React.JSX.Element {
   if (!cohort || !cohortSiteTables(cohort)) {
     return (
@@ -539,9 +544,6 @@ function SitesTab({
     );
   }
   const counts = siteFilters.map(filter => `${siteFilterLabels[filter]} ${String(filteredSites(sites.sites, filter).length)}`);
-  const rowsShown = Math.max(1, visibleRows - sitesHeaderLines - selectableTableHeaderLines - 1);
-  const first = Math.max(0, Math.min(view.siteIndex - Math.floor(rowsShown / 2), shown.length - rowsShown));
-  const window = shown.slice(first, first + rowsShown);
   return (
     <Box flexDirection="column">
       <Text wrap="truncate">
@@ -552,16 +554,15 @@ function SitesTab({
         {shown.length === 0 ? (
           <Text color={mutedColor}>No locus of this iteration is one of the {siteFilterLabels[view.siteFilter]}.</Text>
         ) : (
-          <>
-            <Table
-              header={siteColumns.map(column => column.label)}
-              rows={siteTableRows(window)}
-              selectedRow={Math.min(view.siteIndex, shown.length - 1) - first}
-            />
-            {shown.length > window.length ? (
-              <Text color={mutedColor}>{'  '}loci {String(first + 1)}–{String(first + window.length)} of {String(shown.length)}</Text>
-            ) : null}
-          </>
+          <SelectableTable
+            header={siteColumns.map(column => column.label)}
+            rows={siteTableRows(shown)}
+            selectedIndex={view.siteIndex}
+            onSelect={index => onSelect('siteIndex', index)}
+            active={inputActive}
+            height={Math.max(1, visibleRows - sitesHeaderLines)}
+            noun="loci"
+          />
         )}
       </Box>
     </Box>
@@ -614,8 +615,9 @@ function Comparison({result, cohort}: {result: ReferenceConsensusResult; cohort:
 }
 
 /**
- * The tab content of a reference-consensus result. Selectable tables come first in their tab, so
- * the shell can keep the selected row in view from its index alone.
+ * The tab content of a reference-consensus result. The isolate and site lists fit `visibleRows`;
+ * the Iterations table comes first in its tab, so the shell keeps its selected row in view from
+ * its index alone.
  */
 export function ReferenceConsensusResults({
   result,
@@ -627,13 +629,19 @@ export function ReferenceConsensusResults({
   citation,
   sites,
   visibleRows = 20,
+  inputActive = false,
+  onSelect = () => {},
 }: {
   result: ReferenceConsensusResult;
   view: ConsensusView;
   formatDateTime: DateFormatter;
+  /** Whether the isolate and site lists take their keys. */
+  inputActive?: boolean;
+  /** Moves the selection of the isolate or site list. */
+  onSelect?: (field: ConsensusListField, index: number) => void;
   /** The loci of the cohort selected on the Iterations tab, once the Sites tab asked for them. */
   sites?: SitesState;
-  /** Rows the tab content may use; the Sites tab fits its list into them instead of scrolling. */
+  /** Rows the tab content may use; the isolate and site lists fit into them instead of scrolling. */
   visibleRows?: number;
   /** The execution outcome and run status, shown above the overview. */
   overviewHeader: React.ReactNode;
@@ -672,13 +680,15 @@ export function ReferenceConsensusResults({
         );
       }
       return (
-        <Box flexDirection="column">
-          <Table
-            header={isolateColumns.map(column => column.label)}
-            rows={isolateTableRows(result)}
-            selectedRow={view.isolateIndex}
-          />
-        </Box>
+        <SelectableTable
+          header={isolateColumns.map(column => column.label)}
+          rows={isolateTableRows(result)}
+          selectedIndex={view.isolateIndex}
+          onSelect={index => onSelect('isolateIndex', index)}
+          active={inputActive}
+          height={visibleRows}
+          noun="isolates"
+        />
       );
     }
     case 'cohorts': {
@@ -708,6 +718,8 @@ export function ReferenceConsensusResults({
           sites={sites}
           view={view}
           visibleRows={visibleRows}
+          inputActive={inputActive}
+          onSelect={onSelect}
         />
       );
     case 'files':

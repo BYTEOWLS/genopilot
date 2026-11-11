@@ -15,6 +15,7 @@ import {mutedColor} from '../theme.js';
 import {AccessionForm, localFields, withLocalFields} from './accession-form.js';
 import {Page} from '../components/page.js';
 import {Section} from '../components/section.js';
+import {SelectableList} from '../components/selectable-list.js';
 import type {AccessionsPageFrame} from './screen.js';
 import type {AccessionCatalogUpdater} from '../../accessions/registration.js';
 import {accessionGenomeView} from '../../accessions/views.js';
@@ -26,7 +27,8 @@ type View =
   | {kind: 'form'; editing?: string}
   | {kind: 'confirm-remove'; accession: string};
 
-const visibleEntryCount = 8;
+/** Lines of the accession list, including its position line. */
+const listHeight = 9;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -193,11 +195,6 @@ export function AccessionsTab({
       }
       if (input === 'v') {
         openGenome(selectedEntry);
-      } else if (key.upArrow || key.downArrow) {
-        const index = entries.indexOf(selectedEntry);
-        const offset = key.upArrow ? -1 : 1;
-        setSelected(entries[(index + offset + entries.length) % entries.length]?.accession);
-        setMessage(undefined);
       } else if (key.return) {
         setMessage(undefined);
         setView({kind: 'form', editing: selectedEntry.accession});
@@ -235,10 +232,6 @@ export function AccessionsTab({
   }
 
   const selectedIndex = selectedEntry ? entries.indexOf(selectedEntry) : -1;
-  const visibleStart = Math.max(
-    0,
-    Math.min(selectedIndex - Math.floor(visibleEntryCount / 2), entries.length - visibleEntryCount),
-  );
   const damagedCopies = scan.copies.filter(copy => copy.state !== 'verified');
   const removalTargets = view.kind === 'confirm-remove'
     ? scan.copies.filter(copy => copy.accession === view.accession)
@@ -256,7 +249,7 @@ export function AccessionsTab({
       description={`Catalog: ${sanitizeTerminalText(catalogPath)}`}
       shortcuts={view.kind === 'confirm-remove'
         ? ['y — Remove']
-        : ['↑/↓ — Select', 'Enter — Show and edit', 'n — Add', 'm — Refresh metadata', 'd — Remove', 'r — Rescan caches', browserShortcut,
+        : ['Enter — Show and edit', 'n — Add', 'm — Refresh metadata', 'd — Remove', 'r — Rescan caches', browserShortcut,
             'Tab/←/→ — Tab']}
       back={view.kind === 'confirm-remove' ? 'Keep' : 'Back'}
     >
@@ -264,21 +257,29 @@ export function AccessionsTab({
       {entries.length === 0 ? (
         <Text wrap="wrap">No accessions yet. Press n to add one; verified caches are added automatically.</Text>
       ) : null}
-      {entries.slice(visibleStart, visibleStart + visibleEntryCount).map(entry => {
-        const isSelected = entry.accession === selectedEntry?.accession;
-        return (
-          <Text key={entry.accession} color={isSelected ? 'cyan' : undefined} wrap="truncate">
-            {isSelected ? '› ' : '  '}
-            {sanitizeTerminalText(accessionDisplayName(entry))}
-            {entry.name ? <Text color={mutedColor}> ({entry.accession})</Text> : null}
-            {' · '}{cacheStatus(entry, scan)}
-            {' · '}{sanitizeTerminalText(accessionFactsSummary(entry))}
-          </Text>
-        );
-      })}
-      {entries.length > visibleEntryCount ? (
-        <Text color={mutedColor}>{selectedIndex + 1} of {entries.length}</Text>
-      ) : null}
+      <SelectableList
+        count={entries.length}
+        selectedIndex={selectedIndex}
+        onSelect={index => {
+          setSelected(entries[index]?.accession);
+          setMessage(undefined);
+        }}
+        active={inputActive && busy === undefined && view.kind === 'list'}
+        height={listHeight}
+        noun="accessions"
+        renderItem={(index, isSelected) => {
+          const entry = entries[index]!;
+          return (
+            <Text color={isSelected ? 'cyan' : undefined} wrap="truncate">
+              {isSelected ? '› ' : '  '}
+              {sanitizeTerminalText(accessionDisplayName(entry))}
+              {entry.name ? <Text color={mutedColor}> ({entry.accession})</Text> : null}
+              {' · '}{cacheStatus(entry, scan)}
+              {' · '}{sanitizeTerminalText(accessionFactsSummary(entry))}
+            </Text>
+          );
+        }}
+      />
 
       {damagedCopies.length > 0 && view.kind === 'list' ? (
         <Section title="Damaged caches, not trusted">

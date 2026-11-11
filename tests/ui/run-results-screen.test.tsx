@@ -139,15 +139,15 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
         validation: path('validation.json', false),
       },
       evidence: {
-        raw_gff3: {...path('annotation/lifton.raw.gff3'), recordedAvailable: true},
-        lifton_diagnostics: {...path('annotation/lifton_output'), recordedAvailable: true},
-        run_manifest: {...path('annotation/lifton_output/run_manifest.json'), recordedAvailable: true},
-        completeness_by_feature_type: {...path('annotation/lifton_output/stats/completeness.txt'), recordedAvailable: true},
-        mapped_features: {...path('annotation/lifton_output/stats/mapped.txt'), recordedAvailable: true},
-        mapped_transcripts: {...path('annotation/lifton_output/stats/transcripts.txt'), recordedAvailable: true},
-        unmapped_features: {...path('annotation/lifton_output/stats/unmapped.txt'), recordedAvailable: true},
-        extra_copy_features: {...path('annotation/lifton_output/stats/copies.txt'), recordedAvailable: true},
-        selected_feature_types: {...path('annotation/lifton_output/types.txt'), recordedAvailable: true},
+        raw_gff3: {...path('annotation/lifton.raw.gff3')},
+        lifton_diagnostics: {...path('annotation/lifton_output')},
+        run_manifest: {...path('annotation/lifton_output/run_manifest.json')},
+        completeness_by_feature_type: {...path('annotation/lifton_output/stats/completeness.txt')},
+        mapped_features: {...path('annotation/lifton_output/stats/mapped.txt')},
+        mapped_transcripts: {...path('annotation/lifton_output/stats/transcripts.txt')},
+        unmapped_features: {...path('annotation/lifton_output/stats/unmapped.txt')},
+        extra_copy_features: {...path('annotation/lifton_output/stats/copies.txt')},
+        selected_feature_types: {...path('annotation/lifton_output/types.txt')},
       },
       metricsPath: path('metrics.json'),
     },
@@ -297,20 +297,6 @@ test('checks support and canonical metrics paths independently from generated re
       '/runs/result-42/results/metrics.json',
     ],
   );
-});
-
-test('distinguishes current evidence availability from availability at summary time', async () => {
-  const loaded = compatibleResult();
-  loaded.result.evidence.raw_gff3!.available = false;
-  loaded.result.evidence.mapped_features!.recordedAvailable = false;
-  const screen = renderScreen(loaded, {inputActive: true});
-  try {
-    const frame = (await tabFrames(screen, 5)).at(-1) ?? '';
-    assert.match(frame, /lifton\.raw\.gff3 \(missing\) \(available when summarized\)/);
-    assert.match(frame, /mapped\.txt \(unavailable when summarized; available now\)/);
-  } finally {
-    screen.unmount();
-  }
 });
 
 test('scrolls result content in a short terminal', async () => {
@@ -527,6 +513,20 @@ test('the Proteins tab lists the genes in review order and opens and closes a ge
     await pressKey(screen.input, ENTER);
     await screen.settle();
     assert.ok(screen.frame().includes('97.0%'), 'the arrow keys move the selection');
+
+    for (const [key, identity, reason] of [
+      [ARROW_DOWN, '60.0%', 'the arrow keys wrap around at the end'],
+      [PAGE_DOWN, '97.0%', 'the page keys move the selection'],
+    ] as const) {
+      await pressKey(screen.input, ESCAPE);
+      await screen.settle();
+      await pressKey(screen.input, key);
+      await screen.settle();
+      screen.output.clearOutput();
+      await pressKey(screen.input, ENTER);
+      await screen.settle();
+      assert.ok(screen.frame().includes(identity), reason);
+    }
   } finally {
     screen.unmount();
   }

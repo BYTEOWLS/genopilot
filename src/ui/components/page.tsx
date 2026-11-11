@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {createContext, useCallback, useContext, useEffect, useId, useState} from 'react';
 import {Box, Text} from 'ink';
 import {Alert} from '@inkjs/ui';
 import {useHomeSuspensionState} from '../home-navigation.js';
@@ -17,12 +17,34 @@ export type PageProps = {
   description?: string;
   /** Shown right under the title, before the description, such as a tab bar. */
   header?: React.ReactNode;
-  /** Screen-specific shortcuts; Esc and the home shortcut are always appended. */
+  /**
+   * Screen-specific shortcuts; components inside the page, such as a selectable list, add theirs
+   * first, and Esc and the home shortcut are always appended.
+   */
   shortcuts?: readonly Shortcut[];
   /** What Esc does here; false only while nothing may be left, such as a running workflow. */
   back?: string | false;
   children?: React.ReactNode;
 };
+
+type RegisterShortcuts = (id: string, shortcuts: readonly string[]) => void;
+
+const PageShortcutsContext = createContext<RegisterShortcuts | undefined>(undefined);
+
+/**
+ * Adds shortcuts of a component inside a `Page`, such as a selectable list's keys, to the page's
+ * shortcut line, ahead of the screen's own; empty or blank entries add nothing.
+ */
+export function usePageShortcuts(shortcuts: readonly Shortcut[]): void {
+  const register = useContext(PageShortcutsContext);
+  const id = useId();
+  const shown = shortcuts.filter((shortcut): shortcut is string => typeof shortcut === 'string' && shortcut.length > 0);
+  const key = shown.join('\n');
+  useEffect(() => {
+    register?.(id, shown);
+  }, [register, id, key]);
+  useEffect(() => () => register?.(id, []), [register, id]);
+}
 
 /** The home shortcut as it applies now: typed into a focused field, or waiting for running work. */
 function homeShortcut(suspension: ReturnType<typeof useHomeSuspensionState>): string | undefined {
@@ -51,32 +73,50 @@ export function Page({
 }: PageProps): React.JSX.Element {
   const suspension = useHomeSuspensionState();
   const browser = useBrowserView();
+  const [registered, setRegistered] = useState<ReadonlyMap<string, readonly string[]>>(new Map());
+  const register = useCallback<RegisterShortcuts>((id, values) => {
+    setRegistered(current => {
+      if (values.length === 0 && !current.has(id)) {
+        return current;
+      }
+      const next = new Map(current);
+      if (values.length === 0) {
+        next.delete(id);
+      } else {
+        next.set(id, values);
+      }
+      return next;
+    });
+  }, []);
   const line = [
+    ...[...registered.values()].flat(),
     ...shortcuts.filter((shortcut): shortcut is string => typeof shortcut === 'string' && shortcut.length > 0),
     back === false ? undefined : `Esc — ${back}`,
     homeShortcut(suspension),
   ].filter((shortcut): shortcut is string => shortcut !== undefined);
   return (
-    <Box flexDirection="column">
-      <Text wrap="truncate">
-        <Text bold underline>{sanitizeTerminalText(title)}</Text>
-        {detail ? <Text color={mutedColor}> · {sanitizeTerminalText(detail)}</Text> : null}
-      </Text>
-      {header ? <Box marginTop={1}>{header}</Box> : null}
-      {description ? (
-        <Box marginTop={header ? 1 : 0}>
-          <Text color={mutedColor} wrap="wrap">{description}</Text>
+    <PageShortcutsContext.Provider value={register}>
+      <Box flexDirection="column">
+        <Text wrap="truncate">
+          <Text bold underline>{sanitizeTerminalText(title)}</Text>
+          {detail ? <Text color={mutedColor}> · {sanitizeTerminalText(detail)}</Text> : null}
+        </Text>
+        {header ? <Box marginTop={1}>{header}</Box> : null}
+        {description ? (
+          <Box marginTop={header ? 1 : 0}>
+            <Text color={mutedColor} wrap="wrap">{description}</Text>
+          </Box>
+        ) : null}
+        <Box marginTop={1} flexDirection="column">
+          {children}
         </Box>
-      ) : null}
-      <Box marginTop={1} flexDirection="column">
-        {children}
+        {browser?.status ? <Alert variant="error">{sanitizeTerminalText(browser.status)}</Alert> : null}
+        <Box marginTop={1}>
+          {/* Non-breaking spaces inside each shortcut, so the line only wraps between shortcuts. */}
+          <Text color={mutedColor} wrap="wrap">{line.map(shortcut => shortcut.replaceAll(' ', '\u00a0')).join(' · ')}</Text>
+        </Box>
       </Box>
-      {browser?.status ? <Alert variant="error">{sanitizeTerminalText(browser.status)}</Alert> : null}
-      <Box marginTop={1}>
-        {/* Non-breaking spaces inside each shortcut, so the line only wraps between shortcuts. */}
-        <Text color={mutedColor} wrap="wrap">{line.map(shortcut => shortcut.replaceAll(' ', '\u00a0')).join(' · ')}</Text>
-      </Box>
-    </Box>
+    </PageShortcutsContext.Provider>
   );
 }
 

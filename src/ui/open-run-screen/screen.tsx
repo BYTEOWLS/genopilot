@@ -76,6 +76,74 @@ function RunStatus({run}: {run: DiscoveredRun}): React.JSX.Element {
   }
 }
 
+/** The deletion of a run as its card shows it: the question, the progress, or the failure. */
+function DeletionNotice({deletion, inputActive, onConfirm, onCancel}: {
+  deletion: DeletionState;
+  inputActive: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}): React.JSX.Element {
+  switch (deletion.state) {
+    case 'confirm':
+      return (
+        <Alert variant="warning">
+          Permanently delete this run and all its files? <ConfirmInput
+            isDisabled={!inputActive}
+            defaultChoice="cancel"
+            submitOnEnter={false}
+            onConfirm={onConfirm}
+            onCancel={onCancel}
+          />
+        </Alert>
+      );
+    case 'deleting':
+      return <Text>Deleting run…</Text>;
+    case 'failed':
+      return <Alert variant="error">Could not delete run: {sanitizeTerminalText(deletion.message)}</Alert>;
+  }
+}
+
+/** One run in the list: its name, description, dates, status, and any deletion in progress. */
+function RunCard({run, selected, deletion, inputActive, formatDateTime, onConfirmDeletion, onCancelDeletion}: {
+  run: DiscoveredRun;
+  selected: boolean;
+  deletion?: DeletionState;
+  inputActive: boolean;
+  formatDateTime: (value: string) => string;
+  onConfirmDeletion: () => void;
+  onCancelDeletion: () => void;
+}): React.JSX.Element {
+  const created = run.metadata.createdAt ? formatDateTime(run.metadata.createdAt) : 'Unavailable';
+  const duration = run.timing ? ` · Duration: ${formatDuration(run.timing.durationMs)}` : '';
+  const missing = run.missingLinkedPaths;
+  return (
+    <Box
+      borderStyle="round"
+      borderColor={selected ? 'cyan' : 'gray'}
+      flexDirection="column"
+      marginTop={1}
+      paddingX={1}
+    >
+      <Text bold color={selected ? 'cyan' : undefined}>
+        {selected ? '› ' : '  '}{sanitizeTerminalText(run.metadata.name ?? 'Unnamed run')}
+      </Text>
+      {run.metadata.description ? (
+        <Text wrap="truncate">Description: {sanitizeTerminalText(run.metadata.description)}</Text>
+      ) : null}
+      <Text>Created: {created}{duration}</Text>
+      <RunStatus run={run} />
+      {missing > 0 ? (
+        <Alert variant="warning">
+          {String(missing)} linked path{missing === 1 ? ' is' : 's are'} missing
+        </Alert>
+      ) : null}
+      {deletion ? (
+        <DeletionNotice deletion={deletion} inputActive={inputActive} onConfirm={onConfirmDeletion} onCancel={onCancelDeletion} />
+      ) : null}
+    </Box>
+  );
+}
+
 /** Selects and opens a persisted run without invoking Snakemake. */
 export function OpenRunScreen({
   currentDirectory,
@@ -258,71 +326,26 @@ export function OpenRunScreen({
       shortcuts={['↑/↓ — Select', 'Enter — Open results', 'd — Delete']}
       back="Back to workflows"
     >
-
-      {runState?.state === 'loading' && (
-          <Text>Discovering runs…</Text>
-      )}
-      {runState?.state === 'failed' && (
-        <Alert variant="error">{sanitizeTerminalText(runState.message)}</Alert>
-      )}
-      {runState?.state === 'ready' && runState.runs.length === 0 && (
+      {runState?.state === 'loading' ? <Text>Discovering runs…</Text> : null}
+      {runState?.state === 'failed' ? <Alert variant="error">{sanitizeTerminalText(runState.message)}</Alert> : null}
+      {runState?.state === 'ready' && runState.runs.length === 0 ? (
         <Alert variant="warning">No runs were found for this workflow.</Alert>
-      )}
-      {runState?.state === 'ready' ? visibleRuns.map((run, visibleIndex) => {
-        const index = visibleRunStart + visibleIndex;
-        return (
-          <Box
-            key={run.directory}
-            borderStyle="round"
-            borderColor={index === runIndex ? 'cyan' : 'gray'}
-            flexDirection="column"
-            marginTop={1}
-            paddingX={1}
-          >
-            <Text bold color={index === runIndex ? 'cyan' : undefined}>
-              {index === runIndex ? '› ' : '  '}{sanitizeTerminalText(run.metadata.name ?? 'Unnamed run')}
-            </Text>
-            {run.metadata.description && (
-              <Text wrap="truncate">Description: {sanitizeTerminalText(run.metadata.description)}</Text>
-            )}
-            <Text>
-              Created: {run.metadata.createdAt
-                ? formatDateTime(run.metadata.createdAt)
-                : 'Unavailable'}
-              {run.timing ? ` · Duration: ${formatDuration(run.timing.durationMs)}` : ''}
-            </Text>
-            <RunStatus run={run} />
-            {run.missingLinkedPaths > 0 && (
-              <Alert variant="warning">
-                {String(run.missingLinkedPaths)} linked path{run.missingLinkedPaths === 1 ? ' is' : 's are'} missing
-              </Alert>
-            )}
-
-            {deletionState?.run.directory === run.directory && (
-              <>
-                {deletionState.state === 'confirm' && (
-                  <Alert variant="warning">
-                    Permanently delete this run and all its files? <ConfirmInput
-                      isDisabled={!inputActive}
-                      defaultChoice="cancel"
-                      submitOnEnter={false}
-                      onConfirm={() => void confirmDeletion(run)}
-                      onCancel={() => setDeletionState(undefined)}
-                    />
-                  </Alert>
-                )}
-                {deletionState.state === 'deleting' && (<Text>Deleting run…</Text> )}
-                {deletionState.state === 'failed' && (
-                  <Alert variant="error">Could not delete run: {sanitizeTerminalText(deletionState.message)}</Alert>
-                )}
-              </>
-            )}
-          </Box>
-        );
-      }) : null}
-      {runState?.state === 'ready' && runState.runs.length > visibleRunCount && (
+      ) : null}
+      {visibleRuns.map((run, visibleIndex) => (
+        <RunCard
+          key={run.directory}
+          run={run}
+          selected={visibleRunStart + visibleIndex === runIndex}
+          deletion={deletionState?.run.directory === run.directory ? deletionState : undefined}
+          inputActive={inputActive}
+          formatDateTime={formatDateTime}
+          onConfirmDeletion={() => void confirmDeletion(run)}
+          onCancelDeletion={() => setDeletionState(undefined)}
+        />
+      ))}
+      {runState?.state === 'ready' && runState.runs.length > visibleRunCount ? (
         <Text color={mutedColor}>{runIndex + 1} of {runState.runs.length}</Text>
-      )}
+      ) : null}
     </Page>
   );
 }

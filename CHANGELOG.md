@@ -22,6 +22,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ### Application
 
+- The Proteins gene list, the consensus isolate and site lists, the accession list, and the file browser share one list behaviour: ↑/↓ wrap around, PageUp/PageDown move the selection by a page, and the shortcut line shows both.
 - Cancellation during run setup no longer starts a Snakemake process; opened logs are closed before returning.
 - Accession details group assembly facts, release date, genome size, GC percentage, contig/scaffold counts and N50, and BioProject/BioSample links into sections. Refresh metadata to fill new fields on existing entries. PageUp/PageDown scrolls details while editable fields and Save stay visible on short terminals.
 - Isolates now own stable read sets with multiple file groups and confirmed library identities. Runs explicitly select read sets and snapshot effective Illumina preprocessing; poly-G is Auto / On / Off, and provider-trimmed groups skip fastp. Archive-renamed paired-end Illumina reads are supported. Old catalog/run structures are unsupported; re-import catalogs and create new runs. Schema versions remain at 1, with no migration.

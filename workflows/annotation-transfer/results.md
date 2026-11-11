@@ -8,7 +8,7 @@ The overview shows the execution outcome, the workflow's own status, the target'
 
 ### Run status
 
-The scientific status saved by the workflow. A Snakemake process that exits successfully can still produce a failed validation, so this status, not the process exit, tells whether the result is usable. Paths marked missing do not exist now; paths marked with their availability when summarized existed or were absent when the summary was written.
+The scientific status saved by the workflow. A Snakemake process that exits successfully can still produce a failed validation, so this status, not the process exit, tells whether the result is usable.
 
 | Status | Meaning |
 |---|---|
@@ -143,6 +143,8 @@ The run directory and the run's own files are explained in the general run resul
 | Target unresolved bases (BED) | The target's intervals of bases that are not A, C, G, or T, in 0-based BED coordinates: the evidence behind each gene's count of unresolved bases, readable in any genome browser. |
 
 ### Source evidence
+
+A path marked *missing* does not exist in the run directory now.
 
 | Item | Meaning |
 |---|---|
