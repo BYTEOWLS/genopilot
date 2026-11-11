@@ -4,6 +4,7 @@ import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
 import {ParameterList, type ParameterRow} from '../../src/ui/components/parameter-list.js';
+import {pressKey, waitFor} from '../wait.js';
 
 // Only labels and values the tests pass in are asserted.
 
@@ -51,7 +52,7 @@ test('aligns every value in one column, whatever the label length', async contex
     {id: 'short', label: 'A', value: 'first value'},
     {id: 'long', label: 'A much longer label', value: 'second value'},
   ]);
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await waitFor(() => output.output.includes('second value'), 'the list is drawn');
   const lines = output.output.split('\n');
   const column = (value: string): number => lines.find(line => line.includes(value))?.indexOf(value) ?? -1;
 
@@ -65,18 +66,17 @@ test('marks only a selected editable row and edits it in place', async context =
     {id: 'fixed', label: 'Fixed', value: 'fixed value'},
     {id: 'editable', label: 'Editable', value: 'old', edit: {defaultValue: 'old', onChange: value => edits.push(value)}},
   ], 'editable');
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await waitFor(() => output.output.includes('fixed value'), 'the list is drawn');
 
   assert.match(output.output, /^› Editable/m);
   assert.doesNotMatch(output.output, /^› Fixed/m);
-  input.write('er');
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await pressKey(input, 'er');
   assert.equal(edits.at(-1), 'older');
 });
 
 test('never marks or edits a read-only row, even when selected', async context => {
   const {output} = renderList(context, [{id: 'fixed', label: 'Fixed', value: 'fixed value'}], 'fixed');
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await waitFor(() => output.output.includes('fixed value'), 'the list is drawn');
 
   assert.doesNotMatch(output.output, /^›/m);
   assert.match(output.output, /fixed value/);

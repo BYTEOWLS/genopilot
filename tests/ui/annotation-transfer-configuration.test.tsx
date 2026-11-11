@@ -28,6 +28,7 @@ import {
 } from '../../src/workflows/parameter-definitions.js';
 import {parseWorkflowManifest} from '../../src/workflows/manifest.js';
 import {testMachine} from '../workflows/machine.js';
+import {waitFor, pressKey, rendered} from '../wait.js';
 
 const packagedParameterDefinitions = parseParameterDefinitions(
   readFileSync(
@@ -131,32 +132,10 @@ function lastFrame(output: TestOutput): string {
   return output.readOutput().split(/\x1b\[[GH]/).at(-1) ?? '';
 }
 
-async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 1000;
-  while (Date.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting until ${description}`);
+async function waitForFrame(output: TestOutput, predicate: (frame: string) => boolean): Promise<string> {
+  await waitFor(() => predicate(lastFrame(output)), 'the expected terminal frame', () => `Last frame:\n${lastFrame(output)}`);
+  return lastFrame(output);
 }
-
-async function waitForFrame(
-  output: TestOutput,
-  predicate: (frame: string) => boolean,
-): Promise<string> {
-  const timeoutAt = Date.now() + 1000;
-  while (Date.now() < timeoutAt) {
-    const frame = lastFrame(output);
-    if (predicate(frame)) {
-      return frame;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting for a terminal frame. Last frame:\n${lastFrame(output)}`);
-}
-
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -251,7 +230,7 @@ async function focusField(input: TestInput, output: TestOutput, id: string): Pro
       return;
     }
     const before = selectedLine(frame);
-    input.write(TAB);
+    await pressKey(input, TAB);
     await waitForFrame(output, next => selectedLine(next) !== before);
   }
   assert.fail(`Could not select parameter ${id}.`);
@@ -262,16 +241,16 @@ async function startReview(input: TestInput, output: TestOutput): Promise<void> 
   const onButton = (frame: string): boolean => /^› \[/.test(selectedLine(frame) ?? '');
   for (let attempt = 0; attempt <= packagedParameterDefinitions.length && !onButton(lastFrame(output)); attempt += 1) {
     const before = selectedLine(lastFrame(output));
-    input.write(TAB);
+    await pressKey(input, TAB);
     await waitForFrame(output, next => selectedLine(next) !== before);
   }
   assert.ok(onButton(lastFrame(output)), 'Could not select the continue button.');
-  input.write(ENTER);
+  await pressKey(input, ENTER);
 }
 
 async function typeInto(input: TestInput, output: TestOutput, id: string, value: string): Promise<void> {
   await focusField(input, output, id);
-  input.write(value);
+  await pressKey(input, value);
   await waitForFrame(output, frame => fieldLine(frame, id)?.includes(value) ?? false);
 }
 
@@ -311,7 +290,7 @@ async function chooseOption(input: TestInput, output: TestOutput, id: string, va
   const optionCount = definitionsById.get(id)?.options?.length ?? 0;
   for (let attempt = 0; attempt < optionCount && !isMarked(lastFrame(output)); attempt += 1) {
     const before = selectedFieldBlock(lastFrame(output));
-    input.write(SPACE);
+    await pressKey(input, SPACE);
     await waitForFrame(output, frame => selectedFieldBlock(frame) !== before);
   }
   assert.ok(isMarked(lastFrame(output)), `Could not choose ${value} for parameter ${id}.`);
@@ -322,7 +301,7 @@ async function waitForReview(
   output: TestOutput,
   reviewed: () => PreparedAnnotationTransferRun | undefined,
 ): Promise<{frame: string; prepared: PreparedAnnotationTransferRun}> {
-  await waitUntil(() => reviewed() !== undefined, 'the prepared run is validated');
+  await waitFor(() => reviewed() !== undefined, 'the prepared run is validated');
   const prepared = reviewed()!;
   const frame = await waitForFrame(output, value => value.includes(prepared.configuration.run.id));
   return {frame, prepared};
@@ -337,7 +316,7 @@ test('keeps pasted whitespace in a typable local-file-path field', async context
   await focusField(input, output, 'reference-fasta');
   // Unlike a text/integer field, a paste here is inserted as-is: no trimming, no control-
   // character stripping. That is @inkjs/ui's own behavior, not something this form adds back.
-  input.write('  /data/reference.fa  ');
+  await pressKey(input, '  /data/reference.fa  ');
   await waitForFrame(output, frame => fieldLine(frame, 'reference-fasta')?.includes('  /data/reference.fa') ?? false);
 });
 
@@ -350,14 +329,14 @@ test('↑/↓ leave a choice field without changing it, and ←/→ change it', 
   const marked = (value: string) => (frame: string): boolean =>
     fieldBlock(frame, 'reference-source').includes(`(●) ${optionLabel('reference-source', value)}`);
   // The mouse wheel sends ↑/↓, so scrolling over a form must never change a value.
-  input.write(ARROW_DOWN);
+  await pressKey(input, ARROW_DOWN);
   await waitForFrame(output, frame => !isSelected(frame, fieldLabel('reference-source')));
   assert.ok(marked('ncbi')(lastFrame(output)));
 
   await focusField(input, output, 'reference-source');
-  input.write(ARROW_RIGHT);
+  await pressKey(input, ARROW_RIGHT);
   await waitForFrame(output, marked('local'));
-  input.write(ARROW_LEFT);
+  await pressKey(input, ARROW_LEFT);
   await waitForFrame(output, marked('ncbi'));
 });
 
@@ -427,7 +406,7 @@ test('edits all required fields and confirms effective options before saving', a
   // The NCBI API key only matters, and is only checked, when an input is downloaded from NCBI.
   assert.equal(apiKeyChecks, 0);
 
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   // The rendered command wraps across terminal lines, so match it unwrapped.
   const unwrap = (frame: string): string => frame.replace(/\s+/g, ' ');
   const startFrame = await waitForFrame(output, frame => unwrap(frame).includes('--keep-going --dry-run'));
@@ -437,11 +416,11 @@ test('edits all required fields and confirms effective options before saving', a
   assert.ok(unwrap(startFrame).includes(`--directory ${review.prepared.outputDirectory}`));
 
   // Executing does not require a dry run first: selecting it shows its own exact command.
-  input.write(ARROW_DOWN);
+  await pressKey(input, ARROW_DOWN);
   await waitForFrame(output, frame => frame.includes('--printshellcmds') && !frame.includes('--dry-run'));
 
-  input.write(ENTER);
-  await waitUntil(() => executedModes.length === 1, 'the workflow is executed');
+  await pressKey(input, ENTER);
+  await waitFor(() => executedModes.length === 1, 'the workflow is executed');
   assert.deepEqual(executedModes, ['execute']);
   assert.equal(saved?.configuration.run.id, configuration.run.id);
   await waitForFrame(output, frame => frame.includes('Nothing to be done.'));
@@ -488,14 +467,13 @@ test('records the NCBI cache and measures the run after a successful NCBI-source
   await typeInto(input, output, 'target-accession', 'GCA_000011425.1');
   await startReview(input, output);
   await waitForReview(output, () => reviewed);
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   await waitForFrame(output, frame => frame.includes('--dry-run'));
   // The start options list the dry run first; the execution is the next option.
-  input.write(ARROW_DOWN);
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
-  input.write(ENTER);
+  await pressKey(input, ARROW_DOWN);
+  await pressKey(input, ENTER);
 
-  await waitUntil(() => registrations.length === 1, 'the cache is recorded');
+  await waitFor(() => registrations.length === 1, 'the cache is recorded');
   assert.equal(saves, 1);
   assert.deepEqual(executedModes, ['execute']);
   assert.deepEqual(registrations, ['/research/runs']);
@@ -556,24 +534,24 @@ test('shows a failed dry run with its live output, then offers execution again',
   registerCleanup(context, instance);
 
   await waitForFrame(output, frame => frame.length > 0);
-  input.write(ENTER);
-  await waitUntil(() => prepareCalls === 1, 'the run is prepared');
+  await pressKey(input, ENTER);
+  await waitFor(() => prepareCalls === 1, 'the run is prepared');
   await waitForFrame(output, frame => frame.includes('/run/output'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   // The dry run is preselected and its exact command is shown before starting it.
   await waitForFrame(output, frame => frame.includes('/managed/snakemake --dry-run'));
-  input.write(ENTER);
-  await waitUntil(() => attempts.length === 1, 'the dry run is started');
+  await pressKey(input, ENTER);
+  await waitFor(() => attempts.length === 1, 'the dry run is started');
   assert.equal(saveCalls, 1);
   // The failed run keeps its captured stderr on screen.
   await waitForFrame(output, frame => frame.includes('Invalid workflow configuration'));
 
   // A finished dry run returns to the start options with the execution preselected, and the
   // next attempt is prepared again so it cannot reuse the previous attempt's log files.
-  input.write(ESCAPE);
+  await pressKey(input, ESCAPE);
   await waitForFrame(output, frame => frame.includes('/managed/snakemake') && !frame.includes('--dry-run'));
-  input.write(ENTER);
-  await waitUntil(() => attempts.length === 2, 'the workflow is executed');
+  await pressKey(input, ENTER);
+  await waitFor(() => attempts.length === 2, 'the workflow is executed');
   assert.deepEqual(attempts, [
     '/run/logs/snakemake-dry-run.0.stdout.log',
     '/run/logs/snakemake-execute.1.stdout.log',
@@ -676,7 +654,7 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
   await typeInto(input, output, 'target-fasta', '/data/target.fa');
 
   await startReview(input, output);
-  await waitUntil(() => cacheLookups === 1, 'the NCBI cache is searched');
+  await waitFor(() => cacheLookups === 1, 'the NCBI cache is searched');
   // The cache decision replaces the form and names the cached accession.
   const cacheFrame = await waitForFrame(
     output,
@@ -684,16 +662,16 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
   );
 
   // As on a choice field of the form, → on the cache entry chooses its next option.
-  input.write(ARROW_RIGHT);
+  await pressKey(input, ARROW_RIGHT);
   await waitForFrame(output, frame => frame !== cacheFrame);
   // Enter acts only on the continue button, which follows the cache choices.
   await startReview(input, output);
   await waitForReview(output, () => reviewed);
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   // Saved as the dry run starts.
   await waitForFrame(output, frame => frame.includes('--dry-run'));
-  input.write(ENTER);
-  await waitUntil(() => saved !== undefined, 'the configuration is saved');
+  await pressKey(input, ENTER);
+  await waitFor(() => saved !== undefined, 'the configuration is saved');
   const reference = saved?.configuration.inputs.reference;
   assert.equal(reference?.source === 'ncbi' ? reference.ncbi_cache_mode : undefined, 'refresh');
 });
@@ -759,12 +737,12 @@ test('returns from the form with Escape, and types the letter "b" instead of goi
 
   await chooseOption(input, output, 'reference-source', 'ncbi');
   await focusField(input, output, 'reference-accession');
-  input.write('b');
+  await pressKey(input, 'b');
   await waitForFrame(output, frame => /:\s*b\s*$/.test(fieldLine(frame, 'reference-accession') ?? ''));
   assert.equal(backCalls, 0);
 
-  input.write(ESCAPE);
-  await waitUntil(() => backCalls > 0, 'the form returns');
+  await pressKey(input, ESCAPE);
+  await waitFor(() => backCalls > 0, 'the form returns');
   assert.equal(backCalls, 1);
 });
 
@@ -819,27 +797,27 @@ test('opens the file browser with Enter from a local path field and selects a fi
   await chooseOption(input, output, 'reference-source', 'local');
   await focusField(input, output, 'reference-fasta');
 
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   const rootFrame = await waitForFrame(output, value => value.includes('› folder/'));
   assert.doesNotMatch(rootFrame, /ncbi-accessions-cache/);
   assert.equal(validations, 0);
 
   // The cache directory is only hidden inside a run collection, not in its parent.
-  input.write(ARROW_LEFT);
+  await pressKey(input, ARROW_LEFT);
   await waitForFrame(output, value => value.includes('› ncbi-accessions-cache/'));
-  input.write(ARROW_DOWN);
+  await pressKey(input, ARROW_DOWN);
   await waitForFrame(output, value => value.includes('› runs/'));
-  input.write(ARROW_RIGHT);
+  await pressKey(input, ARROW_RIGHT);
   await waitForFrame(output, value => value.includes('› folder/'));
 
-  input.write(ARROW_RIGHT);
+  await pressKey(input, ARROW_RIGHT);
   await waitForFrame(output, value => value.includes('nested.fa'));
 
-  input.write(ARROW_LEFT);
+  await pressKey(input, ARROW_LEFT);
   await waitForFrame(output, value => value.includes('› folder/'));
-  input.write(ARROW_DOWN);
+  await pressKey(input, ARROW_DOWN);
   await waitForFrame(output, value => value.includes('› reference.fa'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   const formFrame = await waitForFrame(output, value => fieldLine(value, 'reference-fasta')?.includes(fasta) ?? false);
   // Browsing sets only the field it was opened from.
   assert.ok(!fieldLine(formFrame, 'reference-gff3')?.includes(root));
@@ -926,11 +904,11 @@ test('steps through previous run history and prefills the form immediately', asy
   });
   registerCleanup(context, instance);
   await waitForForm(output);
-  await waitUntil(() => loaded, 'previous runs are discovered');
+  await waitFor(() => loaded, 'previous runs are discovered');
   // Let the discovered runs reach the form before browsing them.
-  await new Promise<void>(resolve => setTimeout(resolve, 100));
+  await rendered(instance);
 
-  input.write(PAGE_DOWN);
+  await pressKey(input, PAGE_DOWN);
   const firstRunFrame = await waitForFrame(
     output,
     frame => fieldLine(frame, 'reference-accession')?.includes('GCF_000149205.2') ?? false,
@@ -938,7 +916,7 @@ test('steps through previous run history and prefills the form immediately', asy
   assert.match(fieldLine(firstRunFrame, 'target-fasta') ?? '', /\/data\/target-a\.fa/);
   assert.match(fieldLine(firstRunFrame, 'run-description') ?? '', /First transfer/);
 
-  input.write(PAGE_DOWN);
+  await pressKey(input, PAGE_DOWN);
   const secondRunFrame = await waitForFrame(
     output,
     frame => fieldLine(frame, 'reference-fasta')?.includes('/data/reference-b.fa') ?? false,
@@ -947,11 +925,11 @@ test('steps through previous run history and prefills the form immediately', asy
   assert.match(fieldLine(secondRunFrame, 'run-description') ?? '', /Second transfer/);
   assert.equal(fieldLine(secondRunFrame, 'reference-accession'), undefined);
 
-  input.write(PAGE_UP);
+  await pressKey(input, PAGE_UP);
   await waitForFrame(output, frame => fieldLine(frame, 'reference-accession')?.includes('GCF_000149205.2') ?? false);
 
   // Stepping back past the first run restores the defaults instead of keeping prefilled values.
-  input.write(PAGE_UP);
+  await pressKey(input, PAGE_UP);
   await waitForFrame(output, frame => !frame.includes('AN_A') && !frame.includes('GCF_000149205.2'));
 });
 
@@ -976,7 +954,7 @@ test('scrolls the field list to keep the selected field reachable in a short ter
   const visited = [selectedLabel(initialFrame)];
   for (let step = 0; step <= editableLabels.length; step += 1) {
     const before = selectedLine(lastFrame(output));
-    input.write(TAB);
+    await pressKey(input, TAB);
     const frame = await waitForFrame(output, next => selectedLine(next) !== before);
     assert.ok(frameHeight(frame) <= rows, `Frame exceeds ${String(rows)} rows:\n${frame}`);
     visited.push(selectedLabel(frame));
@@ -997,8 +975,8 @@ test('ignores Enter in a field and reviews only from the continue button', async
 
   await focusField(input, output, 'run-name');
   const before = selectedLine(lastFrame(output));
-  input.write(ENTER);
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await pressKey(input, ENTER);
+  await rendered(instance);
   assert.equal(selectedLine(lastFrame(output)), before);
   assert.equal(validations, 0);
 });

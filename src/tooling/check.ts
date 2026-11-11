@@ -115,7 +115,7 @@ function validateDetectedTool(
 }
 
 /** Runs `<command> --version` without a shell and retains actionable failures. */
-function readVersion(command: string): Promise<VersionProbeResult> {
+function readVersion(command: string, timeoutMilliseconds: number): Promise<VersionProbeResult> {
   return new Promise(resolve => {
     const child = spawn(command, ['--version'], {
       env: {
@@ -175,7 +175,7 @@ function readVersion(command: string): Promise<VersionProbeResult> {
     const timeout = setTimeout(() => {
       child.kill();
       finish({state: 'failed', message: 'Version check timed out'});
-    }, checkTimeoutMilliseconds);
+    }, timeoutMilliseconds);
   });
 }
 
@@ -183,11 +183,12 @@ async function findCompatibleTool(
   commands: readonly string[],
   minimumVersion: string,
   maximumVersionExclusive: string,
+  timeoutMilliseconds: number,
 ): Promise<ToolCheckResult> {
   let firstUnavailable: ToolCheckResult | undefined;
 
   for (const command of commands) {
-    const probe = await readVersion(command);
+    const probe = await readVersion(command, timeoutMilliseconds);
     if (probe.state === 'missing') {
       continue;
     }
@@ -212,28 +213,37 @@ async function findCompatibleTool(
 /**
  * Detects and validates only the application-managed runtime bundle.
  * External PATH tools are intentionally ignored during the limited MVP.
+ *
+ * @param timeoutMilliseconds how long each version check may take before it counts as failed
  */
-export async function checkTooling(paths: ToolingPaths = resolveToolingPaths()): Promise<ToolingStatus> {
+export async function checkTooling(
+  paths: ToolingPaths = resolveToolingPaths(),
+  timeoutMilliseconds = checkTimeoutMilliseconds,
+): Promise<ToolingStatus> {
   const [pixi, conda, snakemake, python] = await Promise.all([
     findCompatibleTool(
       [paths.pixiExecutable],
       toolingPolicy.pixi.minimumVersion,
       toolingPolicy.pixi.maximumVersionExclusive,
+      timeoutMilliseconds,
     ),
     findCompatibleTool(
       [paths.condaExecutable],
       toolingPolicy.conda.minimumVersion,
       toolingPolicy.conda.maximumVersionExclusive,
+      timeoutMilliseconds,
     ),
     findCompatibleTool(
       [paths.snakemakeExecutable],
       toolingPolicy.snakemake.minimumVersion,
       toolingPolicy.snakemake.maximumVersionExclusive,
+      timeoutMilliseconds,
     ),
     findCompatibleTool(
       [paths.pythonExecutable],
       toolingPolicy.python.minimumVersion,
       toolingPolicy.python.maximumVersionExclusive,
+      timeoutMilliseconds,
     ),
   ]);
 

@@ -12,6 +12,7 @@ import {IsolatesScreen} from '../../src/ui/isolates-screen/screen.js';
 import {parseMarkdown} from '../../src/docs/markdown.js';
 import {IsolateImport} from '../../src/ui/isolates-screen/import.js';
 import type {DeliveryScan} from '../../src/isolates/illumina/delivery.js';
+import {effectsSettled, pressKey, waitFor as waitUntil} from '../wait.js';
 
 class Input extends PassThrough {
   isTTY = true;
@@ -28,7 +29,8 @@ class Output extends Writable {
     return stripVTControlCharacters(this.output.split(/\x1b\[[GH]/).at(-1) ?? '').trimEnd();
   }
 }
-const pause = () => new Promise(resolve => setTimeout(resolve, 35));
+/** Lets keys and resolved test doubles reach the screen; frames drawn by an interactive render need a `waitFor`. */
+const pause = effectsSettled;
 const fixture = (): Isolate => ({id: 'sample-a', name: 'Sample A', wildtype: null, derived_from: null,
   read_sets: [testReadSet([{r1: '/reads/r1.fq', r2: '/reads/r2.fq', trimmed: false}])]});
 
@@ -43,7 +45,7 @@ test('creates multiple read sets and file groups with explicit shared library me
   context.after(() => app.unmount());
   const press = async (...keys: string[]) => {
     for (const key of keys) {
-      input.write(key);
+      await pressKey(input, key);
       await pause();
     }
   };
@@ -88,18 +90,10 @@ test('windows a large form around focus after navigation, resize, and validation
     const line = output.lastFrame().split('\n').find(line => /^\s*› /.test(line)) ?? '';
     return line.slice(Math.max(0, line.indexOf('› ')));
   };
-  const waitFor = async (condition: () => boolean) => {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (condition()) {
-        return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    assert.fail(output.lastFrame());
-  };
+  const waitFor = (condition: () => boolean) => waitUntil(condition, 'the expected frame', () => output.lastFrame());
   const press = async (key: string) => {
     const before = selected();
-    input.write(key);
+    await pressKey(input, key);
     if (key === '\t') {
       await waitFor(() => selected() !== before);
     }
@@ -151,7 +145,7 @@ test('windows a large form around focus after navigation, resize, and validation
     onSubmit={async () => {saved = true;}} onCancel={() => {}} inputActive currentDirectory="/"
     checkReads={async () => {checkedInvalid = true; return {pairs: [], sameFiles: []};}} />);
   await waitFor(() => selected().includes(invalid.name));
-  input.write('\x1b[A');
+  await pressKey(input, '\x1b[A');
   await waitFor(() => selected().startsWith('› ['));
   await press('\r');
   await waitFor(() => output.lastFrame().includes('•'));
@@ -174,7 +168,7 @@ test('accepts a prefilled new library without changing existing saved library id
   context.after(() => app.unmount());
   const press = async (...keys: string[]) => {
     for (const key of keys) {
-      input.write(key);
+      await pressKey(input, key);
       await pause();
     }
   };
@@ -198,7 +192,7 @@ test('editing offers four-colour and one-channel chemistry without guessing poly
     checkReads={async pairs => ({pairs: pairs.map(() => ({r1: {state: 'ok'}, r2: {state: 'ok'}})), sameFiles: []})} />,
   {stdin: input, stdout: output, stderr: output, debug: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  const press = async (key: string) => {input.write(key); await pause();};
+  const press = (key: string) => pressKey(input, key);
   await pause();
   for (let index = 0; index < 6; index++) {
     await press('\t');
@@ -228,9 +222,9 @@ test('editing preserves stable set IDs, multiple pairs and shared library identi
   {stdin: input, stdout: output, stderr: output, debug: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
   await pause();
-  input.write('\x1b[A'); // From the first row, wrap to the selectable save button.
+  await pressKey(input, '\x1b[A'); // From the first row, wrap to the selectable save button.
   await pause();
-  input.write('\r');
+  await pressKey(input, '\r');
   await pause();
   assert.deepEqual(saved, editing);
   assert.equal(checked, 3);
@@ -255,13 +249,13 @@ test('Enter on text does not submit; cancellation is explicit and resize keeps t
   {stdin: input, stdout: output, stderr: output, debug: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
   await pause();
-  input.write('\r');
+  await pressKey(input, '\r');
   await pause();
   assert.equal(saved, 0);
   output.columns = 60;
   output.emit('resize');
   await pause();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   await pause();
   assert.equal(cancelled, 1);
 });
@@ -278,13 +272,13 @@ test('missing library identity and failed file checks prevent saving', async con
     checkReads={async () => {checked++; throw new Error('unreadable input');}} />,
   {stdin: input, stdout: output, stderr: output, debug: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  await pause(); input.write('\x1b[A'); await pause(); input.write('\r'); await pause();
+  await pause(); await pressKey(input, '\x1b[A'); await pause(); await pressKey(input, '\r'); await pause();
   assert.equal(saved, 0);
   assert.equal(checked, 0);
   app.rerender(<IsolateForm key="valid" catalog={{schema_version: 1, isolates: []}} editing={fixture()}
     onSubmit={async () => {saved++;}} onCancel={() => {}} inputActive currentDirectory="/"
     checkReads={async () => {checked++; throw new Error('unreadable input');}} />);
-  await pause(); input.write('\x1b[A'); await pause(); input.write('\r'); await pause();
+  await pause(); await pressKey(input, '\x1b[A'); await pause(); await pressKey(input, '\r'); await pause();
   assert.equal(saved, 0);
   assert.equal(checked, 1);
 });
@@ -303,11 +297,11 @@ test('list checks all groups and removal requires confirmation without touching 
   context.after(() => app.unmount());
   await pause();
   assert.equal(checked, 1);
-  input.write('d'); await pause();
+  await pressKey(input, 'd'); await pause();
   assert.equal(updates, 0);
-  input.write('\x1b'); await pause();
+  await pressKey(input, '\x1b'); await pause();
   assert.equal(catalog.isolates.length, 1);
-  input.write('d'); await pause(); input.write('y'); await pause();
+  await pressKey(input, 'd'); await pause(); await pressKey(input, 'y'); await pause();
   assert.equal(updates, 1);
   assert.equal(catalog.isolates.length, 0);
 });
@@ -326,14 +320,14 @@ test('lineage blocks removal and an unavailable catalog offers no mutating actio
     checkReads={async () => ({pairs: [], sameFiles: []})} />,
   {stdin: input, stdout: output, stderr: output, debug: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  await pause(); input.write('d'); await pause(); input.write('y'); await pause();
+  await pause(); await pressKey(input, 'd'); await pause(); await pressKey(input, 'y'); await pause();
   assert.equal(updates, 0);
   app.rerender(<IsolatesScreen key="failed" onBack={() => {back++;}} inputActive currentDirectory="/" catalogPath="/catalog.yaml"
     loadCatalog={async () => {throw new Error('invalid catalog');}}
     updateCatalog={async () => {updates++; throw new Error('must not update');}}
     checkReads={async () => ({pairs: [], sameFiles: []})} />);
-  await pause(); input.write('n'); await pause(); input.write('d'); await pause(); input.write('y'); await pause();
-  input.write('\x1b'); await pause();
+  await pause(); await pressKey(input, 'n'); await pause(); await pressKey(input, 'd'); await pause(); await pressKey(input, 'y'); await pause();
+  await pressKey(input, '\x1b'); await pause();
   assert.equal(updates, 0);
   assert.equal(back, 1);
 });
@@ -361,16 +355,8 @@ test('list help preserves selection, blocks list actions, and closes safely afte
     }} />,
   {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  const waitFor = async (condition: () => boolean) => {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (condition()) {
-        return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    assert.fail(output.lastFrame());
-  };
-  const press = async (key: string) => {input.write(key); await pause();};
+  const waitFor = (condition: () => boolean) => waitUntil(condition, 'the expected frame', () => output.lastFrame());
+  const press = (key: string) => pressKey(input, key);
   const selection = () => output.lastFrame().split('\n').find(line => line.startsWith('›')) ?? '';
   await waitFor(() => selection().includes(first.name));
   await press('\x1b[B');
@@ -418,19 +404,15 @@ test('edit help preserves the draft and focus while question marks remain editab
   context.after(() => app.unmount());
   const press = async (...keys: string[]) => {
     for (const key of keys) {
-      input.write(key);
+      await pressKey(input, key);
       await pause();
     }
   };
   await pause();
   await press('?', '\t', '\t');
   assert.equal(loads, 0);
-  const waitForContent = async (marker: string) => {
-    for (let attempt = 0; attempt < 100 && !output.lastFrame().includes(marker); attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    assert.ok(output.lastFrame().includes(marker), output.lastFrame());
-  };
+  const waitForContent = (marker: string) =>
+    waitUntil(() => output.lastFrame().includes(marker), `the frame shows ${marker}`, () => output.lastFrame());
   await press('?');
   await waitForContent(content);
   await press('\t');
@@ -466,16 +448,8 @@ test('technique headings count isolates once and stay visible through scrolling 
     checkReads={async pairs => ({pairs: pairs.map(() => ({r1: {state: 'ok'}, r2: {state: 'ok'}})), sameFiles: []})} />,
   {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  const waitFor = async (condition: () => boolean) => {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (condition()) {
-        return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    assert.fail(output.lastFrame());
-  };
-  const press = async (key: string) => {input.write(key); await pause();};
+  const waitFor = (condition: () => boolean) => waitUntil(condition, 'the expected frame', () => output.lastFrame());
+  const press = (key: string) => pressKey(input, key);
   const selected = () => output.lastFrame().split('\n').find(line => line.startsWith('›')) ?? '';
   const platform = entries[0]!.read_sets[0]!.platform;
   const technique = platform.charAt(0).toUpperCase() + platform.slice(1);
@@ -507,8 +481,8 @@ test('edit groups pairs with padded buttons and displays technique only in isola
     checkReads={async pairs => ({pairs: pairs.map(() => ({r1: {state: 'ok'}, r2: {state: 'ok'}})), sameFiles: []})} />,
   {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  const press = async (key: string) => {input.write(key); await pause();};
-  await pause();
+  const press = (key: string) => pressKey(input, key);
+  await waitUntil(() => output.lastFrame().includes(second.r2), 'the form is drawn', () => output.lastFrame());
   const frame = output.lastFrame();
   const technique = isolateTechnique(editing);
   assert.equal(frame.split(technique).length - 1, 1);
@@ -555,16 +529,10 @@ test('an empty isolate list uses a warning alert and still opens manual creation
     checkReads={async () => ({pairs: [], sameFiles: []})} />,
   {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  for (let attempt = 0; attempt < 100 && !output.lastFrame().includes('⚠'); attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-  assert.ok(output.lastFrame().includes('⚠'), output.lastFrame());
+  await waitUntil(() => output.lastFrame().includes('⚠'), 'the warning is shown', () => output.lastFrame());
   assert.ok(output.lastFrame().includes('╭'));
-  input.write('n'); await pause();
-  for (let attempt = 0; attempt < 100 && output.lastFrame().includes('⚠'); attempt++) {
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-  assert.ok(!output.lastFrame().includes('⚠'));
+  await pressKey(input, 'n');
+  await waitUntil(() => !output.lastFrame().includes('⚠'), 'the creation form replaces the warning', () => output.lastFrame());
   assert.ok(output.lastFrame().split('\n').some(line => /^› /.test(line)));
   assert.equal(updates, 0);
 });
@@ -588,22 +556,14 @@ test('the defaults info appears after proposed isolates in import review, not du
     readDirectory={async () => []} onDone={() => {}} onCancel={() => {}} />,
   {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  const waitFor = async (condition: () => boolean) => {
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (condition()) {
-        return;
-      }
-      await new Promise(resolve => setTimeout(resolve, 10));
-    }
-    assert.fail(output.lastFrame());
-  };
+  const waitFor = (condition: () => boolean) => waitUntil(condition, 'the expected frame', () => output.lastFrame());
   await waitFor(() => output.lastFrame().includes('/project') && output.lastFrame().includes('›'));
   assert.equal(scans, 0);
   assert.ok(!output.lastFrame().includes('⚠'));
-  input.write('\r'); await pause();
+  await pressKey(input, '\r'); await pause();
   await waitFor(() => scans === 1 && output.lastFrame().includes(scan.root));
   assert.ok(!output.lastFrame().includes('⚠'));
-  input.write('\r'); await pause();
+  await pressKey(input, '\r'); await pause();
   await waitFor(() => output.lastFrame().includes(scan.candidates[0]!.sample) && output.lastFrame().includes('ℹ'));
   const frame = output.lastFrame();
   assert.ok(frame.indexOf(scan.candidates[0]!.sample) < frame.indexOf('ℹ'));
@@ -635,7 +595,7 @@ test('save problems name the field and the pair within its read set, not catalog
     onSubmit={async () => {}} onCancel={() => {}} inputActive currentDirectory="/" checkReads={failing} />,
   {stdin: input, stdout: output, stderr: output, debug: true, exitOnCtrlC: false});
   context.after(() => app.unmount());
-  await pause(); input.write('\x1b[A'); await pause(); input.write('\r'); await pause();
+  await pause(); await pressKey(input, '\x1b[A'); await pause(); await pressKey(input, '\r'); await pause();
   // The second checked pair is the first pair of the second read set.
   const problem = output.output.split('\n').filter(line => line.includes('reason-marker')).at(-1) ?? '';
   assert.match(problem, /2\D+1\D.*reason-marker/, output.output.slice(-1500));
@@ -644,7 +604,7 @@ test('save problems name the field and the pair within its read set, not catalog
   invalid.read_sets[0]!.library_id = '';
   app.rerender(<IsolateForm key="invalid" catalog={{schema_version: 1, isolates: [invalid]}} editing={invalid}
     onSubmit={async () => {}} onCancel={() => {}} inputActive currentDirectory="/" checkReads={failing} />);
-  await pause(); input.write('\x1b[A'); await pause(); input.write('\r'); await pause();
+  await pause(); await pressKey(input, '\x1b[A'); await pause(); await pressKey(input, '\r'); await pause();
   const frames = stripVTControlCharacters(output.output);
   assert.ok(frames.includes('library ID'), frames.slice(-1500));
   assert.ok(!frames.includes('$.'), 'Catalog paths are not shown to the researcher.');

@@ -14,6 +14,7 @@ import {
   type IsolateCatalogReader,
   type ReadSetCompatibility,
 } from '../../src/ui/components/isolates-field.js';
+import {pressKey as press, waitFor} from '../wait.js';
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -51,34 +52,10 @@ class TestOutput extends Writable {
   }
 }
 
-async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 1000;
-  while (Date.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 5));
-  }
-  assert.fail(`Timed out waiting until ${description}`);
-}
-
-async function press(input: TestInput, key: string): Promise<void> {
-  input.write(key);
-  await waitUntil(() => input.readableLength === 0, 'the key is handled');
-}
-
 async function waitForFrame(output: TestOutput, predicate: (frame: string) => boolean): Promise<string> {
-  const timeoutAt = Date.now() + 1000;
-  while (Date.now() < timeoutAt) {
-    const frame = output.lastFrame();
-    if (predicate(frame)) {
-      return frame;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting for a terminal frame. Last frame:\n${output.lastFrame()}`);
+  await waitFor(() => predicate(output.lastFrame()), 'the expected terminal frame', () => `Last frame:\n${output.lastFrame()}`);
+  return output.lastFrame();
 }
-
 function isolate(id: string, name: string, trimmed: boolean[] = [false]): Isolate {
   return {
     id,
@@ -188,7 +165,7 @@ test('selects several isolates, searching by name, and keeps them in selection o
   assert.ok(isChosen(frame, 'mutant-two'));
 
   await press(input, ENTER);
-  await waitUntil(() => values.length === 1, 'the selection is confirmed');
+  await waitFor(() => values.length === 1, 'the selection is confirmed');
   assert.deepEqual(parseIsolateSelection(values[0] ?? ''), ['mutant-two/reads', 'wild-type/reads']);
   await waitForFrame(output, next => next.includes('2 selected'));
 });
@@ -210,7 +187,7 @@ test('keeps the previous selection when the picker is cancelled, and toggles an 
   await waitForFrame(output, frame => !isChosen(frame, 'wild-type'));
   await press(input, ARROW_DOWN);
   await press(input, ENTER);
-  await waitUntil(() => values.length === 1, 'the selection is confirmed');
+  await waitFor(() => values.length === 1, 'the selection is confirmed');
   assert.deepEqual(parseIsolateSelection(values[0] ?? ''), ['mutant-one/reads']);
 });
 
@@ -236,7 +213,7 @@ test('selects every isolate matching the search, all without one, and deselects 
   await press(input, CTRL_A);
   await waitForFrame(output, frame => catalog.every(isolate => isChosen(frame, isolate.id)));
   await press(input, ENTER);
-  await waitUntil(() => values.length === 1, 'the selection is confirmed');
+  await waitFor(() => values.length === 1, 'the selection is confirmed');
   assert.deepEqual(parseIsolateSelection(values[0] ?? ''), ['wild-type/reads', 'mutant-one/reads', 'mutant-two/reads']);
 });
 
@@ -259,7 +236,7 @@ test('explains an empty or unreadable catalog and drops isolates that are no lon
   await press(withStale.input, ENTER);
   await waitForFrame(withStale.output, next => isChosen(next, 'wild-type'));
   await press(withStale.input, ENTER);
-  await waitUntil(() => withStale.values.length === 1, 'the selection is confirmed');
+  await waitFor(() => withStale.values.length === 1, 'the selection is confirmed');
   assert.deepEqual(parseIsolateSelection(withStale.values[0] ?? ''), ['wild-type/reads']);
 });
 
@@ -275,7 +252,7 @@ test('shows incompatible sets but excludes them from individual and bulk selecti
   await waitForFrame(output, frame => isChosen(frame, 'wild-type') && isChosen(frame, 'mutant-two'));
   assert.ok(!isChosen(output.lastFrame(), 'mutant-one'));
   await press(input, ENTER);
-  await waitUntil(() => values.length === 1, 'compatible sets confirmed');
+  await waitFor(() => values.length === 1, 'compatible sets confirmed');
   assert.deepEqual(parseIsolateSelection(values[0]!), ['wild-type/reads', 'mutant-two/reads']);
 });
 
@@ -306,7 +283,7 @@ test('keeps highlighted incompatibility details readable with long identities an
   await waitForFrame(output, next => !next.includes('review-marker-start'));
   await press(input, SPACE);
   await press(input, ENTER);
-  await waitUntil(() => values.length === 1, 'only the compatible set is confirmed');
+  await waitFor(() => values.length === 1, 'only the compatible set is confirmed');
   assert.deepEqual(parseIsolateSelection(values[0]!), ['sample-1/reads']);
 });
 
@@ -329,7 +306,7 @@ test('uses compact names without UUIDs while keeping equally named sets separate
   await press(input, ARROW_DOWN);
   await press(input, SPACE);
   await press(input, ENTER);
-  await waitUntil(() => values.length === 1, 'distinct stable IDs confirmed');
+  await waitFor(() => values.length === 1, 'distinct stable IDs confirmed');
   assert.deepEqual(parseIsolateSelection(values[0]!), sample.read_sets.slice(0, 2).map(set => `${sample.id}/${set.id}`));
 });
 
@@ -343,7 +320,7 @@ test('disambiguates different isolates with the same display name without exposi
   await press(input, ARROW_DOWN);
   await press(input, SPACE);
   await press(input, ENTER);
-  await waitUntil(() => values.length === 1, 'the distinct isolate is selected');
+  await waitFor(() => values.length === 1, 'the distinct isolate is selected');
   assert.deepEqual(parseIsolateSelection(values[0]!), ['right/reads']);
 });
 

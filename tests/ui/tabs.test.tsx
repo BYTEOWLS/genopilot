@@ -4,6 +4,7 @@ import test, {type TestContext} from 'node:test';
 import React, {useState} from 'react';
 import {render} from 'ink';
 import {adjacentTabId, TabBar} from '../../src/ui/components/tabs.js';
+import {pressKey, waitFor} from '../wait.js';
 
 const tabs = [
   {id: 'first', label: 'First'},
@@ -71,10 +72,15 @@ function renderTabs(
     stdout: output as unknown as NodeJS.WriteStream,
   });
   context.after(() => instance.unmount());
-  return {input, output, selections};
+  /** Waits until the tabs are drawn and listen for keys. */
+  const ready = () => waitFor(() => output.output.includes('First'), 'the tabs are drawn');
+  return {input, output, selections, ready};
 }
 
-async function press(input: TestInput, key: string): Promise<void> {
+const press = pressKey;
+
+/** Ink stops reading keys while no input is active, so a key can only be given time to arrive. */
+async function pressIgnored(input: TestInput, key: string): Promise<void> {
   input.write(key);
   await new Promise<void>(resolve => setTimeout(resolve, 30));
 }
@@ -86,7 +92,8 @@ test('cycles tabs by ID in both directions', () => {
 });
 
 test('switches with Tab, Shift+Tab, and ←/→', async context => {
-  const {input, selections} = renderTabs(context);
+  const {input, selections, ready} = renderTabs(context);
+  await ready();
   await press(input, '\t');
   await press(input, '\x1b[C');
   await press(input, '\x1b[Z');
@@ -96,7 +103,8 @@ test('switches with Tab, Shift+Tab, and ←/→', async context => {
 });
 
 test('leaves ←/→ to a text cursor but keeps Tab', async context => {
-  const {input, selections} = renderTabs(context, {arrowKeys: false});
+  const {input, selections, ready} = renderTabs(context, {arrowKeys: false});
+  await ready();
   await press(input, '\x1b[C');
   await press(input, '\t');
 
@@ -104,16 +112,17 @@ test('leaves ←/→ to a text cursor but keeps Tab', async context => {
 });
 
 test('ignores keys while locked', async context => {
-  const {input, selections} = renderTabs(context, {inputActive: false});
-  await press(input, '\t');
-  await press(input, '\x1b[C');
+  const {input, selections, ready} = renderTabs(context, {inputActive: false});
+  await ready();
+  await pressIgnored(input, '\t');
+  await pressIgnored(input, '\x1b[C');
 
   assert.deepEqual(selections, []);
 });
 
 test('marks the active tab without color and wraps on a narrow terminal', async context => {
-  const {output} = renderTabs(context, {columns: 20});
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  const {output, ready} = renderTabs(context, {columns: 20});
+  await ready();
 
   // FORCE_COLOR=0 (tests/setup.ts) renders plain text, so only the bracket marks the tab.
   assert.match(output.output, /\[ First \]/);

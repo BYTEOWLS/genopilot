@@ -4,6 +4,7 @@ import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
 import {ApiKeyTab} from '../../src/ui/accessions-screen/api-key-tab.js';
+import {pressKey, waitFor, rendered} from '../wait.js';
 
 // Behavior is observed through the injected callbacks, test data, and the page structure (the
 // selection marker, the button brackets, the mask character), never the tab's wording.
@@ -43,21 +44,8 @@ class TestOutput extends Writable {
   }
 }
 
-async function waitFor(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 1000;
-  while (Date.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting for ${description}.`);
-}
 
-async function press(input: TestInput, key: string): Promise<void> {
-  input.write(key);
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
-}
+const press = pressKey;
 
 /** ↓ moves from the key field to the save button; Enter there saves. */
 async function submit(input: TestInput): Promise<void> {
@@ -108,6 +96,7 @@ function renderTab(
   return {
     input,
     output,
+    instance,
     saved,
     get checks() {
       return checks;
@@ -120,7 +109,7 @@ function renderTab(
 
 async function ready(tab: ReturnType<typeof renderTab>): Promise<void> {
   await waitFor(() => tab.checks === 1, 'the key status check');
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await rendered(tab.instance);
 }
 
 test('checks the key status and shows where the key is stored', async context => {

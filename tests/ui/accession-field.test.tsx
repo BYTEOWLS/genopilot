@@ -6,6 +6,7 @@ import {render} from 'ink';
 import type {AccessionEntry} from '../../src/accessions/catalog.js';
 import type {AccessionCatalogReader} from '../../src/accessions/store.js';
 import {accessionHint, AccessionField} from '../../src/ui/components/accession-field.js';
+import {pressKey as press, waitFor} from '../wait.js';
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -43,36 +44,10 @@ class TestOutput extends Writable {
   }
 }
 
-async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 1000;
-  while (Date.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 5));
-  }
-  assert.fail(`Timed out waiting until ${description}`);
-}
-
-// Ink reads stdin and runs every key handler synchronously in one 'readable' callback, so once
-// the input buffer is empty the key has been handled, including keys that change nothing.
-async function press(input: TestInput, key: string): Promise<void> {
-  input.write(key);
-  await waitUntil(() => input.readableLength === 0, 'the key is handled');
-}
-
 async function waitForFrame(output: TestOutput, predicate: (frame: string) => boolean): Promise<string> {
-  const timeoutAt = Date.now() + 1000;
-  while (Date.now() < timeoutAt) {
-    const frame = output.lastFrame();
-    if (predicate(frame)) {
-      return frame;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting for a terminal frame. Last frame:\n${output.lastFrame()}`);
+  await waitFor(() => predicate(output.lastFrame()), 'the expected terminal frame', () => `Last frame:\n${output.lastFrame()}`);
+  return output.lastFrame();
 }
-
 function entry(accession: string, name: string, overrides: Partial<AccessionEntry> = {}): AccessionEntry {
   return {
     accession,
@@ -150,7 +125,7 @@ async function renderField(
     },
   );
   context.after(() => instance.unmount());
-  await waitUntil(
+  await waitFor(
     () => writesAtSettle !== undefined && output.writes > writesAtSettle,
     'the loaded catalog is drawn',
   );
@@ -164,11 +139,11 @@ test('chooses an accession from the catalog with Enter', async context => {
   const {input, output, changes} = await renderField(context);
   await waitForFrame(output, frame => selectedLine(frame).length > 0);
 
-  input.write(ENTER);
+  await press(input, ENTER);
   await waitForFrame(output, frame => pickerOpen(frame) && selectedLine(frame).includes('GCF_000000001.1'));
-  input.write(ARROW_DOWN);
+  await press(input, ARROW_DOWN);
   await waitForFrame(output, frame => selectedLine(frame).includes('GCA_000000002.3'));
-  input.write(ENTER);
+  await press(input, ENTER);
 
   const frame = await waitForFrame(output, value => !pickerOpen(value));
   assert.deepEqual(changes, ['GCA_000000002.3']);
@@ -181,9 +156,9 @@ test('preselects the current value in the picker and keeps it when cancelled', a
   const {input, output, changes} = await renderField(context, {initialValue: 'GCA_000000002.3'});
   await waitForFrame(output, frame => selectedLine(frame).length > 0);
 
-  input.write(ENTER);
+  await press(input, ENTER);
   await waitForFrame(output, frame => pickerOpen(frame) && selectedLine(frame).includes('GCA_000000002.3'));
-  input.write(ESCAPE);
+  await press(input, ESCAPE);
 
   await waitForFrame(output, frame => !pickerOpen(frame) && frame.includes('GCA_000000002.3'));
   assert.deepEqual(changes, []);
@@ -193,7 +168,7 @@ test('recognizes a typed accession from the catalog regardless of case and white
   const {input, output, changes} = await renderField(context);
   await waitForFrame(output, frame => selectedLine(frame).length > 0);
 
-  input.write(' gcf_000000001.1');
+  await press(input, ' gcf_000000001.1');
   await waitForFrame(output, frame => frame.includes('first-assembly'));
   assert.equal(changes.at(-1), ' gcf_000000001.1');
 });
@@ -233,7 +208,7 @@ test('lists a conflicting accession with its copies but refuses to choose it', a
     loadAccessions: async () => [conflicting, entry('GCF_000000001.1', 'first-assembly')],
   });
 
-  input.write(ENTER);
+  await press(input, ENTER);
   const picker = await waitForFrame(output, frame => selectedLine(frame).includes('GCF_000000003.1'));
   // The copies that disagree are listed so the researcher can find them.
   assert.match(picker, /\/first-root\/GCF_000000003\.1/);
@@ -244,10 +219,10 @@ test('lists a conflicting accession with its copies but refuses to choose it', a
   assert.ok(selectedLine(output.lastFrame()).includes('GCF_000000003.1'), 'The picker stays open.');
 
   // The copies are only explained for the conflicting entry; another one is chosen as usual.
-  input.write(ARROW_DOWN);
+  await press(input, ARROW_DOWN);
   const next = await waitForFrame(output, frame => selectedLine(frame).includes('GCF_000000001.1'));
   assert.doesNotMatch(next, /first-root/);
-  input.write(ENTER);
+  await press(input, ENTER);
   await waitForFrame(output, frame => !frame.includes('conflicting-assembly'));
   assert.deepEqual(changes, ['GCF_000000001.1']);
 });
@@ -263,7 +238,7 @@ test('opens an empty or unreadable catalog without choosing anything', async con
     const {input, output, changes} = await renderField(context, {loadAccessions});
     const form = await waitForFrame(output, frame => selectedLine(frame).length > 0);
 
-    input.write(ENTER);
+    await press(input, ENTER);
     const picker = await waitForFrame(output, frame => frame !== form && selectedLine(frame).length === 0);
     if (index === 1) {
       assert.match(picker, /catalog is broken/);
@@ -271,7 +246,7 @@ test('opens an empty or unreadable catalog without choosing anything', async con
     // Enter has nothing to choose.
     await press(input, ENTER);
     assert.deepEqual(changes, []);
-    input.write(ESCAPE);
+    await press(input, ESCAPE);
     await waitForFrame(output, frame => selectedLine(frame).length > 0);
     assert.deepEqual(changes, []);
   }

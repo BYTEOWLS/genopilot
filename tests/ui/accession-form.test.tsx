@@ -6,6 +6,7 @@ import React from 'react';
 import {render} from 'ink';
 import type {AccessionEntry} from '../../src/accessions/catalog.js';
 import {AccessionForm} from '../../src/ui/accessions-screen/accession-form.js';
+import {pressKey, rendered, waitFor as waitUntil} from '../wait.js';
 
 class Input extends PassThrough {
   isTTY = true;
@@ -27,16 +28,8 @@ class Output extends Writable {
   }
 }
 
-const pause = () => new Promise(resolve => setTimeout(resolve, 35));
-
 async function waitFor(condition: () => boolean, output: Output): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    if (condition()) {
-      return;
-    }
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(output.frame());
+  await waitUntil(condition, 'the expected frame', () => output.frame());
 }
 
 test('accession details page within the terminal while fields, save, and failures stay visible', async context => {
@@ -62,7 +55,10 @@ test('accession details page within the terminal while fields, save, and failure
   context.after(() => app.unmount());
   const selected = () => output.frame().split('\n').find(line => line.startsWith('› ')) ?? '';
   const fits = () => output.frame().split('\n').length <= output.rows;
-  const press = async (key: string) => {input.write(key); await pause();};
+  const press = async (key: string) => {
+    await pressKey(input, key);
+    await rendered(app);
+  };
 
   await waitFor(() => selected().includes(editing.name!) && output.frame().includes('organism-marker') && fits(), output);
   assert.ok(output.frame().includes('organism-marker'));
