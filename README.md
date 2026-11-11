@@ -25,14 +25,14 @@ How to use GenoPilot is documented in [`docs/`](docs/README.md), which the appli
 
 ## Installation
 
-Node.js is the only manual prerequisite because the CLI itself requires Node.js to start.
+Node.js 24 or 26 is the only manual prerequisite because the CLI itself requires Node.js to start.
 
 ### One-command installation with NVM
 
-Linux and macOS users can install Node.js 24 with NVM, install the CLI, and start it with one copy-and-paste command:
+Linux and macOS users can install Node.js 26 with NVM, install the CLI, and start it with one copy-and-paste command:
 
 ```bash
-export NVM_DIR="${NVM_DIR:-$HOME/.nvm}" && curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash && . "$NVM_DIR/nvm.sh" && nvm install 24 && npm install --global @byteowls/genopilot && genopilot
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}" && curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | bash && . "$NVM_DIR/nvm.sh" && nvm install 26 && npm install --global @byteowls/genopilot && genopilot
 ```
 
 > This convenience command downloads and executes the pinned NVM installation script. Review the script first or use the downloaded Node.js installer below if this does not match your security policy.
@@ -41,7 +41,7 @@ export NVM_DIR="${NVM_DIR:-$HOME/.nvm}" && curl -fsSL https://raw.githubusercont
 
 Linux and macOS users who prefer not to use NVM can:
 
-1. Download and install **Node.js 24 LTS** for their operating system and architecture from [nodejs.org/download](https://nodejs.org/en/download).
+1. Download and install **Node.js 26 LTS** (or 24 LTS) for their operating system and architecture from [nodejs.org/download](https://nodejs.org/en/download).
 2. Open a new terminal and verify the installation:
 
    ```bash
