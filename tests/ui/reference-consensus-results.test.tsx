@@ -568,14 +568,12 @@ test('saves a reasoned exclusion with changed settings, then dry-runs and execut
     assert.deepEqual(draft.consensus, {include_backbone_vote: false, voting_method: 'strict-majority', min_callable_isolates: 2, unresolved_single_base: 'iupac', tie_source: 'backbone', tie_scope: 'any-allele'});
     assert.equal(draft.reason, 'Coverage review.');
 
-    // The rerun of the saved iteration uses the run's CPUs and starts with its dry run.
+    // The rerun of the saved iteration uses the run's CPUs; starting it checks its dry run first.
     await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
     assert.deepEqual(recorded.prepared.slice(0, 2).map(entry => entry.iteration), [4, 4]);
     assert.equal(recorded.prepared[0]?.cores, 3);
-    let frame = await screen.press(ENTER);
-    await waitFor(() => recorded.executed.length === 1, 'the dry run ran');
-    frame = await screen.press(ESCAPE);
-    assert.match(frame, /\/managed\/snakemake provenance\/cohort\/iteration-4\.json/);
+    await screen.settle();
+    assert.match(screen.output.readOutput(), /\/managed\/snakemake provenance\/cohort\/iteration-4\.json/);
     await screen.press(ENTER);
     await waitFor(() => recorded.executed.length === 2, 'the execution ran');
     assert.deepEqual(recorded.executed, ['dry-run', 'execute']);

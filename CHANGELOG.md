@@ -36,6 +36,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 - Ctrl+A in the isolate picker selects every isolate matching the search, or all of them without one; pressing it again deselects them.
 - Reference-consensus ties can be resolved with the backbone's base or a trusted isolate's base, either only among the tied bases or always. Settled ties are counted, filterable on the Sites tab, and kept in the consensus sites table; a cohort iteration can change this setting alone.
 - The reference-consensus setting formerly called *Unresolved SNPs* is now *Unresolved single-base positions*, since such a position is a disagreement between isolates, not an uncertain SNP call.
+- Running a cohort iteration is one step: it checks its dry run first and runs only when nothing but the cohort steps would run.
 
 ### Results
 

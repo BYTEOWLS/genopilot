@@ -640,7 +640,7 @@ export function RunResultsScreen({
         inputActive={inputActive}
         labels={{
           title: `Rerun iteration ${String(iteration)}`,
-          intro: 'Decision saved. Dry-run the iteration first: it may run only when nothing but the cohort steps would run.',
+          intro: `Iteration ${String(iteration)} applies its saved decision. Only the cohort steps may run; per-isolate results are reused, never recomputed.`,
           back: 'Back to results',
         }}
       />

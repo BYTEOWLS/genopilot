@@ -131,7 +131,7 @@ export type WorkflowRun = {
 };
 
 /**
- * Checks a finished, successful dry run before its execution is offered: nothing when it may be
+ * Checks a finished, successful dry run before the execution runs: nothing when it may be
  * executed, otherwise why not.
  */
 export type DryRunGate<R extends WorkflowRun> = (run: R) => Promise<{allowed: true} | {allowed: false; reason: string}>;
@@ -174,6 +174,8 @@ type PersistedRunResult = {
 type FinishedExecution = {
   state: 'finished';
   run: WorkflowRun;
+  /** The dry run an execution starts with to pass the dry-run gate; see `start`. */
+  checking?: boolean;
   /** When the process was started and when it ended, in epoch milliseconds. */
   startedAt: number;
   endedAt: number;
@@ -190,7 +192,7 @@ type FinishedExecution = {
 
 type ExecutionState<R extends WorkflowRun> =
   | {state: 'ready'; mode: WorkflowRunMode}
-  | {state: 'running'; run: R; logLines: string[]; startedAt: number}
+  | {state: 'running'; run: R; logLines: string[]; startedAt: number; checking?: boolean}
   | FinishedExecution
   | {state: 'result'; finished: FinishedExecution & {result: PersistedRunResult}};
 
@@ -269,8 +271,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   /** The isolates whose results are complete, read after a failed execution; see `settleIsolateProgress`. */
   completedIsolates?: () => Promise<ReadonlySet<string>>;
   /**
-   * When given, the execution is offered only after a dry run on this screen succeeded and passed
-   * this check, which reads what the dry run would schedule.
+   * When given, starting the execution first runs the dry run and checks what it would schedule;
+   * the execution follows only when the check passes. Once refused, the execution stays
+   * unavailable until a dry run passes.
    */
   dryRunGate?: DryRunGate<R>;
   /** The size of the event file before an execution appends to it; 0 when it does not exist. */
@@ -278,13 +281,15 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   /** Wording for starting something other than a newly configured run, such as a cohort iteration. */
   labels?: {title?: string; intro?: string; back?: string};
 }): React.JSX.Element {
-  const [gateReason, setGateReason] = useState<string | undefined>(
-    dryRunGate ? 'Available once a dry run shows that only the expected steps would run.' : undefined,
-  );
+  const [gateReason, setGateReason] = useState<string | undefined>();
   const unavailableReason = executionUnavailableReason ?? gateReason;
   const availableModes = modeOptions.filter(option =>
     option.mode !== 'execute' || unavailableReason === undefined);
-  const [screen, setScreen] = useState<ExecutionState<R>>({state: 'ready', mode: 'dry-run'});
+  // With a gate, the execution checks itself first, so it is the one action to start.
+  const [screen, setScreen] = useState<ExecutionState<R>>({
+    state: 'ready',
+    mode: dryRunGate && unavailableReason === undefined ? 'execute' : 'dry-run',
+  });
   useTerminalTitle({status: terminalTitleStatus(screen)});
   // Leaving would unmount the screen and abort Snakemake without waiting for its cleanup.
   useHomeSuspension(screen.state === 'running' ? 'busy' : undefined);
@@ -393,8 +398,12 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     }
   };
 
-  const start = (mode: WorkflowRunMode): void => {
-    const run = preparedRuns[mode];
+  /**
+   * Starts a dry run or an execution. With a dry-run gate, an execution starts as its dry run
+   * (`checkFirst`) and continues as the execution only when the gate allows it.
+   */
+  const start = (mode: WorkflowRunMode, checkFirst = mode === 'execute' && dryRunGate !== undefined): void => {
+    const run = preparedRuns[checkFirst ? 'dry-run' : mode];
     const controller = new AbortController();
     abortController.current = controller;
     eventReader.current = new RunEventReader();
@@ -406,7 +415,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     setScrollOffset(0);
     setProgress(initialRunProgress([...stagesRef.current]));
     const startedAt = Date.now();
-    setScreen({state: 'running', run, logLines: [], startedAt});
+    setScreen({state: 'running', run, logLines: [], startedAt, ...(checkFirst ? {checking: true} : {})});
     liveOutput.current = new LiveOutputBuffer(lines => {
       setScreen(current =>
         current.state === 'running'
@@ -472,6 +481,13 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
         }
         const followUp = run.mode === 'execute' && result.exitCode === 0 ? onSucceeded?.() : undefined;
         const gate = run.mode === 'dry-run' && dryRunGate ? await checkGate(run, result.exitCode === 0) : undefined;
+        // The check passed: the execution follows, unless the screen was left meanwhile.
+        if (checkFirst && gate?.allowed) {
+          if (!controller.signal.aborted) {
+            start('execute', false);
+          }
+          return;
+        }
         setScreen(current => ({
           state: 'finished',
           run: result,
@@ -481,6 +497,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
           exitCode: result.exitCode,
           ...(followUp ? {followUp: {text: followUp.label, error: false}} : {}),
           ...(gate ? {gate} : {}),
+          ...(checkFirst ? {checking: true} : {}),
           ...(persisted ? {result: persisted} : {}),
         }));
         // The run is finished either way; its follow-up may take a while and must not hold the
@@ -523,6 +540,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
           endedAt,
           logLines: current.state === 'running' ? current.logLines : [],
           error: message,
+          ...(checkFirst ? {checking: true} : {}),
           ...(persisted ? {result: persisted} : {}),
         }));
       },
@@ -532,7 +550,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   /** Applies the dry-run gate to a finished dry run and offers or withholds the execution. */
   const checkGate = async (run: R, succeeded: boolean): Promise<{allowed: boolean; text: string}> => {
     if (!succeeded) {
-      const text = 'The dry run failed, so the execution is not offered.';
+      const text = 'The dry run failed, so the workflow was not run.';
       setGateReason(text);
       return {allowed: false, text};
     }
@@ -544,7 +562,7 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
     }
     if (decision.allowed) {
       setGateReason(undefined);
-      return {allowed: true, text: 'Only the expected steps would run; the execution is available.'};
+      return {allowed: true, text: 'Only the expected steps would run; the workflow can run.'};
     }
     setGateReason(decision.reason);
     return {allowed: false, text: decision.reason};
@@ -727,7 +745,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
   const error = finished ? screen.error : undefined;
   const exitCode = finished ? screen.exitCode : undefined;
   const succeeded = finished && hasSucceeded(screen);
-  const label = screen.run.mode === 'dry-run' ? 'Snakemake dry run' : 'Workflow run';
+  const checking = screen.state === 'running' || screen.state === 'finished' ? screen.checking === true : false;
+  // The check an execution starts with is part of running it, so it is shown as the run.
+  const label = checking || screen.run.mode === 'execute' ? 'Workflow run' : 'Snakemake dry run';
   return (
     <Page
       title={label}
@@ -736,8 +756,8 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
       back={!finished ? false : screen.run.mode === 'dry-run' ? 'Start options' : labels.back ?? 'Back to workflow'}
     >
       {finished ? (
-        <Alert variant={succeeded ? 'success' : 'error'}>
-          {succeeded ? `${label} succeeded.` : `${label} failed.`}
+        <Alert variant={succeeded && !checking ? 'success' : 'error'}>
+          {checking ? 'The workflow was not run.' : succeeded ? `${label} succeeded.` : `${label} failed.`}
         </Alert>
       ) : (
         <Text bold color="cyan">Running {sanitizeTerminalText(label.toLowerCase())}…</Text>

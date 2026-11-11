@@ -273,7 +273,7 @@ Review saves a decision: which isolates vote and the cohort settings, with a rea
 
 ### Rerunning an iteration
 
-A saved decision runs only the cohort steps: support aggregation, consensus generation, and the iteration's provenance. A dry run first shows what Snakemake would do. When it would also run a per-isolate step, for example because a voter's results are older than a changed rule, the rerun is refused, because that would recompute evidence: such a change needs a new run. The decision then stays saved as a pending iteration. A pending iteration, also an interrupted one, is continued from the Iterations tab.
+A saved decision runs only the cohort steps: support aggregation, consensus generation, and the iteration's provenance. When Snakemake would also run a per-isolate step, for example because a voter's results are older than a changed rule, the iteration is not run, because that would recompute evidence: such a change needs a new run. The decision then stays saved as a pending iteration. A pending iteration, also an interrupted one, is continued from the Iterations tab.
 
 ### Isolate states
 
