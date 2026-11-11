@@ -6,6 +6,7 @@ import {sanitizeTerminalText} from '../sanitize.js';
 import {ToolingList} from '../welcome-screen/tooling/section.js';
 import {mutedColor} from '../theme.js';
 import {Page} from '../components/page.js';
+import {Section} from '../components/section.js';
 import {ParameterList, type ParameterRow} from '../components/parameter-list.js';
 import {formatLocalDateTime} from '../utils.js';
 import type {CliMetadata} from '../welcome-screen/screen.js';
@@ -68,10 +69,9 @@ export function ToolingScreen({
       ) : (
         <ToolingList status={status} />
       )}
-      <Box marginTop={1} flexDirection="column">
-        <Text bold>{sanitizeTerminalText(metadata.label)}</Text>
+      <Section title={metadata.label}>
         <ParameterList rows={applicationRows(metadata)} inputActive={false} />
-      </Box>
+      </Section>
       {message ? (
         <Box marginTop={1}>
           <Alert variant={status.state === 'ready' ? 'success' : 'warning'}>

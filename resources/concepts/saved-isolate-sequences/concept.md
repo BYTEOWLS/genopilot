@@ -18,7 +18,7 @@ This section was moved from consensus [Task 1](../completed/consensus/1-manage-i
 
 An isolate is the biological sample, not its reads. Its own fields (`name`, `description`, `wildtype`, `derived_from`) describe the organism. Everything else is data about it, grouped by kind:
 
-- Read sets: sequencing inputs referenced where they lie, using the [sequencing-read-set contract](../sequencing-read-sets/concept.md).
+- Read sets: sequencing inputs referenced where they lie, using the [sequencing-read-set contract](../completed/sequencing-read-sets/concept.md).
 - `sequences`: saved FASTA files of the isolate, copied into the catalog. They are outputs, of a run or later of an import.
 
 Sequencing read sets owns read storage, library identity, compatibility, and catalog/run transitions; implement that contract first. This concept only adds saved `sequences` and their display beside read sets. It does not rename read fields, redefine read requirements, or migrate saved run snapshots.

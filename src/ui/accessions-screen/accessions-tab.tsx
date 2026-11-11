@@ -14,6 +14,7 @@ import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 import {AccessionForm, localFields, withLocalFields} from './accession-form.js';
 import {Page} from '../components/page.js';
+import {Section} from '../components/section.js';
 import type {AccessionsPageFrame} from './screen.js';
 import type {AccessionCatalogUpdater} from '../../accessions/registration.js';
 import {accessionGenomeView} from '../../accessions/views.js';
@@ -274,25 +275,23 @@ export function AccessionsTab({
       ) : null}
 
       {damagedCopies.length > 0 && view.kind === 'list' ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>Damaged caches, not trusted</Text>
+        <Section title="Damaged caches, not trusted">
           {damagedCopies.map(copy => (
             <Text key={copy.path} color="red" wrap="wrap">
               ✖ {sanitizeTerminalText(copy.path)} — {sanitizeTerminalText(copy.problem ?? '')}
             </Text>
           ))}
-        </Box>
+        </Section>
       ) : null}
 
       {scan.ignored.length > 0 && view.kind === 'list' ? (
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>Skipped in caches</Text>
+        <Section title="Skipped in caches">
           {scan.ignored.map(entry => (
             <Text key={entry.path} color="yellow" wrap="wrap">
               – {sanitizeTerminalText(entry.path)} {sanitizeTerminalText(entry.reason)}
             </Text>
           ))}
-        </Box>
+        </Section>
       ) : null}
 
       {view.kind === 'confirm-remove' ? (

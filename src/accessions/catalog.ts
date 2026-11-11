@@ -24,6 +24,16 @@ export type NcbiAssemblyMetadata = {
   strain?: string;
   /** Who submitted the assembly to NCBI. */
   submitter?: string;
+  /** Assembly release date, not the submission or metadata retrieval date. */
+  release_date?: string;
+  total_sequence_length?: number;
+  gc_percent?: number;
+  number_of_contigs?: number;
+  number_of_scaffolds?: number;
+  contig_n50?: number;
+  scaffold_n50?: number;
+  bioproject_accession?: string;
+  biosample_accession?: string;
   retrieved_at: string;
   source: NcbiMetadataSource;
 };
@@ -165,6 +175,15 @@ function validateMetadata(value: unknown, path: string, issues: Issues): void {
       'refseq_category',
       'strain',
       'submitter',
+      'release_date',
+      'total_sequence_length',
+      'gc_percent',
+      'number_of_contigs',
+      'number_of_scaffolds',
+      'contig_n50',
+      'scaffold_n50',
+      'bioproject_accession',
+      'biosample_accession',
       'retrieved_at',
       'source',
     ],
@@ -183,8 +202,19 @@ function validateMetadata(value: unknown, path: string, issues: Issues): void {
     'refseq_category',
     'strain',
     'submitter',
+    'release_date',
+    'bioproject_accession',
+    'biosample_accession',
   ] as const) {
     validateText(value[field], `${path}.${field}`, issues, false);
+  }
+  for (const field of ['total_sequence_length', 'number_of_contigs', 'number_of_scaffolds', 'contig_n50', 'scaffold_n50'] as const) {
+    if (value[field] !== undefined && !(Number.isSafeInteger(value[field]) && (value[field] as number) >= 0)) {
+      issues.push({path: `${path}.${field}`, message: 'must be a non-negative safe integer when present'});
+    }
+  }
+  if (value.gc_percent !== undefined && !(typeof value.gc_percent === 'number' && Number.isFinite(value.gc_percent) && value.gc_percent >= 0 && value.gc_percent <= 100)) {
+    issues.push({path: `${path}.gc_percent`, message: 'must be a percentage between 0 and 100 when present'});
   }
   validateTimestamp(value.retrieved_at, `${path}.retrieved_at`, issues);
   if (value.source !== 'datasets-v2-rest' && value.source !== 'cached-download-report') {

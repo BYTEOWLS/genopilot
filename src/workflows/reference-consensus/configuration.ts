@@ -65,6 +65,7 @@ export type ReferenceConsensusConfiguration = {
     backbone: BackboneInput;
     isolates_file: typeof ISOLATE_SNAPSHOT_FILENAME;
     selected_isolates: string[];
+    selected_read_sets: string[];
   };
   calling: CallingSettings;
   consensus: {
@@ -150,7 +151,7 @@ function validateInputs(
   if (!inputs) {
     return undefined;
   }
-  rejectUnknownFields(inputs, ['backbone', 'isolates_file', 'selected_isolates'], '$.inputs', issues);
+  rejectUnknownFields(inputs, ['backbone', 'isolates_file', 'selected_isolates', 'selected_read_sets'], '$.inputs', issues);
   const backbone = validateBackbone(inputs.backbone, issues);
   let validFile = true;
   if (inputs.isolates_file !== ISOLATE_SNAPSHOT_FILENAME) {
@@ -158,10 +159,18 @@ function validateInputs(
     validFile = false;
   }
   const selected = validateSelectedIsolates(inputs.selected_isolates, issues);
+  const keys = inputs.selected_read_sets;
+  if (!Array.isArray(keys) || keys.length === 0 || keys.some(key => typeof key !== 'string' ||
+      key.split('/').length !== 2 || !key.split('/').every(part => isolateIdPattern.test(part))) ||
+      new Set(keys).size !== keys.length) {
+    issues.push({path: '$.inputs.selected_read_sets', message: 'must list unique isolate/read-set IDs; create a new run for older saved contracts'});
+  } else if (selected && JSON.stringify([...new Set(keys.map(key => (key as string).split('/')[0]))]) !== JSON.stringify(selected)) {
+    issues.push({path: '$.inputs.selected_read_sets', message: 'must match selected isolates in order'});
+  }
   if (!backbone || !validFile || !selected) {
     return undefined;
   }
-  return {backbone, isolates_file: ISOLATE_SNAPSHOT_FILENAME, selected_isolates: selected};
+  return {backbone, isolates_file: ISOLATE_SNAPSHOT_FILENAME, selected_isolates: selected, selected_read_sets: keys as string[]};
 }
 
 function validateInteger(

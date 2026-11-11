@@ -4,6 +4,7 @@ import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
 import {NcbiCacheDecisionPage, type NcbiCacheModes} from '../../src/ui/new-run-screen/ncbi-cache-decision.js';
+import {pressKey} from '../wait.js';
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -65,8 +66,7 @@ function renderPage(context: TestContext) {
 
 async function press(input: TestInput, ...keys: string[]): Promise<void> {
   for (const key of keys) {
-    input.write(key);
-    await new Promise<void>(resolve => setTimeout(resolve, 30));
+    await pressKey(input, key);
   }
 }
 

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {stringify} from 'yaml';
+import {testSnapshotReadSet} from '../../read-sets.js';
 import {
   parseReferenceConsensusConfiguration,
   ReferenceConsensusConfigurationError,
@@ -17,6 +19,7 @@ const validConfiguration = {
     backbone: {source: 'ncbi', accession: 'GCF_000149205.2', ncbi_cache_mode: 'reuse'},
     isolates_file: 'isolates.yaml',
     selected_isolates: ['isolate-a', 'isolate-b'],
+    selected_read_sets: ['isolate-a/reads', 'isolate-b/reads'],
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
   consensus: {
@@ -61,6 +64,7 @@ inputs:
     fasta: /data/backbone.fa
   isolates_file: isolates.yaml
   selected_isolates: [isolate-a]
+  selected_read_sets: [isolate-a/reads]
 calling:
   ploidy: 1
   min_depth: 5
@@ -176,20 +180,15 @@ test('refuses an unversioned accession and a backbone mixing both sources', () =
 });
 
 test('parses a snapshot holding exactly the selection, in order', () => {
-  const source = `
-schema_version: 1
-captured_at: "2026-01-01T12:00:00.000Z"
-isolates:
-  - id: isolate-a
-    name: Isolate A
-    wildtype: null
-    derived_from: null
-    read_pairs:
-      - {r1: /data/a_R1.fastq.gz, r2: /data/a_R2.fastq.gz, trimmed: false}
-      - {r1: /data/a2_R1.fastq.gz, r2: /data/a2_R2.fastq.gz, trimmed: true}
-`;
+  const source = stringify({schema_version: 1, captured_at: '2026-01-01T12:00:00.000Z', isolates: [{
+    id: 'isolate-a', name: 'Isolate A', wildtype: null, derived_from: null,
+    read_sets: [testSnapshotReadSet([
+      {r1: '/data/a_R1.fastq.gz', r2: '/data/a_R2.fastq.gz', trimmed: false},
+      {r1: '/data/a2_R1.fastq.gz', r2: '/data/a2_R2.fastq.gz', trimmed: true},
+    ])],
+  }]});
   const snapshot = parseIsolateSnapshot(source, ['isolate-a']);
-  assert.equal(snapshot.isolates[0]?.read_pairs[1]?.trimmed, true);
+  assert.equal(snapshot.isolates[0]?.read_sets[0]?.read_pairs[1]?.trimmed, true);
   assert.throws(() => parseIsolateSnapshot(source, ['isolate-b']), ReferenceConsensusConfigurationError);
   assert.throws(
     () => parseIsolateSnapshot(source.replace('trimmed: true', 'trimmed: yes please'), ['isolate-a']),

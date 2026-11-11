@@ -9,6 +9,7 @@ import {MarkdownDocumentPage} from '../../src/ui/components/markdown-document-pa
 import {DocumentationScreen} from '../../src/ui/documentation-screen/screen.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 import type {WorkflowManifest} from '../../src/workflows/manifest.js';
+import {waitFor, pressKey} from '../wait.js';
 
 const ESCAPE = '\x1b';
 const ENTER = '\r';
@@ -41,8 +42,6 @@ class TestOutput extends Writable {
   }
 }
 
-const settle = (milliseconds = 60): Promise<void> => new Promise(resolve => setTimeout(resolve, milliseconds));
-
 function document(id: string, body: string): Document {
   return {id, title: `Title ${id}`, blocks: parseMarkdown(`# Title ${id}\n\n${body}`)};
 }
@@ -62,29 +61,30 @@ function mount(element: React.JSX.Element) {
     stdin: input as unknown as NodeJS.ReadStream,
     stdout: output as unknown as NodeJS.WriteStream,
   });
-  /** Sends keys one by one and returns everything drawn meanwhile. */
-  const press = async (...keys: string[]): Promise<string> => {
+  /** Sends keys one by one, forgetting what was drawn before. */
+  const press = async (...keys: string[]): Promise<void> => {
     output.output = '';
     for (const key of keys) {
-      input.write(key);
-      await settle();
+      await pressKey(input, key);
     }
-    return output.output;
   };
-  return {input, output, press, unmount: () => instance.unmount()};
+  /** Waits until the output drawn since the last keys matches. */
+  const shows = (pattern: RegExp, message?: string) =>
+    waitFor(() => pattern.test(output.output), message ?? `the output matches ${String(pattern)}`, () => output.output);
+  return {input, output, press, shows, unmount: () => instance.unmount()};
 }
 
 test('shows several documents as tabs, each keeping its own scroll position', async () => {
   const load: DocumentsLoader = async () => [longDocument('first'), longDocument('second')];
   const page = mount(<MarkdownDocumentPage title="Docs" load={load} onClose={() => {}} inputActive />);
   try {
-    await settle();
-    let frame = await page.press(...Array.from({length: 10}, () => PAGE_DOWN));
-    assert.match(frame, /End of first\./);
-    frame = await page.press(TAB);
-    assert.match(frame, /Line 0 of second\./, 'the second tab starts at its top');
-    frame = await page.press(TAB);
-    assert.match(frame, /End of first\./, 'the first tab kept its scroll position');
+    await page.shows(/Line 0 of first\./);
+    await page.press(...Array.from({length: 10}, () => PAGE_DOWN));
+    await page.shows(/End of first\./);
+    await page.press(TAB);
+    await page.shows(/Line 0 of second\./, 'the second tab starts at its top');
+    await page.press(TAB);
+    await page.shows(/End of first\./, 'the first tab kept its scroll position');
   } finally {
     page.unmount();
   }
@@ -95,11 +95,9 @@ test('shows a missing document as unavailable and closes with Esc', async () => 
   const load: DocumentsLoader = async () => [{id: 'README', title: 'README.md'}];
   const page = mount(<MarkdownDocumentPage title="Docs" load={load} onClose={() => { closed = true; }} inputActive />);
   try {
-    await settle();
-    assert.match(page.output.output, /No documentation is available/);
+    await page.shows(/No documentation is available/);
     await page.press(ESCAPE);
-    await settle(100);
-    assert.equal(closed, true);
+    await waitFor(() => closed, 'the page closes');
   } finally {
     page.unmount();
   }
@@ -111,8 +109,7 @@ test('reports documentation that cannot be read', async () => {
   };
   const page = mount(<MarkdownDocumentPage title="Docs" load={load} onClose={() => {}} inputActive />);
   try {
-    await settle();
-    assert.match(page.output.output, /Permission denied sentinel/);
+    await page.shows(/Permission denied sentinel/);
   } finally {
     page.unmount();
   }
@@ -140,23 +137,24 @@ test('lists the general topic and one topic per discovered workflow, and opens t
     />,
   );
   try {
-    await settle();
+    await screen.shows(/Label beta/);
     const index = screen.output.output;
     assert.match(index, /App sentinel/);
     assert.match(index, /Label alpha/);
-    assert.match(index, /Label beta/);
 
-    let frame = await screen.press(ENTER);
-    assert.match(frame, /General body sentinel/);
+    await screen.press(ENTER);
+    await screen.shows(/General body sentinel/);
     await screen.press(ESCAPE);
-    frame = await screen.press(ARROW_DOWN, ARROW_DOWN, ENTER);
-    assert.match(frame, /Readme of beta\./);
+    await screen.shows(/Label beta/);
+    await screen.press(ARROW_DOWN, ARROW_DOWN, ENTER);
+    await screen.shows(/Readme of beta\./);
     assert.deepEqual(opened, ['beta']);
 
     await screen.press(ESCAPE);
+    await screen.shows(/Label beta/);
     assert.equal(backedOut, false, 'Esc on a document returns to the index');
     await screen.press(ESCAPE);
-    assert.equal(backedOut, true);
+    await waitFor(() => backedOut, 'Esc on the index goes back');
   } finally {
     screen.unmount();
   }

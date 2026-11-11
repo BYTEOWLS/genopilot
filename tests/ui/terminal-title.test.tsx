@@ -16,6 +16,7 @@ import {
   type WorkflowRunResult,
 } from '../../src/ui/new-run-screen/workflow-execution.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
+import {pressKey, waitFor} from '../wait.js';
 
 const baseTitle = 'Base title';
 
@@ -47,16 +48,6 @@ class TestOutput extends Writable {
   }
 }
 
-async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 2000;
-  while (Date.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting until ${description}`);
-}
 
 function renderWithTitle(
   context: TestContext,
@@ -114,7 +105,7 @@ test('orders contributions by nesting and removes them on unmount', async contex
     </Contributor>,
   );
   const nested = formatTerminalTitle(baseTitle, [{label: 'Outer'}, {label: 'Inner'}]);
-  await waitUntil(() => lastTitle(view.titles) === nested, 'the nested title is published');
+  await waitFor(() => lastTitle(view.titles) === nested, 'the nested title is published');
 
   view.rerender(
     <Contributor label="Outer">
@@ -125,12 +116,12 @@ test('orders contributions by nesting and removes them on unmount', async contex
     {label: 'Outer'},
     {label: 'Changed', status: 'running'},
   ]);
-  await waitUntil(() => lastTitle(view.titles) === changed, 'the changed title is published');
+  await waitFor(() => lastTitle(view.titles) === changed, 'the changed title is published');
   // A contribution that changes is replaced in one step, never shown partially removed.
   assert.ok(!view.titles.includes(formatTerminalTitle(baseTitle, [{label: 'Outer'}])));
 
   view.rerender(<Contributor label="Outer" />);
-  await waitUntil(
+  await waitFor(
     () => lastTitle(view.titles) === formatTerminalTitle(baseTitle, [{label: 'Outer'}]),
     'the inner contribution is removed',
   );
@@ -165,15 +156,15 @@ test('adds the selected workflow label to the title until the selection is left'
       genopilot={{version: '1.2.3', igv: '3.8.9'}}
     />,
   );
-  await waitUntil(() => view.output.output.includes('Description of placeholder-workflow.'), 'workflows are listed');
+  await waitFor(() => view.output.output.includes('Description of placeholder-workflow.'), 'workflows are listed');
   assert.equal(lastTitle(view.titles), baseTitle);
 
-  view.input.write('\r');
+  await pressKey(view.input, '\r');
   const selected = formatTerminalTitle(baseTitle, [{label: 'Workflow label'}]);
-  await waitUntil(() => lastTitle(view.titles) === selected, 'the workflow label is shown');
+  await waitFor(() => lastTitle(view.titles) === selected, 'the workflow label is shown');
 
-  view.input.write('\x1b');
-  await waitUntil(() => lastTitle(view.titles) === baseTitle, 'the workflow label is removed');
+  await pressKey(view.input, '\x1b');
+  await waitFor(() => lastTitle(view.titles) === baseTitle, 'the workflow label is removed');
 });
 
 function renderExecution(
@@ -211,19 +202,19 @@ for (const [exitCode, outcome] of [
 ] as const) {
   test(`marks the title while Snakemake runs and keeps the ${outcome} outcome`, async context => {
     const {view, releaseRun} = renderExecution(context, exitCode);
-    await waitUntil(() => view.output.output.includes('/managed/snakemake'), 'start options are shown');
+    await waitFor(() => view.output.output.includes('/managed/snakemake'), 'start options are shown');
     assert.equal(lastTitle(view.titles), baseTitle);
 
-    view.input.write('\r');
+    await pressKey(view.input, '\r');
     const running = formatTerminalTitle(baseTitle, [{status: 'running'}]);
-    await waitUntil(() => lastTitle(view.titles) === running, 'the running mark is shown');
+    await waitFor(() => lastTitle(view.titles) === running, 'the running mark is shown');
 
     releaseRun();
     const finished = formatTerminalTitle(baseTitle, [{status: outcome}]);
-    await waitUntil(() => lastTitle(view.titles) === finished, `the ${outcome} mark is shown`);
+    await waitFor(() => lastTitle(view.titles) === finished, `the ${outcome} mark is shown`);
 
     // Leaving the finished dry run for the start options clears the outcome.
-    view.input.write('\x1b');
-    await waitUntil(() => lastTitle(view.titles) === baseTitle, 'the outcome mark is cleared');
+    await pressKey(view.input, '\x1b');
+    await waitFor(() => lastTitle(view.titles) === baseTitle, 'the outcome mark is cleared');
   });
 }

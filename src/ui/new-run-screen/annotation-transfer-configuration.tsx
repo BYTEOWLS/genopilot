@@ -1,4 +1,5 @@
 import {resolve} from 'node:path';
+import {formatLocalDateTime} from '../utils.js';
 import React, {useEffect, useState} from 'react';
 import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
 import {refreshAccessionCaches} from '../../accessions/registration.js';
@@ -102,11 +103,10 @@ function previousRunFormValues(configuration: AnnotationTransferConfiguration): 
 /**
  * Labels a saved run for the prefill picker by what the researcher recognizes it as — its
  * optional name and its creation time — rather than by the run ID, whose timestamp prefix and
- * sanitized directory form are hard to read here. The time is shown exactly as
- * `run.created_at` records it, in UTC, so it never disagrees with the saved configuration.
+ * sanitized directory form are hard to read here. Uses the shared local date-time format.
  */
 export function previousRunLabel(configuration: {run: RunDetails}): string {
-  const createdAt = `${configuration.run.created_at.replace('T', ' ').slice(0, 19)} UTC`;
+  const createdAt = formatLocalDateTime(configuration.run.created_at);
   return [configuration.run.name, createdAt, configuration.run.description]
     .filter(Boolean)
     .join(' — ');

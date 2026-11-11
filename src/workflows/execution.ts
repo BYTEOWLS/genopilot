@@ -234,6 +234,10 @@ export async function executeSnakemakeRun(
   ];
 
   try {
+    // Setup awaits the API key and log files; cancellation during those awaits must not start work.
+    if (signal?.aborted) {
+      throw cancelled();
+    }
     child = spawnProcess(prepared.executable, prepared.arguments, {
       cwd: prepared.runDirectory,
       detached: true,

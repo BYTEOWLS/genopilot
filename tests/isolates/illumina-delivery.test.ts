@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {testReadSet} from '../read-sets.js';
 import {chmod, mkdir, mkdtemp, rm, symlink, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
@@ -10,7 +11,7 @@ import {
   parseIlluminaReadHeader,
   scanIlluminaDelivery,
   type DeliveryScan,
-} from '../../src/isolates/illumina-delivery.js';
+} from '../../src/isolates/illumina/delivery.js';
 
 type Reads = {
   instrument?: string;
@@ -163,7 +164,8 @@ test('reports every FASTQ it does not propose, with its reason', async context =
 
   const scan = await scanIlluminaDelivery(tempDir, emptyCatalog);
 
-  assert.deepEqual(scan.candidates.map(candidate => candidate.sample), ['good']);
+  assert.deepEqual(scan.candidates.map(candidate => candidate.sample), ['good', 'split']);
+  assert.deepEqual(scan.candidates[1]!.readSets.map(group => group.chunk), [1, 2]);
   assert.deepEqual(reasons(scan, tempDir), {
     'broken_S5_L001_R1_001.fastq.gz': 'invalid-fastq',
     'broken_S5_L001_R2_001.fastq.gz': 'invalid-fastq',
@@ -172,10 +174,6 @@ test('reports every FASTQ it does not propose, with its reason', async context =
     'public_S6_L001_R1_001.fastq.gz': 'not-illumina-header',
     'public_S6_L001_R2_001.fastq.gz': 'not-illumina-header',
     'reads_1.fq.gz': 'not-illumina-name',
-    'split_S3_L001_R1_001.fastq.gz': 'split-chunk',
-    'split_S3_L001_R1_002.fastq.gz': 'split-chunk',
-    'split_S3_L001_R2_001.fastq.gz': 'split-chunk',
-    'split_S3_L001_R2_002.fastq.gz': 'split-chunk',
     'swapped_S4_L001_R1_001.fastq.gz': 'mate-mismatch',
     'swapped_S4_L001_R2_001.fastq.gz': 'mate-mismatch',
     'Undetermined_S0_L001_R1_001.fastq.gz': 'undetermined',
@@ -221,14 +219,14 @@ test('marks read files the catalog already references, also through links', asyn
         name: 'Known',
         wildtype: null,
         derived_from: null,
-        read_pairs: [{r1: join(tempDir, 'known_S1_L001_R1_001.fastq.gz'), r2: join(tempDir, 'known_S1_L001_R2_001.fastq.gz'), trimmed: false}],
+        read_sets: [testReadSet([{r1: join(tempDir, 'known_S1_L001_R1_001.fastq.gz'), r2: join(tempDir, 'known_S1_L001_R2_001.fastq.gz'), trimmed: false}])],
       },
       {
         id: 'linked',
         name: 'Linked',
         wildtype: null,
         derived_from: null,
-        read_pairs: [{r1: join(elsewhere, 'linked_R1.fastq.gz'), r2: join(elsewhere, 'missing_R2.fastq.gz'), trimmed: false}],
+        read_sets: [testReadSet([{r1: join(elsewhere, 'linked_R1.fastq.gz'), r2: join(elsewhere, 'missing_R2.fastq.gz'), trimmed: false}])],
       },
     ],
   };

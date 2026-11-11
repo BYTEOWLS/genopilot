@@ -26,6 +26,7 @@ import type {WorkflowDiscovery} from '../../src/ui/components/workflow-selector.
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 import type {WorkflowParameterDefinition} from '../../src/workflows/parameter-definitions.js';
 import type {UpdateAvailability} from '../../src/self-update.js';
+import {pressKey, waitFor as waitUntil, waitForOutput as waitForTerminal, rendered} from '../wait.js';
 
 const nodeVersion = toolingPolicy.node.minimumVersion;
 const pixiVersion = toolingPolicy.pixi.managedVersion;
@@ -162,7 +163,6 @@ function renderWelcome(
   options: {
     columns?: number;
     rows?: number;
-    exitConfirmationMilliseconds?: number;
     toolingCheck?: () => Promise<ToolingStatus>;
     toolingInstaller?: (
       onProgress: (progress: InstallationProgress) => void,
@@ -198,7 +198,6 @@ function renderWelcome(
       currentDirectory="/research/project"
       toolingCheck={options.toolingCheck ?? resolvedTooling(status)}
       toolingInstaller={options.toolingInstaller}
-      exitConfirmationMilliseconds={options.exitConfirmationMilliseconds}
       commands={options.commands}
       workflowDiscovery={options.workflowDiscovery}
       runDiscovery={options.runDiscovery}
@@ -232,13 +231,7 @@ function renderWelcome(
 
 /** Waits until an injected dependency observes an expected interaction. */
 async function waitFor(condition: () => boolean): Promise<void> {
-  const timeoutAt = Date.now() + 1000;
-  while (!condition()) {
-    if (Date.now() > timeoutAt) {
-      assert.fail('Timed out waiting for condition.');
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
+  await waitUntil(condition, 'an injected dependency observes the interaction');
 }
 
 /** Ensures each test unmounts React and releases Ink's event listeners. */
@@ -251,17 +244,7 @@ async function waitForOutput(
   output: TestOutput,
   predicate: (value: string) => boolean,
 ): Promise<string> {
-  const timeoutAt = Date.now() + 1000;
-
-  while (Date.now() < timeoutAt) {
-    const value = output.readOutput();
-    if (predicate(value)) {
-      return value;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-
-  assert.fail(`Timed out waiting for terminal output. Received:\n${output.readOutput()}`);
+  return waitForTerminal(() => output.readOutput(), predicate);
 }
 
 test('renders identity, directory, and commands without the ready tooling list', async context => {
@@ -334,12 +317,12 @@ test('discovers, presents, and chooses workflows by stable ID in the new-run flo
   await waitForOutput(output, value => value.includes(commandLabel));
 
   output.clearOutput();
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, showsWorkflows);
   assert.equal(discoveryCalls, 1);
 
   output.clearOutput();
-  input.write('\x1b[B');
+  await pressKey(input, '\x1b[B');
   await waitForOutput(output, value => value.length > 0);
 
   // Input is ignored while the terminal is too narrow, and resizing neither rediscovers nor
@@ -347,30 +330,37 @@ test('discovers, presents, and chooses workflows by stable ID in the new-run flo
   output.clearOutput();
   output.columns = 35;
   output.emit('resize');
-  await waitForOutput(output, value => value.length > 0 && !showsWorkflows(value));
-  input.write('\x1b[A');
+  // Ink first redraws the wide layout at the new width; the screen then hides the workflows.
+  await waitForOutput(output, value => {
+    const frame = value.split(/\x1b\[[GH]/).at(-1) ?? '';
+    return frame.includes('/research/project') && !frame.includes('First workflow');
+  });
+  await pressKey(input, '\x1b[A');
   output.clearOutput();
   output.columns = 80;
   output.emit('resize');
   await waitForOutput(output, showsWorkflows);
   assert.equal(discoveryCalls, 1);
 
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => selectedWorkflowIds.length === 1);
   assert.deepEqual(selectedWorkflowIds, ['second-workflow']);
+  // Ink draws throttled and skips a frame equal to the last one drawn, so the chosen workflow's
+  // page must be drawn before Esc returns to the list.
+  await waitForOutput(output, value => !(value.split(/\x1b\[[GH]/).at(-1) ?? '').includes('First workflow'));
 
   output.clearOutput();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   await waitForOutput(output, showsWorkflows);
   output.clearOutput();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   await waitForOutput(output, value => value.includes(commandLabel));
 
   // Reopening rediscovers and keeps the previously chosen workflow highlighted by ID.
   output.clearOutput();
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value => value.includes('Renamed Second workflow'));
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => selectedWorkflowIds.length === 2);
   assert.deepEqual(selectedWorkflowIds, ['second-workflow', 'second-workflow']);
   assert.equal(discoveryCalls, 2);
@@ -412,22 +402,22 @@ test('opens annotation-transfer configuration by stable workflow ID', async cont
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value => value.includes('Select a workflow'));
-  input.write('\r');
+  await pressKey(input, '\r');
   // The form shows the discovered workflow's own parameters, not a packaged copy of them.
   const configurationFrame = await waitForOutput(output, value => value.includes('Reference FASTA'));
   assert.match(configurationFrame, /Inputs/);
   assert.match(configurationFrame, /\(●\) Automatic \(all available CPUs\)/);
   assert.doesNotMatch(configurationFrame, /LiftOn profile/);
 
-  input.write('/partial/reference.fa');
+  await pressKey(input, '/partial/reference.fa');
   await waitForOutput(output, value => value.includes('/partial/reference.fa'));
   output.clearOutput();
   output.columns = 35;
   output.emit('resize');
   await waitForOutput(output, value => value.includes('This terminal is too narrow.'));
-  input.write('x');
+  await pressKey(input, 'x');
   output.clearOutput();
   output.columns = 80;
   output.emit('resize');
@@ -447,11 +437,11 @@ test('returns from a workflow-discovery failure', async context => {
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   output.clearOutput();
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value => value.includes('duplicate workflow ID'));
 
   output.clearOutput();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 });
 
@@ -473,21 +463,21 @@ test('opens the existing-run flow from the welcome command', async context => {
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes(commandLabel));
 
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => workflowDiscoveryCalls === 1);
   await waitForOutput(output, value => value.includes('Description for the saved workflow.'));
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => runDiscoveries.length === 1);
   assert.deepEqual(runDiscoveries, [{collectionRoot: '/research/project/runs', workflowId: 'saved-workflow'}]);
 
   // Escape leaves the runs, then the workflows; reopening the command discovers workflows again.
   output.clearOutput();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   await waitForOutput(output, value => value.includes('Description for the saved workflow.'));
   output.clearOutput();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   await waitForOutput(output, value => value.includes(commandLabel));
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => workflowDiscoveryCalls === 2);
 });
 
@@ -514,14 +504,16 @@ test('opens the accession manager by command ID and returns to the menu', async 
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => loads >= 1);
   // Only the current directory's run collection is scanned when no roots are stored.
   await waitFor(() => scannedRoots.length === 1);
   assert.equal(scannedRoots[0], '/research/project/runs');
+  // Ink skips a frame equal to the last one drawn, so the opened screen must be drawn first.
+  await rendered(instance);
 
   output.clearOutput();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   const welcomeFrame = await waitForOutput(output, value => value.includes('↑/↓ — Select'));
   assert.match(welcomeFrame, /Commands/);
 });
@@ -529,7 +521,7 @@ test('opens the accession manager by command ID and returns to the menu', async 
 test('opens the isolate manager by command ID and returns to the menu', async context => {
   let loads = 0;
   let updates = 0;
-  const {input, instance} = renderWelcome(detectedStatus, {
+  const {input, instance, output} = renderWelcome(detectedStatus, {
     commands: isolatesOnlyCommands,
     loadIsolates: async () => {
       loads += 1;
@@ -541,16 +533,16 @@ test('opens the isolate manager by command ID and returns to the menu', async co
     },
   });
   registerCleanup(context, instance);
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => loads === 1);
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await rendered(instance);
 
-  input.write('\x1b');
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await pressKey(input, '\x1b');
+  await rendered(instance);
   // Back on the menu, Enter opens the manager again, which reloads the catalog.
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => loads === 2);
   assert.equal(updates, 0);
 });
@@ -569,7 +561,7 @@ test('opens the tooling screen and runs a fresh check there', async context => {
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   output.clearOutput();
-  input.write('\r');
+  await pressKey(input, '\r');
 
   // The tooling screen lists each detected version from the injected status.
   const toolingFrame = await waitForOutput(output, value => value.includes(`v${snakemakeVersion}`));
@@ -580,7 +572,7 @@ test('opens the tooling screen and runs a fresh check there', async context => {
   assert.match(toolingFrame, new RegExp(String.raw`✓ Snakemake — Workflow — v${escapeRegExp(snakemakeVersion)} — Available`));
   assert.doesNotMatch(toolingFrame, /Commands/);
 
-  input.write('\r');
+  await pressKey(input, '\r');
   const checkedFrame = await waitForOutput(output, value =>
     value.includes('Tooling check complete. All required tools are available.'),
   );
@@ -588,7 +580,7 @@ test('opens the tooling screen and runs a fresh check there', async context => {
   assert.match(checkedFrame, /✔ Tooling check complete/);
 
   output.clearOutput();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   const welcomeFrame = await waitForOutput(output, value => value.includes('↑/↓ — Select'));
   assert.match(welcomeFrame, /Commands/);
   assert.doesNotMatch(welcomeFrame, /Node — Runtime|Tooling check complete/);
@@ -611,9 +603,9 @@ test('runs a command by ID when its display label changes', async context => {
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value => value.includes(`v${snakemakeVersion}`));
-  input.write('\r');
+  await pressKey(input, '\r');
 
   const checkedFrame = await waitForOutput(output, value =>
     value.includes('Tooling check complete. All required tools are available.'),
@@ -629,15 +621,15 @@ test('clears a completed tooling-check message when returning to the command men
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value => value.includes(`v${snakemakeVersion}`));
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value =>
     value.includes('Tooling check complete. All required tools are available.'),
   );
 
   output.clearOutput();
-  input.write('\x1b');
+  await pressKey(input, '\x1b');
   const commandFrame = await waitForOutput(output, value => value.includes('↑/↓ — Select'));
   assert.doesNotMatch(
     commandFrame,
@@ -662,16 +654,17 @@ test('returns home with h from a nested screen in one press', async context => {
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value => value.includes('Description for the saved workflow.'));
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => runDiscoveries.length === 1);
+  await rendered(instance);
 
   output.clearOutput();
-  input.write('h');
+  await pressKey(input, 'h');
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
   // The command reopens from its start, so the nested state was left rather than hidden.
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitFor(() => workflowDiscoveryCalls === 2);
 });
 
@@ -705,21 +698,21 @@ test('leaves h to a focused text field and returns home from a choice field', as
   });
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value => value.includes('Configure it.'));
-  input.write('\r');
+  await pressKey(input, '\r');
   await waitForOutput(output, value => value.includes('Annotation prefix'));
 
-  input.write('x');
+  await pressKey(input, 'x');
   await waitForOutput(output, value => value.includes('Annotation prefix*: x'));
   // Written separately so the field receives `h` as its own keypress, like a typed letter.
-  input.write('h');
+  await pressKey(input, 'h');
   await waitForOutput(output, value => value.includes('Annotation prefix*: xh'));
 
-  input.write('\t');
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await pressKey(input, '\t');
+  await rendered(instance);
   output.clearOutput();
-  input.write('h');
+  await pressKey(input, 'h');
   await waitForOutput(output, value => value.includes('↑/↓ — Select · Enter — Open'));
 });
 
@@ -743,21 +736,21 @@ test('types h into the NCBI key instead of returning home', async context => {
     },
   });
   registerCleanup(context, instance);
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
-  input.write('\r');
+  await waitForOutput(output, value => value.includes('↑/↓ — Select'));
+  await pressKey(input, '\r');
   await waitFor(() => accessionLoads >= 1 && keyChecks === 1);
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await rendered(instance);
   // Shift+Tab wraps from the first tab to the API-key tab, whose key field then has focus.
-  input.write('\x1b[Z');
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await pressKey(input, '\x1b[Z');
+  await rendered(instance);
 
   output.clearOutput();
-  input.write('h');
+  await pressKey(input, 'h');
   await waitForOutput(output, value => value.includes('*'));
   // ↓ selects the save button, and Enter there saves.
-  input.write('\x1b[B');
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
-  input.write('\r');
+  await pressKey(input, '\x1b[B');
+  await rendered(instance);
+  await pressKey(input, '\r');
   await waitFor(() => saved !== undefined);
   assert.equal(saved, 'h');
 });
@@ -821,7 +814,7 @@ test('starts installation only after affirmative consent and shows progress', as
   await waitForOutput(output, value => value.includes('Install missing tooling now?'));
   assert.equal(installationCalls, 0);
 
-  input.write('y');
+  await pressKey(input, 'y');
   const installingFrame = await waitForOutput(output, value => value.includes('Installing…'));
   assert.equal(installationCalls, 1);
   assert.match(installingFrame, new RegExp(String.raw`Pixi — Provisioning — v${escapeRegExp(pixiVersion)} — Installing…`));
@@ -856,7 +849,7 @@ test('returns to setup after an installation failure and shows the log', async c
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('Install missing tooling now?'));
 
-  input.write('\r');
+  await pressKey(input, '\r');
   const frame = await waitForOutput(output, value => value.includes('Setup failed:'));
 
   assert.match(frame, /Setup failed: Checksum verification failed/);
@@ -879,7 +872,7 @@ test('shows tooling-check failures and allows a retry', async context => {
   assert.match(failedFrame, /Tooling check failed: check failed\[31m/);
   assert.doesNotMatch(failedFrame, /check failed\u001b\[31m/);
 
-  input.write('r');
+  await pressKey(input, 'r');
   const readyFrame = await waitForOutput(output, value => value.includes('↑/↓ — Select'));
   assert.equal(checks, 2);
   assert.doesNotMatch(readyFrame, /Required tooling|Node — Runtime/);
@@ -914,12 +907,12 @@ test('cancels an active installation before exiting', async context => {
   const {input, instance, output} = renderWelcome(setupRequired, {toolingInstaller});
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('Install missing tooling now?'));
-  input.write('y');
+  await pressKey(input, 'y');
   await waitForOutput(output, value => value.includes('Installing…'));
 
-  input.write('\x03');
+  await pressKey(input, '\x03');
   await waitForOutput(output, value => value.includes('Press Ctrl+C again to exit.'));
-  input.write('\x03');
+  await pressKey(input, '\x03');
   await instance.waitUntilExit();
   assert.equal(cancelled, true);
 });
@@ -965,7 +958,7 @@ test('activates runtime indicators only after Pixi installation and verification
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('Install missing tooling now?'));
 
-  input.write('y');
+  await pressKey(input, 'y');
   const pixiFrame = await waitForOutput(output, value =>
     value.includes(`Pixi — Provisioning — v${pixiVersion} — Installing…`),
   );
@@ -1068,34 +1061,10 @@ test('exits only after two Ctrl+C presses within the confirmation period', async
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
   output.clearOutput();
-  input.write('\x03');
+  await pressKey(input, '\x03');
   await waitForOutput(output, value => value.includes('Press Ctrl+C again to exit.'));
 
-  input.write('\x03');
-  await instance.waitUntilExit();
-});
-
-test('resets Ctrl+C confirmation after its timeout', async context => {
-  const {input, instance, output} = renderWelcome(detectedStatus, {
-    exitConfirmationMilliseconds: 20,
-  });
-  registerCleanup(context, instance);
-  await waitForOutput(output, value => value.includes('↑/↓ — Select'));
-
-  output.clearOutput();
-  input.write('\x03');
-  await waitForOutput(output, value => value.includes('Press Ctrl+C again to exit.'));
-  await waitForOutput(
-    output,
-    value =>
-      value.lastIndexOf('Press Ctrl+C twice to exit.') >
-      value.lastIndexOf('Press Ctrl+C again to exit.'),
-  );
-
-  output.clearOutput();
-  input.write('\x03');
-  await waitForOutput(output, value => value.includes('Press Ctrl+C again to exit.'));
-  input.write('\x03');
+  await pressKey(input, '\x03');
   await instance.waitUntilExit();
 });
 
@@ -1104,15 +1073,15 @@ test('does not exit in response to q, h, or Escape', async context => {
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
 
-  input.write('q');
-  input.write('h');
-  input.write('\x1b');
-  await new Promise<void>(resolve => setTimeout(resolve, 100));
+  await pressKey(input, 'q');
+  await pressKey(input, 'h');
+  await pressKey(input, '\x1b');
+  await rendered(instance);
   output.clearOutput();
-  input.write('\x03');
+  await pressKey(input, '\x03');
   await waitForOutput(output, value => value.includes('Press Ctrl+C again to exit.'));
 
-  input.write('\x03');
+  await pressKey(input, '\x03');
   await instance.waitUntilExit();
 });
 

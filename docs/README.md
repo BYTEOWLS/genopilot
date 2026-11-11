@@ -3,6 +3,8 @@
 The same pages are shown inside GenoPilot under Help.
 
 - [Using GenoPilot](help.md): runs, catalogs, tooling, and keys.
+- [Managing isolates](isolates.md): the isolate list, editing, library identity, and saved changes.
+- [Illumina](illumina.md): paired read files, chemistry options, and preprocessing choices.
 - [Import review](import-review.md): importing isolates from a sequencing delivery.
 - [Run results](run-results.md): the run metadata and files every result page shows.
 - [Browser view](browser-view.md): local browser documentation, genome views, themes, printing, and SSH forwarding.

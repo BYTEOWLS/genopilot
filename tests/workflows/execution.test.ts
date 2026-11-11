@@ -9,6 +9,24 @@ import {
   prepareSnakemakeRun,
   renderCommand,
 } from '../../src/workflows/execution.js';
+import {readProcessList, type ProcessListReader} from '../../src/workflows/memory-sampling.js';
+
+/** A child that runs until the flag file appears, so it outlives a sample however slow `ps` is. */
+function untilFlag(flag: string): string[] {
+  return ['--eval', `setInterval(() => { if (require('node:fs').existsSync(${JSON.stringify(flag)})) { process.exit(0); } }, 10)`];
+}
+
+/** The real `ps`, as on macOS and Linux, then `afterSample` once the child has been seen. */
+function sampleThen(afterSample: () => Promise<void> | void): ProcessListReader {
+  return async () => {
+    try {
+      return await readProcessList();
+    } finally {
+      // Also after a failed `ps`, so the child never outlives the test.
+      await afterSample();
+    }
+  };
+}
 
 async function fixture() {
   const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-test-'));
@@ -147,6 +165,7 @@ test('samples the memory of an execution\'s process tree with ps, but not of a d
   const {tempDir, paths} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
   const runDirectory = join(tempDir, 'run');
+  const flag = join(tempDir, 'sampled');
   const peaks: (number | undefined)[] = [];
   for (const mode of ['execute', 'dry-run'] as const) {
     const prepared = prepareSnakemakeRun({
@@ -158,12 +177,15 @@ test('samples the memory of an execution\'s process tree with ps, but not of a d
       paths,
     });
     prepared.executable = process.execPath;
-    // A child that lives long enough to be sampled at its start.
-    prepared.arguments = ['--eval', 'setTimeout(() => undefined, 300)'];
-    const result = await executeSnakemakeRun(prepared, undefined, undefined, {paths, readApiKey: async () => undefined});
+    // The execution's child ends once sampled; a dry run is never sampled and ends at once.
+    prepared.arguments = mode === 'execute' ? untilFlag(flag) : ['--eval', ''];
+    const result = await executeSnakemakeRun(prepared, undefined, undefined, {
+      paths,
+      readApiKey: async () => undefined,
+      readProcesses: sampleThen(() => writeFile(flag, '')),
+    });
     peaks.push(result.peakMemoryBytes);
   }
-  // The real ps, as on macOS and Linux, sees the process at its start.
   assert.ok((peaks[0] ?? 0) > 0);
   assert.equal(peaks[1], undefined);
 });
@@ -208,17 +230,18 @@ test('keeps the peak memory of a cancelled execution on its error', async contex
   prepared.executable = process.execPath;
   prepared.arguments = ['--eval', 'setInterval(() => {}, 1000)'];
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), 300);
 
+  // Cancels once the running child has been sampled.
   const error: unknown = await executeSnakemakeRun(prepared, undefined, controller.signal, {
     paths,
     readApiKey: async () => undefined,
+    readProcesses: sampleThen(() => { setImmediate(() => controller.abort()); }),
   }).then(() => assert.fail('expected the cancelled run to reject'), (reason: unknown) => reason);
   assert.match(String(error), /Snakemake run cancelled\./);
   assert.ok(((error as {peakMemoryBytes?: number}).peakMemoryBytes ?? 0) > 0);
 });
 
-test('cancels the detached process and still closes its log files', async context => {
+test('does not spawn after cancellation during setup and still closes its log files', async context => {
   const {tempDir, paths} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
   const runDirectory = join(tempDir, 'run');
@@ -233,17 +256,50 @@ test('cancels the detached process and still closes its log files', async contex
   prepared.executable = process.execPath;
   prepared.arguments = ['--eval', "process.stdout.write('started\\n'); setInterval(() => {}, 1000)"];
   const controller = new AbortController();
+  let spawned = false;
 
   await assert.rejects(
     executeSnakemakeRun(prepared, undefined, controller.signal, {
       paths,
+      spawnProcess: () => {spawned = true; throw new Error('must not spawn');},
       readApiKey: async () => {
-        // Exercise cancellation before executeSnakemakeDryRun has registered its child listener.
+        // Cancel while setup is awaiting dependencies, before there is a child to signal.
         controller.abort();
         return undefined;
       },
     }),
     /Snakemake run cancelled\./,
   );
+  assert.equal(spawned, false);
   assert.equal(await readFile(prepared.stdoutLogPath, 'utf8'), '');
+  assert.equal(await readFile(prepared.stderrLogPath, 'utf8'), '');
+});
+
+test('cancels a running detached process and drains both logs before rejecting', async context => {
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const prepared = prepareSnakemakeRun({
+    mode: 'execute', runDirectory: join(tempDir, 'run'),
+    configurationPath: join(tempDir, 'run', 'config.yaml'),
+    snakefilePath: join(tempDir, 'Snakefile'), cores: 1, paths,
+  });
+  prepared.executable = process.execPath;
+  prepared.arguments = ['--eval', `
+    process.on('SIGTERM', () => {process.stderr.write('stopped\\n', () => process.exit(0));});
+    process.stdout.write('started\\n');
+    setInterval(() => {}, 1000);
+  `];
+  const controller = new AbortController();
+  const guard = setTimeout(() => controller.abort(), 5000);
+  context.after(() => clearTimeout(guard));
+  let started = false;
+  await assert.rejects(executeSnakemakeRun(prepared, output => {
+    if (output.stream === 'stdout' && output.text.includes('started')) {
+      started = true;
+      controller.abort();
+    }
+  }, controller.signal, {paths, readApiKey: async () => undefined, readProcesses: async () => []}), /Snakemake run cancelled\./);
+  assert.equal(started, true);
+  assert.equal(await readFile(prepared.stdoutLogPath, 'utf8'), 'started\n');
+  assert.equal(await readFile(prepared.stderrLogPath, 'utf8'), 'stopped\n');
 });

@@ -50,7 +50,7 @@ def libraries_of(pairs: list[tuple[Path, Path]]) -> dict[str, list[tuple[Path, d
         if read_group["id"] in seen_ids:
             raise SystemExit(
                 f"read group {read_group['id']} occurs in two read pairs of this isolate; "
-                "the same lane and barcode must not be listed twice"
+                "each snapshot file group must have a unique generated ID"
             )
         seen_ids.add(read_group["id"])
         libraries.setdefault(read_group["lb"], []).append((bam, read_group))

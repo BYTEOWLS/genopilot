@@ -24,6 +24,7 @@ import {mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {testMachine} from '../workflows/machine.js';
+import {pressKey, rendered} from '../wait.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -51,10 +52,6 @@ const ESCAPE = '\x1b';
 const HELP = '?';
 const TAB = '\t';
 const SHIFT_TAB = '\x1b[Z';
-
-async function settle(milliseconds = 80): Promise<void> {
-  await new Promise<void>(resolve => setTimeout(resolve, milliseconds));
-}
 
 const manifest: WorkflowManifest = {
   schema_version: 1,
@@ -189,7 +186,7 @@ function renderScreen(
     readReviewGenes?: (options: {path: string; signal?: AbortSignal}) => Promise<ReviewGene[]>;
     readCitation?: (runDirectory: string) => Promise<Document | undefined>;
   } = {},
-): {input: TestInput; output: TestOutput; frame: () => string; unmount: () => void} {
+): {input: TestInput; output: TestOutput; frame: () => string; settle: () => Promise<void>; unmount: () => void} {
   const input = new TestInput();
   const output = new TestOutput();
   output.rows = options.rows ?? output.rows;
@@ -214,17 +211,17 @@ function renderScreen(
       stdout: output as unknown as NodeJS.WriteStream,
     },
   );
-  return {input, output, frame: () => output.readOutput(), unmount: () => instance.unmount()};
+  return {input, output, frame: () => output.readOutput(), settle: () => rendered(instance), unmount: () => instance.unmount()};
 }
 
 /** The screen's frame on each tab, from the first; Tab moves to the next one. */
 async function tabFrames(screen: ReturnType<typeof renderScreen>, count = 6): Promise<string[]> {
-  await settle();
+  await screen.settle();
   const frames = [screen.frame()];
   for (let index = 1; index < count; index += 1) {
     screen.output.clearOutput();
-    screen.input.write(TAB);
-    await settle();
+    await pressKey(screen.input, TAB);
+    await screen.settle();
     frames.push(screen.frame());
   }
   return frames;
@@ -322,32 +319,32 @@ test('scrolls result content in a short terminal', async () => {
     inputActive: true,
   });
   try {
-    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    await screen.settle();
     screen.output.clearOutput();
     screen.output.emit('resize');
-    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    await screen.settle();
     // The run files are on the Files tab, the third from the end.
-    screen.input.write(SHIFT_TAB);
-    await new Promise<void>(resolve => setTimeout(resolve, 20));
-    screen.input.write(SHIFT_TAB);
-    await new Promise<void>(resolve => setTimeout(resolve, 20));
-    screen.input.write(SHIFT_TAB);
-    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    await pressKey(screen.input, SHIFT_TAB);
+    await screen.settle();
+    await pressKey(screen.input, SHIFT_TAB);
+    await screen.settle();
+    await pressKey(screen.input, SHIFT_TAB);
+    await screen.settle();
     screen.output.clearOutput();
     screen.output.emit('resize');
-    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    await screen.settle();
     assert.doesNotMatch(screen.frame(), /provenance\/run\.json/);
 
     let reachedSupportPaths = false;
     for (let index = 0; index < 40 && !reachedSupportPaths; index += 1) {
       screen.output.clearOutput();
-      screen.input.write(PAGE_DOWN);
-      await new Promise<void>(resolve => setTimeout(resolve, 20));
+      await pressKey(screen.input, PAGE_DOWN);
+      await screen.settle();
       reachedSupportPaths = /provenance\/run\.json/.test(screen.frame());
     }
     assert.ok(reachedSupportPaths);
 
-    screen.input.write(ARROW_DOWN);
+    await pressKey(screen.input, ARROW_DOWN);
   } finally {
     screen.unmount();
   }
@@ -360,9 +357,9 @@ test('returns from the result screen with Escape', async () => {
     onBack: () => { backedOut = true; },
   });
   try {
-    await new Promise<void>(resolve => setTimeout(resolve, 20));
-    screen.input.write(ESCAPE);
-    await new Promise<void>(resolve => setTimeout(resolve, 150));
+    await screen.settle();
+    await pressKey(screen.input, ESCAPE);
+    await screen.settle();
     assert.equal(backedOut, true);
   } finally {
     screen.unmount();
@@ -425,39 +422,39 @@ test('opens the help page and returns to the preserved result scroll position', 
     onBack: () => { backedOut = true; },
   });
   try {
-    await settle();
+    await screen.settle();
     screen.output.emit('resize');
-    await settle();
-    screen.input.write(PAGE_DOWN);
-    await settle();
+    await screen.settle();
+    await pressKey(screen.input, PAGE_DOWN);
+    await screen.settle();
     screen.output.clearOutput();
-    screen.input.write(ARROW_DOWN);
-    await settle();
+    await pressKey(screen.input, ARROW_DOWN);
+    await screen.settle();
     const scrolledResults = screen.frame();
     assert.doesNotMatch(scrolledResults, /Result help sentinel/);
 
     screen.output.clearOutput();
-    screen.input.write(HELP);
-    await settle();
+    await pressKey(screen.input, HELP);
+    await screen.settle();
     let helpFrame = screen.frame();
     for (let index = 0; index < 40 && !/Result help sentinel/.test(helpFrame); index += 1) {
       screen.output.clearOutput();
-      screen.input.write(PAGE_DOWN);
-      await settle();
+      await pressKey(screen.input, PAGE_DOWN);
+      await screen.settle();
       helpFrame = screen.frame();
     }
     assert.match(helpFrame, /Result help sentinel\./);
 
     screen.output.clearOutput();
-    screen.input.write(ESCAPE);
-    await settle(150);
+    await pressKey(screen.input, ESCAPE);
+    await screen.settle();
     assert.equal(backedOut, false);
     assert.doesNotMatch(screen.frame(), /Result help sentinel/);
     const visibleText = (frame: string) => frame.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '').trim();
     assert.equal(visibleText(screen.frame()), visibleText(scrolledResults));
 
-    screen.input.write(ESCAPE);
-    await settle(150);
+    await pressKey(screen.input, ESCAPE);
+    await screen.settle();
     assert.equal(backedOut, true);
   } finally {
     screen.unmount();
@@ -470,10 +467,10 @@ test('opens the result help documents also for incompatible results', async () =
     error: {kind: 'missing-summary', message: 'No summary.'},
   }, {inputActive: true});
   try {
-    await settle();
+    await screen.settle();
     screen.output.clearOutput();
-    screen.input.write(HELP);
-    await settle();
+    await pressKey(screen.input, HELP);
+    await screen.settle();
     assert.match(screen.frame(), /Result help sentinel/);
   } finally {
     screen.unmount();
@@ -512,23 +509,23 @@ test('the Proteins tab lists the genes in review order and opens and closes a ge
     assert.ok(list.indexOf('gene-frame') < list.indexOf('gene-low'), 'the disrupted gene comes first');
 
     screen.output.clearOutput();
-    screen.input.write(ENTER);
-    await settle();
+    await pressKey(screen.input, ENTER);
+    await screen.settle();
     const detail = screen.frame();
     assert.ok(detail.includes('gene-frame-target') && detail.includes('LiftOn_chaining_algorithm') && detail.includes('60.0%'));
     assert.ok(!detail.includes('gene-low'));
 
     screen.output.clearOutput();
-    screen.input.write(ESCAPE);
-    await settle();
+    await pressKey(screen.input, ESCAPE);
+    await screen.settle();
     assert.ok(screen.frame().includes('gene-low'), 'Escape returns to the list');
     assert.equal(backs, 0);
 
     screen.output.clearOutput();
-    screen.input.write(ARROW_DOWN);
-    await settle();
-    screen.input.write(ENTER);
-    await settle();
+    await pressKey(screen.input, ARROW_DOWN);
+    await screen.settle();
+    await pressKey(screen.input, ENTER);
+    await screen.settle();
     assert.ok(screen.frame().includes('97.0%'), 'the arrow keys move the selection');
   } finally {
     screen.unmount();
@@ -540,11 +537,11 @@ test('the Proteins tab filters by review reason', async () => {
   try {
     await proteinsTab(screen);
     screen.output.clearOutput();
-    screen.input.write('f');
-    await settle();
+    await pressKey(screen.input, 'f');
+    await screen.settle();
     screen.output.clearOutput();
-    screen.input.write('f');
-    await settle();
+    await pressKey(screen.input, 'f');
+    await screen.settle();
     const disrupted = screen.frame();
     assert.ok(disrupted.includes('gene-frame') && !disrupted.includes('gene-low'));
   } finally {

@@ -10,6 +10,27 @@ A researcher asks an AI assistant about a finished run, and the assistant answer
 2. Run workflows in GenoPilot as usual.
 3. Ask the assistant about a run. The app starts the server when it needs it; the server only reads run directories, so the TUI may stay open.
 
+### Choosing an assistant app
+
+Researchers need an app that can start a local MCP server over stdio, not just an app that advertises MCP support. Candidate apps are listed below; compatibility, setup steps, and account requirements must be verified before documenting them as supported.
+
+| App | Fit for the proposed connection | Audience |
+|---|---|---|
+| Claude Desktop | Local stdio MCP servers; setup may require a configuration file. | First candidate for a researcher-facing cloud assistant. |
+| Claude Code | Local stdio MCP servers. | Terminal users comfortable with technical setup. |
+| VS Code with GitHub Copilot | Local stdio MCP servers. | Researchers already using a code editor. |
+| Cursor | Local stdio MCP servers. | Researchers already using a code editor. |
+| LM Studio | Local MCP integrations in supported releases; verify stdio compatibility. | Candidate for local models, with additional setup and hardware requirements. |
+| ChatGPT desktop/web | Remote MCP integrations are not a direct connection to the proposed local stdio server. | Would require a different integration; not an initial setup target. |
+
+Start by evaluating Claude Desktop for cloud-assisted interpretation and LM Studio for local interpretation. App capabilities, subscriptions, and organization policies can change; this table is a shortlist, not a tested support guarantee.
+
+### Setup for researchers
+
+The setup guide must not assume programming or MCP knowledge. For each supported app, provide screenshots or copyable settings: name `GenoPilot`, command `genopilot`, and argument `mcp`. Explain any required account or subscription, how to find the installed command, and how to confirm the assistant can discover an allowed run. Include troubleshooting for a missing command, missing runs, and unsupported clients.
+
+Before first access, explain which runs are exposed and what data reaches the assistant provider. Whether researchers must explicitly select allowed runs remains an open question below. A local MCP server does **not** make the model local: a cloud assistant sends retrieved information to its provider. A fully local model setup is a separate choice. GenoPilot needs no model API key; any assistant credentials belong to the assistant app.
+
 ## What stays in GenoPilot, what the assistant adds
 
 Everything deterministic and repeatable stays in GenoPilot, and works without any assistant. These values must be the same on every reading and citable:

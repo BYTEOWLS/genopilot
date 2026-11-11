@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {formatLocalDate} from '../../src/ui/utils.js';
 import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
 import React from 'react';
@@ -14,6 +15,7 @@ import {
 import type {MetadataFetchResult} from '../../src/accessions/ncbi-metadata.js';
 import type {AccessionCatalogMutation, LoadedAccessionCatalog} from '../../src/accessions/store.js';
 import {AccessionsScreen} from '../../src/ui/accessions-screen/screen.js';
+import {effectsSettled, pressKey as press, waitFor, waitForOutput as waitForTerminal} from '../wait.js';
 
 const ENTER = '\r';
 const ARROW_DOWN_KEY = '\x1b[B';
@@ -61,59 +63,9 @@ class TestOutput extends Writable {
   }
 }
 
-async function waitFor(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 2000;
-  while (Date.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting for ${description}.`);
-}
-
-/**
- * Lets React finish the work a render left behind. Ink draws a frame when React commits it, but a
- * newly shown field starts listening for keys in an effect that React's scheduler runs later, in
- * `setImmediate` turns of at least one task each; a key written in between is dropped. A few turns
- * cover the effects and anything they schedule.
- */
-async function effectsSettled(): Promise<void> {
-  for (let turn = 0; turn < 3; turn += 1) {
-    await new Promise<void>(resolve => setImmediate(resolve));
-  }
-}
-
 /** Waits for output matching `predicate` and for the drawn screen to listen for keys. */
 async function waitForOutput(output: TestOutput, predicate: (value: string) => boolean): Promise<string> {
-  const timeoutAt = Date.now() + 2000;
-  while (!predicate(output.read())) {
-    if (Date.now() >= timeoutAt) {
-      // The output when the wait gave up, not when it began.
-      assert.fail(`Timed out waiting for terminal output. Received:\n${output.read()}`);
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  await effectsSettled();
-  return output.read();
-}
-
-// Ink holds a lone Escape this long in case it starts a key sequence (`pendingInputFlushDelay`).
-const inkEscapeDelayMilliseconds = 20;
-
-/**
- * Lets Ink handle one keypress before the next arrives. Ink reads stdin and runs the key handlers
- * synchronously, so an empty input buffer means the key was handled, except a lone Escape, which
- * Ink passes on from a timer. A timer started afterwards with the same delay fires after Ink's, as
- * Node fires timers by deadline. Then whatever the key showed starts listening for keys.
- */
-async function press(input: TestInput, key: string): Promise<void> {
-  input.write(key);
-  await waitFor(() => input.readableLength === 0, 'the key to be handled');
-  if (key === ESCAPE) {
-    await new Promise<void>(resolve => setTimeout(resolve, inkEscapeDelayMilliseconds));
-  }
-  await effectsSettled();
+  return waitForTerminal(() => output.read(), predicate);
 }
 
 /** ↓ moves from the accession field to the look-up button; Enter there looks it up. */
@@ -135,9 +87,7 @@ async function addTypedRoot(input: TestInput): Promise<void> {
 }
 
 /** Lets a newly opened form take keyboard input. */
-async function settle(): Promise<void> {
-  await effectsSettled();
-}
+const settle = effectsSettled;
 
 function metadata(organism: string): NcbiAssemblyMetadata {
   return {organism, retrieved_at: '2026-01-01T12:00:00.000Z', source: 'datasets-v2-rest'};
@@ -263,6 +213,23 @@ async function ready(screen: {scansCompleted: number}): Promise<void> {
   await effectsSettled();
 }
 
+test('shows all metadata sections together without changing or submitting the entry', async context => {
+  const facts = {...metadata('Synthetic detail organism'), release_date: '2025-04-03', total_sequence_length: 1234567, biosample_accession: 'SAMN123'};
+  const screen = renderScreen(context, {fetch: async () => ({state: 'retrieved', metadata: facts})});
+  await ready(screen);
+  await press(screen.input, 'n');
+  await press(screen.input, typed);
+  await lookUp(screen.input);
+  await waitForOutput(screen.output, value => value.includes(formatLocalDate(facts.release_date))
+    && value.includes('1,234,567 bp')
+    && value.includes('https://www.ncbi.nlm.nih.gov/biosample/SAMN123'));
+  await press(screen.input, ENTER);
+  assert.equal(screen.writes, 0);
+  await saveDetails(screen.input);
+  await waitFor(() => screen.writes === 1, 'explicit save');
+  assert.deepEqual(screen.catalog.accessions[0]?.ncbi, facts);
+});
+
 test('records verified caches on open and shows damaged copies without trusting them', async context => {
   const screen = renderScreen(context, {
     copies: [
@@ -284,12 +251,12 @@ test('adds an accession with its looked-up metadata and without downloading anyt
 
   await press(screen.input, 'n');
   await settle();
-  screen.input.write(accession.toLowerCase());
+  await press(screen.input, accession.toLowerCase());
   await waitForOutput(screen.output, value => value.includes(accession.toLowerCase()));
   await lookUp(screen.input);
   await waitFor(() => screen.fetches.length === 1, 'the metadata lookup');
   await waitForOutput(screen.output, value => value.includes('Fetched organism'));
-  screen.input.write('Backbone');
+  await press(screen.input, 'Backbone');
   await waitForOutput(screen.output, value => value.includes('Backbone'));
   await saveDetails(screen.input);
 
@@ -313,7 +280,7 @@ test('saves an accession without metadata when NCBI is unreachable', async conte
 
   await press(screen.input, 'n');
   await settle();
-  screen.input.write(typed);
+  await press(screen.input, typed);
   await waitForOutput(screen.output, value => value.includes(typed));
   await lookUp(screen.input);
   await waitForOutput(screen.output, value => value.includes('NCBI could not be reached.'));
@@ -331,7 +298,7 @@ test('does not add an accession NCBI does not know', async context => {
 
   await press(screen.input, 'n');
   await settle();
-  screen.input.write(typed);
+  await press(screen.input, typed);
   await waitForOutput(screen.output, value => value.includes(typed));
   await lookUp(screen.input);
   await waitForOutput(screen.output, value => value.includes('NCBI has no such assembly.'));
@@ -349,7 +316,7 @@ test('edits only the local name and keeps fetched facts', async context => {
   await waitForOutput(screen.output, value => value.includes('Kept organism'));
 
   await press(screen.input, ENTER);
-  screen.input.write(' label');
+  await press(screen.input, ' label');
   await waitForOutput(screen.output, value => value.includes('Old label'));
   await saveDetails(screen.input);
 
@@ -414,7 +381,7 @@ test('adds and forgets output roots from their tab and rescans them', async cont
 
   await press(screen.input, TAB);
   await press(screen.input, 't');
-  screen.input.write('/analysis/other');
+  await press(screen.input, '/analysis/other');
   await waitForOutput(screen.output, value => value.includes('/analysis/other'));
   await addTypedRoot(screen.input);
 
@@ -459,7 +426,7 @@ test('switches tabs with ←/→ like the file browser moves between folders', a
 
   await press(screen.input, ARROW_RIGHT);
   await press(screen.input, 't');
-  screen.input.write('/analysis/other');
+  await press(screen.input, '/analysis/other');
   await waitForOutput(screen.output, value => value.includes('/analysis/other'));
   await addTypedRoot(screen.input);
   await waitFor(() => screen.catalog.output_roots.length === 1, 'the root added on the roots tab');
@@ -471,7 +438,7 @@ test('switches tabs with ←/→ like the file browser moves between folders', a
   await press(screen.input, ARROW_LEFT);
   await press(screen.input, 'n');
   await settle();
-  screen.input.write(typed);
+  await press(screen.input, typed);
   await waitForOutput(screen.output, value => value.includes(typed));
   await lookUp(screen.input);
   await waitFor(() => screen.fetches.length === 1, 'the lookup from the accession tab');
@@ -484,7 +451,7 @@ test('leaves ←/→ to the API-key cursor while a key is being typed', async co
   // ← from the first tab wraps to the API-key tab, which shows where the key is stored.
   await press(screen.input, ARROW_LEFT);
   await waitForOutput(screen.output, value => value.includes('/researcher/secrets/ncbi-api-key'));
-  screen.input.write('ab');
+  await press(screen.input, 'ab');
   await waitForOutput(screen.output, value => value.includes('**'));
   await press(screen.input, ARROW_LEFT);
   screen.output.clear();

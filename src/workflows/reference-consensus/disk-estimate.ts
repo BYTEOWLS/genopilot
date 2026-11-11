@@ -1,4 +1,5 @@
 import {stat} from 'node:fs/promises';
+import {readPairs} from '../../isolates/catalog.js';
 import {join} from 'node:path';
 import type {DiskEstimateFactors} from '../manifest.js';
 import {ncbiCacheDirectory} from '../run-preparation.js';
@@ -69,7 +70,7 @@ export async function diskEstimateInputs(
 ): Promise<{inputs: DiskEstimateInputs; note?: string}> {
   const size = (path: string) => fileSize(path).catch(() => 0);
   const isolateReadBytes = await Promise.all(prepared.snapshot.isolates.map(async isolate =>
-    (await Promise.all(isolate.read_pairs.flatMap(pair => [size(pair.r1), size(pair.r2)])))
+    (await Promise.all(readPairs(isolate).flatMap(pair => [size(pair.r1), size(pair.r2)])))
       .reduce((sum, bytes) => sum + bytes, 0)));
   const {backbone} = prepared.configuration.inputs;
   const effectiveCpus = prepared.configuration.resources.effective_cpus;

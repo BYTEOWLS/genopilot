@@ -1,8 +1,8 @@
 import type {Dirent} from 'node:fs';
 import {readdir, realpath, stat} from 'node:fs/promises';
 import {basename, dirname, join, resolve, sep} from 'node:path';
-import type {IsolateCatalog} from './catalog.js';
-import {readFastqHead, type FastqHead} from './reads.js';
+import {readPairs, type IsolateCatalog} from '../catalog.js';
+import {readFastqHead, type FastqHead} from '../reads.js';
 
 /**
  * Records sampled from each R1. Adapter trimming shortens only reads from fragments shorter than
@@ -86,6 +86,7 @@ export type DeliveryReadSet = {
   run: number;
   flowcell: string;
   lane: number | null;
+  chunk: number;
   variants: DeliveryVariant[];
 };
 
@@ -98,7 +99,6 @@ export type SkipReason =
   | 'not-illumina-name'
   | 'undetermined'
   | 'index-read'
-  | 'split-chunk'
   | 'missing-mate'
   | 'invalid-fastq'
   | 'unreadable'
@@ -236,7 +236,7 @@ export async function scanIlluminaDelivery(
   // Keyed by absolute path and by device:inode identity; the two never collide.
   const importedBy = new Map<string, string>();
   for (const isolate of catalog.isolates) {
-    for (const pair of isolate.read_pairs) {
+    for (const pair of readPairs(isolate)) {
       for (const path of [pair.r1, pair.r2]) {
         importedBy.set(resolve(path), isolate.id);
         const identity = await fileIdentity(path);
@@ -261,22 +261,10 @@ export async function scanIlluminaDelivery(
     }
   }
 
-  // The catalog stores one file per mate, so a lane split into several chunks is unsupported.
   const laneKey = (file: NamedFile): string =>
-    [dirname(file.path), file.name.sample, file.name.sampleNumber, file.name.lane ?? ''].join('\0');
-  const chunksByLane = new Map<string, Set<number>>();
-  for (const file of named) {
-    const chunks = chunksByLane.get(laneKey(file)) ?? new Set<number>();
-    chunks.add(file.name.chunk);
-    chunksByLane.set(laneKey(file), chunks);
-  }
+    [dirname(file.path), file.name.sample, file.name.sampleNumber, file.name.lane ?? '', file.name.chunk].join('\0');
   const mates = new Map<string, {r1?: NamedFile; r2?: NamedFile}>();
   for (const file of named) {
-    const chunks = chunksByLane.get(laneKey(file));
-    if (chunks === undefined || chunks.size > 1 || !chunks.has(1)) {
-      skippedFiles.push({path: file.path, reason: 'split-chunk'});
-      continue;
-    }
     const pair = mates.get(laneKey(file)) ?? {};
     pair[file.name.read === 'R1' ? 'r1' : 'r2'] = file;
     mates.set(laneKey(file), pair);
@@ -326,10 +314,10 @@ export async function scanIlluminaDelivery(
     // The header lane is never used: in a lane-merged file the first record's lane is arbitrary.
     const {instrument, run, flowcell} = r1Header;
     const lane = r1.name.lane;
-    const key = [r1.name.sample, instrument, run, flowcell, lane ?? ''].join('\0');
+    const key = [r1.name.sample, instrument, run, flowcell, lane ?? '', r1.name.chunk].join('\0');
     const entry = readSets.get(key) ?? {
       sample: r1.name.sample,
-      readSet: {instrument, run, flowcell, lane, variants: []},
+      readSet: {instrument, run, flowcell, lane, chunk: r1.name.chunk, variants: []},
     };
     const lengths = r1Head.records.map(record => record.sequenceLength);
     const readLength = {min: Math.min(...lengths), max: Math.max(...lengths)};
@@ -355,7 +343,7 @@ export async function scanIlluminaDelivery(
   const byText = (left: string, right: string): number => left.localeCompare(right);
   for (const candidate of candidates.values()) {
     candidate.readSets.sort((left, right) =>
-      left.run - right.run || byText(left.flowcell, right.flowcell) || (left.lane ?? 0) - (right.lane ?? 0));
+      left.run - right.run || byText(left.flowcell, right.flowcell) || (left.lane ?? 0) - (right.lane ?? 0) || left.chunk - right.chunk);
     for (const readSet of candidate.readSets) {
       readSet.variants.sort((left, right) => byText(left.r1, right.r1));
     }

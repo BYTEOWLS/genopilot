@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {checkTooling, isVersionSupported} from '../../src/tooling/check.js';
 import {resolveToolingPaths} from '../../src/tooling/paths.js';
 import {toolingPolicy} from '../../src/tooling/policy.js';
+import {WAIT_TIMEOUT_MS} from '../wait.js';
 
 test('accepts versions inside an inclusive-minimum and exclusive-maximum range', () => {
   assert.equal(isVersionSupported('v24.0.0', '24.0.0', '26.0.0'), true);
@@ -37,7 +38,8 @@ test('reports unrecognized managed-tool version output as a failed check', async
   await writeFile(paths.pixiExecutable, "#!/bin/sh\nprintf '%s\\n' 'development build'\n");
   await chmod(paths.pixiExecutable, 0o755);
 
-  const status = await checkTooling(paths);
+  // A busy machine can take longer to start the stand-in tools than the interactive limit.
+  const status = await checkTooling(paths, WAIT_TIMEOUT_MS);
 
   assert.equal(status.state, 'setup-required');
   if (status.state !== 'setup-required') {
@@ -70,7 +72,8 @@ test('detects compatible executables in the managed tooling location', async con
     await chmod(path, 0o755);
   }
 
-  const status = await checkTooling(paths);
+  // A busy machine can take longer to start the stand-in tools than the interactive limit.
+  const status = await checkTooling(paths, WAIT_TIMEOUT_MS);
 
   assert.equal(status.state, 'ready');
   if (status.state !== 'ready') {

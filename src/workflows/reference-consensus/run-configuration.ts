@@ -8,7 +8,9 @@ import {
   type AccessionEntry,
 } from '../../accessions/catalog.js';
 import {readCatalogedAccessions, type AccessionCatalogReader} from '../../accessions/store.js';
-import type {Isolate, IsolateCatalog} from '../../isolates/catalog.js';
+import {readPairs, type IsolateCatalog} from '../../isolates/catalog.js';
+import {resolveIlluminaPreprocessing} from '../../isolates/illumina/metadata.js';
+import type {SnapshotIsolate} from './snapshot.js';
 import {checkReadPairs, type ReadPairsChecker} from '../../isolates/reads.js';
 import {
   machineDetails,
@@ -49,7 +51,8 @@ export type ReferenceConsensusDraft = {
   backboneSource: 'local' | 'ncbi';
   backboneFasta: string;
   backboneAccession: string;
-  isolateIds: readonly string[];
+  /** Explicit isolate/read-set keys, as offered by the selection picker. */
+  readSetIds: readonly string[];
   votingMethod: VotingMethod;
   includeBackboneVote: boolean;
   minCallableIsolates: string;
@@ -77,9 +80,8 @@ function parseThreshold(value: string): number {
 }
 
 /**
- * Builds the run's configuration and its isolate snapshot. The snapshot copies each selected
- * catalog record, with every read pair and its `trimmed` flag, so the run never reads the
- * catalog again. A selected ID that is no longer cataloged is refused rather than dropped.
+ * Copies only explicitly selected read sets and their resolved Illumina settings.
+ * The run never reads the catalog again; missing or incompatible sets are refused.
  */
 export function buildReferenceConsensusRun(
   draft: ReferenceConsensusDraft,
@@ -91,18 +93,34 @@ export function buildReferenceConsensusRun(
   machine: MachineDetails = machineDetails(),
 ): PreparedReferenceConsensusRun {
   const staleIssues: ConfigurationValidationIssue[] = [];
-  const isolates: Isolate[] = [];
-  draft.isolateIds.forEach((id, index) => {
+  const isolates: SnapshotIsolate[] = [];
+  draft.readSetIds.forEach((key, index) => {
+    const [id, readSetId] = key.split('/');
     const isolate = catalog.isolates.find(candidate => candidate.id === id);
-    if (isolate) {
-      isolates.push(structuredClone({
-        ...isolate,
-        read_pairs: isolate.read_pairs.map(pair => ({...pair, r1: resolve(pair.r1), r2: resolve(pair.r2)})),
-      }));
+    const readSet = isolate?.read_sets.find(candidate => candidate.id === readSetId);
+    if (isolate && readSet) {
+      try {
+        const selected = structuredClone({
+          ...readSet,
+          read_pairs: readSet.read_pairs.map(pair => ({...pair, r1: resolve(pair.r1), r2: resolve(pair.r2)})),
+          effective_preprocessing: resolveIlluminaPreprocessing(readSet),
+        });
+        const existing = isolates.find(candidate => candidate.id === id);
+        if (existing?.read_sets.some(candidate => candidate.id === readSetId)) {
+          throw new Error('read set is selected more than once');
+        }
+        if (existing) {
+          existing.read_sets.push(selected);
+        } else {
+          isolates.push({...structuredClone(isolate), read_sets: [selected]});
+        }
+      } catch (error) {
+        staleIssues.push({path: `$.inputs.selected_read_sets[${index}]`, message: `${key}: ${error instanceof Error ? error.message : String(error)}`});
+      }
     } else {
       staleIssues.push({
-        path: `$.inputs.selected_isolates[${index}]`,
-        message: `'${id}' is no longer in the isolate catalog`,
+        path: `$.inputs.selected_read_sets[${index}]`,
+        message: `'${key}' is no longer a cataloged read set`,
       });
     }
   });
@@ -122,7 +140,8 @@ export function buildReferenceConsensusRun(
         ? {source: 'ncbi', accession: normalizeAccession(draft.backboneAccession), ncbi_cache_mode: 'reuse'}
         : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.backboneFasta)},
       isolates_file: ISOLATE_SNAPSHOT_FILENAME,
-      selected_isolates: [...draft.isolateIds],
+      selected_isolates: isolates.map(isolate => isolate.id),
+      selected_read_sets: isolates.flatMap(isolate => isolate.read_sets.map(set => `${isolate.id}/${set.id}`)),
     },
     calling: {
       ploidy: 1,
@@ -154,6 +173,7 @@ export function buildReferenceConsensusRun(
   const snapshot = validateIsolateSnapshot(
     {schema_version: ISOLATE_SNAPSHOT_SCHEMA_VERSION, captured_at: now.toISOString(), isolates},
     configuration.inputs.selected_isolates,
+    configuration.inputs.selected_read_sets,
   );
   return {
     configuration,
@@ -217,7 +237,7 @@ export async function inspectPreparedRun(
   }
 
   const pairs = prepared.snapshot.isolates.flatMap(isolate =>
-    isolate.read_pairs.map((pair, index) => ({isolate, index, pair})));
+    readPairs(isolate).map((pair, index) => ({isolate, index, pair})));
   const readCheck = await checkReads(pairs.map(({pair}) => pair));
   readCheck.pairs.forEach((result, position) => {
     const entry = pairs[position];
@@ -294,11 +314,11 @@ export function reviewWarnings(
       );
     }
   }
-  const pairs = prepared.snapshot.isolates.flatMap(isolate => isolate.read_pairs);
+  const pairs = prepared.snapshot.isolates.flatMap(readPairs);
   const trimmed = pairs.filter(pair => pair.trimmed).length;
   if (trimmed > 0 && trimmed < pairs.length) {
     const trimmedIsolates = prepared.snapshot.isolates
-      .filter(isolate => isolate.read_pairs.some(pair => pair.trimmed))
+      .filter(isolate => readPairs(isolate).some(pair => pair.trimmed))
       .map(isolate => isolate.name);
     warnings.push(
       `The selection mixes trimmed and untrimmed reads (trimmed: ${trimmedIsolates.join(', ')}), so the ` +
@@ -346,6 +366,8 @@ export async function savePreparedRun(
   prepared: PreparedReferenceConsensusRun,
   dependencies: RunInspectionDependencies = {},
 ): Promise<string> {
+  validateReferenceConsensusConfiguration(prepared.configuration);
+  validateIsolateSnapshot(prepared.snapshot, prepared.configuration.inputs.selected_isolates, prepared.configuration.inputs.selected_read_sets);
   await inspectPreparedRun(prepared, dependencies);
   const written = await createRunWorkspace(
     prepared.outputDirectory,

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {testSnapshotReadSet} from '../../read-sets.js';
 import {createHash} from 'node:crypto';
 import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -42,6 +43,7 @@ const configuration = validateReferenceConsensusConfiguration({
     backbone: {source: 'ncbi', accession: 'GCF_000000001.1'},
     isolates_file: 'isolates.yaml',
     selected_isolates: isolateIds,
+    selected_read_sets: isolateIds.map(id => `${id}/reads`),
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
   consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
@@ -57,7 +59,7 @@ const snapshot = {
     name: `Isolate ${id.at(-1)!.toUpperCase()}`,
     wildtype: index === 0 ? true : index === 1 ? false : null,
     derived_from: index === 1 ? 'isolate-a' : null,
-    read_pairs: [{r1: `/reads/${id}_R1.fastq.gz`, r2: `/reads/${id}_R2.fastq.gz`, trimmed: false}],
+    read_sets: [testSnapshotReadSet([{r1: `/reads/${id}_R1.fastq.gz`, r2: `/reads/${id}_R2.fastq.gz`, trimmed: false}])],
   })),
 };
 

@@ -22,6 +22,7 @@ import {
 import {ParameterList, parameterLabelWidth, type ParameterRow} from '../components/parameter-list.js';
 import type {TabDefinition} from '../components/tabs.js';
 import {Table} from '../components/table.js';
+import {Section} from '../components/section.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {timingRows} from '../run-timing-rows.js';
 import {mutedColor} from '../theme.js';
@@ -525,17 +526,15 @@ function SitesTab({
     return (
       <Box flexDirection="column">
         <Sections sections={siteDetailSections(selected)} />
-        <Box marginTop={1} flexDirection="column" flexShrink={0}>
-          <Text bold>Alleles</Text>
+        <Section title="Alleles">
           <Table
             header={siteAlleleColumns.map(column => column.label)}
             rows={selected.alleles.map((allele, index) => [allele, String(selected.votes[index] ?? 0)])}
           />
-        </Box>
-        <Box marginTop={1} flexDirection="column" flexShrink={0}>
-          <Text bold>Voters</Text>
+        </Section>
+        <Section title="Voters">
           <Table header={siteVoterColumns.map(column => column.label)} rows={siteVoterRows(selected, sites.sites.voters, result)} />
-        </Box>
+        </Section>
       </Box>
     );
   }
@@ -575,10 +574,9 @@ function Sections({sections}: {sections: readonly RowSection[]}): React.JSX.Elem
   return (
     <Box flexDirection="column">
       {sections.map(section => (
-        <Box key={section.id} marginTop={1} flexDirection="column" flexShrink={0}>
-          <Text bold>{section.title}</Text>
+        <Section key={section.id} title={section.title}>
           <ParameterList rows={section.rows} inputActive={false} labelWidth={labelWidth} />
-        </Box>
+        </Section>
       ))}
     </Box>
   );
@@ -606,13 +604,12 @@ function Comparison({result, cohort}: {result: ReferenceConsensusResult; cohort:
     return null;
   }
   return (
-    <Box marginTop={1} flexDirection="column" flexShrink={0}>
-      <Text bold>Compared with iteration {cohortName(baseline)}</Text>
+    <Section title={`Compared with iteration ${cohortName(baseline)}`}>
       <Table
         header={[`Iteration ${String(baseline.iteration)}`, `Iteration ${String(cohort.iteration)}`, 'Change', 'Count']}
         rows={comparisonRows(baseline.counts, cohort.counts)}
       />
-    </Box>
+    </Section>
   );
 }
 

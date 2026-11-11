@@ -7,6 +7,7 @@ import {OpenRunScreen} from '../../src/ui/open-run-screen/screen.js';
 import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
 import type {DiscoveredRun} from '../../src/workflows/run-discovery.js';
+import {pressKey, waitForOutput as waitForTerminal, rendered} from '../wait.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -67,19 +68,7 @@ const run: DiscoveredRun = {
 };
 
 async function waitForOutput(output: TestOutput, expected: string): Promise<string> {
-  const timeout = Date.now() + 1000;
-  while (Date.now() < timeout) {
-    const frame = output.readOutput();
-    if (frame.includes(expected)) {
-      return frame;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting for ${expected}. Received:\n${output.readOutput()}`);
-}
-
-async function settle(): Promise<void> {
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  return waitForTerminal(() => output.readOutput(), frame => frame.includes(expected));
 }
 
 function namedRuns(count: number): DiscoveredRun[] {
@@ -126,13 +115,13 @@ function renderScreen(context: TestContext, options: {
     },
   );
   context.after(() => instance.unmount());
-  return {input, output, discoveredCollection: () => discoveredCollection};
+  return {input, output, settle: () => rendered(instance), discoveredCollection: () => discoveredCollection};
 }
 
 test('uses the default run collection and opens persisted results without execution', async context => {
   const screen = renderScreen(context);
   await waitForOutput(screen.output, 'Current annotation label');
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   const runFrame = await waitForOutput(screen.output, 'Saved run description');
   assert.equal(screen.discoveredCollection(), '/research/project/runs');
   assert.match(runFrame, /Saved run name/);
@@ -140,14 +129,14 @@ test('uses the default run collection and opens persisted results without execut
   assert.doesNotMatch(runFrame, /run-42/);
 
   screen.output.clearOutput();
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   const resultFrame = await waitForOutput(screen.output, 'Unable to read completion summary');
   assert.match(resultFrame, /run-42/);
   assert.match(resultFrame, /Saved run name/);
   assert.match(resultFrame, /Saved run description/);
 
   screen.output.clearOutput();
-  screen.input.write('\x1b');
+  await pressKey(screen.input, '\x1b');
   await waitForOutput(screen.output, 'Saved run description');
 });
 
@@ -173,7 +162,7 @@ test('shows how many runs each workflow has and how long each run took', async c
   await waitForOutput(screen.output, '3 runs');
   assert.deepEqual(counted, [`/research/project/runs/${workflow.manifest.id}`]);
 
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, '1 h 23 min 45 s');
 });
 
@@ -183,35 +172,35 @@ test('deletes a selected run only after explicit confirmation', async context =>
     deleteRun: async runDirectory => { deletedDirectories.push(runDirectory); },
   });
   await waitForOutput(screen.output, 'Current annotation label');
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, 'Saved run description');
 
-  screen.input.write('d');
-  await settle();
+  await pressKey(screen.input, 'd');
+  await screen.settle();
   screen.output.clearOutput();
-  screen.input.write('\r');
-  await settle();
+  await pressKey(screen.input, '\r');
+  await screen.settle();
   assert.deepEqual(deletedDirectories, []);
   assert.doesNotMatch(screen.output.readOutput(), /run-42/);
 
-  screen.input.write('n');
-  await settle();
-  screen.input.write('\r');
+  await pressKey(screen.input, 'n');
+  await screen.settle();
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, 'run-42');
   assert.deepEqual(deletedDirectories, []);
 
   screen.output.clearOutput();
-  screen.input.write('\x1b');
+  await pressKey(screen.input, '\x1b');
   await waitForOutput(screen.output, 'Saved run description');
-  screen.input.write('d');
-  await settle();
-  screen.input.write('y');
-  await settle();
+  await pressKey(screen.input, 'd');
+  await screen.settle();
+  await pressKey(screen.input, 'y');
+  await screen.settle();
   assert.deepEqual(deletedDirectories, [run.directory]);
 
   screen.output.clearOutput();
-  screen.input.write('\r');
-  await settle();
+  await pressKey(screen.input, '\r');
+  await screen.settle();
   assert.doesNotMatch(screen.output.readOutput(), /run-42/);
 });
 
@@ -223,19 +212,19 @@ test('deletes the selected run and keeps the others', async context => {
     deleteRun: async runDirectory => { deletedDirectories.push(runDirectory); },
   });
   await waitForOutput(screen.output, 'Current annotation label');
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, 'Visible run 3');
 
-  screen.input.write('\x1b[B');
-  await settle();
-  screen.input.write('d');
-  await settle();
-  screen.input.write('y');
-  await settle();
+  await pressKey(screen.input, '\x1b[B');
+  await screen.settle();
+  await pressKey(screen.input, 'd');
+  await screen.settle();
+  await pressKey(screen.input, 'y');
+  await screen.settle();
   assert.deepEqual(deletedDirectories, [runs[1]?.directory]);
 
   screen.output.clearOutput();
-  screen.input.write('\x1b[B');
+  await pressKey(screen.input, '\x1b[B');
   const frame = await waitForOutput(screen.output, 'Visible run 3');
   assert.match(frame, /Visible run 1/);
   assert.doesNotMatch(frame, /Visible run 2/);
@@ -252,25 +241,25 @@ test('keeps a run after a failed deletion and allows a retry', async context => 
     },
   });
   await waitForOutput(screen.output, 'Current annotation label');
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, 'Saved run description');
 
-  screen.input.write('d');
-  await settle();
-  screen.input.write('y');
+  await pressKey(screen.input, 'd');
+  await screen.settle();
+  await pressKey(screen.input, 'y');
   await waitForOutput(screen.output, 'disk is read-only');
   assert.deepEqual(attempts, [run.directory]);
 
-  screen.input.write('y');
-  await settle();
+  await pressKey(screen.input, 'y');
+  await screen.settle();
   assert.deepEqual(attempts, [run.directory]);
 
-  screen.input.write('\x1b');
-  await settle();
-  screen.input.write('d');
-  await settle();
-  screen.input.write('y');
-  await settle();
+  await pressKey(screen.input, '\x1b');
+  await screen.settle();
+  await pressKey(screen.input, 'd');
+  await screen.settle();
+  await pressKey(screen.input, 'y');
+  await screen.settle();
   assert.deepEqual(attempts, [run.directory, run.directory]);
 });
 
@@ -286,26 +275,26 @@ test('ignores navigation and repeated confirmation while a deletion is running',
     },
   });
   await waitForOutput(screen.output, 'Current annotation label');
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, 'Saved run description');
 
-  screen.input.write('d');
-  await settle();
-  screen.input.write('y');
-  await settle();
+  await pressKey(screen.input, 'd');
+  await screen.settle();
+  await pressKey(screen.input, 'y');
+  await screen.settle();
   screen.output.clearOutput();
-  screen.input.write('y');
-  screen.input.write('\r');
-  screen.input.write('\x1b');
-  await settle();
+  await pressKey(screen.input, 'y');
+  await pressKey(screen.input, '\r');
+  await pressKey(screen.input, '\x1b');
+  await screen.settle();
   assert.deepEqual(attempts, [run.directory]);
   assert.doesNotMatch(screen.output.readOutput(), /run-42/);
 
-  screen.input.write('\x1b');
-  await settle();
+  await pressKey(screen.input, '\x1b');
+  await screen.settle();
   assert.equal(backedOut, false);
   finishDeletion();
-  await settle();
+  await screen.settle();
   assert.deepEqual(attempts, [run.directory]);
 });
 
@@ -313,20 +302,20 @@ test('keeps the selected run visible in a short terminal', async context => {
   const runs = namedRuns(8);
   const screen = renderScreen(context, {runs, rows: 16});
   await waitForOutput(screen.output, 'Current annotation label');
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, 'Visible run 1');
 
   for (let index = 0; index < 5; index += 1) {
-    screen.input.write('\x1b[B');
+    await pressKey(screen.input, '\x1b[B');
   }
   await waitForOutput(screen.output, 'Visible run 6');
   screen.output.clearOutput();
-  screen.input.write('\x1b[B');
+  await pressKey(screen.input, '\x1b[B');
   const frame = await waitForOutput(screen.output, 'Visible run 7');
   assert.doesNotMatch(frame, /Visible run 1/);
 
   screen.output.clearOutput();
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, 'run-7');
 });
 
@@ -334,8 +323,8 @@ test('returns from workflow selection with Escape', async context => {
   let backedOut = false;
   const screen = renderScreen(context, {onBack: () => { backedOut = true; }});
   await waitForOutput(screen.output, 'Current annotation label');
-  screen.input.write('\x1b');
-  await new Promise<void>(resolve => setTimeout(resolve, 30));
+  await pressKey(screen.input, '\x1b');
+  await screen.settle();
   assert.equal(backedOut, true);
 });
 
@@ -347,17 +336,17 @@ test('suspends the home shortcut only while a deletion is running', async contex
     deleteRun: () => new Promise<void>(resolve => { finishDeletion = resolve; }),
   });
   await waitForOutput(screen.output, 'Current annotation label');
-  screen.input.write('\r');
+  await pressKey(screen.input, '\r');
   await waitForOutput(screen.output, 'Saved run description');
   assert.deepEqual(suspensions, []);
 
-  screen.input.write('d');
-  await settle();
-  screen.input.write('y');
-  await settle();
+  await pressKey(screen.input, 'd');
+  await screen.settle();
+  await pressKey(screen.input, 'y');
+  await screen.settle();
   assert.deepEqual(suspensions, ['busy']);
 
   finishDeletion();
-  await settle();
+  await screen.settle();
   assert.deepEqual(suspensions, ['busy', undefined]);
 });

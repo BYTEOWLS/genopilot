@@ -1,17 +1,20 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
-import {childIsolateIds, type Isolate} from '../../isolates/catalog.js';
+import {Alert} from '@inkjs/ui';
+import {childIsolateIds, readPairs, type Isolate} from '../../isolates/catalog.js';
 import type {ReadPairsCheck, ReadPairsChecker} from '../../isolates/reads.js';
-import {lineage, readSummary} from '../../isolates/presentation.js';
+import {isolateListLineage, isolateTechnique, readSummary} from '../../isolates/presentation.js';
 import type {IsolateCatalogMutation, LoadedIsolateCatalog} from '../../isolates/store.js';
 import type {DirectoryReader} from '../components/path-browser.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {Page} from '../components/page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
-import {scanIlluminaDelivery} from '../../isolates/illumina-delivery.js';
+import {scanIlluminaDelivery} from '../../isolates/illumina/delivery.js';
 import {IsolateImport, type DeliveryScanner} from './import.js';
 import {IsolateForm, withIsolate} from './isolate-form.js';
+import {isolateDocumentNames, readGeneralDocuments, type DocumentsLoader} from '../../docs/documents.js';
+import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 
 export type IsolateCatalogLoader = () => Promise<LoadedIsolateCatalog>;
 export type IsolateCatalogUpdater = (
@@ -46,6 +49,7 @@ export function IsolatesScreen({
   checkReads,
   readDirectory,
   scanDelivery = scanIlluminaDelivery,
+  loadHelp = () => readGeneralDocuments(isolateDocumentNames),
 }: {
   onBack: () => void;
   inputActive: boolean;
@@ -56,6 +60,7 @@ export function IsolatesScreen({
   checkReads: ReadPairsChecker;
   readDirectory?: DirectoryReader;
   scanDelivery?: DeliveryScanner;
+  loadHelp?: DocumentsLoader;
 }): React.JSX.Element {
   const [catalogState, setCatalogState] = useState<CatalogState>({state: 'loading'});
   const [readChecks, setReadChecks] = useState<ReadonlyMap<string, ReadPairsCheck>>(new Map());
@@ -63,6 +68,7 @@ export function IsolatesScreen({
   const [selectedId, setSelectedId] = useState<string>();
   const [message, setMessage] = useState<{text: string; error: boolean}>();
   const [busy, setBusy] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   useHomeSuspension(busy ? 'busy' : undefined);
 
   const applyLoaded = useCallback((loaded: LoadedIsolateCatalog): void => {
@@ -84,6 +90,20 @@ export function IsolatesScreen({
   // Re-check every isolate's reads whenever the catalog changes; files may have moved since the
   // isolate was saved, and that must be visible before a run selects it.
   const isolates = catalogState.state === 'ready' ? catalogState.loaded.catalog.isolates : undefined;
+  const techniqueGroups = useMemo(() => {
+    const groups = new Map<string, Isolate[]>();
+    for (const isolate of isolates ?? []) {
+      const technique = isolateTechnique(isolate);
+      const group = groups.get(technique);
+      if (group) {
+        group.push(isolate);
+      } else {
+        groups.set(technique, [isolate]);
+      }
+    }
+    return [...groups].map(([technique, entries]) => ({technique, isolates: entries}));
+  }, [isolates]);
+  const orderedIsolates = techniqueGroups.flatMap(group => group.isolates);
   useEffect(() => {
     if (!isolates) {
       return;
@@ -91,7 +111,7 @@ export function IsolatesScreen({
     let active = true;
     setReadChecks(new Map());
     for (const isolate of isolates) {
-      checkReads(isolate.read_pairs).then(
+      checkReads(readPairs(isolate)).then(
         check => {
           if (active) {
             setReadChecks(current => new Map(current).set(isolate.id, check));
@@ -127,7 +147,7 @@ export function IsolatesScreen({
 
   useInput(
     (input, key) => {
-      if (busy || view.kind === 'form' || view.kind === 'import') {
+      if (busy || showHelp || view.kind === 'form' || view.kind === 'import') {
         return;
       }
       if (view.kind === 'confirm-remove') {
@@ -136,6 +156,10 @@ export function IsolatesScreen({
         } else if (input.toLowerCase() === 'n' || key.escape) {
           setView({kind: 'list'});
         }
+        return;
+      }
+      if (input === '?') {
+        setShowHelp(true);
         return;
       }
       if (key.escape) {
@@ -150,7 +174,7 @@ export function IsolatesScreen({
       if (catalogState.state !== 'ready') {
         return;
       }
-      const {isolates: current} = catalogState.loaded.catalog;
+      const current = orderedIsolates;
       if (input === 'n') {
         setMessage(undefined);
         setView({kind: 'form'});
@@ -190,6 +214,11 @@ export function IsolatesScreen({
     {isActive: inputActive},
   );
 
+  if (showHelp) {
+    return <MarkdownDocumentPage title="Managing isolates" load={loadHelp}
+      onClose={() => setShowHelp(false)} back="Close help" inputActive={inputActive} />;
+  }
+
   if (view.kind === 'form' && catalogState.state === 'ready') {
     const {catalog} = catalogState.loaded;
     const editing = catalog.isolates.find(isolate => isolate.id === view.editingId);
@@ -202,6 +231,7 @@ export function IsolatesScreen({
         inputActive={inputActive}
         currentDirectory={currentDirectory}
         readDirectory={readDirectory}
+        loadHelp={loadHelp}
         onCancel={() => setView({kind: 'list'})}
         onSubmit={async isolate => {
           const loaded = await updateCatalog(
@@ -238,10 +268,9 @@ export function IsolatesScreen({
     );
   }
 
-  const selectedIndex = isolates?.findIndex(isolate => isolate.id === selectedId) ?? -1;
-  const visibleStart = isolates
-    ? Math.max(0, Math.min(selectedIndex - Math.floor(visibleIsolateCount / 2), isolates.length - visibleIsolateCount))
-    : 0;
+  const selectedIndex = orderedIsolates.findIndex(isolate => isolate.id === selectedId);
+  const visibleStart = Math.max(0, Math.min(selectedIndex - Math.floor(visibleIsolateCount / 2), orderedIsolates.length - visibleIsolateCount));
+  const visibleIds = new Set(orderedIsolates.slice(visibleStart, visibleStart + visibleIsolateCount).map(isolate => isolate.id));
 
   return (
     <Page
@@ -250,7 +279,7 @@ export function IsolatesScreen({
       description={`Catalog: ${sanitizeTerminalText(catalogPath)}`}
       shortcuts={view.kind === 'confirm-remove'
         ? [busy ? 'Removing…' : 'y — Remove']
-        : ['↑/↓ — Select', 'Enter — Edit', 'n — New', 'i — Import delivery', 'd — Remove', 'r — Reload']}
+        : ['↑/↓ — Select', 'Enter — Edit', 'n — New', 'i — Import delivery', 'd — Remove', 'r — Reload', '? — Help']}
       back={view.kind === 'confirm-remove' ? 'Keep' : 'Back'}
     >
       {catalogState.state === 'loading' ? <Text>Loading isolates…</Text> : null}
@@ -261,20 +290,27 @@ export function IsolatesScreen({
         </Box>
       ) : null}
       {isolates && isolates.length === 0 ? (
-        <Text>No isolates yet. Press n to add one or i to import a sequencing delivery.</Text>
+        <Alert variant="warning">No isolates yet. Press n to add one or i to import a sequencing delivery.</Alert>
       ) : null}
-      {isolates?.slice(visibleStart, visibleStart + visibleIsolateCount).map(isolate => {
-        const isSelected = isolate.id === selectedId;
-        return (
-          <Text key={isolate.id} color={isSelected ? 'cyan' : undefined} wrap="truncate">
-            {isSelected ? '› ' : '  '}
-            {sanitizeTerminalText(isolate.name)}
-            <Text color={mutedColor}> ({sanitizeTerminalText(isolate.id)})</Text>
-            {/* Read problems come before lineage so a narrow terminal truncates the less urgent part. */}
-            {' · '}{readSummary(isolate, readChecks.get(isolate.id))}
-            {' · '}{sanitizeTerminalText(lineage(isolate))}
-          </Text>
-        );
+      {techniqueGroups.map(group => {
+        const visible = group.isolates.filter(isolate => visibleIds.has(isolate.id));
+        if (visible.length === 0) {
+          return null;
+        }
+        return <Box key={group.technique} flexDirection="column" marginBottom={1}>
+          <Text bold underline wrap="truncate">{sanitizeTerminalText(group.technique)} · {group.isolates.length}</Text>
+          {visible.map(isolate => {
+            const isSelected = isolate.id === selectedId;
+            const lineage = isolateListLineage(isolate);
+            return <Text key={isolate.id} color={isSelected ? 'cyan' : undefined} wrap="truncate">
+              {isSelected ? '› ' : '  '}
+              {sanitizeTerminalText(isolate.name)}
+              <Text color={mutedColor}> ({sanitizeTerminalText(isolate.id)})</Text>
+              {' · '}{readSummary(isolate, readChecks.get(isolate.id))}
+              {lineage ? ` · ${sanitizeTerminalText(lineage)}` : ''}
+            </Text>;
+          })}
+        </Box>;
       })}
       {isolates && isolates.length > visibleIsolateCount ? (
         <Text color={mutedColor}>{selectedIndex + 1} of {isolates.length}</Text>

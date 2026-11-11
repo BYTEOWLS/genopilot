@@ -138,7 +138,7 @@ async function loadReferenceConsensusResult(
   const snapshotPath = resolve(directory, ISOLATE_SNAPSHOT_FILENAME);
   let snapshot: IsolateSnapshot;
   try {
-    snapshot = parseIsolateSnapshot(await readFile(snapshotPath, 'utf8'), configuration.inputs.selected_isolates);
+    snapshot = parseIsolateSnapshot(await readFile(snapshotPath, 'utf8'), configuration.inputs.selected_isolates, configuration.inputs.selected_read_sets);
   } catch (error) {
     return {
       kind: 'incompatible',

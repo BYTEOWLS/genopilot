@@ -29,6 +29,7 @@ import {mutedColor} from '../theme.js';
 import {useTerminalTitle, type TerminalTitleStatus} from '../terminal-title.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {Page} from '../components/page.js';
+import {Section} from '../components/section.js';
 import {IsolateProgressList, isolateProgressHeight} from './isolate-progress-list.js';
 import {ElapsedTime} from '../components/elapsed-time.js';
 import {appendExecutionRecord, stageSeconds} from '../../workflows/run-timing.js';
@@ -76,8 +77,7 @@ function stageDetail(stage: StageProgress): string {
 function StageProgressList({progress}: {progress: RunProgress}): React.JSX.Element {
   const width = Math.max(...progress.stages.map(stage => stage.label.length), 0);
   return (
-    <Box marginTop={1} flexDirection="column">
-      <Text bold>Stages</Text>
+    <Section title="Stages">
       {progress.stages.map(stage => {
         const {marker, color} = stateMarkers[stage.state];
         return (
@@ -91,7 +91,7 @@ function StageProgressList({progress}: {progress: RunProgress}): React.JSX.Eleme
           ? `${String(progress.done)}/${String(progress.total)} jobs`
           : 'Waiting for Snakemake to schedule jobs…'}
       </Text>
-    </Box>
+    </Section>
   );
 }
 
@@ -716,10 +716,9 @@ export function WorkflowExecutionScreen<R extends WorkflowRun>({
             );
           })}
         </Box>
-        <Box marginTop={1} flexDirection="column">
-          <Text bold>Snakemake command</Text>
+        <Section title="Snakemake command">
           <Text wrap="wrap">{sanitizeTerminalText(run.command)}</Text>
-        </Box>
+        </Section>
       </Page>
     );
   }

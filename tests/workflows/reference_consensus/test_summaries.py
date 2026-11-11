@@ -36,6 +36,34 @@ class ArtifactListTests(unittest.TestCase):
 
 
 class SummarizeIsolateTests(unittest.TestCase):
+    def test_provider_skip_keeps_measurements_unavailable_and_origin_imported(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            pair = directory / "pairs/1"
+            pair.mkdir(parents=True)
+            documents = {
+                "pairs/1/read-validation.json": {"trimmed": True, "read_set_id": "delivery",
+                    "read_group": {"id": "sample.delivery.1", "lb": "library-a"},
+                    "preprocessing": {"status": "skipped-provider-trimmed", "settings": {"poly_g": False}}},
+                "pairs/1/fastp.json": {"status": "skipped-provider-trimmed",
+                    "summary": {"before_filtering": None, "after_filtering": None}},
+                "flagstat.json": {"QC-passed reads": {"total": 2, "primary mapped": 2, "primary mapped %": 100,
+                    "properly paired %": 100, "duplicates": 0}},
+                "markdup.json": {"libraries": []},
+                "callability.json": {"bases": {}, "genome_length": 4, "callable_fraction": 1},
+            }
+            for path, value in documents.items():
+                (directory / path).write_text(json.dumps(value), encoding="utf-8")
+            (directory / "coverage.tsv").write_text("chr1\t1\t4\t2\t4\t100\t2\n", encoding="utf-8")
+            (directory / "variant-stats.txt").write_text("", encoding="utf-8")
+            metrics = summarize_isolate.build_metrics("sample", directory, 1, {})
+            report = metrics["read_pairs"][0]
+            self.assertEqual(report["read_set_id"], "delivery")
+            self.assertEqual(report["preprocessing"]["origin"], "imported")
+            self.assertEqual(report["preprocessing"]["status"], "skipped-provider-trimmed")
+            self.assertIsNone(report["before_trimming"])
+            self.assertIsNone(report["after_trimming"])
+
     def test_names_the_trimming_of_all_read_pairs(self) -> None:
         self.assertEqual(summarize_isolate.trimmed_status([{"trimmed": False}]), "untrimmed")
         self.assertEqual(summarize_isolate.trimmed_status([{"trimmed": True}, {"trimmed": True}]), "trimmed")

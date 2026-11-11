@@ -4,7 +4,8 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test, {type TestContext} from 'node:test';
 import type {AccessionEntry} from '../../../src/accessions/catalog.js';
-import type {Isolate, IsolateCatalog} from '../../../src/isolates/catalog.js';
+import {testReadSet, testSnapshotReadSet} from '../../read-sets.js';
+import type {ReadPair, IsolateCatalog} from '../../../src/isolates/catalog.js';
 import {
   parseReferenceConsensusConfiguration,
   ReferenceConsensusConfigurationError,
@@ -34,7 +35,7 @@ async function createTempDir(context: TestContext): Promise<string> {
   return tempDir;
 }
 
-async function readPair(tempDir: string, name: string, trimmed = false): Promise<Isolate['read_pairs'][number]> {
+async function readPair(tempDir: string, name: string, trimmed = false): Promise<ReadPair> {
   await mkdir(join(tempDir, 'reads'), {recursive: true});
   const pair = {r1: join(tempDir, 'reads', `${name}_R1.fastq`), r2: join(tempDir, 'reads', `${name}_R2.fastq`), trimmed};
   await writeFile(pair.r1, fastq);
@@ -53,7 +54,7 @@ async function fixture(context: TestContext): Promise<{tempDir: string; catalog:
         name: 'Isolate A',
         wildtype: true,
         derived_from: null,
-        read_pairs: [await readPair(tempDir, 'a-lane1'), await readPair(tempDir, 'a-lane2')],
+        read_sets: [testReadSet([await readPair(tempDir, 'a-lane1'), await readPair(tempDir, 'a-lane2')])],
       },
       {
         id: 'isolate-b',
@@ -61,7 +62,7 @@ async function fixture(context: TestContext): Promise<{tempDir: string; catalog:
         description: 'Derived line',
         wildtype: false,
         derived_from: 'isolate-a',
-        read_pairs: [await readPair(tempDir, 'b')],
+        read_sets: [testReadSet([await readPair(tempDir, 'b')])],
       },
     ],
   };
@@ -69,7 +70,7 @@ async function fixture(context: TestContext): Promise<{tempDir: string; catalog:
     backboneSource: 'local',
     backboneFasta: 'backbone.fa',
     backboneAccession: '',
-    isolateIds: ['isolate-b', 'isolate-a'],
+    readSetIds: ['isolate-b/reads', 'isolate-a/reads'],
     votingMethod: 'strict-majority',
     includeBackboneVote: true,
     minCallableIsolates: '1',
@@ -113,21 +114,21 @@ test('snapshots every selected isolate with all read pairs in selection order', 
   assert.equal(configuration.run.id, '2026-09-25_100000000_Cohort-one');
   assert.equal(prepared.outputDirectory, join(tempDir, 'runs', 'reference-consensus', configuration.run.id));
   assert.deepEqual(snapshot.isolates.map(isolate => isolate.id), ['isolate-b', 'isolate-a']);
-  assert.deepEqual(snapshot.isolates[1], catalog.isolates[0]);
+  assert.deepEqual(snapshot.isolates[1], {...catalog.isolates[0], read_sets: [testSnapshotReadSet(catalog.isolates[0]!.read_sets[0]!.read_pairs)]});
   assert.equal(snapshot.captured_at, now.toISOString());
   // The snapshot is a copy: changing the catalog afterwards leaves the run's record alone.
-  catalog.isolates[0]!.read_pairs[0]!.trimmed = true;
-  assert.equal(snapshot.isolates[1]?.read_pairs[0]?.trimmed, false);
+  catalog.isolates[0]!.read_sets[0]!.read_pairs[0]!.trimmed = true;
+  assert.equal(snapshot.isolates[1]?.read_sets[0]?.read_pairs[0]?.trimmed, false);
 });
 
 test('refuses a selected isolate that is no longer cataloged and an empty or invalid threshold', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
   assert.throws(
-    () => buildReferenceConsensusRun({...draft, isolateIds: ['isolate-a', 'gone']}, catalog, tempDir, genopilot, 8, now),
-    error => issuesOf(error).some(issue => issue.path === '$.inputs.selected_isolates[1]'),
+    () => buildReferenceConsensusRun({...draft, readSetIds: ['isolate-a/reads', 'gone/reads']}, catalog, tempDir, genopilot, 8, now),
+    error => issuesOf(error).some(issue => issue.path === '$.inputs.selected_read_sets[1]'),
   );
   assert.throws(
-    () => buildReferenceConsensusRun({...draft, isolateIds: []}, catalog, tempDir, genopilot, 8, now),
+    () => buildReferenceConsensusRun({...draft, readSetIds: []}, catalog, tempDir, genopilot, 8, now),
     error => issuesOf(error).some(issue => issue.path === '$.inputs.selected_isolates'),
   );
   assert.throws(
@@ -150,7 +151,7 @@ test('refuses a selected isolate that is no longer cataloged and an empty or inv
 test('blocks a missing read file and an unreadable backbone before review', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
   const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, genopilot, 8, now);
-  await rm(catalog.isolates[0]!.read_pairs[1]!.r2);
+  await rm(catalog.isolates[0]!.read_sets[0]!.read_pairs[1]!.r2);
   await rm(join(tempDir, 'backbone.fa'));
   await assert.rejects(inspectPreparedRun(prepared, {readAccessions: noAccessions}), error => {
     const issues = issuesOf(error);
@@ -195,10 +196,10 @@ test('warns about linked read files, a possible backbone sample, and mixed trimm
   assert.deepEqual(reviewWarnings(clean, await inspectPreparedRun(clean, {readAccessions: noAccessions})), []);
 
   // Isolate B's R2 becomes a hard link to isolate A's first R1, and one of A's pairs is trimmed.
-  const b = catalog.isolates[1]!.read_pairs[0]!;
+  const b = catalog.isolates[1]!.read_sets[0]!.read_pairs[0]!;
   await rm(b.r2);
-  await link(catalog.isolates[0]!.read_pairs[0]!.r1, b.r2);
-  catalog.isolates[0]!.read_pairs[1]!.trimmed = true;
+  await link(catalog.isolates[0]!.read_sets[0]!.read_pairs[0]!.r1, b.r2);
+  catalog.isolates[0]!.read_sets[0]!.read_pairs[1]!.trimmed = true;
   const strain: AccessionEntry = {
     accession: 'GCF_000149205.2',
     ncbi: {organism: 'Example organism', strain: 'ISOLATE-B', retrieved_at: now.toISOString(), source: 'datasets-v2-rest'},
@@ -297,7 +298,7 @@ test('refuses input paths Snakemake cannot declare', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
   const braced = join(tempDir, 'reads', 'x{y}');
   await mkdir(braced);
-  const pair = catalog.isolates[1]!.read_pairs[0]!;
+  const pair = catalog.isolates[1]!.read_sets[0]!.read_pairs[0]!;
   pair.r1 = join(braced, 'b_R1.fastq');
   await writeFile(pair.r1, fastq);
   const prepared = buildReferenceConsensusRun(draft, catalog, tempDir, genopilot, 8, now);
@@ -305,6 +306,25 @@ test('refuses input paths Snakemake cannot declare', async context => {
     inspectPreparedRun(prepared, {readAccessions: noAccessions}),
     error => issuesOf(error).some(issue => issue.path.includes("'isolate-b' pair 1 R1") && issue.message.includes('{')),
   );
+});
+
+test('selects individual sets, snapshots effective settings, and preserves shared libraries', async context => {
+  const {tempDir, catalog, draft} = await fixture(context);
+  const isolate = catalog.isolates[0]!;
+  isolate.read_sets.push(testReadSet([await readPair(tempDir, 'topup')], {
+    id: 'topup', illumina: {chemistry: 'unknown', poly_g: 'off'},
+  }));
+  const one = buildReferenceConsensusRun({...draft, readSetIds: ['isolate-a/topup']}, catalog, tempDir, genopilot, 8, now);
+  assert.deepEqual(one.configuration.inputs.selected_read_sets, ['isolate-a/topup']);
+  assert.equal(one.snapshot.isolates[0]!.read_sets.length, 1);
+  assert.equal(one.snapshot.isolates[0]!.read_sets[0]!.effective_preprocessing.poly_g, false);
+  const both = buildReferenceConsensusRun({...draft, readSetIds: ['isolate-a/reads', 'isolate-a/topup']}, catalog, tempDir, genopilot, 8, now);
+  assert.deepEqual(both.snapshot.isolates[0]!.read_sets.map(set => set.library_id), ['library-a', 'library-a']);
+  isolate.read_sets[1]!.illumina.poly_g = 'on';
+  assert.equal(one.snapshot.isolates[0]!.read_sets[0]!.illumina.poly_g, 'off');
+  assert.throws(() => buildReferenceConsensusRun({...draft, readSetIds: ['isolate-a/topup', 'isolate-a/topup']}, catalog, tempDir, genopilot));
+  both.snapshot.isolates[0]!.read_sets[0]!.effective_preprocessing.poly_g = false;
+  await assert.rejects(savePreparedRun(both), ReferenceConsensusConfigurationError);
 });
 
 test('sums each isolate\'s read files and the local backbone for the disk estimate', async context => {
@@ -317,7 +337,7 @@ test('sums each isolate\'s read files and the local backbone for the disk estima
   });
 
   // A missing read file counts as empty: the inspection reports it.
-  await rm(catalog.isolates[1]!.read_pairs[0]!.r1);
+  await rm(catalog.isolates[1]!.read_sets[0]!.read_pairs[0]!.r1);
   const withMissing = await diskEstimateInputs(prepared);
   assert.deepEqual(withMissing.inputs.isolateReadBytes, [reads, 4 * reads]);
 

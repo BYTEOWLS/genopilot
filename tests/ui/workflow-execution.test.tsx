@@ -17,6 +17,7 @@ import {
 import {RUN_EVENT_SCHEMA_VERSION} from '../../src/workflows/run-events.js';
 import {readExecutionRecords} from '../../src/workflows/run-timing.js';
 import {HomeSuspensionContext, type HomeSuspension} from '../../src/ui/home-navigation.js';
+import {pressKey, waitFor, waitForOutput as waitForTerminal, rendered, WAIT_TIMEOUT_MS} from '../wait.js';
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -65,38 +66,18 @@ async function waitForOutput(
   output: TestOutput,
   predicate: (value: string) => boolean,
 ): Promise<string> {
-  // performance.now(), unlike Date, stays real when a test mocks the clock.
-  const timeoutAt = performance.now() + 2000;
-  while (performance.now() < timeoutAt) {
-    const value = output.readOutput();
-    if (predicate(value)) {
-      return value;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting for terminal output. Received:\n${output.readOutput()}`);
+  return waitForTerminal(() => output.readOutput(), predicate);
 }
 
-async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-  // performance.now(), unlike Date, stays real when a test mocks the clock.
-  const timeoutAt = performance.now() + 2000;
-  while (performance.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting until ${description}`);
-}
 
 // Selects the execution in the start options by its exact command, which unlike the dry run's
 // has no --dry-run flag, and starts it.
 async function startExecution(input: TestInput, output: TestOutput): Promise<void> {
   await waitForOutput(output, value => value.includes('/managed/snakemake --dry-run'));
   output.clearOutput();
-  input.write(ARROW_DOWN);
+  await pressKey(input, ARROW_DOWN);
   await waitForOutput(output, value => value.includes('/managed/snakemake') && !value.includes('--dry-run'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
 }
 
 const stages = [
@@ -173,10 +154,10 @@ test('reports stage progress from structured events, never from console text', a
   context.after(() => instance.unmount());
 
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  input.write(ARROW_DOWN);
+  await pressKey(input, ARROW_DOWN);
   await waitForOutput(output, value => value.includes('(●) Run workflow'));
   output.clearOutput();
-  input.write(ENTER);
+  await pressKey(input, ENTER);
 
   const startedFrame = await waitForOutput(output, value =>
     value.includes('Waiting for Snakemake to schedule jobs'),
@@ -233,9 +214,9 @@ test('marks the failing stage and keeps the reported reason', async context => {
   context.after(() => instance.unmount());
 
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  input.write(ARROW_DOWN);
+  await pressKey(input, ARROW_DOWN);
   await waitForOutput(output, value => value.includes('(●) Run workflow'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
 
   const frame = await waitForOutput(output, value => value.includes('Workflow run failed'));
   assert.match(frame, /✖ Validate inputs\s+0\/1/);
@@ -254,42 +235,43 @@ test('shows no stage progress for a dry run, which schedules nothing', async con
   context.after(() => instance.unmount());
 
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
 
   const frame = await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
   assert.doesNotMatch(frame, /Stages/);
   assert.doesNotMatch(frame, /Summarize results/);
 });
 
-test('shows the elapsed time while running, keeps the time the process took, and saves it in the run', async context => {
+test('saves the time the process took and its stage times in the run', async context => {
   context.mock.timers.enable({apis: ['Date'], now: 1_000_000});
   const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
   context.after(() => rm(tempDir, {recursive: true, force: true}));
-  let finish: () => void = () => undefined;
+  let finish: (() => void) | undefined;
   const eventsPath = join(tempDir, 'events.jsonl');
-  const {input, output, instance} = renderExecution(eventsPath, run =>
-    new Promise(resolve => {
-      void appendFile(eventsPath, [
-        eventLine({type: 'job-started', job_id: 1, rule: 'validate_inputs', timestamp: new Date(1_000_000).toISOString()}),
-        eventLine({type: 'job-finished', job_id: 1, timestamp: new Date(1_042_000).toISOString()}),
-      ].join(''));
+  const {input, output, instance} = renderExecution(eventsPath, async run => {
+    // The events are written before the run can finish, so the saved timing always sees them.
+    await appendFile(eventsPath, [
+      eventLine({type: 'job-started', job_id: 1, rule: 'validate_inputs', timestamp: new Date(1_000_000).toISOString()}),
+      eventLine({type: 'job-finished', job_id: 1, timestamp: new Date(1_042_000).toISOString()}),
+    ].join(''));
+    return new Promise(resolve => {
       finish = () => resolve({...run, exitCode: 0, peakMemoryBytes: 3_000_000_000});
-    }));
+    });
+  });
   context.after(() => instance.unmount());
 
   await startExecution(input, output);
-  await waitForOutput(output, value => /\b0 s\b/.test(value));
+  await waitFor(() => finish !== undefined, 'the execution started');
   context.mock.timers.tick(65_000);
-  output.clearOutput();
-  finish();
-  await waitForOutput(output, value => /\b1 min 5 s\b/.test(value));
-  // Ended: later time no longer counts, even after the timer's next whole second.
-  context.mock.timers.tick(600_000);
-  await new Promise(resolve => setTimeout(resolve, 1100));
-  assert.doesNotMatch(output.readOutput(), /\b11 min\b/);
+  finish!();
 
-  // The run directory keeps the execution's process times and its stage times.
-  const [saved] = await readExecutionRecords(tempDir);
+  // The shown elapsed time follows a real one-second ticker, so only the saved times are checked;
+  // the elapsed-time tests cover the display with mocked timers.
+  let [saved] = await readExecutionRecords(tempDir);
+  for (const timeoutAt = performance.now() + WAIT_TIMEOUT_MS; !saved && performance.now() < timeoutAt;) {
+    await new Promise<void>(resolve => setTimeout(resolve, 10));
+    [saved] = await readExecutionRecords(tempDir);
+  }
   assert.deepEqual(saved, {
     started_at: new Date(1_000_000).toISOString(),
     finished_at: new Date(1_065_000).toISOString(),
@@ -310,7 +292,7 @@ test('saves the timing of a stopped or failed execution with the peak memory it 
   context.after(() => instance.unmount());
 
   await startExecution(input, output);
-  await waitUntil(() => existsSync(join(tempDir, 'timing.yaml')), 'the timing is saved');
+  await waitFor(() => existsSync(join(tempDir, 'timing.yaml')), 'the timing is saved');
   const [saved] = await readExecutionRecords(tempDir);
   assert.equal(saved?.peak_memory_bytes, 7_000_000_000);
   assert.equal(saved?.exit_code, undefined);
@@ -336,7 +318,7 @@ test('scrolls back through retained output while the run keeps producing more', 
   context.after(() => instance.unmount());
 
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   await waitForOutput(output, value => value.includes('Running snakemake dry run'));
   assert.ok(emit);
 
@@ -347,7 +329,7 @@ test('scrolls back through retained output while the run keeps producing more', 
   assert.doesNotMatch(tailFrame, /log line 1$/m);
 
   output.clearOutput();
-  input.write(PAGE_UP);
+  await pressKey(input, PAGE_UP);
   const scrolledFrame = await waitForOutput(output, value => value.includes('Snakemake log — line'));
   assert.match(scrolledFrame, /newer lines/);
   assert.match(scrolledFrame, /↑\/↓ — Scroll/);
@@ -364,19 +346,19 @@ test('scrolls back through retained output while the run keeps producing more', 
 
   // One line down, then back to following the newest output.
   output.clearOutput();
-  input.write(ARROW_DOWN);
+  await pressKey(input, ARROW_DOWN);
   const steppedFrame = await waitForOutput(output, value =>
     value.includes(`line ${String(Number(scrolledRange[1]) + 1)}–`),
   );
   assert.match(steppedFrame, /of 41/);
 
   output.clearOutput();
-  input.write('G');
+  await pressKey(input, 'G');
   const followingFrame = await waitForOutput(output, value => value.includes('log line 41'));
   assert.doesNotMatch(followingFrame, /Snakemake log — line/);
 
   output.clearOutput();
-  input.write(ARROW_UP);
+  await pressKey(input, ARROW_UP);
   await waitForOutput(output, value => value.includes('Snakemake log — line'));
 
   release();
@@ -425,22 +407,23 @@ test('reloads persisted results after execution instead of keeping transient met
   context.after(() => instance.unmount());
 
   await startExecution(input, output);
-  await waitUntil(() => loads === 1, 'persisted results are loaded');
+  await waitFor(() => loads === 1, 'persisted results are loaded');
 
   // A finished execution stays on the run screen with its log until results are requested.
   await waitForOutput(output, value => value.includes('Finished all jobs.'));
-  await new Promise<void>(resolve => setTimeout(resolve, 100));
+  await rendered(instance);
   assert.doesNotMatch(output.readOutput(), /Unable to read completion summary/);
 
   output.clearOutput();
-  input.write(ENTER);
-  const frame = await waitForOutput(output, value => value.includes('Unable to read completion summary'));
-  assert.match(frame, /snakemake-execute\.stdout\.log/);
+  await pressKey(input, ENTER);
+  // The results page draws its parts as they load, so wait for the log path as well.
+  await waitForOutput(output, value =>
+    value.includes('Unable to read completion summary') && /snakemake-execute\.stdout\.log/.test(value));
   assert.equal(loads, 1);
 
   // Leaving the results returns to the finished run rather than the workflow.
   output.clearOutput();
-  input.write(ESCAPE);
+  await pressKey(input, ESCAPE);
   await waitForOutput(output, value => value.includes('Finished all jobs.'));
 });
 
@@ -478,15 +461,14 @@ test('shows process failure together with persisted-result availability', async 
   context.after(() => instance.unmount());
 
   await startExecution(input, output);
-  await waitUntil(() => loads === 1, 'persisted results are loaded');
-  await new Promise<void>(resolve => setTimeout(resolve, 100));
+  await waitFor(() => loads === 1, 'persisted results are loaded');
+  await rendered(instance);
   assert.doesNotMatch(output.readOutput(), /Completion summary is corrupt/);
 
   // Results of a failed execution can still be opened from the run screen.
   output.clearOutput();
-  input.write(ENTER);
-  const frame = await waitForOutput(output, value => value.includes('Completion summary is corrupt'));
-  assert.match(frame, new RegExp(tempDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  await pressKey(input, ENTER);
+  await waitForOutput(output, value => value.includes('Completion summary is corrupt') && value.includes(tempDir));
 });
 
 test('sizes the log window to the terminal instead of a fixed height', async context => {
@@ -511,7 +493,7 @@ test('sizes the log window to the terminal instead of a fixed height', async con
   context.after(() => instance.unmount());
 
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   await waitForOutput(output, value => value.includes('Running snakemake dry run'));
   assert.ok(emit);
 
@@ -547,11 +529,11 @@ test('suspends the home shortcut while the workflow runs', async context => {
   context.after(() => instance.unmount());
 
   await startExecution(input, output);
-  await waitUntil(() => suspensions.length === 1, 'the running workflow suspends the shortcut');
+  await waitFor(() => suspensions.length === 1, 'the running workflow suspends the shortcut');
   assert.deepEqual(suspensions, ['busy']);
 
   releaseRun();
-  await waitUntil(() => suspensions.length === 2, 'the finished workflow releases the shortcut');
+  await waitFor(() => suspensions.length === 2, 'the finished workflow releases the shortcut');
   assert.deepEqual(suspensions, ['busy', undefined]);
 });
 
@@ -563,10 +545,10 @@ async function startMode(input: TestInput, output: TestOutput, mode: 'dry-run' |
   await waitForOutput(output, value => value.includes('/managed/snakemake --dry-run'));
   if (mode === 'execute') {
     output.clearOutput();
-    input.write(ARROW_DOWN);
+    await pressKey(input, ARROW_DOWN);
     await waitForOutput(output, value => value.includes('/managed/snakemake') && !value.includes('--dry-run'));
   }
-  input.write(ENTER);
+  await pressKey(input, ENTER);
 }
 
 test('runs the success follow-up only after a successful execution', async context => {
@@ -591,16 +573,15 @@ test('runs the success follow-up only after a successful execution', async conte
   context.after(() => instance.unmount());
 
   await startMode(input, output, 'dry-run');
-  await waitUntil(() => modes.length === 1, 'the dry run finishes');
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await waitFor(() => modes.length === 1, 'the dry run finishes');
+  await rendered(instance);
   assert.equal(followUps, 0);
 
   // Leaving a finished dry run preselects the execution in the start options.
   output.clearOutput();
-  input.write(ESCAPE);
+  await pressKey(input, ESCAPE);
   await waitForOutput(output, value => value.includes('/managed/snakemake'));
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   await waitForOutput(output, value => value.includes('Test follow-up note'));
   assert.deepEqual(modes, ['dry-run', 'execute']);
   assert.equal(followUps, 1);
@@ -672,8 +653,8 @@ test('skips the success follow-up when the execution fails', async context => {
   context.after(() => instance.unmount());
 
   await startMode(input, output, 'execute');
-  await waitUntil(() => executed, 'the execution finishes');
-  await new Promise<void>(resolve => setTimeout(resolve, 50));
+  await waitFor(() => executed, 'the execution finishes');
+  await rendered(instance);
   assert.equal(followUps, 0);
 });
 
@@ -904,18 +885,18 @@ test('offers the execution only after a dry run passed the gate', async context 
 
   // Before any dry run, the arrows cannot select the execution.
   await waitForOutput(output, value => value.includes('/managed/snakemake --dry-run target.json'));
-  input.write(ARROW_DOWN);
-  input.write(ENTER);
-  await waitUntil(() => gated.length === 1, 'the dry run is checked');
+  await pressKey(input, ARROW_DOWN);
+  await pressKey(input, ENTER);
+  await waitFor(() => gated.length === 1, 'the dry run is checked');
   assert.deepEqual(modes, ['dry-run']);
   assert.equal(gated[0]?.mode, 'dry-run');
 
   // The passed dry run preselects the execution.
   await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
-  input.write(ESCAPE);
+  await pressKey(input, ESCAPE);
   await waitForOutput(output, value => value.includes('/managed/snakemake target.json'));
-  input.write(ENTER);
-  await waitUntil(() => modes.length === 2, 'the execution starts');
+  await pressKey(input, ENTER);
+  await waitFor(() => modes.length === 2, 'the execution starts');
   assert.deepEqual(modes, ['dry-run', 'execute']);
 });
 
@@ -934,14 +915,14 @@ test('keeps the execution unavailable when the gate refuses the dry run, and sho
   context.after(() => instance.unmount());
 
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   await waitForOutput(output, value => value.includes('call_all_sites (1)'));
   output.clearOutput();
-  input.write(ESCAPE);
+  await pressKey(input, ESCAPE);
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  input.write(ARROW_DOWN);
-  input.write(ENTER);
-  await waitUntil(() => modes.length === 2, 'the second attempt starts');
+  await pressKey(input, ARROW_DOWN);
+  await pressKey(input, ENTER);
+  await waitFor(() => modes.length === 2, 'the second attempt starts');
   assert.deepEqual(modes, ['dry-run', 'dry-run']);
 });
 
@@ -967,12 +948,12 @@ test('reads only the events an execution appends, not those of earlier attempts'
   context.after(() => instance.unmount());
 
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
-  input.write(ESCAPE);
+  await pressKey(input, ESCAPE);
   await waitForOutput(output, value => value.includes('/managed/snakemake target.json'));
   output.clearOutput();
-  input.write(ENTER);
+  await pressKey(input, ENTER);
   const frame = await waitForOutput(output, value => value.includes('Workflow run succeeded'));
   assert.doesNotMatch(frame, /earlier attempt failed/);
 });

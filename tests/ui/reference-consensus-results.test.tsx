@@ -24,6 +24,7 @@ import {
 import type {WorkflowManifest} from '../../src/workflows/manifest.js';
 import type {CompatibleReferenceConsensusResult} from '../../src/workflows/results.js';
 import {testMachine} from '../workflows/machine.js';
+import {pressKey, rendered, waitFor} from '../wait.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -53,10 +54,6 @@ const ENTER = '\r';
 const ESCAPE = '\x1b';
 const HELP = '?';
 
-async function settle(milliseconds = 60): Promise<void> {
-  await new Promise<void>(resolve => setTimeout(resolve, milliseconds));
-}
-
 const manifest: WorkflowManifest = {
   schema_version: 1,
   workflow_version: 1,
@@ -80,6 +77,7 @@ const configuration = validateReferenceConsensusConfiguration({
     backbone: {source: 'ncbi', accession: 'GCF_000000001.1'},
     isolates_file: 'isolates.yaml',
     selected_isolates: isolateIds,
+    selected_read_sets: isolateIds.map(id => `${id}/reads`),
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
   consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
@@ -212,12 +210,12 @@ function renderScreen(options: {
   const press = async (...keys: string[]): Promise<string> => {
     for (const key of keys) {
       output.clearOutput();
-      input.write(key);
-      await settle();
+      await pressKey(input, key);
+      await rendered(instance);
     }
     return output.readOutput();
   };
-  return {input, output, press, unmount: () => instance.unmount()};
+  return {input, output, press, settle: () => rendered(instance), unmount: () => instance.unmount()};
 }
 
 /** The drawn line that carries the selection marker. */
@@ -228,7 +226,7 @@ function selectedLine(frame: string): string | undefined {
 test('opens on the overview with the backbone and the active cohort, and keeps run details on their own tab', async () => {
   const screen = renderScreen();
   try {
-    await settle();
+    await screen.settle();
     const frame = screen.output.readOutput();
     for (const expected of ['GCF_000000001.1', 'c'.repeat(64), 'iso-a, iso-c', '/runs/run-a/results/cohort/iteration-2/consensus-fasta']) {
       assert.ok(frame.includes(expected), `missing ${expected}`);
@@ -248,7 +246,7 @@ test('suggests no annotation transfer before a consensus FASTA exists', async ()
   result.cohorts[1] = cohort('iteration-2', 2, {paths: {...result.cohorts[1]!.paths, 'consensus-fasta': path('results/cohort/iteration-2/consensus-fasta', false)}});
   const screen = renderScreen({loaded: loaded(result)});
   try {
-    await settle();
+    await screen.settle();
     assert.doesNotMatch(screen.output.readOutput(), /\/runs\/run-a\/results\/cohort\/iteration-2\/consensus-fasta/);
   } finally {
     screen.unmount();
@@ -259,7 +257,7 @@ test('switches tabs and moves the isolate selection into its detail and back', a
   let backedOut = false;
   const screen = renderScreen({onBack: () => { backedOut = true; }});
   try {
-    await settle();
+    await screen.settle();
     let frame = await screen.press(TAB);
     assert.match(selectedLine(frame) ?? '', /iso-a/);
     assert.doesNotMatch(frame, /results\/isolates\/iso-a\/alignment/);
@@ -285,7 +283,7 @@ test('switches tabs and moves the isolate selection into its detail and back', a
 test('selects an iteration and compares it with the first completed cohort', async () => {
   const screen = renderScreen();
   try {
-    await settle();
+    await screen.settle();
     let frame = await screen.press(TAB, TAB);
     // The active iteration is selected first; its tie count fell from 3 to 1.
     assert.match(selectedLine(frame) ?? '', /^\W*2\b/);
@@ -313,7 +311,7 @@ test('omits cohort durations while retaining execution timestamps in the details
   }};
   const screen = renderScreen({loaded: loaded(result)});
   try {
-    await settle();
+    await screen.settle();
     let frame = await screen.press(TAB, TAB);
     assert.doesNotMatch(frame, /1 min 5 s/);
     assert.match(frame, /formatted:2026-01-02T10:00:00\.000Z/);
@@ -331,7 +329,7 @@ test('omits cohort durations while retaining execution timestamps in the details
 test('shows the run files on their tab and returns to the overview', async () => {
   const screen = renderScreen();
   try {
-    await settle();
+    await screen.settle();
     let frame = await screen.press(TAB, TAB, TAB, TAB);
     assert.match(frame, /isolates\.yaml/);
     assert.match(frame, /provenance\/backbone\.fasta\.json/);
@@ -345,7 +343,7 @@ test('shows the run files on their tab and returns to the overview', async () =>
 test('keeps the selected isolate in view in a short terminal and after a resize', async () => {
   const screen = renderScreen({rows: 22, columns: 70});
   try {
-    await settle();
+    await screen.settle();
     await screen.press(TAB);
     const frame = await screen.press(...Array.from({length: isolateIds.length - 1}, () => ARROW_DOWN));
     assert.match(selectedLine(frame) ?? '', /iso-h/);
@@ -353,7 +351,7 @@ test('keeps the selected isolate in view in a short terminal and after a resize'
     screen.output.columns = 50;
     screen.output.clearOutput();
     screen.output.emit('resize');
-    await settle();
+    await screen.settle();
     assert.match(selectedLine(screen.output.readOutput()) ?? '', /iso-h/);
   } finally {
     screen.unmount();
@@ -363,7 +361,7 @@ test('keeps the selected isolate in view in a short terminal and after a resize'
 test('opens and closes the help page from any tab', async () => {
   const screen = renderScreen();
   try {
-    await settle();
+    await screen.settle();
     await screen.press(TAB);
     let frame = await screen.press(HELP);
     assert.equal(selectedLine(frame), undefined);
@@ -418,14 +416,14 @@ test('lists the reviewable loci of the selected cohort, filters them, and shows 
   const select = async (pattern: RegExp, ...keys: string[]): Promise<string> => {
     screen.output.clearOutput();
     for (const key of keys) {
-      screen.input.write(key);
-      await settle();
+      await pressKey(screen.input, key);
+      await screen.settle();
     }
     await waitFor(() => pattern.test(selectedLine(screen.output.readOutput()) ?? ''), `the selection matches ${String(pattern)}`);
     return screen.output.readOutput();
   };
   try {
-    await settle();
+    await screen.settle();
     let frame = await select(/chr1:1,111/, TAB, TAB, TAB);
     // The active iteration is read, once.
     assert.deepEqual(requested, ['/runs/run-a/results/cohort/iteration-2/consensus-sites']);
@@ -458,7 +456,7 @@ test('reads the sites of the cohort selected on the Iterations tab, and none wit
     },
   });
   try {
-    await settle();
+    await screen.settle();
     await screen.press(TAB, TAB, ARROW_UP, TAB);
     await waitFor(() => requested.length === 1, 'the sites are read');
     assert.deepEqual(requested, ['/runs/run-a/results/cohort/initial/consensus-sites']);
@@ -477,9 +475,9 @@ test('reads the sites of the cohort selected on the Iterations tab, and none wit
     },
   });
   try {
-    await settle();
+    await screen.settle();
     await second.press(TAB, TAB, TAB);
-    await settle();
+    await screen.settle();
     assert.deepEqual(requestedAgain, []);
   } finally {
     second.unmount();
@@ -532,16 +530,6 @@ function recorder(): Recorded {
   return {drafts: [], prepared: [], executed: [], reloads: 0};
 }
 
-async function waitFor(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 2000;
-  while (Date.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await settle(10);
-  }
-  assert.fail(`Timed out waiting until ${description}`);
-}
 
 /** Moves from the first isolate row to a later form row: isolates, then the settings, the reason, and save. */
 function down(times: number): string[] {
@@ -550,9 +538,18 @@ function down(times: number): string[] {
 
 test('saves a reasoned exclusion with changed settings, then dry-runs and executes only the iteration', async () => {
   const recorded = recorder();
-  const screen = renderScreen({cohortRerun: rerun(recorded)});
+  const capability = rerun(recorded);
+  const loadResult = capability.loadResult!;
+  let releaseReload!: () => void;
+  const reload = new Promise<void>(resolve => {releaseReload = resolve;});
+  capability.loadResult = async (...args) => {
+    const result = await loadResult(...args);
+    await reload;
+    return result;
+  };
+  const screen = renderScreen({cohortRerun: capability});
   try {
-    await settle();
+    await screen.settle();
     await screen.press('r');
     // The draft starts from the active iteration: iso-b (incomplete) is excluded.
     await screen.press(SPACE); // iso-a stops voting
@@ -582,11 +579,14 @@ test('saves a reasoned exclusion with changed settings, then dry-runs and execut
     assert.deepEqual(recorded.executed, ['dry-run', 'execute']);
 
     // Back on the results, reloaded, with the new iteration selected.
-    await settle();
-    frame = await screen.press(ESCAPE);
-    await waitFor(() => recorded.reloads === 1, 'the result is reloaded');
-    frame = await screen.press(ARROW_UP, ARROW_DOWN);
-    assert.match(selectedLine(frame) ?? '', /^.*4.*active/);
+    await screen.settle();
+    await screen.press(ESCAPE);
+    await waitFor(() => recorded.reloads === 1, 'the result reload starts');
+    releaseReload();
+    const consensusPath = cohort('iteration-4', 4).paths['consensus-fasta']!.path;
+    await waitFor(() => /^\W*4\b/.test(selectedLine(screen.output.readOutput()) ?? '') &&
+      screen.output.readOutput().includes(consensusPath), 'the reloaded result renders with the new iteration selected', () => screen.output.readOutput());
+    assert.equal(recorded.reloads, 1);
   } finally {
     screen.unmount();
   }
@@ -605,7 +605,7 @@ test('shows the problems of a refused decision and stays in the form', async () 
     }),
   });
   try {
-    await settle();
+    await screen.settle();
     await screen.press('r');
     await screen.press(...down(isolateIds.length + 5), ENTER);
     await waitFor(() => /must explain the decision/.test(screen.output.readOutput()), 'the problems are shown');
@@ -633,13 +633,13 @@ test('keeps the execution unavailable when the dry run would recompute an isolat
     }),
   });
   try {
-    await settle();
+    await screen.settle();
     await screen.press('r');
     await screen.press(...down(isolateIds.length + 5), ENTER);
     await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
     let frame = await screen.press(ENTER);
     await waitFor(() => recorded.executed.length === 1, 'the dry run ran');
-    await settle();
+    await screen.settle();
     frame = screen.output.readOutput();
     assert.match(frame, /call_all_sites \(1\)/);
     await screen.press(ESCAPE, ARROW_DOWN, ENTER);
@@ -654,7 +654,7 @@ test('continues a pending iteration from the Iterations tab', async () => {
   const recorded = recorder();
   const screen = renderScreen({cohortRerun: rerun(recorded)});
   try {
-    await settle();
+    await screen.settle();
     // The completed active iteration cannot be continued.
     await screen.press(TAB, TAB, 'c');
     assert.equal(recorded.prepared.length, 0);
@@ -679,7 +679,7 @@ test('cancels a running iteration when its screen goes away', async () => {
       },
     }),
   });
-  await settle();
+  await screen.settle();
   await screen.press(TAB, TAB, ARROW_DOWN, 'c');
   await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
   await screen.press(ENTER);
@@ -691,7 +691,7 @@ test('cancels a running iteration when its screen goes away', async () => {
 test('offers no review or continue action without a rerun capability', async () => {
   const screen = renderScreen();
   try {
-    await settle();
+    await screen.settle();
     const before = screen.output.readOutput();
     const frame = await screen.press('r');
     assert.match(frame + before, /GCF_000000001\.1/);
@@ -705,7 +705,7 @@ test('keeps the selected isolate of the review form in view in a short terminal 
   const recorded = recorder();
   const screen = renderScreen({rows: 30, columns: 120, cohortRerun: rerun(recorded)});
   try {
-    await settle();
+    await screen.settle();
     await screen.press('r');
     let frame = await screen.press(...down(isolateIds.length - 1));
     assert.match(selectedLine(frame) ?? '', /iso-h/);
@@ -715,7 +715,7 @@ test('keeps the selected isolate of the review form in view in a short terminal 
     screen.output.rows = 40;
     screen.output.clearOutput();
     screen.output.emit('resize');
-    await settle();
+    await screen.settle();
     frame = screen.output.readOutput();
     assert.match(selectedLine(frame) ?? '', /iso-h/);
     assert.match(frame, /iso-a/);

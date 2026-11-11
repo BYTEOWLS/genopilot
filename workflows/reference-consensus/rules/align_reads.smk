@@ -20,8 +20,9 @@ What it does
     fastp    adapters detected for paired-end reads; quality filtering off,
              because the aligner soft-clips and the caller weighs base
              qualities; reads shorter than 30 bp dropped; poly-G tails of at
-             least 10 bases trimmed on every instrument, not only on the
-             two-colour ones fastp recognizes by name
+             least 10 bases trimmed only when the read set's resolved setting
+             enables it; auto-detection disabled when it is off. Provider-trimmed
+             files bypass fastp and receive explicit skip reports
     bwa mem  a fixed batch size (-K), so alignments do not depend on the
              number of threads
 
@@ -32,13 +33,10 @@ Maintainer notes
   configuration-only change is recorded in Snakemake's job metadata.
 """
 
+import json
 import shlex
 
 BACKBONE_INDEX = multiext("resolved/backbone.fasta", ".amb", ".ann", ".bwt", ".pac", ".sa", ".fai")
-FASTP_OPTIONS = (
-    "--detect_adapter_for_pe --disable_quality_filtering --length_required 30"
-    " --trim_poly_g --poly_g_min_len 10"
-)
 BWA_BATCH_BASES = 100000000
 
 
@@ -54,15 +52,7 @@ def _pair_reads(wildcards):
 def _trim_args(wildcards):
     pair = read_pair_of(wildcards)
     directory = _pair_dir(wildcards)
-    args = [
-        "--in1", pair["r1"],
-        "--in2", pair["r2"],
-        "--out1", f"{directory}/trimmed_R1.fastq.gz",
-        "--out2", f"{directory}/trimmed_R2.fastq.gz",
-        "--json", f"{directory}/fastp.json",
-        "--html", f"{directory}/fastp.html",
-        "--report_title", f"{wildcards.isolate} read pair {wildcards.pair}",
-    ]
+    args = ["--pair-json", json.dumps(pair, sort_keys=True), "--directory", directory]
     return " ".join(shlex.quote(str(arg)) for arg in args)
 
 
@@ -130,11 +120,10 @@ rule trim_read_pair:
     threads: 4
     params:
         args=_trim_args,
-        options=FASTP_OPTIONS,
     conda:
         str(ENVS_DIR / "short-read-calling" / "environment.yaml")
     shell:
-        "fastp {params.args} {params.options} --thread {threads} > {log} 2>&1"
+        "python3 {SCRIPTS_DIR_SH}/preprocess_reads.py {params.args} --threads {threads} > {log} 2>&1"
 
 
 rule align_read_pair:

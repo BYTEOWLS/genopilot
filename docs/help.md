@@ -14,10 +14,14 @@ Files copied into a run from outside are marked **imported**. Files the run comp
 
 ## Catalogs
 
-- **Isolates** store isolate details and read-file paths for reuse across runs. Each entry records a name, wild-type status, and any parent isolate. You can import a sequencing delivery in one step.
-- **NCBI accessions** store versioned assembly accessions, NCBI metadata, and locations of download caches. Workflows download an assembly only when a run needs it.
+- **Isolates** store identity and lineage independently of sequencing data. Their read sets record a library, platform, layout, and multiple file groups. Confirm library identity during import; workflows explicitly select compatible read sets and snapshot their effective settings.
+- **NCBI accessions** store versioned assembly accessions, NCBI metadata, and locations of download caches. Workflows download an assembly only when a run needs it. Accession details show Assembly, Genome statistics, and Linked records as consecutive sections. PageUp/PageDown (or fn + ↑/↓) scrolls the details and local copies; editable fields and Save stay visible. Assembly includes the metadata retrieval date and source as labelled rows. The release date is not a submission date; missing facts are marked as not reported. Refresh metadata from the accession list to fill new fields on existing entries.
 
-Catalogs are stored locally for your user. Runs save snapshots of the catalog entries they use, so later catalog edits do not change those runs. Removing an isolate from the catalog never deletes its read files.
+See [Managing isolates](isolates.md) for the list, edit form, read sets, and library identity. Each supported sequencing technique has its own help file and tab, currently [Illumina](illumina.md). Press `?` in the list or on an edit-form choice or button to open these tabs.
+
+The isolate list shows a wild-type badge only when true. Successful read checks have no badge; pending checks, read problems, and recorded parent lineage remain visible.
+
+Catalogs are stored locally for your user. Runs save snapshots of the catalog entries they use, so later catalog edits do not change those runs. Removing an isolate from the catalog never deletes its read files. Older catalog and run structures are unsupported after the read-set change: discard and re-import catalogs and create new runs. Existing files are not automatically deleted or rewritten.
 
 ## Tooling
 
@@ -32,7 +36,7 @@ The tooling page shows GenoPilot's version. Development builds also show the Git
 | ↑/↓ | Select a row, move between form fields, or scroll |
 | PageUp/PageDown (or fn + ↑/↓) | Scroll by a page |
 | Space, ←/→ | Change the selected choice in a form |
-| Ctrl+A | Select all isolates matching the search in the isolate chooser. Press again to deselect them. |
+| Ctrl+A | Select all compatible read sets matching the search in the chooser. Press again to deselect them. |
 | Tab, Shift+Tab | Switch tabs, or move between form fields |
 | Enter | Open, choose, or press the selected button |
 | Esc | Go back one step |

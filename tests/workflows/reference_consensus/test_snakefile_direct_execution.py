@@ -91,7 +91,7 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         reads_dir.mkdir()
         for mate in ("R1", "R2"):
             (reads_dir / f"renamed_{mate}.fastq").write_text(
-                "@SRR1234567.1 1 length=4\nACGT\n+\nIIII\n", encoding="utf-8")
+                "@SRR1234567.1 1 length=4\nACGT\n+\nI\n", encoding="utf-8")
         config_path = write_run(
             self.run_dir,
             ["iso-c"],
@@ -111,7 +111,25 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.assertTrue((self.run_dir / reports[1]).is_file())
         self.assertFalse((self.run_dir / reports[2]).exists())
         log = (self.run_dir / "logs/isolates/public-reads/pairs/1/validate-read-pair.log").read_text(encoding="utf-8")
-        self.assertIn("not an Illumina read name", log)
+        self.assertIn("quality", log)
+
+    def test_archive_renamed_reads_validate_directly_with_snapshot_library_identity(self) -> None:
+        reads_dir = self.temp_dir / "archive"
+        reads_dir.mkdir()
+        for mate in (1, 2):
+            (reads_dir / f"reads_{mate}.fq").write_text(
+                f"@SRR1234567.1/{mate}\nACGT\n+\nIIII\n", encoding="utf-8")
+        config_path = write_run(self.run_dir, [], extra_isolates=[{"id": "archive", "read_pairs": [
+            {"r1": str(reads_dir / "reads_1.fq"), "r2": str(reads_dir / "reads_2.fq"), "trimmed": True}]}])
+        target = "results/isolates/archive/pairs/1/read-validation.json"
+        result = run_snakemake(self.run_dir, config_path, *self.validation_targets(target))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        report = json.loads((self.run_dir / target).read_text())
+        self.assertEqual(report["status"], "passed")
+        self.assertIsNone(report["sequencing"])
+        self.assertEqual(report["read_group"]["lb"], "archive-library-1")
+        self.assertNotIn("pu", report["read_group"])
+        self.assertEqual(report["read_set_id"], "reads-1")
 
     def test_a_complete_run_aggregates_support_over_every_selected_isolate(self) -> None:
         config_path = write_run(self.run_dir, ["iso-a", "iso-b"])
@@ -205,7 +223,7 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         reads_dir.mkdir()
         for mate in ("R1", "R2"):
             (reads_dir / f"renamed_{mate}.fastq").write_text(
-                "@SRR1234567.1 1 length=4\nACGT\n+\nIIII\n", encoding="utf-8")
+                "@SRR1234567.1 1 length=4\nACGT\n+\nI\n", encoding="utf-8")
         config_path = write_run(
             self.run_dir,
             ["iso-a"],

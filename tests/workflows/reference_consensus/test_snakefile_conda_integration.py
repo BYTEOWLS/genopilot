@@ -327,7 +327,7 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
         reads_dir.mkdir(exist_ok=True)
         for mate in ("R1", "R2"):
             (reads_dir / f"renamed_{mate}.fastq").write_text(
-                "@SRR1234567.1 1 length=4\nACGT\n+\nIIII\n", encoding="utf-8")
+                "@SRR1234567.1 1 length=4\nACGT\n+\nI\n", encoding="utf-8")
         run_dir = self.temp_dir / "runs" / "failed-isolate"
         write_run(run_dir, ["iso-a", "iso-b"], effective_cpus=4, extra_isolates=[{"id": "public-reads", "read_pairs": [
             {"r1": str(reads_dir / "renamed_R1.fastq"), "r2": str(reads_dir / "renamed_R2.fastq"), "trimmed": False},

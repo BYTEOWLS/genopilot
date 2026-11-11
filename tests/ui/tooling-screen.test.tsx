@@ -4,6 +4,7 @@ import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
 import {applicationRows, ToolingScreen} from '../../src/ui/tooling-screen/screen.js';
+import {waitFor} from '../wait.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -60,7 +61,6 @@ test('the tooling screen shows the version and commit while the check runs', asy
     {stdin: new TestInput() as unknown as NodeJS.ReadStream, stdout: output as unknown as NodeJS.WriteStream, exitOnCtrlC: false, interactive: true, patchConsole: false},
   );
   context.after(() => instance.unmount());
-  await new Promise(resolve => setTimeout(resolve, 20));
-  assert.ok(output.output.includes('v1.2.3'));
+  await waitFor(() => output.output.includes('v1.2.3'), 'the version is shown', () => output.output);
   assert.ok(output.output.includes('0123456789ab'));
 });

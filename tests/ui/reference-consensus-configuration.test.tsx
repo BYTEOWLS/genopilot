@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {testReadSet} from '../read-sets.js';
 import {readFileSync} from 'node:fs';
 import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
@@ -14,6 +15,7 @@ import type {
   PreparedReferenceConsensusRun,
   RunInspection,
 } from '../../src/workflows/reference-consensus/run-configuration.js';
+import {pressKey as press, waitFor} from '../wait.js';
 
 const packagedParameterDefinitions = parseParameterDefinitions(
   readFileSync(new URL('../../workflows/reference-consensus/manifest.parameters.yaml', import.meta.url), 'utf8'),
@@ -75,34 +77,10 @@ class TestOutput extends Writable {
   }
 }
 
-async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-  const timeoutAt = Date.now() + 2000;
-  while (Date.now() < timeoutAt) {
-    if (condition()) {
-      return;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting until ${description}`);
-}
-
 async function waitForFrame(output: TestOutput, predicate: (frame: string) => boolean): Promise<string> {
-  const timeoutAt = Date.now() + 2000;
-  while (Date.now() < timeoutAt) {
-    const frame = output.lastFrame();
-    if (predicate(frame)) {
-      return frame;
-    }
-    await new Promise<void>(resolve => setTimeout(resolve, 10));
-  }
-  assert.fail(`Timed out waiting for a terminal frame. Last frame:\n${output.lastFrame()}`);
+  await waitFor(() => predicate(output.lastFrame()), 'the expected terminal frame', () => `Last frame:\n${output.lastFrame()}`);
+  return output.lastFrame();
 }
-
-async function press(input: TestInput, key: string): Promise<void> {
-  input.write(key);
-  await waitUntil(() => input.readableLength === 0, 'the key is handled');
-}
-
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -143,7 +121,7 @@ async function chooseOption(input: TestInput, output: TestOutput, id: string, va
 
 async function typeInto(input: TestInput, output: TestOutput, id: string, value: string): Promise<void> {
   await focusField(input, output, id);
-  input.write(value);
+  await press(input, value);
   await waitForFrame(output, frame => fieldLine(frame, id)?.includes(value) ?? false);
 }
 
@@ -164,7 +142,7 @@ function isolate(id: string, name: string, trimmed = false): Isolate {
     name,
     wildtype: null,
     derived_from: null,
-    read_pairs: [{r1: `/reads/${id}_R1.fastq.gz`, r2: `/reads/${id}_R2.fastq.gz`, trimmed}],
+    read_sets: [testReadSet([{r1: `/reads/${id}_R1.fastq.gz`, r2: `/reads/${id}_R2.fastq.gz`, trimmed}])],
   };
 }
 
@@ -238,18 +216,19 @@ async function chooseIsolates(input: TestInput, output: TestOutput, ids: readonl
   await focusField(input, output, 'isolates');
   await press(input, ENTER);
   for (const id of ids) {
-    await waitForFrame(output, frame => frame.includes(`(${id})`));
-    // Move the highlight onto the isolate's row, found by its stable ID.
+    const name = catalog.isolates.find(isolate => isolate.id === id)!.name;
+    await waitForFrame(output, frame => frame.includes(name));
+    // Resolve the expected fixture data by ID; internal IDs need not be displayed.
     for (let attempt = 0; attempt < catalog.isolates.length; attempt += 1) {
       const before = selectedLine(output.lastFrame());
-      if (before?.includes(`(${id})`)) {
+      if (before?.includes(name)) {
         break;
       }
       await press(input, ARROW_DOWN);
       await waitForFrame(output, frame => selectedLine(frame) !== before);
     }
     await press(input, SPACE);
-    await waitForFrame(output, frame => frame.split('\n').some(line => line.includes(`(${id})`) && line.includes('[✔]')));
+    await waitForFrame(output, frame => frame.split('\n').some(line => line.includes(name) && line.includes('[✔]')));
   }
   await press(input, ENTER);
   await waitForFrame(output, frame => fieldLine(frame, 'isolates')?.includes(`${String(ids.length)} selected`) ?? false);
@@ -301,7 +280,7 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   await typeInto(input, output, 'min-depth', '5');
   await startReview(input, output);
 
-  await waitUntil(() => reviewed.length === 1, 'the run is prepared');
+  await waitFor(() => reviewed.length === 1, 'the run is prepared');
   const prepared = reviewed[0]!;
   const {configuration, snapshot} = prepared;
   assert.deepEqual(configuration.inputs.selected_isolates, ['mutant-one', 'wild-type']);
@@ -334,8 +313,8 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   // Nothing is saved before a run starts, so leaving the start page leaves no run behind.
   assert.equal(saved, undefined);
   await press(input, ENTER);
-  await waitUntil(() => saved !== undefined, 'the run is saved as the dry run starts');
-  await waitUntil(() => executedModes.length === 1, 'the dry run starts');
+  await waitFor(() => saved !== undefined, 'the run is saved as the dry run starts');
+  await waitFor(() => executedModes.length === 1, 'the dry run starts');
   assert.deepEqual(executedModes, ['dry-run']);
   // A dry run is not measured for the next estimate.
   assert.deepEqual(measured, []);
@@ -345,10 +324,10 @@ test('configures a run from cataloged isolates, reviews it, and starts a dry run
   await press(input, ESCAPE);
   await waitForFrame(output, next => next.includes('workflows/reference-consensus/Snakefile') && !next.includes('--dry-run'));
   await press(input, ENTER);
-  await waitUntil(() => executedModes.length === 2, 'the execution starts');
+  await waitFor(() => executedModes.length === 2, 'the execution starts');
   assert.deepEqual(executedModes, ['dry-run', 'execute']);
   // A successful execution is measured for the next estimate on this machine.
-  await waitUntil(() => measured.length === 1, 'the run is measured');
+  await waitFor(() => measured.length === 1, 'the run is measured');
   assert.equal(measured[0], prepared);
   await waitForFrame(output, next => next.includes(snapshot.isolates[0]!.name) && next.includes(snapshot.isolates[1]!.name));
 });
@@ -385,7 +364,7 @@ test('shows a save that fails as a run starts, and tries it again on the next st
   await press(input, ESCAPE);
   await waitForFrame(output, next => next.includes('workflows/reference-consensus/Snakefile'));
   await press(input, ENTER);
-  await waitUntil(() => executed.length === 1, 'a run starts after the save');
+  await waitFor(() => executed.length === 1, 'a run starts after the save');
   assert.equal(saveAttempts, 2);
 });
 
@@ -409,7 +388,7 @@ test('reports a run that could not be measured without failing it, next to the N
   await press(input, ARROW_DOWN);
   await waitForFrame(output, next => next.includes('workflows/reference-consensus/Snakefile') && !next.includes('--dry-run'));
   await press(input, ENTER);
-  await waitUntil(() => executed.length === 1, 'the execution starts');
+  await waitFor(() => executed.length === 1, 'the execution starts');
   const frame = await waitForFrame(output, next => next.includes('measure-failure-message'));
   // The run itself succeeded, and the accession catalog note is kept.
   assert.ok(frame.includes('Recorded.'));
@@ -432,7 +411,7 @@ test('asks how to handle a cached backbone and saves the decision', async contex
   await chooseIsolates(input, output, ['wild-type']);
   await startReview(input, output);
 
-  await waitUntil(() => reviewed.length === 1, 'the run is prepared');
+  await waitFor(() => reviewed.length === 1, 'the run is prepared');
   // The cache decision replaces the form and names the cached accession.
   const cacheFrame = await waitForFrame(
     output,
@@ -447,7 +426,7 @@ test('asks how to handle a cached backbone and saves the decision', async contex
   // Saved as the dry run starts.
   await waitForFrame(output, next => next.includes('--dry-run'));
   await press(input, ENTER);
-  await waitUntil(() => saved !== undefined, 'the run is saved');
+  await waitFor(() => saved !== undefined, 'the run is saved');
   const backbone = saved?.configuration.inputs.backbone;
   assert.equal(backbone?.source === 'ncbi' ? backbone.ncbi_cache_mode : undefined, 'refresh');
 });
@@ -462,7 +441,7 @@ test('scrolls a review taller than the terminal', async context => {
   await typeInto(input, output, 'backbone-accession', 'GCF_000149205.2');
   await focusField(input, output, 'isolates');
   await press(input, ENTER);
-  await waitForFrame(output, frame => frame.includes('(isolate-1)'));
+  await waitForFrame(output, frame => frame.includes(many.isolates[0]!.name));
   for (let index = 0; index < 12; index += 1) {
     await press(input, SPACE);
     await press(input, ARROW_DOWN);
@@ -470,7 +449,7 @@ test('scrolls a review taller than the terminal', async context => {
   await press(input, ENTER);
   await waitForFrame(output, frame => fieldLine(frame, 'isolates')?.includes('12 selected') ?? false);
   await startReview(input, output);
-  await waitUntil(() => reviewed.length === 1, 'the run is prepared');
+  await waitFor(() => reviewed.length === 1, 'the run is prepared');
   const {outputDirectory} = reviewed[0]!;
 
   const first = await waitForFrame(output, frame => frame.includes('↓'));

@@ -10,6 +10,7 @@ import {
 } from '../../src/ui/components/workflow-selector.js';
 import type {Document} from '../../src/docs/documents.js';
 import type {DiscoveredWorkflow} from '../../src/workflows/discovery.js';
+import {waitFor, pressKey} from '../wait.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -22,7 +23,9 @@ class TestOutput extends Writable {
   columns = 100;
   rows = 40;
   readonly isTTY = false;
-  override _write(_chunk: string | Buffer, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
+  output = '';
+  override _write(chunk: string | Buffer, _encoding: BufferEncoding, callback: (error?: Error | null) => void): void {
+    this.output += chunk.toString();
     callback();
   }
 }
@@ -81,6 +84,7 @@ function Harness({
   );
 }
 
+/** Gives a key time to arrive; only checks that something did not happen rely on it. */
 async function settle(): Promise<void> {
   await new Promise<void>(resolve => setTimeout(resolve, 30));
 }
@@ -92,6 +96,7 @@ function renderSelector(context: TestContext, options: {
   loadDocuments?: (workflow: DiscoveredWorkflow) => Promise<Document[]>;
 } = {}) {
   const input = new TestInput();
+  const output = new TestOutput();
   const selected: string[] = [];
   let backCount = 0;
   const instance = render(
@@ -108,27 +113,34 @@ function renderSelector(context: TestContext, options: {
       interactive: true,
       patchConsole: false,
       stdin: input as unknown as NodeJS.ReadStream,
-      stdout: new TestOutput() as unknown as NodeJS.WriteStream,
+      stdout: output as unknown as NodeJS.WriteStream,
     },
   );
   context.after(() => instance.unmount());
-  const press = async (key: string): Promise<void> => {
+  const press = (key: string): Promise<void> => pressKey(input, key);
+  /** Ink stops reading keys while no input is active, so a key can only be given time to arrive. */
+  const pressIgnored = async (key: string): Promise<void> => {
     input.write(key);
     await settle();
   };
-  return {press, selected, backCount: () => backCount};
+  /** Waits until discovery has settled and the selector shows the given text. */
+  const shows = (text: string) => waitFor(() => output.output.includes(text), `the selector shows ${text}`, () => output.output);
+  return {press, pressIgnored, shows, selected, backCount: () => backCount};
 }
+
+const ready = 'Label for first';
 
 test('selects the first discovered workflow by default', async context => {
   const selector = renderSelector(context);
-  await settle();
+  await selector.shows(ready);
   await selector.press(ENTER);
+  await waitFor(() => selector.selected.length === 1, 'a workflow is selected');
   assert.deepEqual(selector.selected, ['first']);
 });
 
 test('moves the selection with wrap-around in both directions', async context => {
   const selector = renderSelector(context);
-  await settle();
+  await selector.shows(ready);
   await selector.press(ARROW_DOWN);
   await selector.press(ENTER);
   await selector.press(ARROW_UP);
@@ -136,64 +148,70 @@ test('moves the selection with wrap-around in both directions', async context =>
   await selector.press(ENTER);
   await selector.press(ARROW_DOWN);
   await selector.press(ENTER);
+  await waitFor(() => selector.selected.length === 3, 'three workflows are selected');
   assert.deepEqual(selector.selected, ['second', 'third', 'first']);
 });
 
 test('starts at a preferred workflow when discovery contains it', async context => {
   const selector = renderSelector(context, {preferredWorkflowId: 'third'});
-  await settle();
+  await selector.shows(ready);
   await selector.press(ENTER);
+  await waitFor(() => selector.selected.length === 1, 'a workflow is selected');
   assert.deepEqual(selector.selected, ['third']);
 });
 
 test('falls back to the first workflow when the preferred one is not discovered', async context => {
   const selector = renderSelector(context, {preferredWorkflowId: 'removed'});
-  await settle();
+  await selector.shows(ready);
   await selector.press(ENTER);
+  await waitFor(() => selector.selected.length === 1, 'a workflow is selected');
   assert.deepEqual(selector.selected, ['first']);
 });
 
 test('reports Escape as a back request', async context => {
   const selector = renderSelector(context);
-  await settle();
+  await selector.shows(ready);
   await selector.press(ESCAPE);
-  assert.equal(selector.backCount(), 1);
+  await waitFor(() => selector.backCount() === 1, 'the selector goes back');
   assert.deepEqual(selector.selected, []);
 });
 
 test('allows only going back while discovery is pending', async context => {
   const selector = renderSelector(context, {discoverWorkflows: () => new Promise(() => undefined)});
-  await settle();
+  await selector.shows('Choose');
   await selector.press(ENTER);
   await selector.press(ESCAPE);
+  await waitFor(() => selector.backCount() === 1, 'the selector goes back');
   assert.deepEqual(selector.selected, []);
-  assert.equal(selector.backCount(), 1);
 });
 
 test('allows only going back after discovery fails', async context => {
   const selector = renderSelector(context, {
     discoverWorkflows: async () => { throw new Error('duplicate workflow ID'); },
   });
-  await settle();
+  await selector.shows('duplicate workflow ID');
   await selector.press(ARROW_DOWN);
   await selector.press(ENTER);
   await selector.press(ESCAPE);
+  await waitFor(() => selector.backCount() === 1, 'the selector goes back');
   assert.deepEqual(selector.selected, []);
-  assert.equal(selector.backCount(), 1);
 });
 
 test('selects nothing when no workflows are discovered', async context => {
   const selector = renderSelector(context, {discoverWorkflows: async () => []});
+  await selector.shows('Choose');
   await settle();
   await selector.press(ENTER);
+  await selector.press(ESCAPE);
+  await waitFor(() => selector.backCount() === 1, 'the selector goes back');
   assert.deepEqual(selector.selected, []);
 });
 
 test('ignores input while inactive', async context => {
   const selector = renderSelector(context, {inputActive: false});
-  await settle();
-  await selector.press(ENTER);
-  await selector.press(ESCAPE);
+  await selector.shows(ready);
+  await selector.pressIgnored(ENTER);
+  await selector.pressIgnored(ESCAPE);
   assert.deepEqual(selector.selected, []);
   assert.equal(selector.backCount(), 0);
 });
@@ -206,15 +224,17 @@ test('opens the highlighted workflow\'s documentation and returns to the list', 
       return [];
     },
   });
-  await settle();
+  await selector.shows(ready);
   await selector.press(ARROW_DOWN);
   await selector.press('?');
+  await waitFor(() => documented.length === 1, 'the documentation loads');
   assert.deepEqual(documented, ['second']);
   await selector.press(ENTER);
   assert.deepEqual(selector.selected, [], 'the documentation owns the keys while open');
+  // Checked through the callbacks: Ink skips redrawing a list identical to its last drawn frame.
   await selector.press(ESCAPE);
-  await new Promise<void>(resolve => setTimeout(resolve, 100));
   assert.equal(selector.backCount(), 0, 'Esc closes the documentation, not the selector');
   await selector.press(ENTER);
+  await waitFor(() => selector.selected.length === 1, 'a workflow is selected');
   assert.deepEqual(selector.selected, ['second']);
 });

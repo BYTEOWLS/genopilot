@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {Box, Text, useInput, useWindowSize} from 'ink';
+import {Text, useInput, useWindowSize} from 'ink';
 import type {ReferenceConsensusConfiguration} from '../../workflows/reference-consensus/configuration.js';
 import {
   CohortDecisionError,
@@ -8,6 +8,7 @@ import {
 } from '../../workflows/reference-consensus/cohort-decision.js';
 import type {ReferenceConsensusResult} from '../../workflows/reference-consensus/results.js';
 import {EditPage} from '../components/page.js';
+import {Section} from '../components/section.js';
 import {ParameterList, type ParameterRow} from '../components/parameter-list.js';
 import {Table} from '../components/table.js';
 import {useHomeSuspension} from '../home-navigation.js';
@@ -233,21 +234,21 @@ export function CohortReviewScreen({
       savingLabel="Saving the decision…"
       problems={problems}
     >
-      <Text bold>Voting isolates</Text>
-      <Table
-        header={['Votes', 'Isolate', 'Name', 'Wild type', 'Derived from', 'State', 'Depth', 'Covered', 'Callable', 'SNPs', 'Indels']}
-        rows={isolateRows}
-        selectedRow={selectedIsolateRow === undefined || selectedIsolateRow < 0 ? -1 : selectedIsolateRow}
-      />
-      {result.isolates.length > shownIsolates.length ? (
-        <Text color={mutedColor}>
-          {'  '}isolates {String(firstIsolate + 1)}–{String(firstIsolate + shownIsolates.length)} of {String(result.isolates.length)}
-        </Text>
-      ) : null}
-      <Box marginTop={1} flexDirection="column">
-        <Text bold>Cohort settings</Text>
+      <Section title="Voting isolates" marginTop={0}>
+        <Table
+          header={['Votes', 'Isolate', 'Name', 'Wild type', 'Derived from', 'State', 'Depth', 'Covered', 'Callable', 'SNPs', 'Indels']}
+          rows={isolateRows}
+          selectedRow={selectedIsolateRow === undefined || selectedIsolateRow < 0 ? -1 : selectedIsolateRow}
+        />
+        {result.isolates.length > shownIsolates.length ? (
+          <Text color={mutedColor}>
+            {'  '}isolates {String(firstIsolate + 1)}–{String(firstIsolate + shownIsolates.length)} of {String(result.isolates.length)}
+          </Text>
+        ) : null}
+      </Section>
+      <Section title="Cohort settings">
         <ParameterList rows={settingsList} selectedId={selected} inputActive={inputActive && !saving} />
-      </Box>
+      </Section>
     </EditPage>
   );
 }

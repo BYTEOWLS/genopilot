@@ -4,6 +4,7 @@ import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
 import {applyTextInputKey, TextInput, type TextInputState} from '../../src/ui/components/text-input.js';
+import {pressKey} from '../wait.js';
 
 class TestInput extends PassThrough {
   readonly isTTY = true;
@@ -83,8 +84,7 @@ function renderInput(
 
 async function press(input: TestInput, ...chunks: string[]): Promise<void> {
   for (const chunk of chunks) {
-    input.write(chunk);
-    await new Promise<void>(resolve => setTimeout(resolve, 20));
+    await pressKey(input, chunk);
   }
 }
 

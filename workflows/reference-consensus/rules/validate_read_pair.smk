@@ -2,9 +2,9 @@
 
 What it does
   One job per read pair of every selected isolate. Reads both FASTQ files
-  in full, checks their records, mate names, and Illumina read names, records
-  the files' checksums and read statistics, and derives the pair's read group
-  from its read names and R1 file name:
+  in full, checks record integrity, mate names, and optional Illumina header
+  evidence, and records checksums. Read groups use snapshot library identity,
+  generated IDs, and optional header-derived sequencing metadata:
 
     validate_read_pair  -> results/isolates/{isolate}/pairs/{pair}/read-validation.json
                            results/isolates/{isolate}/pairs/{pair}/read-group.txt
@@ -21,6 +21,7 @@ Maintainer notes
   metadata.
 """
 
+import json
 import shlex
 
 
@@ -38,6 +39,10 @@ def _validate_read_pair_args(wildcards):
         "--r1", pair["r1"],
         "--r2", pair["r2"],
         "--trimmed", "trimmed" if pair["trimmed"] else "untrimmed",
+        "--library-id", pair["library_id"],
+        "--read-set-id", pair["read_set_id"],
+        "--read-group-id", pair["read_group_id"],
+        "--preprocessing-json", json.dumps(pair["preprocessing"], sort_keys=True),
         "--report", f"{directory}/read-validation.json",
         "--read-group", f"{directory}/read-group.txt",
     ]

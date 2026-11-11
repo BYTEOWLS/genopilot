@@ -10,4 +10,4 @@
 - [ ] `locus_evidence`, after per-vote evidence.
 - [ ] Decision proposals, their display in the TUI, and their record in decisions and the citation.
 - [ ] Tests on a fixture run: each tool's output, limits on large tables and logs, replaced paths, an incomplete and a corrupt run.
-- [ ] Document the setup and the privacy notice in `docs/`.
+- [ ] Verify candidate apps' local stdio support and account requirements, starting with Claude Desktop and LM Studio; document researcher-facing setup, a connection check, troubleshooting, and the privacy notice in `docs/`.
