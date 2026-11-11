@@ -74,7 +74,10 @@ async function fixture(context: TestContext): Promise<{tempDir: string; catalog:
     votingMethod: 'strict-majority',
     includeBackboneVote: true,
     minCallableIsolates: '1',
-    unresolvedSnp: 'iupac',
+    unresolvedSingleBase: 'iupac',
+    tieSource: 'none',
+    tieScope: 'tied-alleles',
+    tieIsolate: '',
     minDepth: '10',
     minMappingQuality: '20',
     minBaseQuality: '20',
@@ -106,7 +109,8 @@ test('snapshots every selected isolate with all read pairs in selection order', 
     ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8,
   });
   assert.deepEqual(configuration.consensus, {
-    include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 1, unresolved_snp: 'iupac',
+    include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 1, unresolved_single_base: 'iupac',
+    tie_source: 'none',
   });
   // The builder records the machine it runs on.
   assert.deepEqual(configuration.resources, {cpu_mode: 'manual', manual_limit: 2, effective_cpus: 2, machine: machineDetails()});

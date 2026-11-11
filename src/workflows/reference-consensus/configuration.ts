@@ -28,9 +28,17 @@ export const ISOLATE_SNAPSHOT_FILENAME = 'isolates.yaml' as const;
 export type VotingMethod = 'strict-majority' | 'plurality';
 export const votingMethods: readonly VotingMethod[] = ['strict-majority', 'plurality'];
 
-/** How the consensus writes an unresolved SNP: `N`, or the IUPAC code of the alleles that got votes. */
-export type UnresolvedSnp = 'n' | 'iupac';
-export const unresolvedSnpRepresentations: readonly UnresolvedSnp[] = ['n', 'iupac'];
+/** How the consensus writes an unresolved single-base position: `N`, or the IUPAC code of the alleles that got votes. */
+export type UnresolvedSingleBase = 'n' | 'iupac';
+export const unresolvedSingleBaseRepresentations: readonly UnresolvedSingleBase[] = ['n', 'iupac'];
+
+/** Whose allele settles a tie: nobody's, the backbone's, or a trusted isolate's. */
+export type TieSource = 'none' | 'backbone' | 'isolate';
+export const tieSources: readonly TieSource[] = ['none', 'backbone', 'isolate'];
+
+/** Whether the tie source's allele must be one of the tied alleles, or wins whatever its votes. */
+export type TieScope = 'tied-alleles' | 'any-allele';
+export const tieScopes: readonly TieScope[] = ['tied-alleles', 'any-allele'];
 
 export type BackboneInput =
   | {source: 'local'; fasta: string}
@@ -72,7 +80,12 @@ export type ReferenceConsensusConfiguration = {
     include_backbone_vote: boolean;
     voting_method: VotingMethod;
     min_callable_isolates: number;
-    unresolved_snp: UnresolvedSnp;
+    unresolved_single_base: UnresolvedSingleBase;
+    tie_source: TieSource;
+    /** Saved only with a tie source. */
+    tie_scope?: TieScope;
+    /** Saved only with the `isolate` tie source: one of the voters. */
+    tie_isolate?: string;
   };
   resources: ResourceSettings;
   run: RunDetails;
@@ -224,12 +237,13 @@ function validateCalling(
 }
 
 /**
- * Validates the cohort settings of a configuration or a cohort decision. `voters` is how many
- * isolates can vote, which bounds the minimum of callable isolates, and `voterLabel` names them.
+ * Validates the cohort settings of a configuration or a cohort decision. `voters` are the isolates
+ * that can vote: their number bounds the minimum of callable isolates, the trusted isolate must be
+ * one of them, and `voterLabel` names them.
  */
 export function validateConsensus(
   value: unknown,
-  voters: number | undefined,
+  voters: readonly string[] | undefined,
   issues: ConfigurationValidationIssue[],
   voterLabel = 'selected isolates',
 ): ReferenceConsensusConfiguration['consensus'] | undefined {
@@ -239,7 +253,15 @@ export function validateConsensus(
   }
   rejectUnknownFields(
     consensus,
-    ['include_backbone_vote', 'voting_method', 'min_callable_isolates', 'unresolved_snp'],
+    [
+      'include_backbone_vote',
+      'voting_method',
+      'min_callable_isolates',
+      'unresolved_single_base',
+      'tie_source',
+      'tie_scope',
+      'tie_isolate',
+    ],
     '$.consensus',
     issues,
   );
@@ -258,18 +280,61 @@ export function validateConsensus(
   const minimumPath = '$.consensus.min_callable_isolates';
   if (!validateInteger(consensus.min_callable_isolates, minimumPath, 0, issues)) {
     valid = false;
-  } else if (voters !== undefined && (consensus.min_callable_isolates as number) > voters) {
+  } else if (voters !== undefined && (consensus.min_callable_isolates as number) > voters.length) {
     issues.push({path: minimumPath, message: `must not exceed the number of ${voterLabel}`});
     valid = false;
   }
-  if (!unresolvedSnpRepresentations.includes(consensus.unresolved_snp as UnresolvedSnp)) {
+  if (!unresolvedSingleBaseRepresentations.includes(consensus.unresolved_single_base as UnresolvedSingleBase)) {
     issues.push({
-      path: '$.consensus.unresolved_snp',
-      message: `must be one of: ${unresolvedSnpRepresentations.join(', ')}`,
+      path: '$.consensus.unresolved_single_base',
+      message: `must be one of: ${unresolvedSingleBaseRepresentations.join(', ')}`,
     });
     valid = false;
   }
+  if (!validateTieSettings(consensus, voters, issues, voterLabel)) {
+    valid = false;
+  }
   return valid ? (consensus as ReferenceConsensusConfiguration['consensus']) : undefined;
+}
+
+function validateTieSettings(
+  consensus: Record<string, unknown>,
+  voters: readonly string[] | undefined,
+  issues: ConfigurationValidationIssue[],
+  voterLabel: string,
+): boolean {
+  const source = consensus.tie_source;
+  if (!tieSources.includes(source as TieSource)) {
+    issues.push({path: '$.consensus.tie_source', message: `must be one of: ${tieSources.join(', ')}`});
+    return false;
+  }
+  let valid = true;
+  if (source === 'none') {
+    for (const field of ['tie_scope', 'tie_isolate'] as const) {
+      if (field in consensus) {
+        issues.push({path: `$.consensus.${field}`, message: 'is saved only with a tie source'});
+        valid = false;
+      }
+    }
+    return valid;
+  }
+  if (!tieScopes.includes(consensus.tie_scope as TieScope)) {
+    issues.push({path: '$.consensus.tie_scope', message: `must be one of: ${tieScopes.join(', ')}`});
+    valid = false;
+  }
+  if (source === 'backbone') {
+    if ('tie_isolate' in consensus) {
+      issues.push({path: '$.consensus.tie_isolate', message: 'is saved only with the isolate tie source'});
+      valid = false;
+    }
+  } else if (typeof consensus.tie_isolate !== 'string' || consensus.tie_isolate.length === 0) {
+    issues.push({path: '$.consensus.tie_isolate', message: 'must name the isolate that settles ties'});
+    valid = false;
+  } else if (voters !== undefined && !voters.includes(consensus.tie_isolate)) {
+    issues.push({path: '$.consensus.tie_isolate', message: `must be one of the ${voterLabel}`});
+    valid = false;
+  }
+  return valid;
 }
 
 export function validateReferenceConsensusConfiguration(
@@ -294,7 +359,7 @@ export function validateReferenceConsensusConfiguration(
   const genopilot = validateGenoPilot(value.genopilot, issues);
   const inputs = validateInputs(value.inputs, issues);
   const calling = validateCalling(value.calling, issues);
-  const consensus = validateConsensus(value.consensus, inputs?.selected_isolates.length, issues);
+  const consensus = validateConsensus(value.consensus, inputs?.selected_isolates, issues);
   const resources = validateResources(value.resources, issues);
   const run = validateRun(value.run, issues);
 

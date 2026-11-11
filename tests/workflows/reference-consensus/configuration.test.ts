@@ -26,7 +26,8 @@ const validConfiguration = {
     include_backbone_vote: true,
     voting_method: 'strict-majority',
     min_callable_isolates: 0,
-    unresolved_snp: 'n',
+    unresolved_single_base: 'n',
+    tie_source: 'none',
   },
   resources: {cpu_mode: 'automatic', effective_cpus: 8, machine: testMachine},
   run: {output_root: '/analysis/runs', id: '2026-01-01_120000000_example', created_at: '2026-01-01T12:00:00.000Z'},
@@ -75,7 +76,9 @@ consensus:
   include_backbone_vote: false
   voting_method: plurality
   min_callable_isolates: 1
-  unresolved_snp: iupac
+  unresolved_single_base: iupac
+  tie_source: backbone
+  tie_scope: any-allele
 resources:
   cpu_mode: manual
   manual_limit: 2
@@ -90,7 +93,8 @@ run:
   assert.equal(parsed.consensus.include_backbone_vote, false);
   assert.equal(parsed.consensus.voting_method, 'plurality');
   assert.equal(parsed.consensus.min_callable_isolates, 1);
-  assert.equal(parsed.consensus.unresolved_snp, 'iupac');
+  assert.equal(parsed.consensus.unresolved_single_base, 'iupac');
+  assert.equal(parsed.consensus.tie_scope, 'any-allele');
   assert.equal(parsed.calling.min_mapping_quality, 0);
 });
 
@@ -156,15 +160,39 @@ test('bounds the minimum of callable isolates by the selected isolates', () => {
   })));
 });
 
-test('requires an explicit representation of unresolved SNPs', () => {
+test('requires an explicit representation of unresolved single-base positions', () => {
   for (const representation of ['IUPAC', 'backbone', undefined]) {
     assert.deepEqual(issuePaths(withChange(value => {
-      value.consensus.unresolved_snp = representation;
-    })), ['$.consensus.unresolved_snp']);
+      value.consensus.unresolved_single_base = representation;
+    })), ['$.consensus.unresolved_single_base']);
   }
   assert.doesNotThrow(() => validateReferenceConsensusConfiguration(withChange(value => {
-    value.consensus.unresolved_snp = 'iupac';
+    value.consensus.unresolved_single_base = 'iupac';
   })));
+});
+
+test('saves the tie scope and the trusted isolate only where they apply', () => {
+  assert.doesNotThrow(() => validateReferenceConsensusConfiguration(withChange(value => {
+    value.consensus = {...value.consensus, tie_source: 'backbone', tie_scope: 'tied-alleles'};
+  })));
+  assert.doesNotThrow(() => validateReferenceConsensusConfiguration(withChange(value => {
+    value.consensus = {...value.consensus, tie_source: 'isolate', tie_scope: 'any-allele', tie_isolate: 'isolate-b'};
+  })));
+  const cases: [Record<string, unknown>, string[]][] = [
+    [{tie_source: 'random'}, ['$.consensus.tie_source']],
+    [{tie_source: undefined}, ['$.consensus.tie_source']],
+    [{tie_source: 'none', tie_scope: 'tied-alleles'}, ['$.consensus.tie_scope']],
+    [{tie_source: 'backbone'}, ['$.consensus.tie_scope']],
+    [{tie_source: 'backbone', tie_scope: 'tied-alleles', tie_isolate: 'isolate-a'}, ['$.consensus.tie_isolate']],
+    [{tie_source: 'isolate', tie_scope: 'any-allele'}, ['$.consensus.tie_isolate']],
+    // The trusted isolate must be one of the selected isolates.
+    [{tie_source: 'isolate', tie_scope: 'any-allele', tie_isolate: 'isolate-z'}, ['$.consensus.tie_isolate']],
+  ];
+  for (const [tie, paths] of cases) {
+    assert.deepEqual(issuePaths(withChange(value => {
+      value.consensus = {...value.consensus, ...tie};
+    })), paths, JSON.stringify(tie));
+  }
 });
 
 test('refuses an unversioned accession and a backbone mixing both sources', () => {

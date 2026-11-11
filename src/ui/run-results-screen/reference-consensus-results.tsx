@@ -1,5 +1,6 @@
 import React from 'react';
 import {Box, Text} from 'ink';
+import {Alert} from '@inkjs/ui';
 import type {ResultPath} from '../../workflows/annotation-transfer/results.js';
 import {
   cohortPathKeys,
@@ -122,6 +123,8 @@ export function countRows(counts: CohortCounts): {id: string; label: string; val
   return [
     {id: 'counts.loci_selected', label: 'Selected loci', value: counts.lociSelected},
     {id: 'counts.loci_changed', label: 'Selected loci differing from the backbone', value: counts.lociChanged},
+    {id: 'counts.loci_settled.tie_resolved', label: 'Selected loci: tie resolved', value: counts.lociSettledTies.tie_resolved},
+    {id: 'counts.loci_settled.tie_overridden', label: 'Selected loci: tie overridden', value: counts.lociSettledTies.tie_overridden},
     ...unresolvedReasons.map(reason => ({
       id: `counts.loci_unresolved.${reason}`,
       label: reasonLabels[reason],
@@ -139,6 +142,14 @@ export function countRows(counts: CohortCounts): {id: string; label: string; val
   ];
 }
 
+function tieSettling(settings: NonNullable<CohortResult['settings']>): string {
+  if (settings.tie_source === 'none') {
+    return 'ties left unresolved';
+  }
+  const base = settings.tie_source === 'backbone' ? "the backbone's base" : `the base of isolate ${settings.tie_isolate ?? ''}`;
+  return settings.tie_scope === 'any-allele' ? `${base}, always` : `${base}, only among the tied bases`;
+}
+
 function settingsRows(cohort: CohortResult): ParameterRow[] {
   if (!cohort.settings || !cohort.voters) {
     return [];
@@ -147,7 +158,8 @@ function settingsRows(cohort: CohortResult): ParameterRow[] {
     {id: 'cohort.voting_method', label: 'Voting method', value: votingMethod(cohort.settings.voting_method)},
     {id: 'backbone.vote', label: 'Backbone votes', value: yesNo(cohort.settings.include_backbone_vote)},
     {id: 'cohort.min_callable_isolates', label: 'Minimum callable isolates', value: String(cohort.settings.min_callable_isolates)},
-    {id: 'cohort.unresolved_snp', label: 'Unresolved SNPs written as', value: cohort.settings.unresolved_snp === 'n' ? 'N' : 'IUPAC code'},
+    {id: 'cohort.unresolved_single_base', label: 'Unresolved single-base positions written as', value: cohort.settings.unresolved_single_base === 'n' ? 'N' : 'IUPAC code'},
+    {id: 'cohort.tie_settling', label: 'Tie resolution', value: tieSettling(cohort.settings)},
     {id: 'cohort.voters', label: `Voting isolates (${String(cohort.voters.length)})`, value: cohort.voters.join(', ')},
   ];
 }
@@ -216,7 +228,7 @@ const isolateColumns: readonly {id: string; label: string}[] = [
   {id: 'isolates.state', label: 'State'},
   {id: 'isolates.mean_depth', label: 'Depth'},
   {id: 'isolates.callable_fraction', label: 'Callable'},
-  {id: 'isolates.snps', label: 'SNPs'},
+  {id: 'isolates.snps', label: 'Single-base changes'},
   {id: 'isolates.indels', label: 'Indels'},
   {id: 'isolates.votes', label: 'Votes'},
   {id: 'isolates.candidate', label: 'Candidate'},
@@ -277,8 +289,8 @@ function isolateDetailSections(isolate: IsolateResult, result: ReferenceConsensu
     {id: 'isolates.mean_depth', label: 'Mean depth (reads per base)', value: metrics.meanDepth.toFixed(1)},
     {id: 'isolate.covered_fraction', label: 'Covered backbone bases', value: share(metrics.coveredFraction)},
     {id: 'isolates.callable_fraction', label: 'Callable backbone bases', value: share(metrics.callableFraction)},
-    {id: 'isolates.snps', label: 'PASS SNPs', value: integer(metrics.snps)},
-    {id: 'isolates.indels', label: 'PASS indels', value: integer(metrics.indels)},
+    {id: 'isolates.snps', label: 'Single-base changes (SNVs)', value: integer(metrics.snps)},
+    {id: 'isolates.indels', label: 'Indels', value: integer(metrics.indels)},
   ] : [];
   const sections: RowSection[] = [{id: 'isolate', title: 'Isolate', rows: summary}];
   if (quality.length > 0) {
@@ -392,6 +404,8 @@ function consensusFileSections(result: ReferenceConsensusResult): RowSection[] {
 export const siteFilterLabels: Record<SiteFilter, string> = {
   tie: 'ties',
   no_majority: 'no majority',
+  tie_resolved: 'ties resolved',
+  tie_overridden: 'ties overridden',
   competing_indel: 'competing indels',
   unresolved: 'all unresolved loci',
 };
@@ -419,7 +433,8 @@ function position(site: CohortSite): string {
 
 function outcome(site: CohortSite): string {
   if (site.status === 'selected') {
-    return `selected ${site.allele === site.backboneAllele ? 'backbone allele' : shortAllele(site.allele)}`;
+    const allele = site.allele === site.backboneAllele ? 'backbone allele' : shortAllele(site.allele);
+    return site.reason === '.' ? `selected ${allele}` : `${site.reason.replace('_', ' ')}: ${allele}`;
   }
   return site.reason.replace('_', ' ');
 }
@@ -523,7 +538,7 @@ function SitesTab({
     return <Text>Reading the loci of iteration {cohortName(cohort)}…</Text>;
   }
   if (sites.state === 'failed') {
-    return <Text color="yellow" wrap="wrap">The loci of iteration {cohortName(cohort)} cannot be read: {sanitizeTerminalText(sites.message)}</Text>;
+    return <Alert variant="warning">The loci of iteration {cohortName(cohort)} cannot be read: {sanitizeTerminalText(sites.message)}</Alert>;
   }
   const shown = filteredSites(sites.sites, view.siteFilter);
   const selected = shown[Math.min(view.siteIndex, shown.length - 1)];
@@ -589,12 +604,9 @@ function Issues({issues}: {issues: readonly RecordIssue[]}): React.JSX.Element |
   }
   return (
     <Box marginTop={1} flexDirection="column" flexShrink={0}>
-      <Text color="yellow" bold>Records that cannot be interpreted</Text>
-      {issues.map(issue => (
-        <Text key={`${issue.path}:${issue.message}`} color="yellow" wrap="wrap">
-          {'! '}{sanitizeTerminalText(issue.path)}: {sanitizeTerminalText(issue.message)}
-        </Text>
-      ))}
+      <Alert variant="warning" title="Records that cannot be interpreted">
+        {issues.map(issue => `${sanitizeTerminalText(issue.path)}: ${sanitizeTerminalText(issue.message)}`).join('\n')}
+      </Alert>
     </Box>
   );
 }
@@ -658,11 +670,11 @@ export function ReferenceConsensusResults({
         <Box flexDirection="column">
           {overviewHeader}
           {result.initialNotAggregatedReason ? (
-            <Box marginTop={1}>
-              <Text color="yellow" wrap="wrap">
+            <Box marginTop={1} flexDirection="column">
+              <Alert variant="warning">
                 The initial cohort of all selected isolates was never aggregated. The first decision explains why:{' '}
                 {sanitizeTerminalText(result.initialNotAggregatedReason)}
-              </Text>
+              </Alert>
             </Box>
           ) : null}
           <Sections sections={overviewSections(result)} />

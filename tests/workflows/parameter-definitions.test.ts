@@ -139,6 +139,33 @@ test('accepts an accession parameter', () => {
   assert.equal(definition?.kind, 'accession');
 });
 
+test('accepts a choice whose options come from an isolate selection', () => {
+  const isolates = {id: 'isolates', label: 'Isolates', section: 'Inputs', kind: 'isolates', required: true, default: null};
+  const trusted = {id: 'trusted', label: 'Trusted', section: 'Inputs', kind: 'choice', required: true, default: null, options_from: 'isolates'};
+  const definitions = validateParameterDefinitions({schema_version: 1, parameters: [isolates, trusted]});
+  assert.equal(definitions[1]?.options_from, 'isolates');
+
+  const refused = (parameters: Record<string, unknown>[]): string[] => {
+    try {
+      validateParameterDefinitions({schema_version: 1, parameters});
+    } catch (error) {
+      assert.ok(error instanceof ParameterDefinitionsValidationError);
+      return error.issues.map(issue => issue.path);
+    }
+    assert.fail('expected the definitions to be refused');
+  };
+  assert.deepEqual(refused([isolates, {...trusted, options_from: 'missing'}]), ['$.parameters[1].options_from']);
+  assert.deepEqual(refused([isolates, {...trusted, default: 'isolate-a'}]), ['$.parameters[1].default']);
+  assert.deepEqual(
+    refused([isolates, {...trusted, options: [{value: 'a', label: 'A'}]}]),
+    ['$.parameters[1].options'],
+  );
+  assert.deepEqual(
+    refused([isolates, {...trusted, kind: 'text', options_from: 'isolates'}]),
+    ['$.parameters[1].options_from'],
+  );
+});
+
 test('accepts an isolate selection whose default is null, and refuses a preset one', () => {
   const [definition] = validateParameterDefinitions({
     schema_version: 1,

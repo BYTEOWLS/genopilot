@@ -80,7 +80,7 @@ const configuration = validateReferenceConsensusConfiguration({
     selected_read_sets: isolateIds.map(id => `${id}/reads`),
   },
   calling: {ploidy: 1, min_depth: 10, min_mapping_quality: 20, min_base_quality: 20, min_allele_fraction: 0.8},
-  consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_snp: 'n'},
+  consensus: {include_backbone_vote: true, voting_method: 'strict-majority', min_callable_isolates: 0, unresolved_single_base: 'n', tie_source: 'none'},
   resources: {cpu_mode: 'automatic', effective_cpus: 3, machine: testMachine},
   run: {output_root: '/runs', id: 'run-a', name: 'Synthetic cohort', created_at: '2026-01-01T12:00:00.000Z'},
 });
@@ -92,6 +92,7 @@ function path(relative: string, available = true) {
 function counts(tie: number): CohortCounts {
   return {
     lociSelected: 40, lociChanged: 12, multiallelicLoci: 3, competingIndelLoci: 1, basesBackboneOnly: 7, basesIupac: 0,
+    lociSettledTies: {tie_resolved: 2, tie_overridden: 0},
     lociUnresolved: {tie, no_majority: 1, no_votes: 0, few_callable: 0},
     basesN: {tie, no_majority: 1, no_votes: 5, few_callable: 0, backbone_not_acgt: 3},
   };
@@ -557,23 +558,22 @@ test('saves a reasoned exclusion with changed settings, then dry-runs and execut
     await screen.press(...down(isolateIds.length - 1)); // backbone vote
     await screen.press(SPACE, ARROW_DOWN, ARROW_RIGHT, ARROW_DOWN); // no backbone vote, plurality → strict majority
     await screen.press('\x7f', '2', ARROW_DOWN, SPACE, ARROW_DOWN); // minimum 2, IUPAC
+    await screen.press(SPACE, ARROW_DOWN, ARROW_RIGHT, ARROW_DOWN); // the backbone settles every tie
     await screen.press(...'Coverage review.'.split(''), ARROW_DOWN, ENTER);
     await waitFor(() => recorded.drafts.length === 1, 'the decision is saved');
 
     const draft = recorded.drafts[0]!;
     assert.deepEqual(draft.voting_isolates, isolateIds.filter(id => id !== 'iso-a' && id !== 'iso-b'));
     assert.deepEqual(draft.excluded_from_voting, ['iso-a', 'iso-b']);
-    assert.deepEqual(draft.consensus, {include_backbone_vote: false, voting_method: 'strict-majority', min_callable_isolates: 2, unresolved_snp: 'iupac'});
+    assert.deepEqual(draft.consensus, {include_backbone_vote: false, voting_method: 'strict-majority', min_callable_isolates: 2, unresolved_single_base: 'iupac', tie_source: 'backbone', tie_scope: 'any-allele'});
     assert.equal(draft.reason, 'Coverage review.');
 
-    // The rerun of the saved iteration uses the run's CPUs and starts with its dry run.
+    // The rerun of the saved iteration uses the run's CPUs; starting it checks its dry run first.
     await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
     assert.deepEqual(recorded.prepared.slice(0, 2).map(entry => entry.iteration), [4, 4]);
     assert.equal(recorded.prepared[0]?.cores, 3);
-    let frame = await screen.press(ENTER);
-    await waitFor(() => recorded.executed.length === 1, 'the dry run ran');
-    frame = await screen.press(ESCAPE);
-    assert.match(frame, /\/managed\/snakemake provenance\/cohort\/iteration-4\.json/);
+    await screen.settle();
+    assert.match(screen.output.readOutput(), /\/managed\/snakemake provenance\/cohort\/iteration-4\.json/);
     await screen.press(ENTER);
     await waitFor(() => recorded.executed.length === 2, 'the execution ran');
     assert.deepEqual(recorded.executed, ['dry-run', 'execute']);
@@ -607,7 +607,7 @@ test('shows the problems of a refused decision and stays in the form', async () 
   try {
     await screen.settle();
     await screen.press('r');
-    await screen.press(...down(isolateIds.length + 5), ENTER);
+    await screen.press(...down(isolateIds.length + 6), ENTER);
     await waitFor(() => /must explain the decision/.test(screen.output.readOutput()), 'the problems are shown');
     assert.match(screen.output.readOutput(), /changes nothing/);
     assert.equal(recorded.prepared.length, 0);
@@ -635,7 +635,7 @@ test('keeps the execution unavailable when the dry run would recompute an isolat
   try {
     await screen.settle();
     await screen.press('r');
-    await screen.press(...down(isolateIds.length + 5), ENTER);
+    await screen.press(...down(isolateIds.length + 6), ENTER);
     await waitFor(() => recorded.prepared.length >= 2, 'the rerun is prepared');
     let frame = await screen.press(ENTER);
     await waitFor(() => recorded.executed.length === 1, 'the dry run ran');

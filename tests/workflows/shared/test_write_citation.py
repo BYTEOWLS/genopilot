@@ -49,7 +49,8 @@ LOCAL_TRANSFER_INPUTS = {
 }
 CONSENSUS_CONFIGURATION = {
     "calling": {"ploidy": 1, "min_depth": 10, "min_mapping_quality": 20, "min_base_quality": 20, "min_allele_fraction": 0.8},
-    "consensus": {"include_backbone_vote": True, "voting_method": "strict-majority", "min_callable_isolates": 0, "unresolved_snp": "n"},
+    "consensus": {"include_backbone_vote": True, "voting_method": "strict-majority", "min_callable_isolates": 0, "unresolved_single_base": "n",
+                  "tie_source": "none"},
 }
 
 
@@ -154,7 +155,16 @@ class WriteCitationTests(unittest.TestCase):
         self.assertNotIn("strict-majority", none)
         self.assertNotIn("fewer than 0", none)
         self.assertIn("fewer than 2 callable isolates", methods({"min_callable_isolates": 2}))
-        self.assertIn("IUPAC", methods({"unresolved_snp": "iupac"}))
+        self.assertIn("IUPAC", methods({"unresolved_single_base": "iupac"}))
+        self.assertNotIn("A tie was settled", none)
+        backbone = methods({"tie_source": "backbone", "tie_scope": "tied-alleles"})
+        self.assertIn("settled by the backbone allele when it was one of the tied alleles", backbone)
+        isolate = methods({"tie_source": "isolate", "tie_isolate": "iso-a", "tie_scope": "any-allele"})
+        self.assertIn("allele of isolate iso-a, also when it was not one of the tied alleles", isolate)
+
+    def test_words_a_setting_left_out_with_its_empty_key(self) -> None:
+        self.assertEqual(write_citation.apply_phrases({}, {"config.optional": {"": "", "*": " {}"}}),
+                         {"config.optional": ""})
 
     def test_rejects_a_setting_value_without_wording(self) -> None:
         with self.assertRaisesRegex(ValueError, "config.consensus.voting_method"):

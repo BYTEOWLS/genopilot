@@ -23,8 +23,9 @@ Methods placeholders: `${genopilot.version}`, `${workflow.id}`, `${workflow.vers
 `${tool.<version key>}`, `${input.<role>}`, and `${config.<path>}` for a value of the
 effective configuration (a list gives its number of items, a boolean `yes` or `no`).
 `phrases.json` replaces a placeholder's value by its wording: each placeholder maps its values to
-text, and `*`, with `{}` for the value, covers any other value. A value without wording is an
-error, so a new setting value never reaches the paragraph unworded.
+text, `*`, with `{}` for the value, covers any other value, and `""` words a setting the
+configuration leaves out because it does not apply. A value without wording is an error, so a
+new setting value never reaches the paragraph unworded.
 
 Standard library only.
 """
@@ -125,7 +126,10 @@ def apply_phrases(values: dict[str, str], phrases: dict[str, dict[str, str]]) ->
     worded = dict(values)
     for placeholder, wording in phrases.items():
         if placeholder not in values:
-            raise ValueError(f"phrases for unknown placeholder {placeholder}")
+            if "" not in wording:
+                raise ValueError(f"phrases for unknown placeholder {placeholder}")
+            worded[placeholder] = wording[""]
+            continue
         value = values[placeholder]
         if value in wording:
             worded[placeholder] = wording[value]

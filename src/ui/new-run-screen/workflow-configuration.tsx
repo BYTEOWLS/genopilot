@@ -4,14 +4,16 @@ import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import type {WorkflowManifest} from '../../workflows/manifest.js';
 import type {ProgressIsolate} from '../../workflows/isolate-progress.js';
-import type {WorkflowParameterDefinition} from '../../workflows/parameter-definitions.js';
+import type {WorkflowParameterDefinition, WorkflowParameterOption} from '../../workflows/parameter-definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AccessionField} from '../components/accession-field.js';
 import {
   IsolatesField,
+  parseIsolateSelection,
   readCatalogedIsolates,
   useIsolateChoices,
   type IsolateCatalogReader,
+  type IsolateChoices,
   type ReadSetCompatibility,
 } from '../components/isolates-field.js';
 import {PathField} from '../components/path-field.js';
@@ -45,9 +47,29 @@ type FormRow =
   | {kind: 'section'; key: string; section: string; lines: number}
   | {kind: 'field'; key: string; definition: WorkflowParameterDefinition; lines: number};
 
-function definitionLineCount(definition: WorkflowParameterDefinition): number {
+/**
+ * A choice's options: its declared ones, or the isolates chosen in its `options_from` field,
+ * named from the catalog when it is loaded.
+ */
+function choiceOptions(
+  definition: WorkflowParameterDefinition,
+  values: WorkflowFormValues,
+  isolates: IsolateChoices,
+): WorkflowParameterOption[] {
+  if (definition.options_from === undefined) {
+    return definition.options ?? [];
+  }
+  const keys = parseIsolateSelection(values[definition.options_from] ?? '');
+  const ids = [...new Set(keys.map(key => key.split('/')[0] ?? key))];
+  return ids.map(id => {
+    const name = isolates.state === 'ready' ? isolates.isolates.find(isolate => isolate.id === id)?.name : undefined;
+    return {value: id, label: name ? `${name} (${id})` : id};
+  });
+}
+
+function definitionLineCount(definition: WorkflowParameterDefinition, options: readonly WorkflowParameterOption[]): number {
   if (definition.kind === 'choice') {
-    return 1 + (definition.options?.length ?? 0);
+    return 1 + options.length;
   }
   // An accession or isolates field always shows its validity or catalog line.
   return 1 + (definition.preview || definition.kind === 'accession' || definition.kind === 'isolates' ? 1 : 0);
@@ -370,7 +392,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         kind: 'field',
         key: definition.id,
         definition,
-        lines: definitionLineCount(definition),
+        lines: definitionLineCount(definition, choiceOptions(definition, values, isolateChoices)),
       });
     }
   }
@@ -545,7 +567,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       }
       // As in every form, ↑/↓ only move between fields, so the mouse wheel never changes a value.
       if (selectedDefinition?.kind === 'choice' && (key.leftArrow || key.rightArrow || input === ' ')) {
-        const options = selectedDefinition.options ?? [];
+        const options = choiceOptions(selectedDefinition, values, isolateChoices);
         const currentIndex = Math.max(0, options.findIndex(option => option.value === values[selectedDefinition.id]));
         const offset = key.leftArrow ? -1 : 1;
         const option = options[(currentIndex + offset + options.length) % options.length];
@@ -783,7 +805,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
                   {selected ? '›' : ' '} {sanitizeTerminalText(definition.label)}
                   {definition.required ? '*' : ''}:
                 </Text>
-                {definition.options?.map(option => (
+                {choiceOptions(definition, values, isolateChoices).map(option => (
                   <Text key={option.value} color={value === option.value ? undefined : mutedColor}>
                     {'    '}({value === option.value ? '●' : ' '}){' '}
                     {sanitizeTerminalText(option.label)}

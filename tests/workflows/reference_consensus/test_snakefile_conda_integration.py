@@ -273,7 +273,7 @@ class ReferenceConsensusCondaTests(unittest.TestCase):
         self.addCleanup(config_path.write_text, original, encoding="utf-8")
 
         config = json.loads(original)
-        for key, value in (("voting_method", "plurality"), ("min_callable_isolates", 1), ("unresolved_snp", "iupac")):
+        for key, value in (("voting_method", "plurality"), ("min_callable_isolates", 1), ("unresolved_single_base", "iupac")):
             changed = json.loads(original)
             changed["consensus"][key] = value
             config_path.write_text(json.dumps(changed), encoding="utf-8")

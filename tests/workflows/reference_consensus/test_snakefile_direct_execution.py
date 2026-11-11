@@ -139,14 +139,14 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         for isolate in ("iso-a", "iso-b"):
             self.assertIn(f"--voter {isolate} results/isolates/{isolate}/variants.vcf.gz", result.stdout)
         self.assertIn("rule generate_consensus:", result.stdout)
-        self.assertIn("--voting-method strict-majority --min-callable-isolates 0 --unresolved-snp n", result.stdout)
+        self.assertIn("--voting-method strict-majority --min-callable-isolates 0 --unresolved-single-base n --tie-source none ", result.stdout)
 
     def test_an_iteration_schedules_only_its_voting_isolates_and_its_decision(self) -> None:
         config_path = write_run(self.run_dir, ["iso-a", "iso-b", "iso-c"])
         target = write_decision(
             self.run_dir, 2, ["iso-a", "iso-c"], ["iso-b"],
             {"voting_method": "plurality", "include_backbone_vote": False, "min_callable_isolates": 1,
-             "unresolved_snp": "iupac"},
+             "unresolved_single_base": "iupac", "tie_source": "isolate", "tie_scope": "any-allele", "tie_isolate": "iso-c"},
         )
         result = run_snakemake(self.run_dir, config_path, "--dry-run", "--printshellcmds", target)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -158,7 +158,11 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
         self.assertIn("--voter iso-c results/isolates/iso-c/variants.vcf.gz", planned)
         self.assertNotIn("--voter iso-b", planned)
         self.assertNotIn("results/isolates/iso-b/", planned)
-        self.assertIn("--voting-method plurality --min-callable-isolates 1 --unresolved-snp iupac", planned)
+        self.assertIn(
+            "--voting-method plurality --min-callable-isolates 1 --unresolved-single-base iupac"
+            " --tie-source isolate --tie-scope any-allele --tie-isolate iso-c",
+            planned,
+        )
         self.assertIn("results/cohort/iteration-2/support-sites.tsv", planned)
         self.assertNotIn("results/cohort/initial/", planned)
 

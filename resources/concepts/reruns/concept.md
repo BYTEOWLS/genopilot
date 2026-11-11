@@ -8,7 +8,7 @@ A run directory cannot simply be rerun with an edited `config.yaml`: Snakemake r
 
 ## Model
 
-- **Cohort-only changes** stay in the same run as a new iteration: the voting isolates, including excluding a failed isolate, and the cohort settings: the voting method, the backbone vote, the minimum of callable isolates, and the unresolved-SNP representation. Nothing per-isolate reruns, and every earlier iteration is kept in its own directory. [Task 5.1](../completed/consensus/5a-cohort-iterations.md) defines the saved decision and the iteration layout.
+- **Cohort-only changes** stay in the same run as a new iteration: the voting isolates, including excluding a failed isolate, and the cohort settings: the voting method, the backbone vote, the minimum of callable isolates, and the representation of unresolved single-base positions. Nothing per-isolate reruns, and every earlier iteration is kept in its own directory. [Task 5.1](../completed/consensus/5a-cohort-iterations.md) defines the saved decision and the iteration layout.
 - **Every other change** creates a new run in its own directory: calling thresholds, the backbone, the selected isolates' reads, or anything else a per-isolate step reads. The source run is never modified, and the new run computes everything again.
 
 A run's saved `config.yaml` and `isolates.yaml` are never edited after it was created, by GenoPilot or by a researcher; the workflow README already says so for direct runs.

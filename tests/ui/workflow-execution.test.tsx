@@ -865,7 +865,7 @@ function renderGatedExecution(
   return {input, output, instance};
 }
 
-test('offers the execution only after a dry run passed the gate', async context => {
+test('runs the execution after its dry run passed the gate, in one start', async context => {
   const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
   context.after(() => rm(tempDir, {recursive: true, force: true}));
   const modes: string[] = [];
@@ -883,24 +883,38 @@ test('offers the execution only after a dry run passed the gate', async context 
   );
   context.after(() => instance.unmount());
 
-  // Before any dry run, the arrows cannot select the execution.
-  await waitForOutput(output, value => value.includes('/managed/snakemake --dry-run target.json'));
-  await pressKey(input, ARROW_DOWN);
-  await pressKey(input, ENTER);
-  await waitFor(() => gated.length === 1, 'the dry run is checked');
-  assert.deepEqual(modes, ['dry-run']);
-  assert.equal(gated[0]?.mode, 'dry-run');
-
-  // The passed dry run preselects the execution.
-  await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
-  await pressKey(input, ESCAPE);
+  // The execution is preselected; starting it checks the dry run, then executes.
   await waitForOutput(output, value => value.includes('/managed/snakemake target.json'));
   await pressKey(input, ENTER);
-  await waitFor(() => modes.length === 2, 'the execution starts');
+  await waitFor(() => modes.length === 2, 'the execution follows the check');
   assert.deepEqual(modes, ['dry-run', 'execute']);
+  assert.equal(gated.length, 1);
+  assert.equal(gated[0]?.mode, 'dry-run');
 });
 
-test('keeps the execution unavailable when the gate refuses the dry run, and shows why', async context => {
+test('keeps the dry run available on its own, without executing', async context => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const modes: string[] = [];
+  const {input, output, instance} = renderGatedExecution(
+    join(tempDir, 'events.jsonl'),
+    async run => {
+      modes.push(run.mode);
+      return {...run, exitCode: 0};
+    },
+    async () => ({allowed: true}),
+  );
+  context.after(() => instance.unmount());
+
+  await waitForOutput(output, value => value.includes('/managed/snakemake target.json'));
+  await pressKey(input, ARROW_UP);
+  await waitForOutput(output, value => value.includes('/managed/snakemake --dry-run target.json'));
+  await pressKey(input, ENTER);
+  await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
+  assert.deepEqual(modes, ['dry-run']);
+});
+
+test('does not execute when the gate refuses the dry run, shows why, and keeps the execution unavailable', async context => {
   const tempDir = await mkdtemp(join(tmpdir(), 'workflow-execution-screen-'));
   context.after(() => rm(tempDir, {recursive: true, force: true}));
   const modes: string[] = [];
@@ -917,9 +931,11 @@ test('keeps the execution unavailable when the gate refuses the dry run, and sho
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
   await pressKey(input, ENTER);
   await waitForOutput(output, value => value.includes('call_all_sites (1)'));
+  assert.deepEqual(modes, ['dry-run']);
   output.clearOutput();
   await pressKey(input, ESCAPE);
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
+  // Only the dry run can be chosen now.
   await pressKey(input, ARROW_DOWN);
   await pressKey(input, ENTER);
   await waitFor(() => modes.length === 2, 'the second attempt starts');
@@ -948,10 +964,6 @@ test('reads only the events an execution appends, not those of earlier attempts'
   context.after(() => instance.unmount());
 
   await waitForOutput(output, value => value.includes('Choose how to start this run'));
-  await pressKey(input, ENTER);
-  await waitForOutput(output, value => value.includes('Snakemake dry run succeeded'));
-  await pressKey(input, ESCAPE);
-  await waitForOutput(output, value => value.includes('/managed/snakemake target.json'));
   output.clearOutput();
   await pressKey(input, ENTER);
   const frame = await waitForOutput(output, value => value.includes('Workflow run succeeded'));

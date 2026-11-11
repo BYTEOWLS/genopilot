@@ -120,7 +120,7 @@ class IterationProvenanceTests(unittest.TestCase):
             "run": {"id": "run-a", "created_at": "2026-09-25T10:00:00.000Z"},
         }
         settings = {"include_backbone_vote": False, "voting_method": "plurality", "min_callable_isolates": 1,
-                    "unresolved_snp": "n"}
+                    "unresolved_single_base": "n", "tie_source": "backbone", "tie_scope": "tied-alleles", "tie_isolate": None}
         self.write("decisions/iteration-2.yaml", "reason: test\n")
         self.write("manifest.yaml")
         self.write("resolved/backbone.fasta", ">chr1\nACGT\n")
