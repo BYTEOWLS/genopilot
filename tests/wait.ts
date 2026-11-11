@@ -45,7 +45,13 @@ export async function rendered(instance: {waitUntilRenderFlush(): Promise<void>}
   await instance.waitUntilRenderFlush();
 }
 
-/** Waits for terminal output that satisfies the predicate and returns it. */
+/**
+ * Waits for terminal output that satisfies the predicate and returns it.
+ *
+ * Ink skips a frame equal to the last one it drew. Before clearing the output and waiting for a
+ * screen to be drawn again, make sure the screen in between was drawn (`rendered`), or check the
+ * outcome through a callback instead.
+ */
 export async function waitForOutput(read: () => string, predicate: (value: string) => boolean): Promise<string> {
   await waitFor(() => predicate(read()), 'the expected terminal output', () => `Received:\n${read()}`);
   return read();

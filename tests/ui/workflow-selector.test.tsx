@@ -125,7 +125,7 @@ function renderSelector(context: TestContext, options: {
   };
   /** Waits until discovery has settled and the selector shows the given text. */
   const shows = (text: string) => waitFor(() => output.output.includes(text), `the selector shows ${text}`, () => output.output);
-  return {press, pressIgnored, shows, clear: () => { output.output = ''; }, selected, backCount: () => backCount};
+  return {press, pressIgnored, shows, selected, backCount: () => backCount};
 }
 
 const ready = 'Label for first';
@@ -231,9 +231,8 @@ test('opens the highlighted workflow\'s documentation and returns to the list', 
   assert.deepEqual(documented, ['second']);
   await selector.press(ENTER);
   assert.deepEqual(selector.selected, [], 'the documentation owns the keys while open');
-  selector.clear();
+  // Checked through the callbacks: Ink skips redrawing a list identical to its last drawn frame.
   await selector.press(ESCAPE);
-  await selector.shows(ready);
   assert.equal(selector.backCount(), 0, 'Esc closes the documentation, not the selector');
   await selector.press(ENTER);
   await waitFor(() => selector.selected.length === 1, 'a workflow is selected');

@@ -509,6 +509,8 @@ test('opens the accession manager by command ID and returns to the menu', async 
   // Only the current directory's run collection is scanned when no roots are stored.
   await waitFor(() => scannedRoots.length === 1);
   assert.equal(scannedRoots[0], '/research/project/runs');
+  // Ink skips a frame equal to the last one drawn, so the opened screen must be drawn first.
+  await rendered(instance);
 
   output.clearOutput();
   await pressKey(input, '\x1b');
@@ -656,6 +658,7 @@ test('returns home with h from a nested screen in one press', async context => {
   await waitForOutput(output, value => value.includes('Description for the saved workflow.'));
   await pressKey(input, '\r');
   await waitFor(() => runDiscoveries.length === 1);
+  await rendered(instance);
 
   output.clearOutput();
   await pressKey(input, 'h');
