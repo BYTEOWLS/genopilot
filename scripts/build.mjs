@@ -47,6 +47,18 @@ const cli = await build({
   banner: {js: "import {createRequire as __createRequire} from 'node:module';\nconst require = __createRequire(import.meta.url);"},
 });
 await chmod('dist/cli.js', 0o755);
+// The GFF3 find-and-replace runs in a worker thread, which loads this file next to the CLI.
+const gff3Worker = await build({
+  metafile: true,
+  entryPoints: ['src/gff3-replace/worker.ts'],
+  outfile: 'dist/gff3-replace-worker.js',
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node24',
+  minifyWhitespace: true,
+  minifySyntax: true,
+});
 
 await mkdir('dist/browser/assets', {recursive: true});
 const page = await build({metafile: true, entryPoints: ['src/browser/page/main.tsx'], outfile: 'dist/browser/assets/page.js', bundle: true, platform: 'browser', format: 'esm', minify: true, legalComments: 'eof'});
@@ -79,7 +91,7 @@ function permitted(license) {
 }
 
 const packages = new Set();
-for (const result of [cli, page, igv]) {
+for (const result of [cli, gff3Worker, page, igv]) {
   for (const input of Object.keys(result.metafile.inputs).filter(path => path.includes('node_modules/'))) {
     packages.add(await packageDirectory(input));
   }

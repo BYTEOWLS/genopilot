@@ -2,25 +2,24 @@
 
 ## Goal
 
-Ship the implemented systems check, make sequencing technology explicit on read sets, let reference-consensus ties be settled, and improve concurrent catalog use and run-review readability.
+Ship the implemented systems check, make sequencing technology explicit on read sets, let reference-consensus ties be settled, and add a GFF3 find-and-replace.
 
 ## Scope
 
 - [x] [Systems check: hardware facts, resource estimates, timing, and measured rates](done_01_system_check.md) — already implemented.
 - [x] [Sequencing read sets: catalog, workflow selection, snapshots, and preprocessing defaults](done_02_sequencing_read_sets.md).
-- [ ] [Make stale-lock recovery race-free](03_stale_lock_recovery.md).
-- [ ] [Reload the isolate catalog after a save conflict](04_catalog_conflict_reload.md).
-- [ ] [Shorten run-review summaries](05_run_review_summaries.md).
 - [x] [Settle reference-consensus ties](done_06_consensus_tie_handling.md).
+- [x] [GFF3 find-and-replace](done_07_gff3_find_and_replace.md).
+
+Items 03–05 (race-free stale-lock recovery, catalog reload after a save conflict, shorter run-review summaries) moved to the [backlog](../../backlog/).
 
 ## Delivery order
 
 1. Keep the completed systems check as the baseline; verify that read-set changes preserve its input-size estimates.
 2. Deliver read sets in concept task order, preserving schema versions at `1` and rejecting old structures without migration or legacy-run compatibility.
-3. Fix stale-lock recovery before changing catalog conflict handling. Both remain independent of the read-set schema and cover tooling setup where it shares locking.
-4. Land catalog conflict reload against the resulting catalog contract. Shorten run-review summaries after read-set selection and effective settings are stable.
-5. Settle consensus ties independently of the items above; land it before run-review summaries if both touch the consensus review section.
-6. Verify the integrated release and update its changelog and package version at release preparation, not during planning.
+3. Settle consensus ties independently of the items above.
+4. Add the GFF3 find-and-replace in concept task order, independently of the items above.
+5. Verify the integrated release and update its changelog and package version at release preparation, not during planning.
 
 ## Exclusions
 

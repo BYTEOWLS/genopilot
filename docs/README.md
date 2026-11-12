@@ -7,6 +7,7 @@ The same pages are shown inside GenoPilot under Help.
 - [Illumina](illumina.md): paired read files, chemistry options, and preprocessing choices.
 - [Import review](import-review.md): importing isolates from a sequencing delivery.
 - [Run results](run-results.md): the run metadata and files every result page shows.
+- [Find and replace in GFF3](gff3-find-and-replace.md): renaming IDs and other attribute values, and the derived files it writes.
 - [Browser view](browser-view.md): local browser documentation, genome views, themes, printing, and SSH forwarding.
 - [Using the genome viewer](genome-view.md): sequence coordinates, annotation tracks, and source/error states.
 

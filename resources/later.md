@@ -78,11 +78,15 @@ Builds on the [saved isolate sequences](concepts/saved-isolate-sequences/concept
   with a record under the sequence's entry in `isolates.yaml`: its origin (`generated`), the producing run and workflow, the reference it was transferred from, its checksum, and the checksum of the sequence it annotates. Saving refuses a GFF3 whose run targeted another sequence or another checksum.
 - **One sequence, several annotations.** A sequence can hold annotations transferred from different references or with different settings, each named like a saved sequence.
 - **Removal.** Removing a sequence removes its annotations, after confirming both.
-- **Final IDs.** Take this up after the [GFF3 find-and-replace](concepts/annotation-id-rewriting/concept.md), so a researcher can save an annotation with rewritten IDs rather than raw LiftOn IDs.
+- **Final IDs.** Take this up after the [GFF3 find-and-replace](concepts/completed/annotation-id-rewriting/concept.md), so a researcher can save an annotation with rewritten IDs rather than raw LiftOn IDs.
+
+## Sequence selection for inputs
+
+A run could use only some sequences of an input genome, such as one chromosome for a quick test or without the mitochondrion. Download and verify the whole genome as usual, then filter the resolved FASTA and GFF3 to listed sequence IDs in a run step that records the list and the checksums before and after. This works for every input source.
 
 ## Sequence ID renaming
 
-The [GFF3 find-and-replace](concepts/annotation-id-rewriting/concept.md) leaves sequence IDs (column 1) alone. Renaming them, for example assembler contig names to chromosome names or to a submission's naming rules, has to rewrite the FASTA header IDs and the GFF3 seqid column together, so the annotation keeps matching its genome.
+The [GFF3 find-and-replace](concepts/completed/annotation-id-rewriting/concept.md) leaves sequence IDs (column 1) alone. Renaming them, for example assembler contig names to chromosome names or to a submission's naming rules, has to rewrite the FASTA header IDs and the GFF3 seqid column together, so the annotation keeps matching its genome.
 
 ## Reads without Illumina headers
 
@@ -565,7 +569,6 @@ Concept links below are pointers, not duplicate checklists. Their task files own
 - [Annotation-format validation](concepts/annotation-formats/tasks.md).
 - [Saved isolate sequences](concepts/saved-isolate-sequences/tasks.md).
 - [Annotation review decisions](concepts/annotation-review-decision/tasks.md).
-- [GFF3 find-and-replace](concepts/annotation-id-rewriting/tasks.md); required before INSDC submission.
 - [INSDC submission preparation](concepts/insdc-submission/tasks.md): genome and isolate reads.
 
 ## Application
@@ -575,6 +578,9 @@ Concept links below are pointers, not duplicate checklists. Their task files own
 - [ ] Add continue-from-stage, rerun-stage, and presentation-mode actions.
 - [Workflow modules](concepts/workflow-modules/tasks.md).
 - [Run evidence export](concepts/run-export/tasks.md).
+- [Race-free stale-lock recovery](backlog/03_stale_lock_recovery.md).
+- [Catalog reload after a save conflict](backlog/04_catalog_conflict_reload.md); depends on stale-lock recovery.
+- [Shorter run-review summaries](backlog/05_run_review_summaries.md).
 
 ## Integration and packaging
 

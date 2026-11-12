@@ -6,7 +6,7 @@ Prepare a genome and the isolates' raw reads for submission to any node of the I
 
 The official validators (`table2asn` at NCBI, Webin-CLI at ENA, DDBJ's checking tools) report problems as text logs and leave the fixing to the researcher. GenoPilot runs the pinned validator of the chosen node, shows its findings, and guides the fixes that need a decision: each is saved as YAML, and the next target reads it. Mechanical preparation, such as trimming `N` at sequence ends, is recorded; nothing that changes the science is fixed silently.
 
-This concept depends on the [GFF3 find-and-replace](../annotation-id-rewriting/concept.md), a general application feature implemented first. This workflow uses it unchanged and adds only what the repositories need on top of it: locus tags and transcript and protein IDs (see [Identifier preparation](#identifier-preparation)).
+This concept depends on the [GFF3 find-and-replace](../completed/annotation-id-rewriting/concept.md), a general application feature implemented first. This workflow uses it unchanged and adds only what the repositories need on top of it: locus tags and transcript and protein IDs (see [Identifier preparation](#identifier-preparation)).
 
 ## Repositories
 
@@ -59,7 +59,7 @@ Verify each point against the node's current pages and the pinned validator at k
 ## Inputs
 
 - the target node, chosen explicitly;
-- a genome FASTA and a GFF3 whose sequence IDs match it, chosen as local paths in the first version;
+- a genome FASTA and a GFF3 whose sequence IDs match it, chosen as local paths in the first version. Any GFF3 is accepted, including an unreviewed LiftOn output; the checklist advises the [annotation review decision](../annotation-review-decision/concept.md) when the GFF3 traces back to an unreviewed transfer;
 - the node's submission metadata: for NCBI the submission template `.sbt`, created by the researcher on NCBI's template page; for ENA the manifest fields;
 - the lineage, prokaryote or eukaryote, chosen explicitly and never inferred (for NCBI it selects `-euk` and the lineage-specific checks);
 - organism, strain or isolate, the genetic code, and other source modifiers for the whole genome;
@@ -81,7 +81,7 @@ A new packaged workflow, `insdc-submission`, runnable directly through Snakemake
 validate inputs (reuse the shared FASTA/GFF3 validation)
   -> prepare FASTA: trim leading/trailing N, report short and N-rich sequences
   -> shift GFF3 coordinates for trimmed sequences
-  -> rewrite identifiers (reused shared step, optional)
+  -> remove or replace reference-specific attributes
   -> assign locus tags, transcript and protein IDs
   -> find features over N runs or ambiguous codons           # decision point
   -> node packaging and validation:
@@ -95,20 +95,23 @@ Every stage before the node packaging is repository-neutral and its outputs are 
 
 - **FASTA preparation.** Trimming is deterministic and recorded per sequence (bases removed at each end). A feature that lies in a trimmed end fails the stage rather than being dropped. Sequences below the node's minimum length and sequences above its `N` threshold are reported for the researcher to exclude explicitly; they are never removed silently. The original FASTA and GFF3 are kept unchanged.
 - **Gaps.** For reference-guided genomes an `N` run is not an assembly gap in the usual sense: its length is known from the backbone and the linkage evidence is the alignment, not paired ends. The configuration therefore records gap type and linkage evidence explicitly instead of defaulting to `paired-ends`; the correct values for reference-guided genomes are an open question below. `table2asn` converts `N` runs itself from these settings; for ENA the manifest's minimum gap length plays that role.
+- **Reference-specific attributes.** A transferred GFF3 carries the reference's `locus_tag`, `Dbxref`, `transcript_id`, and `protein_id`, which describe another genome. This stage removes or replaces them per the node's rules, keeps the originals in the ID mapping, and shows every change in the preview. It belongs here, not in the find-and-replace, because which attributes matter is node-specific.
 - **Features over uncertain sequence.** A CDS that overlaps an `N` run or contains an ambiguous codon usually fails translation checks. The stage lists these features, with the mask reason when a mask is given. The researcher decides per feature: `pseudo=true`, partial ends, or exclusion. The decision is saved to YAML and the next target reads it. Nothing is marked automatically.
 - **Review.** The validator's errors block the package; warnings and discrepancy findings are shown with counts and paths and must be acknowledged. Changing only decisions or identifiers reruns from that stage and reuses earlier outputs.
 - **Package.** `submission/` holds the node's submission files (for NCBI the `.sqn`; for ENA the manifest and flat file), the prepared FASTA and GFF3, the ID mapping, the validation reports, checksums, and a checklist naming the project, sample, locus-tag prefix, and upload step of the chosen node. Provenance records the validator's version and full command.
 
 ## Identifier preparation
 
-ID rewriting is the [GFF3 find-and-replace](../annotation-id-rewriting/concept.md), with its contract, preview, validation, and `id-mapping.tsv`. It runs in the application before the submission workflow starts, which reads the rewritten GFF3 as an imported input. When the input GFF3 already has its final IDs, it is skipped.
+ID rewriting is the [GFF3 find-and-replace](../completed/annotation-id-rewriting/concept.md), with its contract, preview, validation, and `id-mapping.tsv`. It runs in the application before the submission workflow starts, which reads the rewritten GFF3 as an imported input; it is not a workflow stage. When the input GFF3 already has its final IDs, it is skipped.
+
+The application, while validating the configuration, follows a rewritten GFF3's `replace.yaml` back through chained rewrites to the first source, verifies each recorded checksum, refuses an outdated rewrite, and joins the `id-mapping.tsv` files into one raw → final mapping that the workflow snapshots.
 
 **Locus tags** are specific to this workflow, because the repositories do not read them from `ID`. Two modes, chosen explicitly:
 
 - **numbered**: `<prefix>_<number>` in genome order, with a configured start and step (for example 10, so later insertions fit), zero-padded to a configured width;
 - **from ID**: a regex capture from the final gene ID, rejected unless every gene matches and the resulting tags are unique and in the INSDC format.
 
-For NCBI, `transcript_id` and `protein_id` are generated as `gnl|<dbname>|<locus_tag>` plus a per-isoform suffix, or omitted so `table2asn` generates them; the mode is recorded. Existing values in the input are kept only when they already have NCBI's form, and the choice is shown in the preview. Locus tags and generated IDs are added as columns to the ID mapping, so every submitted identifier traces back to the raw LiftOn ID.
+For NCBI, `transcript_id` and `protein_id` are generated as `gnl|<dbname>|<locus_tag>` plus a per-isoform suffix, or omitted so `table2asn` generates them; the mode is recorded. Existing values are kept only when they already have NCBI's form and were not inherited from the reference; the choice is shown in the preview. Locus tags and generated IDs are added as columns to the ID mapping, so every submitted identifier traces back to the raw LiftOn ID.
 
 ## Isolate reads
 
@@ -133,7 +136,8 @@ Decide these at kickoff:
 - Which gap type and linkage evidence describe an uncallable run in a reference-guided genome?
 - The current `N`-content and minimum-length thresholds of the chosen node.
 - Which locus-tag numbering the node and the research group prefer.
-- How a transferred gene refers to its source gene in the reference annotation (for example a `note` or an `inference` qualifier), since the reference's locus tag belongs to another genome and must not be reused.
+- How a transferred gene refers to its source gene in the reference annotation (for example a `note` or an `inference` qualifier), since the reference's locus tag belongs to another genome and must not be reused. The find-and-replace keeps the reference gene ID in `Alias`, which the repositories probably do not map to a qualifier; confirm and map it.
+- The chosen node's sequence-ID rules. The find-and-replace never changes sequence IDs, so FASTA and GFF3 stay consistent; if assembly names break the rules, [sequence ID renaming](../../later.md#sequence-id-renaming) becomes a prerequisite.
 - Whether an organellar or plasmid sequence is submitted with the main genome or separately.
 - Whether ambiguous positions should be submitted as `N` or IUPAC codes: NCBI's genome guide mentions only `N`, so confirm with the chosen validator that IUPAC codes validate (see the [consensus science background](../completed/consensus/science-background.md#open-point)).
 - For ENA: how the GFF3 becomes an EMBL flat file (a pinned converter or an own step), and whether Webin-CLI validation needs the Webin login.
