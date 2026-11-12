@@ -80,6 +80,10 @@ Builds on the [saved isolate sequences](concepts/saved-isolate-sequences/concept
 - **Removal.** Removing a sequence removes its annotations, after confirming both.
 - **Final IDs.** Take this up after the [GFF3 find-and-replace](concepts/completed/annotation-id-rewriting/concept.md), so a researcher can save an annotation with rewritten IDs rather than raw LiftOn IDs.
 
+## Sequence selection for inputs
+
+A run could use only some sequences of an input genome, such as one chromosome for a quick test or without the mitochondrion. Download and verify the whole genome as usual, then filter the resolved FASTA and GFF3 to listed sequence IDs in a run step that records the list and the checksums before and after. This works for every input source.
+
 ## Sequence ID renaming
 
 The [GFF3 find-and-replace](concepts/completed/annotation-id-rewriting/concept.md) leaves sequence IDs (column 1) alone. Renaming them, for example assembler contig names to chromosome names or to a submission's naming rules, has to rewrite the FASTA header IDs and the GFF3 seqid column together, so the annotation keeps matching its genome.
