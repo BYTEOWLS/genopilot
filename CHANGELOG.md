@@ -6,6 +6,8 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-11-25
+
 ### License
 
 - GenoPilot is licensed under the MIT License again instead of `AGPL-3.0-or-later`; version 0.0.2 remains available under the AGPL.
