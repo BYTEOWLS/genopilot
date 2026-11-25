@@ -1,6 +1,6 @@
 # Annotation transfer results
 
-This page explains every item of the annotation transfer result page, grouped by its tabs. The counts and their values are those of the pinned LiftOn release (see *Tools* in the README); how the transfer works is explained in the workflow's [README](README.md). The Run Details tab and the run files every workflow shows are explained in the general [run results](../../docs/run-results.md) page.
+This page explains every item of the annotation transfer result page, grouped by its tabs. The counts and their values are those of the pinned LiftOn release (see *Tools* in the README); how the transfer works is explained in the workflow's [README](README.md). The Run Details tab, the run files every workflow shows, and the derived files made from a finished run are explained in the general [run results](../../docs/run-results.md) page.
 
 ## Overview
 
@@ -131,6 +131,10 @@ The *Proteins genome review* section below explains how to check each reason in 
 ## Files
 
 The run directory and the run's own files are explained in the general run results page.
+
+### Derived files
+
+Rewrites of this run's GFF3 made with find and replace, listed under the run directory. Press `g` to rename IDs or other attribute values in the raw LiftOn GFF3 or in an earlier rewrite that is not outdated: the result goes to a new folder in the run's `derived/` folder, and the run's own files stay unchanged. A rewrite is marked *outdated* when its source changed since. The general run results page and [Find and replace in GFF3](../../docs/gff3-find-and-replace.md) explain the details.
 
 ### Generated reports
 

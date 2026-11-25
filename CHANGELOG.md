@@ -23,6 +23,7 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ### Application
 
+- **Find and replace in GFF3**, from the home screen or with `g` on a finished run's result page: renames IDs and other attribute values in the chosen attributes, with a preview, and writes a new folder with the GFF3, an `id-mapping.tsv`, and a `replace.yaml` record. Sequence IDs and the source stay unchanged; a renamed gene keeps its former ID as an alias. Rewrites of a run go to its `derived/` folder and are listed, and marked when outdated, under **Derived files**.
 - The Proteins gene list, the consensus isolate and site lists, the accession list, and the file browser share one list behaviour: ↑/↓ wrap around, PageUp/PageDown move the selection by a page, and the shortcut line shows both.
 - Cancellation during run setup no longer starts a Snakemake process; opened logs are closed before returning.
 - Accession details group assembly facts, release date, genome size, GC percentage, contig/scaffold counts and N50, and BioProject/BioSample links into sections. Refresh metadata to fill new fields on existing entries. PageUp/PageDown scrolls details while editable fields and Save stay visible on short terminals.

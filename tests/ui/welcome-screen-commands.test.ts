@@ -22,7 +22,7 @@ test('groups welcome commands by stable ID and keeps every command visible', () 
   );
   assert.deepEqual(
     new Set(grouped.secondary.map(command => command.id)),
-    new Set(['manage-isolates', 'check-tooling', 'manage-accessions']),
+    new Set(['gff3-replace', 'manage-isolates', 'check-tooling', 'manage-accessions']),
   );
 });
 

@@ -34,6 +34,7 @@ import {checkReadPairs, type ReadPairsChecker} from '../../isolates/reads.js';
 import {OpenRunScreen, type RunDiscovery} from '../open-run-screen/screen.js';
 import {ToolingScreen} from '../tooling-screen/screen.js';
 import {DocumentationScreen} from '../documentation-screen/screen.js';
+import {Gff3ReplaceScreen} from '../gff3-replace-screen/screen.js';
 import {discoverPackagedWorkflows} from '../../workflows/discovery.js';
 import type {WorkflowDiscovery} from '../components/workflow-selector.js';
 import {
@@ -202,6 +203,7 @@ export function WelcomeScreen({
       case 'help':
       case 'manage-isolates':
       case 'manage-accessions':
+      case 'gff3-replace':
         setCommandMessage(undefined);
         tooling.clearCheckMessage();
         setActiveScreenId(id);
@@ -248,6 +250,7 @@ export function WelcomeScreen({
       case 'help':
       case 'manage-isolates':
       case 'manage-accessions':
+      case 'gff3-replace':
       case 'check-tooling':
         return;
       default:
@@ -348,6 +351,14 @@ export function WelcomeScreen({
             saveApiKey={saveNcbiApiKey}
             clearApiKey={clearStoredNcbiApiKey}
             apiKeyPath={ncbiApiKeyPath}
+          />
+        );
+      case 'gff3-replace':
+        return (
+          <Gff3ReplaceScreen
+            currentDirectory={currentDirectory}
+            onBack={() => setActiveScreenId(undefined)}
+            inputActive={columns >= minimumTerminalWidth}
           />
         );
       case 'check-tooling':

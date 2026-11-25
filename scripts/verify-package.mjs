@@ -24,6 +24,7 @@ try {
   }
   for (const path of [
     'dist/cli.js',
+    'dist/gff3-replace-worker.js',
     'dist/THIRD-PARTY-LICENSES.md',
     'dist/browser/assets/index.html',
     'dist/browser/assets/page.js',
