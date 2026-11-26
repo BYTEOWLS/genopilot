@@ -36,8 +36,8 @@ test('accession details page within the terminal while fields, save, and failure
   const input = new Input();
   const output = new Output();
   const editing: AccessionEntry = {
-    accession: 'GCA_000000001.1', name: 'draft-marker', description: 'long note '.repeat(40).trim(),
-    ncbi: {organism: 'organism-marker', retrieved_at: '2026-01-01T12:00:00.000Z', source: 'datasets-v2-rest'},
+    source: 'ncbi', id: 'GCA_000000001.1', parameters: {}, name: 'draft-marker', description: 'long note '.repeat(40).trim(),
+    metadata: {organism: 'organism-marker', retrieved_at: '2026-01-01T12:00:00.000Z', source: 'datasets-v2-rest'},
     cached_copies: Array.from({length: 8}, (_, index) => ({
       path: `/synthetic/${'long-directory/'.repeat(6)}cache-${index}-marker/GCA_000000001.1`,
       verified_at: '2026-01-01T12:00:00.000Z', fasta_sha256: 'a'.repeat(64),
@@ -46,7 +46,7 @@ test('accession details page within the terminal while fields, save, and failure
   const submitted: AccessionEntry[] = [];
   let cancelled = false;
   const app = render(<AccessionForm
-    catalog={{schema_version: 1, output_roots: [], accessions: [editing]}}
+    catalog={{schema_version: 2, output_roots: [], accessions: [editing]}}
     editing={editing} inputActive
     fetchMetadata={async () => {throw new Error('unexpected lookup');}}
     onSubmit={async entry => {submitted.push(entry); throw new Error(`failure-marker ${'long failure '.repeat(80)}`);}}

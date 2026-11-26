@@ -1,29 +1,25 @@
 import {createHash} from 'node:crypto';
 import {createReadStream} from 'node:fs';
-import {lstat, readdir, readFile, realpath, rm, stat} from 'node:fs/promises';
+import {lstat, mkdir, readdir, readFile, realpath, rm, stat} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {pipeline} from 'node:stream/promises';
-import {isVersionedAssemblyAccession} from './accession.js';
+import {genomeSources} from '../genome-sources/registry.js';
+import {referenceKey, type FileKind, type GenomeReference, type GenomeProviderRegistry} from '../genome-sources/provider.js';
 import {
-  ncbiCacheDirectoryName,
   type AccessionCatalog,
   type AccessionEntry,
   type CachedCopy,
-  type NcbiAssemblyMetadata,
 } from './catalog.js';
-import {parseAssemblyReport} from './ncbi-metadata.js';
 
-// The file names the workflow resolver (`workflows/shared/scripts/resolve_input.py`) writes into
-// every accession cache directory.
+
+// Fixed names shared by the cache writer and workflow resolver.
 const checksumsFileName = 'checksums.json';
 const fastaFileName = 'genomic.fna';
 const gff3FileName = 'genomic.gff';
-const reportPath = ['ncbi_dataset', 'data', 'assembly_data_report.jsonl'] as const;
 
 export type ScannedCopyState = 'verified' | 'incomplete' | 'checksum-invalid';
 
-export type ScannedCopy = {
-  accession: string;
+export type ScannedCopy = GenomeReference & {
   /** The output root the copy was found in; a directory reached through two roots counts once. */
   root: string;
   /** Canonical directory path, so one directory reached through two roots is listed once. */
@@ -33,8 +29,7 @@ export type ScannedCopy = {
   problem?: string;
   fasta_sha256?: string;
   gff3_sha256?: string;
-  /** Metadata from the download's own NCBI report, when present. */
-  report?: NcbiAssemblyMetadata;
+  metadata: unknown;
 };
 
 export type IgnoredCacheEntry = {path: string; reason: string};
@@ -65,9 +60,9 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function sha256File(path: string): Promise<string> {
+async function sha256File(path: string, signal?: AbortSignal): Promise<string> {
   const hash = createHash('sha256');
-  await pipeline(createReadStream(path), hash);
+  await pipeline(createReadStream(path), hash, {signal});
   return hash.digest('hex');
 }
 
@@ -86,6 +81,7 @@ const sha256Pattern = /^[0-9a-f]{64}$/;
 
 async function readRecordedChecksums(
   directory: string,
+  includeGff3: boolean,
 ): Promise<{fasta: string; gff3?: string} | string> {
   let source: string;
   try {
@@ -108,48 +104,23 @@ async function readRecordedChecksums(
   if (typeof fasta !== 'string' || !sha256Pattern.test(fasta)) {
     return `${checksumsFileName} records no FASTA checksum`;
   }
-  if (gff3 !== undefined && (typeof gff3 !== 'string' || !sha256Pattern.test(gff3))) {
+  if (includeGff3 && gff3 !== undefined && (typeof gff3 !== 'string' || !sha256Pattern.test(gff3))) {
     return `${checksumsFileName} records an invalid GFF3 checksum`;
   }
-  return typeof gff3 === 'string' ? {fasta, gff3} : {fasta};
+  return includeGff3 && typeof gff3 === 'string' ? {fasta, gff3} : {fasta};
 }
 
-async function readCachedReport(directory: string, accession: string): Promise<NcbiAssemblyMetadata | undefined> {
-  const path = join(directory, ...reportPath);
-  try {
-    const [source, details] = await Promise.all([readFile(path, 'utf8'), stat(path)]);
-    // The Datasets CLI writes one report per line, but a report reformatted for reading spans
-    // many lines; accept the whole file as one report as well.
-    const reports: unknown[] = [];
-    try {
-      reports.push(JSON.parse(source));
-    } catch {
-      for (const line of source.split('\n')) {
-        try {
-          reports.push(JSON.parse(line));
-        } catch {
-          // Blank or unparsable lines carry no report.
-        }
-      }
-    }
-    for (const report of reports) {
-      // The report was written when the download was unpacked; that is when NCBI provided it.
-      const metadata = parseAssemblyReport(report, accession, 'cached-download-report', details.mtime.toISOString());
-      if (metadata) {
-        return metadata;
-      }
-    }
-  } catch {
-    // The report is a convenience; its absence never affects whether the copy is trusted.
-  }
-  return undefined;
-}
-
-/** Verifies one accession cache directory against the checksums its resolver recorded. */
-async function inspectCopy(accession: string, root: string, directory: string): Promise<ScannedCopy> {
-  const report = await readCachedReport(directory, accession);
-  const base = {accession, root, path: directory, ...(report ? {report} : {})};
-  const recorded = await readRecordedChecksums(directory);
+/** Verify requested files; catalog discovery checks every recorded file by default. */
+export async function inspectCopy(
+  reference: GenomeReference,
+  root: string,
+  directory: string,
+  metadata: unknown = null,
+  {signal, kinds = ['fasta', 'gff3']}: {signal?: AbortSignal; kinds?: readonly FileKind[]} = {},
+): Promise<ScannedCopy> {
+  signal?.throwIfAborted();
+  const base = {...reference, root, path: directory, metadata};
+  const recorded = await readRecordedChecksums(directory, kinds.includes('gff3'));
   if (typeof recorded === 'string') {
     return {...base, state: 'incomplete', problem: recorded};
   }
@@ -162,16 +133,11 @@ async function inspectCopy(accession: string, root: string, directory: string): 
     if (!(await isFile(path))) {
       return {...base, state: 'incomplete', problem: `${file.name} is missing`};
     }
-    if ((await sha256File(path)) !== file.expected) {
+    if ((await sha256File(path, signal)) !== file.expected) {
       return {...base, state: 'checksum-invalid', problem: `${file.name} does not match its recorded checksum`};
     }
   }
-  return {
-    ...base,
-    state: 'verified',
-    fasta_sha256: recorded.fasta,
-    ...(recorded.gff3 ? {gff3_sha256: recorded.gff3} : {}),
-  };
+  return {...base, state: 'verified', fasta_sha256: recorded.fasta, ...(recorded.gff3 ? {gff3_sha256: recorded.gff3} : {})};
 }
 
 /** Removes repeated roots while keeping their order. */
@@ -180,63 +146,57 @@ export function uniqueRoots(roots: readonly string[]): string[] {
 }
 
 /**
- * Reads the NCBI caches directly inside the given output roots, and nothing else. Discovery never
- * contacts NCBI and never changes or deletes files.
+ * Reads registered provider caches directly inside the output roots. Discovery never
+ * contacts providers and never changes or deletes files.
  */
 export async function scanAccessionCaches(
   roots: readonly string[],
   now: () => Date = () => new Date(),
+  registry: GenomeProviderRegistry = genomeSources,
 ): Promise<CacheScan> {
-  const scan: CacheScan = {
-    scannedAt: now().toISOString(),
-    cacheDirectories: [],
-    copies: [],
-    ignored: [],
-    rootProblems: [],
-  };
+  const scan: CacheScan = {scannedAt: now().toISOString(), cacheDirectories: [], copies: [], ignored: [], rootProblems: []};
   const seen = new Set<string>();
   for (const root of uniqueRoots(roots)) {
-    const cacheDirectory = join(root, ncbiCacheDirectoryName);
-    scan.cacheDirectories.push(await realpath(cacheDirectory).catch(() => cacheDirectory));
-    let entries;
-    try {
-      entries = await readdir(cacheDirectory, {withFileTypes: true});
-    } catch (error) {
-      if (errorCode(error) !== 'ENOENT') {
-        scan.rootProblems.push({root, message: errorMessage(error)});
-      }
-      continue;
-    }
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      const directory = join(cacheDirectory, entry.name);
-      if (entry.isSymbolicLink()) {
-        // Deletion refuses links, so discovery does not follow them either.
-        scan.ignored.push({path: directory, reason: 'is a symbolic link, which is not followed'});
-        continue;
-      }
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      if (!isVersionedAssemblyAccession(entry.name)) {
-        scan.ignored.push({path: directory, reason: 'is not named like a versioned assembly accession'});
-        continue;
-      }
+    for (const provider of registry.list()) {
+      const cacheDirectory = join(root, provider.cacheDirectory);
+      scan.cacheDirectories.push(await realpath(cacheDirectory).catch(() => cacheDirectory));
+      let entries;
       try {
-        const canonical = await realpath(directory);
-        if (seen.has(canonical)) {
+        entries = await readdir(cacheDirectory, {withFileTypes: true});
+      } catch (error) {
+        if (errorCode(error) !== 'ENOENT') {
+          scan.rootProblems.push({root, message: errorMessage(error)});
+        }
+        continue;
+      }
+      for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+        const directory = join(cacheDirectory, entry.name);
+        if (entry.isSymbolicLink()) {
+          scan.ignored.push({path: directory, reason: 'is a symbolic link, which is not followed'});
           continue;
         }
-        seen.add(canonical);
-        scan.copies.push(await inspectCopy(entry.name, root, canonical));
-      } catch (error) {
-        // One unreadable copy must not hide the others; it is shown as damaged instead.
-        scan.copies.push({
-          accession: entry.name,
-          root,
-          path: directory,
-          state: 'incomplete',
-          problem: `cannot be read: ${errorMessage(error)}`,
-        });
+        if (!entry.isDirectory() || entry.name.startsWith('.')) {
+          continue;
+        }
+        try {
+          const record: unknown = JSON.parse(await readFile(join(directory, 'genome.json'), 'utf8'));
+          if (typeof record !== 'object' || record === null || !('reference' in record) || !('metadata' in record)) {
+            throw new Error('Missing genome cache record.');
+          }
+          const reference = registry.validateReference(record.reference);
+          if (reference.source !== provider.id || reference.id !== entry.name) {
+            throw new Error('Cache identity does not match its directory.');
+          }
+          provider.validateMetadata(record.metadata);
+          const canonical = await realpath(directory);
+          if (seen.has(canonical)) {
+            continue;
+          }
+          seen.add(canonical);
+          scan.copies.push(await inspectCopy(reference, root, canonical, record.metadata));
+        } catch (error) {
+          scan.ignored.push({path: directory, reason: errorMessage(error)});
+        }
       }
     }
   }
@@ -251,67 +211,64 @@ function sameCopy(left: CachedCopy, right: CachedCopy): boolean {
  * Records the verified copies of the latest scan. Every entry's `cached_copies` becomes exactly
  * what was verified, so damaged, deleted, or no longer scanned copies are dropped; a `partial`
  * scan only replaces copies inside the cache directories it read. A copy that is unchanged keeps
- * its first `verified_at`. Accessions found only on disk are added with the
- * metadata of their cached report, which never replaces metadata already recorded.
+ * its first `verified_at`. Entries found only on disk use their provider's saved metadata,
+ * which never replaces metadata already recorded.
  */
 export function applyCacheScan(
   catalog: AccessionCatalog,
   scan: CacheScan,
   {partial = false}: {partial?: boolean} = {},
 ): AccessionCatalog {
-  // A partial scan read only some roots, so copies recorded outside its cache directories stay.
   const outsideScan = (copy: CachedCopy): boolean =>
     partial && !scan.cacheDirectories.some(directory => dirname(copy.path) === directory);
   const verified = new Map<string, ScannedCopy[]>();
   for (const copy of scan.copies) {
     if (copy.state === 'verified') {
-      verified.set(copy.accession, [...(verified.get(copy.accession) ?? []), copy]);
+      const key = referenceKey(copy);
+      verified.set(key, [...(verified.get(key) ?? []), copy]);
     }
   }
-  const copiesFor = (entry: AccessionEntry | undefined, accession: string): CachedCopy[] =>
-    (verified.get(accession) ?? [])
-      .map(copy => {
-        const next: CachedCopy = {
-          path: copy.path,
-          verified_at: scan.scannedAt,
-          fasta_sha256: copy.fasta_sha256 ?? '',
-          ...(copy.gff3_sha256 ? {gff3_sha256: copy.gff3_sha256} : {}),
-        };
-        return entry?.cached_copies.find(previous => sameCopy(previous, next)) ?? next;
-      })
-      .concat(entry?.cached_copies.filter(outsideScan) ?? [])
+  const copiesFor = (entry: AccessionEntry | undefined, key: string): CachedCopy[] =>
+    (verified.get(key) ?? []).map(copy => {
+      const next: CachedCopy = {
+        path: copy.path, verified_at: scan.scannedAt, fasta_sha256: copy.fasta_sha256!,
+        ...(copy.gff3_sha256 ? {gff3_sha256: copy.gff3_sha256} : {}),
+      };
+      return entry?.cached_copies.find(previous => sameCopy(previous, next)) ?? next;
+    }).concat(entry?.cached_copies.filter(outsideScan) ?? [])
       .sort((left, right) => left.path.localeCompare(right.path));
-  const reportFor = (accession: string): NcbiAssemblyMetadata | null =>
-    verified.get(accession)?.find(copy => copy.report)?.report ?? null;
 
-  const accessions = catalog.accessions.map(entry => ({
+  const accessions: AccessionEntry[] = catalog.accessions.map(entry => ({
     ...entry,
-    ncbi: entry.ncbi ?? reportFor(entry.accession),
-    cached_copies: copiesFor(entry, entry.accession),
+    metadata: entry.metadata ?? verified.get(referenceKey(entry))?.[0]?.metadata ?? null,
+    cached_copies: copiesFor(entry, referenceKey(entry)),
   }));
-  const known = new Set(catalog.accessions.map(entry => entry.accession));
-  for (const accession of [...verified.keys()].sort()) {
-    if (!known.has(accession)) {
-      accessions.push({accession, ncbi: reportFor(accession), cached_copies: copiesFor(undefined, accession)});
+  const known = new Set(catalog.accessions.map(referenceKey));
+  for (const [key, copies] of verified) {
+    if (!known.has(key)) {
+      const copy = copies[0]!;
+      accessions.push({
+        source: copy.source, id: copy.id, parameters: copy.parameters,
+        metadata: copy.metadata, cached_copies: copiesFor(undefined, key),
+      });
     }
   }
   return {...catalog, accessions};
 }
 
-/**
- * Deletes every cache directory of `accession` directly inside the given roots, damaged or not,
- * and returns the deleted paths. A symbolic link, or a directory that does not resolve to exactly
- * `<root>/ncbi-accessions-cache/<accession>`, is refused rather than followed.
- */
-export async function deleteAccessionCaches(roots: readonly string[], accession: string): Promise<string[]> {
-  if (!isVersionedAssemblyAccession(accession)) {
-    throw new Error(`Refusing to delete a cache for the invalid accession ${accession}.`);
-  }
+/** Delete only this provider/ID, refusing symlinks and path traversal. */
+export async function deleteAccessionCaches(
+  roots: readonly string[],
+  reference: GenomeReference,
+  registry: GenomeProviderRegistry = genomeSources,
+): Promise<string[]> {
+  const validated = registry.validateReference(reference);
+  const provider = registry.get(validated.source);
   const deleted: string[] = [];
   const seen = new Set<string>();
   for (const root of uniqueRoots(roots)) {
-    const cacheDirectory = join(root, ncbiCacheDirectoryName);
-    const directory = join(cacheDirectory, accession);
+    const cacheDirectory = join(root, provider.cacheDirectory);
+    const directory = join(cacheDirectory, validated.id);
     let details;
     try {
       details = await lstat(directory);
@@ -321,19 +278,28 @@ export async function deleteAccessionCaches(roots: readonly string[], accession:
       }
       throw error;
     }
-    if (!details.isDirectory()) {
+    if (!details.isDirectory() || details.isSymbolicLink()) {
       throw new Error(`Refusing to delete ${directory}: it is not a directory.`);
     }
     const [canonicalCache, canonicalDirectory] = await Promise.all([realpath(cacheDirectory), realpath(directory)]);
-    if (canonicalDirectory !== join(canonicalCache, accession)) {
-      throw new Error(`Refusing to delete ${directory}: it resolves outside its accession cache.`);
+    if (canonicalDirectory !== join(canonicalCache, validated.id)) {
+      throw new Error('Refusing to delete outside the provider cache.');
     }
-    if (seen.has(canonicalDirectory)) {
-      continue;
+    if (!seen.has(canonicalDirectory)) {
+      seen.add(canonicalDirectory);
+      const lock = join(canonicalCache, `.${validated.id}.lock`);
+      try {
+        await mkdir(lock);
+      } catch {
+        throw new Error('Another genome cache writer holds this entry. Retry after it finishes.');
+      }
+      try {
+        await rm(canonicalDirectory, {recursive: true});
+        deleted.push(canonicalDirectory);
+      } finally {
+        await rm(lock, {recursive: true, force: true});
+      }
     }
-    seen.add(canonicalDirectory);
-    await rm(canonicalDirectory, {recursive: true});
-    deleted.push(canonicalDirectory);
   }
   return deleted;
 }

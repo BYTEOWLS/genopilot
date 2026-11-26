@@ -101,7 +101,7 @@ export async function consensusSitesView(context: Context & {cohort: CohortResul
   if (backbone.accession) {
     const entries = await (context.readAccessions ?? readCatalogedAccessions)().catch(() => []);
     context.signal?.throwIfAborted();
-    const entry = entries.find(entry => entry.accession === backbone.accession && recordedCacheState(entry) === 'cached');
+    const entry = entries.find(entry => entry.source === 'ncbi' && entry.id === backbone.accession && recordedCacheState(entry) === 'cached');
     const copy = entry?.cached_copies.find(copy => copy.fasta_sha256 === backbone.sha256 && copy.gff3_sha256);
     if (copy?.gff3_sha256) {
       const file = join(copy.path, 'genomic.gff');

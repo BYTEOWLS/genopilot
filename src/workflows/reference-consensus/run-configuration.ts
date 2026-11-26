@@ -1,3 +1,4 @@
+import {ncbiMetadata} from '../../genome-sources/ncbi.js';
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
 import {basename, resolve} from 'node:path';
@@ -234,7 +235,7 @@ export async function inspectPreparedRun(
   if (backbone.source === 'ncbi') {
     // The catalog is optional bookkeeping: an unreadable one does not block a run.
     const cataloged = await readAccessions().catch(() => []);
-    backboneEntry = cataloged.find(entry => entry.accession === backbone.accession);
+    backboneEntry = cataloged.find(entry => entry.source === 'ncbi' && entry.id === backbone.accession);
     if (backboneEntry && recordedCacheState(backboneEntry) === 'conflict') {
       issues.push({path: '$.inputs.backbone.accession', message: conflictingCopiesMessage});
     }
@@ -296,7 +297,7 @@ function backboneSampleNames(prepared: PreparedReferenceConsensusRun, inspection
   if (backbone.source === 'local') {
     return [basename(backbone.fasta).replace(/\.(fa|fasta|fna)(\.gz)?$/i, '')];
   }
-  const strain = inspection.backboneEntry?.ncbi?.strain;
+  const strain = ncbiMetadata(inspection.backboneEntry?.metadata ?? null)?.strain;
   return strain ? [strain] : [];
 }
 

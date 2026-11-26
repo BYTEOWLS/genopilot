@@ -21,7 +21,7 @@ test('REST and cached reports preserve assembly dates, statistics and linked rec
     assert.equal(metadata.release_date, '2025-04-03');
     assert.equal(metadata.total_sequence_length, 1234567);
     assert.equal(metadata.gc_percent, 42.5);
-    const catalog = {...emptyAccessionCatalog(), accessions: [{accession, ncbi: metadata, cached_copies: []}]};
+    const catalog = {...emptyAccessionCatalog(), accessions: [{source: 'ncbi', id: accession, parameters: {}, metadata: metadata, cached_copies: []}]};
     assert.deepEqual(validateAccessionCatalog(parse(stringify(catalog))), catalog);
     const sections = metadataSections(metadata);
     assert.deepEqual(sections.map(section => section.id), ['assembly', 'statistics', 'records']);
@@ -59,7 +59,7 @@ test('invalid statistics are omitted from reports and rejected in persisted cata
   for (const field of ['total_sequence_length', 'gc_percent', 'number_of_contigs', 'contig_n50']) {
     assert.ok(!(field in metadata));
     assert.throws(() => validateAccessionCatalog({...emptyAccessionCatalog(), accessions: [
-      {accession, ncbi: {...metadata, [field]: -1}, cached_copies: []},
+      {source: 'ncbi', id: accession, parameters: {}, metadata: {...metadata, [field]: -1}, cached_copies: []},
     ]}));
   }
 });

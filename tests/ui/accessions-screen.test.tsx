@@ -1,3 +1,5 @@
+import {ncbiMetadata} from '../../src/genome-sources/ncbi.js';
+import type {NcbiAssemblyMetadata} from '../../src/genome-sources/ncbi-metadata.js';
 import assert from 'node:assert/strict';
 import {formatLocalDate} from '../../src/ui/utils.js';
 import {PassThrough, Writable} from 'node:stream';
@@ -10,7 +12,6 @@ import {
   validateAccessionCatalog,
   type AccessionCatalog,
   type AccessionEntry,
-  type NcbiAssemblyMetadata,
 } from '../../src/accessions/catalog.js';
 import type {MetadataFetchResult} from '../../src/accessions/ncbi-metadata.js';
 import type {AccessionCatalogMutation, LoadedAccessionCatalog} from '../../src/accessions/store.js';
@@ -94,12 +95,13 @@ function metadata(organism: string): NcbiAssemblyMetadata {
 }
 
 function entry(id: string, overrides: Partial<AccessionEntry> = {}): AccessionEntry {
-  return {accession: id, ncbi: null, cached_copies: [], ...overrides};
+  return {source: 'ncbi', id: id, parameters: {}, metadata: null, cached_copies: [], ...overrides};
 }
 
 function copy(id: string, root: string, state: ScannedCopy['state'], problem?: string): ScannedCopy {
   return {
-    accession: id,
+    source: 'ncbi', id: id, parameters: {},
+    metadata: null,
     root,
     path: `${root}/ncbi-accessions-cache/${id}`,
     state,
@@ -163,10 +165,11 @@ function renderScreen(
         fetches.push(id);
         return fetch(id);
       }}
-      deleteCaches={async (roots, id) => {
+      deleteCaches={async (roots, reference) => {
+        const id = reference.id;
         deletions.push({roots, accession: id});
         const deleted = await deleteCaches(roots, id);
-        currentCopies = currentCopies.filter(candidate => candidate.accession !== id);
+        currentCopies = currentCopies.filter(candidate => candidate.id !== id);
         return deleted;
       }}
       checkApiKeyConfigured={async () => false}
@@ -227,7 +230,7 @@ test('shows all metadata sections together without changing or submitting the en
   assert.equal(screen.writes, 0);
   await saveDetails(screen.input);
   await waitFor(() => screen.writes === 1, 'explicit save');
-  assert.deepEqual(screen.catalog.accessions[0]?.ncbi, facts);
+  assert.deepEqual(screen.catalog.accessions[0]?.metadata, facts);
 });
 
 test('records verified caches on open and shows damaged copies without trusting them', async context => {
@@ -240,7 +243,7 @@ test('records verified caches on open and shows damaged copies without trusting 
 
   await waitFor(() => screen.writes === 1, 'discovery to save');
   assert.deepEqual(screen.scans[0], ['/project/runs']);
-  assert.deepEqual(screen.catalog.accessions.map(candidate => candidate.accession), [accession]);
+  assert.deepEqual(screen.catalog.accessions.map(candidate => candidate.id), [accession]);
   const frame = await waitForOutput(screen.output, value => value.includes('genomic.fna does not match'));
   assert.match(frame, new RegExp(`${other}`));
 });
@@ -264,9 +267,9 @@ test('adds an accession with its looked-up metadata and without downloading anyt
   // The form stayed open on its own page and received the accession.
   assert.deepEqual(screen.fetches, [accession]);
   assert.deepEqual(screen.catalog.accessions[0], {
-    accession,
+    source: 'ncbi', id: accession, parameters: {},
     name: 'Backbone',
-    ncbi: metadata('Fetched organism'),
+    metadata: metadata('Fetched organism'),
     cached_copies: [],
   });
   assert.deepEqual(screen.deletions, []);
@@ -287,7 +290,7 @@ test('saves an accession without metadata when NCBI is unreachable', async conte
   await saveDetails(screen.input);
 
   await waitFor(() => screen.catalog.accessions.length === 1, 'the entry to be saved');
-  assert.equal(screen.catalog.accessions[0]?.ncbi, null);
+  assert.equal(screen.catalog.accessions[0]?.metadata, null);
 });
 
 test('does not add an accession NCBI does not know', async context => {
@@ -311,7 +314,7 @@ test('does not add an accession NCBI does not know', async context => {
 
 test('edits only the local name and keeps fetched facts', async context => {
   const screen = renderScreen(context, {
-    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'Old', ncbi: metadata('Kept organism')})]},
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'Old', metadata: metadata('Kept organism')})]},
   });
   await waitForOutput(screen.output, value => value.includes('Kept organism'));
 
@@ -321,19 +324,19 @@ test('edits only the local name and keeps fetched facts', async context => {
   await saveDetails(screen.input);
 
   await waitFor(() => screen.catalog.accessions[0]?.name === 'Old label', 'the edit to be saved');
-  assert.deepEqual(screen.catalog.accessions[0]?.ncbi, metadata('Kept organism'));
+  assert.deepEqual(screen.catalog.accessions[0]?.metadata, metadata('Kept organism'));
   assert.deepEqual(screen.fetches, []);
 });
 
 test('refreshes metadata independently of any assembly download', async context => {
   const screen = renderScreen(context, {
-    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {ncbi: metadata('Stale')})]},
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {metadata: metadata('Stale')})]},
   });
   await waitForOutput(screen.output, value => value.includes('Stale'));
 
   await press(screen.input, 'm');
 
-  await waitFor(() => screen.catalog.accessions[0]?.ncbi?.organism === 'Fetched organism', 'the refresh');
+  await waitFor(() => ncbiMetadata(screen.catalog.accessions[0]?.metadata)?.organism === 'Fetched organism', 'the refresh');
   assert.deepEqual(screen.deletions, []);
 });
 
@@ -342,7 +345,7 @@ test('removing a cached entry deletes its cache directories under every known ro
     catalog: {
       ...emptyAccessionCatalog(),
       output_roots: ['/analysis/other'],
-      accessions: [entry(accession, {ncbi: metadata('Organism')})],
+      accessions: [entry(accession, {metadata: metadata('Organism')})],
     },
     copies: [copy(accession, '/project/runs', 'verified'), copy(accession, '/analysis/other', 'incomplete', 'genomic.fna is missing')],
   });
@@ -410,7 +413,7 @@ test('returns with Escape from the tab bar but not from an open form', async con
 test('stays usable on a narrow terminal', async context => {
   const screen = renderScreen(context, {
     columns: 40,
-    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'A long researcher label', ncbi: metadata('Organism')})]},
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'A long researcher label', metadata: metadata('Organism')})]},
   });
 
   const frame = await waitForOutput(screen.output, value => value.includes('A long researcher'));
@@ -462,7 +465,7 @@ test('leaves ←/→ to the API-key cursor while a key is being typed', async co
 
 test('shows every cached and damaged copy when an entry is opened', async context => {
   const screen = renderScreen(context, {
-    catalog: {...emptyAccessionCatalog(), output_roots: ['/analysis/other'], accessions: [entry(accession, {ncbi: metadata('Organism')})]},
+    catalog: {...emptyAccessionCatalog(), output_roots: ['/analysis/other'], accessions: [entry(accession, {metadata: metadata('Organism')})]},
     copies: [
       copy(accession, '/project/runs', 'verified'),
       copy(accession, '/analysis/other', 'checksum-invalid', 'genomic.fna does not match its recorded checksum'),

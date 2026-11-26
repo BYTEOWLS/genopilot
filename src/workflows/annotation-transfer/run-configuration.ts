@@ -221,7 +221,7 @@ export async function validatePreparedRunPaths(
     const cataloged = await readAccessions().catch(() => []);
     for (const [path, input] of ncbiInputs) {
       const entry = input.source === 'ncbi'
-        ? cataloged.find(candidate => candidate.accession === input.accession)
+        ? cataloged.find(candidate => candidate.source === input.source && candidate.id === input.accession)
         : undefined;
       if (entry && recordedCacheState(entry) === 'conflict') {
         issues.push({path, message: conflictingCopiesMessage});

@@ -265,13 +265,13 @@ test('refuses an NCBI accession whose cataloged copies conflict', async context 
     ({path, verified_at: '2026-01-01T00:00:00.000Z', fasta_sha256: checksum.repeat(64)});
   const catalog = async () => [
     {
-      accession: 'GCF_000149205.2',
-      ncbi: null,
+      source: 'ncbi', id: 'GCF_000149205.2', parameters: {},
+      metadata: null,
       cached_copies: [copy('/a/GCF_000149205.2', 'a'), copy('/b/GCF_000149205.2', 'b')],
     },
     {
-      accession: 'GCA_000011425.1',
-      ncbi: null,
+      source: 'ncbi', id: 'GCA_000011425.1', parameters: {},
+      metadata: null,
       cached_copies: [copy('/a/GCA_000011425.1', 'c'), copy('/b/GCA_000011425.1', 'c')],
     },
   ];

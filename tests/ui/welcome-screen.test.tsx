@@ -488,7 +488,7 @@ test('opens the accession manager by command ID and returns to the menu', async 
     commands: accessionsOnlyCommands,
     loadAccessions: async () => {
       loads += 1;
-      return {catalog: {schema_version: 1, output_roots: [], accessions: []}, revision: undefined};
+      return {catalog: {schema_version: 2, output_roots: [], accessions: []}, revision: undefined};
     },
     updateAccessions: async () => {
       throw new Error('unexpected');
@@ -724,7 +724,7 @@ test('types h into the NCBI key instead of returning home', async context => {
     commands: accessionsOnlyCommands,
     loadAccessions: async () => {
       accessionLoads += 1;
-      return {catalog: {schema_version: 1, output_roots: [], accessions: []}, revision: undefined};
+      return {catalog: {schema_version: 2, output_roots: [], accessions: []}, revision: undefined};
     },
     scanAccessionCaches: async () => ({scannedAt: '', cacheDirectories: [], copies: [], ignored: [], rootProblems: []}),
     checkNcbiApiKeyConfigured: async () => {

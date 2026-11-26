@@ -1,46 +1,71 @@
-# Genome sources: NCBI and VEuPathDB
+# Catalog-first genome sources
 
 ## Outcome
 
-Researchers can catalog, cache, and use a genome from NCBI or from any VEuPathDB site (FungiDB, ToxoDB, …) wherever a workflow accepts an NCBI accession today. Each source is a separate implementation behind one interface; shared code never names a source.
+After normal setup, a researcher can enter a genome identifier, download its files from the catalog, and inspect them before creating an analysis run. A later workflow can reuse the verified files.
 
 ## Scope and contract
 
-### Sources
+- A registered provider must resolve an exact identifier and download the pinned genome. Remote metadata lookup, search by query, and browse without a query are independent optional methods. The catalog offers only the methods implemented; listing saved entries is always available.
+- The catalog owns identity `(source, id)`, labels, descriptions, and verified cache locations. Each provider validates its own `parameters` mapping and optional metadata. Parameters describe how to request the exact genome; they never contain credentials. Saved workflow inputs snapshot the identity and parameters rather than depending on the current catalog. Breaking changes are expected in this alpha. Do not implement migrations for old catalogs or saved workflow configurations; reject incompatible files without overwriting them.
+- NCBI accepts a versioned assembly accession and supports metadata lookup. Use the Datasets REST API from TypeScript; search and browse are not required. Replace the Datasets CLI dependency, not the normal setup flow.
+- VEuPathDB owns site selection, release, organism identifier, authentication, and REST requests. Validate parameters against the canonical ID. Verify search support and release coverage before exposing search; never substitute a current release for an unavailable one.
+- Catalog downloads and direct Snakemake runs use the same packaged TypeScript download implementation. The resolver retains local inputs and role-specific file requirements. Record provider provenance and checksums; publish only verified files. A failed or cancelled refresh leaves the previous verified copy usable.
 
-| | NCBI | VEuPathDB |
-|---|---|---|
-| Identifier | versioned assembly accession, `GCF_000149205.2` | the site's file prefix `<Site>-<release>_<Abbrev>`, `FungiDB-71_AnidulansFGSCA4` |
-| Download | NCBI Datasets CLI | `https://<host>/a/service/raw-files/release-<N>/<Abbrev>/{fasta,gff}/data/<id>{_Genome.fasta,.gff}` |
-| Metadata | Datasets v2 REST assembly report | WDK `organism` record |
-| API key | optional, `NCBI_API_KEY` | required, `VEUPATHDB_API_KEY`, sent as `Authorization: Bearer` |
-| Cache folder | `ncbi-accessions-cache` | `veupathdb-cache` |
+### Provider setup
 
-- A VEuPathDB identifier pins the release; the same organism in another release is another genome. A release the site no longer offers fails clearly and never falls back to the current one.
-- Supported VEuPathDB sites are one fixed table of site prefix and host. Identifiers use only letters, digits, `-`, and `_`, so they are safe directory names on every OS; an organism abbreviation outside `[A-Za-z0-9]` is rejected, not rewritten.
-- Whole-genome FASTA and GFF only; no per-chromosome download.
+Manage Tools gains an **Accession Providers** tab alongside its existing tooling view. Build the list at runtime by iterating the provider registry. Each row takes its ID, label, short description, fields, and configuration status from the registered definition and its settings. Catalog selectors and downloader dispatch use the same registry; no screen or dispatcher keeps its own provider list. For packaged providers, explicit registration at startup is sufficient: adding a provider changes its module and the registration point, not shared tooling, catalog, or form code. Configuration is separate from runtime setup: a missing provider key must not make the toolchain appear broken.
 
-### Shared contract
+Providers declare their setup fields, following the declarative approach of `manifest.parameters.yaml`, not its workflow-specific schema. For this release a field needs only `id`, `label`, `kind: secret`, and `required`. Shared code renders the list and masked edit form, validates required fields, and stores secrets by provider and field ID. A provider with no fields needs no form. Site, release, and organism belong to genome selection, not credential setup.
 
-- **Interface** (`src/genome-sources/`): a source has an id, label, cache folder name, API-key env var and whether the key is required, identifier validation, metadata validation, fetch, and summary, and a reader for the report cached with a download. One registry lists the implementations; shared code iterates it.
-- **Catalog entry**: `{id, source, name?, description?, metadata, cached_copies}`. Shared code validates the envelope; the source validates `metadata`. Replaces the `ncbi` field; `schema_version` stays `1` (unreleased, no migration).
-- **Workflow input**: `{source: local | <source id>, accession, cache_mode: reuse | refresh}`; `ncbi_cache_mode` becomes `cache_mode`.
-- **Cache**: `<output_root>/<cache folder>/<id>/` holding `genomic.fna`, `genomic.gff`, `checksums.json`, and the source's own report. Discovery, verification, and deletion are shared.
-- **API keys**: one owner-only file per source (directory `0700`, file `0600`), set, replaced, and cleared on the API-key tab of Manage accessions, never shown in full. Execution passes each stored key in its env var; a missing required key fails application validation.
-- **Resolver**: `resolve_input.py` keeps local inputs, caching, checksums, and provenance, and dispatches downloads to one module per source. VEuPathDB uses the standard library and reads the key from the environment only, never from arguments or logs. Provenance records the source, identifier, and source-specific facts (Datasets CLI version; site, release, and file URLs).
+- NCBI declares an optional API key: show a nonblocking notice if absent. VEuPathDB declares a required key: show an error and block operations that need remote access until configured. Listing saved entries and inspecting verified local copies remain available. A stored key means **configured**, not verified by the service.
+- Both catalog notices offer **Configure provider**, opening the matching provider in Manage Tools. Returning restores the catalog selection and rechecks status; never automatically repeat a download.
+- Replace the catalog's API-key tab rather than leaving two editors. Use the shared `TabBar`, selectable list, and `EditPage` in `src/ui/tooling-screen/`; reuse the masked input behavior of `src/ui/accessions-screen/api-key-tab.tsx` and the owner-only storage in `src/tooling/ncbi-api-key.ts`. Support set, replace, and explicit clear; never prefill or reveal a stored key. Providers own request authentication, not rendering or storage.
 
-### Implementation order
+### Implementation handoff (in delivery order)
 
-- [ ] Move NCBI behind the interface without changing behavior; existing tests pass.
-- [ ] Generalize the catalog envelope, `cache_mode`, the key store, cache discovery, and the resolver dispatch.
-- [ ] Add the VEuPathDB implementation in TypeScript and Python, its key row, and its documentation.
-- [ ] Verify with a real VEuPathDB key: a current and an older release, a rerun that reuses the cache, and a missing key.
+Treat the steps as the order of work for one full accession refactor, not independently shippable compatibility layers. Refactor or replace the existing accession code and its callers wherever needed. Do not retain old types, UI flows, or adapters just to keep an intermediate step compatible. The finished branch is judged against the release acceptance criteria.
+
+1. **Catalog and provider boundary.** Start with `src/accessions/catalog.ts`, `store.ts`, and `cache-discovery.ts`. Keep the locked catalog store. Introduce `src/genome-sources/` with one registry and separate provider modules. Shared operations receive a reference `{source, id, parameters}`; treat loaded parameters as `unknown` until the provider validates them. Extend the reference with `{name?, description?, metadata, cached_copies}` in the catalog. Bump the catalog schema and use the pair for lookup, update, discovery, and deletion. Test two providers with the same ID in `tests/accessions/` before changing the UI.
+2. **Provider methods.** `resolveExact` returns a canonical reference; `download` takes that reference, requested file kinds, a staging directory, and an abort signal. It writes files and returns source facts, not catalog mutations. Optional `lookupMetadata`, `search`, and `browse` are detected by method presence. Search and browse return selectable references and display summaries, not downloads. NCBI parameters can be `{}`; a VEuPathDB reference such as `FungiDB-71_AnidulansFGSCA4` carries `{site: FungiDB, release: 71, organism_abbreviation: AnidulansFGSCA4}`. Keep site selection and identifier parsing inside that provider.
+3. **NCBI vertical slice.** Reuse `src/accessions/ncbi-metadata.ts` for exact lookup. Verify the genome package request and archive members against the [Datasets REST API](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/rest-api/). Stream to staging; select only the requested accession's FASTA, requested GFF3, and report. Reject missing or ambiguous matches. Preserve `genomic.fna`, optional `genomic.gff`, and `checksums.json` (`fasta`, optional `gff3`, SHA-256) under `<output-root>/<provider-cache-dir>/<id>/`. Preserve `ncbi-accessions-cache` for NCBI. The shared cache writer verifies before replacing; cancellation, disk errors, or concurrent writers must not expose a partial entry. Test with a small synthetic archive and injected HTTP responses.
+4. **Catalog action.** Extend `src/ui/accessions-screen/` and reuse `src/accessions/views.ts` for opening verified files. Select the provider, enter the ID (or select a result if supported), and download to the default `runs` root unless the researcher chooses another known output root. If the source has no GFF3, keep the verified FASTA and show that annotation is unavailable. It remains usable as an annotation-transfer target; only roles requiring GFF3 are blocked. Do not treat a failed GFF3 request as proof that no annotation exists. On success rescan and select the verified entry; on failure retain the record and allow retry. Generalize `src/tooling/ncbi-api-key.ts` per provider; keep secrets out of parameters, process arguments, URLs, and errors.
+5. **Workflow handoff.** In both workflow configuration modules, save the remote reference plus `cache_mode: reuse | refresh`; leave local file inputs alone. When reusing a verified catalog copy outside the run's output root, snapshot its location as well, then recheck the required checksums at resolution. In `scripts/build.mjs` bundle a non-interactive Node entry point under `dist/` that calls the same provider/cache code. `workflows/shared/scripts/resolve_input.py` locates it relative to the packaged script, not the working directory. Pass a nonsecret request (reference, file kinds, root, mode) on stdin; return verified paths, digests, provider facts, and `downloaded` on stdout. Errors go to stderr with a nonzero exit. The Python resolver copies files and writes per-file provenance; verified reuse remains `imported`, `downloaded: false`. Update `resolve_inputs.smk`, `resolve_backbone.smk`, and `collect_run_provenance.py`; remove the Datasets CLI environment, version probes, and citation/tool rows once the REST path passes. Test the packed entry point from an unrelated working directory, not only via the TypeScript dev runner.
+6. **VEuPathDB evidence before implementation.** Verify the site-to-host table, authenticated whole-genome file routes, and whether organism lookup/search identifies the requested release. Check one current and one older release with a real key. Record confirmed routes and sanitized response shapes in the provider tests; never store a key or raw genome fixture. If search covers only current releases, label that scope; if unsupported, omit the method. Exercise missing credentials and an unavailable pinned release separately from network failures.
+
+## Implementation progress
+
+- [x] Step 1: provider/ID catalog identity, schema rejection, locked store, source-scoped discovery and deletion; same-ID provider tests passed before UI callers changed.
+- [ ] Step 2: required/optional method contract and NCBI implementation exist; VEuPathDB parameter validation remains pending its evidence step.
+- [x] Step 3: streamed NCBI REST packages, exact-member selection, CRC/file/SHA-256 checks, staged publication, refresh rollback, cancellation, concurrent-writer exclusion, and offline/cross-root reuse tests. The live REST route and archive layout were checked; see `src/genome-sources/README.md` for evidence and current ZIP64/lock limitations.
+- [ ] Step 4: catalog download action, registry-driven selector, generalized credentials, and Manage Tools provider setup. Existing screens only consume the new catalog identity; they still expose the old NCBI-only actions/key editor.
+- [ ] Step 5: saved remote references, packaged downloader entry point, Python/Snakemake handoff, removal of the Datasets CLI, and workflow documentation/citations. Current workflow downloads do not yet produce the new provider cache record. Review finding 4 belongs here: protect the interval from verification through copying into the run, including cross-root reuse; returning paths after an unlocked verification is insufficient. Add deterministic reader/refresh/deletion race tests at that consumer boundary.
+- [ ] Step 6: authenticated VEuPathDB evidence and implementation. No real key was available for current/older-release checks; no unverified routes or search method are exposed.
+
+Review fixes 2 and 3: reuse verifies required files only and omits unverified annotation paths/digests; catalog discovery still verifies every recorded file. Empty FASTA records are rejected at every position before publication, preserving the previous copy on failure.
+
+Verification for this slice: `pnpm test` (672 passing), `pnpm typecheck`, `pnpm build`, `pnpm pack:local`, and `git diff --check` passed. No workflow assets changed, and browser tests remain parked.
+
+The release acceptance criteria below remain open; this is an unfinished refactor, not a release-ready download path.
+
+## New-session handoff
+
+Read this file, the release README, repository instructions, and `src/genome-sources/README.md` first. Continue on the current feature branch, starting with step 4; retain the delivery order above. Step 2's VEuPathDB-specific work waits for step 6's evidence, not a speculative implementation.
+
+- The foundation is implemented, not the release outcome. `registry.ts` registers only NCBI. `provider.ts` owns the contract; `cache.ts` owns staged downloads and required-file reuse; `cache-discovery.ts` uses provider/ID identity and requires `genome.json`.
+- No migration or backward compatibility is wanted. The researcher cleared `runs/` and the accession catalog. The Python resolver's missing provider cache record is unfinished step 5 work for new runs, not a legacy-data problem.
+- Step 4 must replace the NCBI-only catalog/key flow, not wrap it in compatibility adapters. Inspect comparable screens and shared components before changing UI. Add registry-driven provider setup and selection, generalized secret storage, exact-ID download, and verified inspection. Required credentials block remote operations only.
+- Step 5 must wire both workflows to the same packaged downloader, snapshot remote references and cross-root copies, and test the packed entry point from an unrelated directory. Keep the existing CLI path explicitly unfinished until replaced; then remove its environment, probes, and citation/tool rows together.
+- Review findings 2 and 3 are fixed and covered in `tests/accessions/cache-requirements.test.ts`: required-file-only reuse does not expose unverified GFF3; empty FASTA records cannot be published. Finding 4 remains open: coordinate refresh/deletion with verification **through consumption/copying**, not merely while hashing. Design that protection at the Node/Python copy boundary and test races without timing-dependent sleeps.
+- VEuPathDB needs a real key and confirmed current/older-release routes before implementation. No key was available in this session. Never commit a key or raw downloaded genome; omit unverified search capabilities. ZIP64 packages currently fail explicitly; interrupted writer locks require manual inspection.
+- Preserve unrelated edits, including the root README acknowledgement left out of this foundation commit. Do not resume or run parked browser tests. Before the next commit, update progress, acceptance checkboxes, and affected documentation; run all repository verification commands, including Python tests after workflow asset changes. Do not mark this release delivered while any acceptance criterion remains open.
 
 ## Acceptance criteria
 
-- [ ] `FungiDB-71_AnidulansFGSCA4` works as annotation-transfer reference and target and as reference-consensus backbone; NCBI inputs behave as before.
-- [ ] A rerun reuses a verified VEuPathDB cache entry; `refresh` downloads again.
-- [ ] Manage accessions catalogs, discovers, and deletes genomes of both sources.
-- [ ] Without a stored VEuPathDB key, a configuration with a VEuPathDB input fails validation before the run starts.
-- [ ] No API key appears in a command, log, provenance file, or error message.
-- [ ] Workflow READMEs, `citation/`, `docs/`, and `CHANGELOG.md` describe both sources; `docs/` and shared code name no source.
+- [ ] Manage Tools lists every registered provider. Inject a third test provider and verify it appears in the tooling list and catalog selector and uses its declared setup fields without changing either screen. With no keys, NCBI remote actions remain available and VEuPathDB remote actions are blocked. Follow the catalog shortcut, save or clear a masked key, and return to the same selection with updated status. Clearing a key never removes cached files.
+- [ ] Starting with an empty cache, download and open a genome from each provider without creating an analysis run.
+- [ ] A provider without search or browse still supports exact-ID download; both sources' saved entries remain selectable. Updating or deleting an entry never affects another source with the same ID.
+- [ ] Direct Snakemake can reuse a catalog download without network access or download on a cache miss without the TUI or the Datasets CLI. It resolves the downloader independently of the caller's working directory.
+- [ ] Verify a pinned VEuPathDB release and an unavailable release. Authentication failures disclose no key; a failed or cancelled download is not offered as verified.
+- [ ] No packaged workflow, environment, or version check installs or invokes the NCBI Datasets CLI. Both catalog and workflow downloads use the REST implementation.
+- [ ] Update catalog help, affected workflow documentation and citations, and the changelog for delivered behavior.

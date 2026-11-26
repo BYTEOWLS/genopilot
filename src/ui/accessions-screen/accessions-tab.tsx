@@ -1,3 +1,4 @@
+import {referenceKey, sameReference, type GenomeReference} from '../../genome-sources/provider.js';
 import React, {useEffect, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import type {AccessionCacheDeleter, CacheScan, ScannedCopy} from '../../accessions/cache-discovery.js';
@@ -24,8 +25,8 @@ import {browserUnavailableShortcut, browserViewShortcut} from '../../browser/con
 
 type View =
   | {kind: 'list'}
-  | {kind: 'form'; editing?: string}
-  | {kind: 'confirm-remove'; accession: string};
+  | {kind: 'form'; editing?: GenomeReference}
+  | {kind: 'confirm-remove'; reference: GenomeReference};
 
 /** Lines of the accession list, including its position line. */
 const listHeight = 9;
@@ -34,13 +35,13 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function unverifiedCopies(scan: CacheScan, accession: string): ScannedCopy[] {
-  return scan.copies.filter(copy => copy.accession === accession && copy.state !== 'verified');
+function unverifiedCopies(scan: CacheScan, reference: GenomeReference): ScannedCopy[] {
+  return scan.copies.filter(copy => sameReference(copy, reference) && copy.state !== 'verified');
 }
 
 /** A short cache status; conflicts and damage come first so truncation never hides them. */
 function cacheStatus(entry: AccessionEntry, scan: CacheScan): string {
-  const damaged = unverifiedCopies(scan, entry.accession).length;
+  const damaged = unverifiedCopies(scan, entry).length;
   const damage = damaged === 0 ? '' : `${String(damaged)} damaged`;
   switch (recordedCacheState(entry)) {
     case 'conflict':
@@ -92,7 +93,7 @@ export function AccessionsTab({
 }): React.JSX.Element {
   const entries = loaded.catalog.accessions;
   const [view, setView] = useState<View>({kind: 'list'});
-  const [selected, setSelected] = useState<string | undefined>(entries[0]?.accession);
+  const [selected, setSelected] = useState<string | undefined>(entries[0] ? referenceKey(entries[0]) : undefined);
   const [message, setMessage] = useState<{text: string; error: boolean}>();
   const [operationBusy, setBusy] = useState<string>();
   const genome = useGenomeSession(JSON.stringify([inputActive, view.kind]));
@@ -101,7 +102,7 @@ export function AccessionsTab({
   const locked = view.kind !== 'list' || busy !== undefined;
   useEffect(() => onLockChange(locked), [locked, onLockChange]);
 
-  const selectedEntry = entries.find(entry => entry.accession === selected) ?? entries[0];
+  const selectedEntry = entries.find(entry => referenceKey(entry) === selected) ?? entries[0];
   const canView = !!browser?.browserAvailable && !verifying && !!selectedEntry && recordedCacheState(selectedEntry) === 'cached' &&
     scan.copies.some(copy => copy.state === 'verified' && copy.path === selectedEntry.cached_copies[0]?.path);
   const openGenome = (entry: AccessionEntry): void => {
@@ -113,34 +114,39 @@ export function AccessionsTab({
   };
 
   const refreshMetadata = (entry: AccessionEntry): void => {
-    setBusy(`Looking up NCBI metadata for ${entry.accession}…`);
+    if (entry.source !== 'ncbi') {
+      setMessage({text: 'Metadata lookup is unavailable for this provider.', error: true});
+      return;
+    }
+    setBusy(`Looking up NCBI metadata for ${entry.id}…`);
     setMessage(undefined);
-    fetchMetadata(entry.accession)
+    fetchMetadata(entry.id)
       .then(async result => {
         if (result.state === 'failed') {
           setMessage({text: `Metadata not refreshed: ${result.message}`, error: true});
           return;
         }
         const next = await updateCatalog(loaded.revision, latest => {
-          const current = latest.accessions.find(candidate => candidate.accession === entry.accession);
-          return current ? withAccession(latest, {...current, ncbi: result.metadata}) : latest;
+          const current = latest.accessions.find(candidate => sameReference(candidate, entry));
+          return current ? withAccession(latest, {...current, metadata: result.metadata}) : latest;
         });
         onCatalogChange(next);
-        setMessage({text: `Refreshed NCBI metadata for ${entry.accession}.`, error: false});
+        setMessage({text: `Refreshed NCBI metadata for ${entry.id}.`, error: false});
       })
       .catch(error => setMessage({text: errorMessage(error), error: true}))
       .finally(() => setBusy(undefined));
   };
 
-  const remove = (accession: string): void => {
+  const remove = (reference: GenomeReference): void => {
+    const accession = reference.id;
     setBusy(`Removing ${accession}…`);
     // Delete the cached files first: if that fails, the record stays and the researcher can see
     // what is still on disk instead of an orphaned cache that discovery would re-add.
-    deleteCaches(roots, accession)
+    deleteCaches(roots, reference)
       .then(async deleted => {
         const next = await updateCatalog(loaded.revision, latest => ({
           ...latest,
-          accessions: latest.accessions.filter(candidate => candidate.accession !== accession),
+          accessions: latest.accessions.filter(candidate => !sameReference(candidate, reference)),
         }));
         onCatalogChange(next);
         setSelected(undefined);
@@ -170,7 +176,7 @@ export function AccessionsTab({
       genome.clearError();
       if (view.kind === 'confirm-remove') {
         if (input.toLowerCase() === 'y') {
-          remove(view.accession);
+          remove(view.reference);
         } else if (input.toLowerCase() === 'n' || key.escape) {
           setView({kind: 'list'});
         }
@@ -197,34 +203,34 @@ export function AccessionsTab({
         openGenome(selectedEntry);
       } else if (key.return) {
         setMessage(undefined);
-        setView({kind: 'form', editing: selectedEntry.accession});
+        setView({kind: 'form', editing: selectedEntry});
       } else if (input === 'm') {
         refreshMetadata(selectedEntry);
       } else if (input === 'd') {
         setMessage(undefined);
-        setView({kind: 'confirm-remove', accession: selectedEntry.accession});
+        setView({kind: 'confirm-remove', reference: selectedEntry});
       }
     },
     {isActive: inputActive},
   );
 
   if (view.kind === 'form') {
-    const editing = entries.find(entry => entry.accession === view.editing);
+    const editing = entries.find(entry => view.editing !== undefined && sameReference(entry, view.editing));
     return (
       <AccessionForm
         catalog={loaded.catalog}
         editing={editing}
         fetchMetadata={fetchMetadata}
-        unverifiedCopies={editing ? unverifiedCopies(scan, editing.accession) : []}
+        unverifiedCopies={editing ? unverifiedCopies(scan, editing) : []}
         inputActive={inputActive}
         onCancel={() => setView({kind: 'list'})}
         onSubmit={async entry => {
           const next = await updateCatalog(loaded.revision, latest => editing
-            ? withLocalFields(latest, entry.accession, localFields(entry.name ?? '', entry.description ?? ''))
+            ? withLocalFields(latest, entry, localFields(entry.name ?? '', entry.description ?? ''))
             : withAccession(latest, entry));
           onCatalogChange(next);
-          setSelected(entry.accession);
-          setMessage({text: `Saved ${entry.accession}.`, error: false});
+          setSelected(referenceKey(entry));
+          setMessage({text: `Saved ${entry.id}.`, error: false});
           setView({kind: 'list'});
         }}
       />
@@ -234,7 +240,7 @@ export function AccessionsTab({
   const selectedIndex = selectedEntry ? entries.indexOf(selectedEntry) : -1;
   const damagedCopies = scan.copies.filter(copy => copy.state !== 'verified');
   const removalTargets = view.kind === 'confirm-remove'
-    ? scan.copies.filter(copy => copy.accession === view.accession)
+    ? scan.copies.filter(copy => sameReference(copy, view.reference))
     : [];
 
   let browserShortcut = '';
@@ -261,7 +267,7 @@ export function AccessionsTab({
         count={entries.length}
         selectedIndex={selectedIndex}
         onSelect={index => {
-          setSelected(entries[index]?.accession);
+          setSelected(entries[index] ? referenceKey(entries[index]) : undefined);
           setMessage(undefined);
         }}
         active={inputActive && busy === undefined && view.kind === 'list'}
@@ -273,7 +279,7 @@ export function AccessionsTab({
             <Text color={isSelected ? 'cyan' : undefined} wrap="truncate">
               {isSelected ? '› ' : '  '}
               {sanitizeTerminalText(accessionDisplayName(entry))}
-              {entry.name ? <Text color={mutedColor}> ({entry.accession})</Text> : null}
+              {entry.name ? <Text color={mutedColor}> ({entry.id})</Text> : null}
               {' · '}{cacheStatus(entry, scan)}
               {' · '}{sanitizeTerminalText(accessionFactsSummary(entry))}
             </Text>
@@ -304,7 +310,7 @@ export function AccessionsTab({
       {view.kind === 'confirm-remove' ? (
         <Box marginTop={1} flexDirection="column">
           <Text color="yellow" wrap="wrap">
-            Remove {sanitizeTerminalText(view.accession)} from the catalog?
+            Remove {sanitizeTerminalText(view.reference.id)} from the catalog?
           </Text>
           {removalTargets.length === 0 ? (
             <Text wrap="wrap">No cached files exist for it under the known output roots.</Text>

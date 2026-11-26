@@ -50,9 +50,9 @@ async function waitForFrame(output: TestOutput, predicate: (frame: string) => bo
 }
 function entry(accession: string, name: string, overrides: Partial<AccessionEntry> = {}): AccessionEntry {
   return {
-    accession,
+    source: 'ncbi', id: accession, parameters: {},
     name,
-    ncbi: {
+    metadata: {
       organism: 'Synthetic organism',
       retrieved_at: '2026-01-01T00:00:00.000Z',
       source: 'datasets-v2-rest',

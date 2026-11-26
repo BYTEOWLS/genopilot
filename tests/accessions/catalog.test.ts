@@ -1,3 +1,4 @@
+import {ncbiMetadata} from '../../src/genome-sources/ncbi.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -15,7 +16,7 @@ const fastaA = 'a'.repeat(64);
 const fastaB = 'b'.repeat(64);
 
 function entry(accession: string, overrides: Partial<AccessionEntry> = {}): AccessionEntry {
-  return {accession, ncbi: null, cached_copies: [], ...overrides};
+  return {source: 'ncbi', id: accession, parameters: {}, metadata: null, cached_copies: [], ...overrides};
 }
 
 function catalogWith(...accessions: AccessionEntry[]): AccessionCatalog {
@@ -34,13 +35,15 @@ function issuesFor(value: unknown): {path: string; message: string}[] {
 
 test('accepts metadata without a strain and an uncached entry', () => {
   const catalog = parseAccessionCatalog(`
-schema_version: 1
+schema_version: 2
 output_roots: [/analysis/genopilot]
 accessions:
-  - accession: GCF_000149205.2
+  - source: ncbi
+    id: GCF_000149205.2
+    parameters: {}
     name: Backbone
     description: Local note
-    ncbi:
+    metadata:
       organism: Example organism
       tax_id: 42
       assembly_name: Example assembly
@@ -52,7 +55,7 @@ accessions:
     cached_copies: []
 `);
 
-  assert.equal(catalog.accessions[0]?.ncbi?.strain, undefined);
+  assert.equal(ncbiMetadata(catalog.accessions[0]?.metadata)?.strain, undefined);
   assert.equal(recordedCacheState(catalog.accessions[0]!), 'not-cached');
 });
 
@@ -61,9 +64,9 @@ test('rejects unversioned accessions, unknown fields, and malformed copies', () 
     ...emptyAccessionCatalog(),
     output_roots: ['relative/root'],
     accessions: [
-      {accession: 'GCF_000149205', ncbi: null, cached_copies: [], extra: true},
+      {source: 'ncbi', id: 'GCF_000149205', parameters: {}, metadata: null, cached_copies: [], extra: true},
       entry('GCF_000149205.2', {
-        ncbi: {organism: ' padded ', retrieved_at: 'yesterday', source: 'guess'} as never,
+        metadata: {organism: ' padded ', retrieved_at: 'yesterday', source: 'guess'} as never,
         cached_copies: [{path: '/cache/GCF_000000001.1', verified_at: '2026-01-01T12:00:00Z', fasta_sha256: 'x'}],
       }),
     ],
@@ -71,11 +74,13 @@ test('rejects unversioned accessions, unknown fields, and malformed copies', () 
   const paths = issues.map(issue => issue.path);
 
   assert.ok(paths.includes('$.output_roots[0]'));
-  assert.ok(paths.includes('$.accessions[0].accession'));
+  assert.ok(paths.includes('$.accessions[0]'));
   assert.ok(paths.includes('$.accessions[0].extra'));
-  assert.ok(paths.includes('$.accessions[1].ncbi.organism'));
-  assert.ok(paths.includes('$.accessions[1].ncbi.retrieved_at'));
-  assert.ok(paths.includes('$.accessions[1].ncbi.source'));
+  assert.ok(paths.includes('$.accessions[1].metadata'));
+  const metadataProblem = issues.find(issue => issue.path === '$.accessions[1].metadata')!.message;
+  assert.match(metadataProblem, /organism/);
+  assert.match(metadataProblem, /retrieved_at/);
+  assert.match(metadataProblem, /source/);
   assert.ok(paths.includes('$.accessions[1].cached_copies[0].path'));
   assert.ok(paths.includes('$.accessions[1].cached_copies[0].fasta_sha256'));
 });
@@ -93,7 +98,7 @@ test('rejects repeated accessions, roots, and copy paths', () => {
 
   assert.deepEqual(issues.map(issue => issue.path).sort(), [
     '$.accessions[0].cached_copies[1].path',
-    '$.accessions[1].accession',
+    '$.accessions[1].id',
     '$.output_roots[1]',
   ]);
 });

@@ -180,8 +180,8 @@ test('refuses a backbone accession whose cataloged copies conflict', async conte
   });
   const copy = (path: string, sha: string) => ({path, verified_at: now.toISOString(), fasta_sha256: sha});
   const conflicting: AccessionEntry = {
-    accession: 'GCF_000149205.2',
-    ncbi: null,
+    source: 'ncbi', id: 'GCF_000149205.2', parameters: {},
+    metadata: null,
     cached_copies: [copy('/one', 'a'.repeat(64)), copy('/two', 'b'.repeat(64))],
   };
   await assert.rejects(
@@ -191,7 +191,7 @@ test('refuses a backbone accession whose cataloged copies conflict', async conte
   const inspection = await inspectPreparedRun(prepared, {
     readAccessions: async () => [{...conflicting, cached_copies: [copy('/one', 'a'.repeat(64))]}],
   });
-  assert.equal(inspection.backboneEntry?.accession, 'GCF_000149205.2');
+  assert.equal(inspection.backboneEntry?.id, 'GCF_000149205.2');
 });
 
 test('warns about linked read files, a possible backbone sample, and mixed trimming', async context => {
@@ -205,8 +205,8 @@ test('warns about linked read files, a possible backbone sample, and mixed trimm
   await link(catalog.isolates[0]!.read_sets[0]!.read_pairs[0]!.r1, b.r2);
   catalog.isolates[0]!.read_sets[0]!.read_pairs[1]!.trimmed = true;
   const strain: AccessionEntry = {
-    accession: 'GCF_000149205.2',
-    ncbi: {organism: 'Example organism', strain: 'ISOLATE-B', retrieved_at: now.toISOString(), source: 'datasets-v2-rest'},
+    source: 'ncbi', id: 'GCF_000149205.2', parameters: {},
+    metadata: {organism: 'Example organism', strain: 'ISOLATE-B', retrieved_at: now.toISOString(), source: 'datasets-v2-rest'},
     cached_copies: [],
   };
   const prepared = buildReferenceConsensusRun(
@@ -281,8 +281,8 @@ test('does not take an isolate named after the backbone strain for the backbone 
   catalog.isolates[0]!.name = 'FGSC A4 mutant';
   catalog.isolates[1]!.name = 'fgsc-a4';
   const strain: AccessionEntry = {
-    accession: 'GCF_000149205.2',
-    ncbi: {organism: 'Example organism', strain: 'FGSC A4', retrieved_at: now.toISOString(), source: 'datasets-v2-rest'},
+    source: 'ncbi', id: 'GCF_000149205.2', parameters: {},
+    metadata: {organism: 'Example organism', strain: 'FGSC A4', retrieved_at: now.toISOString(), source: 'datasets-v2-rest'},
     cached_copies: [],
   };
   const prepared = buildReferenceConsensusRun(

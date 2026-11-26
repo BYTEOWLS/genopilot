@@ -28,7 +28,7 @@ function useAccessionChoices(loadAccessions: AccessionCatalogReader): AccessionC
     loadAccessions().then(
       entries => {
         if (active) {
-          setChoices({state: 'ready', entries});
+          setChoices({state: 'ready', entries: entries.filter(entry => entry.source === 'ncbi')});
         }
       },
       error => {
@@ -96,7 +96,7 @@ export function accessionHint(value: string, choices: AccessionChoices): Accessi
         : `${String(choices.entries.length)} cataloged — press Enter to choose`,
     };
   }
-  const entry = choices.entries.find(candidate => candidate.accession === accession);
+  const entry = choices.entries.find(candidate => candidate.source === 'ncbi' && candidate.id === accession);
   if (!entry) {
     return {kind: 'uncataloged', text: 'Valid; not in the accession catalog'};
   }
@@ -189,7 +189,7 @@ export function AccessionField({
 function ConflictExplanation({entry}: {entry: AccessionEntry}): React.JSX.Element {
   return (
     <Box marginTop={1} flexDirection="column">
-      <Alert variant="warning" title={`${sanitizeTerminalText(entry.accession)} cannot be used: its cached copies conflict`}>
+      <Alert variant="warning" title={`${sanitizeTerminalText(entry.id)} cannot be used: its cached copies conflict`}>
         A versioned accession always names the same assembly files, so every cached copy of it must
         have identical checksums. These copies differ, so at least one was damaged or changed after
         it was downloaded, and GenoPilot cannot tell which one is right. Remove the entry under
@@ -230,7 +230,7 @@ export function AccessionPicker({
   const [selectedIndex, setSelectedIndex] = useState(0);
   // Preselect the current value once the catalog has loaded.
   useEffect(() => {
-    setSelectedIndex(Math.max(0, entries.findIndex(entry => entry.accession === initialAccession)));
+    setSelectedIndex(Math.max(0, entries.findIndex(entry => entry.source === 'ncbi' && entry.id === initialAccession)));
   }, [entries, initialAccession]);
   const selectedEntry = entries[selectedIndex];
   const selectedConflicts = selectedEntry !== undefined && recordedCacheState(selectedEntry) === 'conflict';
@@ -248,7 +248,7 @@ export function AccessionPicker({
         const offset = key.upArrow ? -1 : 1;
         setSelectedIndex(index => (index + offset + entries.length) % entries.length);
       } else if (key.return && selectedEntry && !selectedConflicts) {
-        onSelect(selectedEntry.accession);
+        onSelect(selectedEntry.id);
       }
     },
     {isActive: inputActive},
@@ -280,11 +280,11 @@ export function AccessionPicker({
         const selected = visibleStart + offset === selectedIndex;
         const conflict = recordedCacheState(entry) === 'conflict';
         return (
-          <Text key={entry.accession} color={selected ? 'cyan' : undefined} wrap="truncate">
+          <Text key={entry.id} color={selected ? 'cyan' : undefined} wrap="truncate">
             {selected ? '› ' : '  '}
             {conflict ? '⚠ ' : ''}
             {sanitizeTerminalText(accessionDisplayName(entry))}
-            {entry.name ? <Text color={mutedColor}> ({entry.accession})</Text> : null}
+            {entry.name ? <Text color={mutedColor}> ({entry.id})</Text> : null}
             {' · '}
             <Text color={conflict ? 'yellow' : undefined}>{cacheLabel(entry)}</Text>
             {' · '}{sanitizeTerminalText(accessionFactsSummary(entry))}

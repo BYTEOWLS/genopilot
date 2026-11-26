@@ -1,3 +1,5 @@
+import {ncbiMetadata} from '../../src/genome-sources/ncbi.js';
+import {parseAssemblyReport} from '../../src/accessions/ncbi-metadata.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {mkdir, mkdtemp, readdir, realpath, rm, stat, symlink, writeFile} from 'node:fs/promises';
@@ -44,6 +46,8 @@ async function writeCopy(
 ): Promise<string> {
   const directory = join(root, 'ncbi-accessions-cache', name);
   await mkdir(directory, {recursive: true});
+  const metadata = report ? parseAssemblyReport(report, name, 'cached-download-report', now().toISOString()) : null;
+  await writeFile(join(directory, 'genome.json'), JSON.stringify({reference: {source: 'ncbi', id: name, parameters: {}}, metadata: metadata ?? null}));
   if (fasta !== null) {
     await writeFile(join(directory, 'genomic.fna'), fasta);
   }
@@ -72,7 +76,7 @@ test('verifies copies and explains damaged ones without trusting them', async co
   await mkdir(join(tempDir, 'ncbi-accessions-cache', 'not-an-accession'));
 
   const scan = await scanAccessionCaches([tempDir], now);
-  const byAccession = new Map(scan.copies.map(copy => [copy.accession, copy]));
+  const byAccession = new Map(scan.copies.map(copy => [copy.id, copy]));
 
   assert.equal(byAccession.get(accession)?.state, 'verified');
   assert.equal(byAccession.get(accession)?.path, verified);
@@ -96,22 +100,10 @@ test('accepts a FASTA-only copy and reads its cached NCBI report', async context
 
   assert.equal(copy?.state, 'verified');
   assert.equal(copy?.gff3_sha256, undefined);
-  assert.equal(copy?.report?.organism, 'Example organism');
-  assert.equal(copy?.report?.source, 'cached-download-report');
+  assert.equal(ncbiMetadata(copy?.metadata)?.organism, 'Example organism');
+  assert.equal(ncbiMetadata(copy?.metadata)?.source, 'cached-download-report');
 });
 
-test('reads a cached report that spans several lines', async context => {
-  const tempDir = await temporaryDirectory(context);
-  const directory = await writeCopy(tempDir);
-  await mkdir(join(directory, 'ncbi_dataset', 'data'), {recursive: true});
-  const report = {accession, organism: {organismName: 'Example organism'}, assemblyInfo: {assemblyType: 'haploid'}};
-  await writeFile(join(directory, 'ncbi_dataset', 'data', 'assembly_data_report.jsonl'), JSON.stringify(report, null, 2));
-
-  const [copy] = (await scanAccessionCaches([tempDir], now)).copies;
-
-  assert.equal(copy?.report?.organism, 'Example organism');
-  assert.equal(copy?.report?.assembly_type, 'haploid');
-});
 
 test('skips missing roots and lists one directory reached through two roots once', async context => {
   const tempDir = await temporaryDirectory(context);
@@ -134,23 +126,23 @@ test('records verified copies in the catalog, keeps REST metadata, and flags con
   const catalog: AccessionCatalog = {
     ...emptyAccessionCatalog(),
     accessions: [{
-      accession,
+      source: 'ncbi', id: accession, parameters: {},
       name: 'Backbone',
-      ncbi: {organism: 'From REST', retrieved_at: '2025-01-01T00:00:00.000Z', source: 'datasets-v2-rest'},
+      metadata: {organism: 'From REST', retrieved_at: '2025-01-01T00:00:00.000Z', source: 'datasets-v2-rest'},
       cached_copies: [],
     }],
   };
 
   const scan = await scanAccessionCaches([first, second], now);
   const next = applyCacheScan(catalog, scan);
-  const backbone = next.accessions.find(entry => entry.accession === accession);
-  const found = next.accessions.find(entry => entry.accession === 'GCA_000000009.1');
+  const backbone = next.accessions.find(entry => entry.id === accession);
+  const found = next.accessions.find(entry => entry.id === 'GCA_000000009.1');
 
   assert.equal(backbone?.name, 'Backbone');
-  assert.equal(backbone?.ncbi?.organism, 'From REST');
+  assert.equal(ncbiMetadata(backbone?.metadata)?.organism, 'From REST');
   assert.equal(backbone?.cached_copies.length, 2);
   assert.notEqual(backbone?.cached_copies[0]?.fasta_sha256, backbone?.cached_copies[1]?.fasta_sha256);
-  assert.equal(found?.ncbi?.source, 'cached-download-report');
+  assert.equal(ncbiMetadata(found?.metadata)?.source, 'cached-download-report');
   assert.equal(found?.cached_copies[0]?.verified_at, '2026-01-01T12:00:00.000Z');
 });
 
@@ -176,7 +168,7 @@ test('deletes every cache directory of an accession, damaged or not', async cont
   const damaged = await writeCopy(second, {fasta: null});
   const other = await writeCopy(first, {name: 'GCF_000000001.1'});
 
-  const deleted = await deleteAccessionCaches([first, second, first], accession);
+  const deleted = await deleteAccessionCaches([first, second, first], {source: 'ncbi', id: accession, parameters: {}});
 
   assert.deepEqual(deleted.sort(), [verified, damaged].sort());
   await assert.rejects(stat(verified), {code: 'ENOENT'});
@@ -191,8 +183,8 @@ test('refuses to delete through a symbolic link or for an invalid accession', as
   await mkdir(join(tempDir, 'ncbi-accessions-cache'), {recursive: true});
   await symlink(elsewhere, join(tempDir, 'ncbi-accessions-cache', accession));
 
-  await assert.rejects(deleteAccessionCaches([tempDir], accession), /not a directory/);
-  await assert.rejects(deleteAccessionCaches([tempDir], '../escape'), /invalid accession/);
+  await assert.rejects(deleteAccessionCaches([tempDir], {source: 'ncbi', id: accession, parameters: {}}), /not a directory/);
+  await assert.rejects(deleteAccessionCaches([tempDir], {source: 'ncbi', id: '../escape', parameters: {}}), /Invalid genome reference/);
   assert.deepEqual(await readdir(elsewhere), ['keep.txt']);
 });
 

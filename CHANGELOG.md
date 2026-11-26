@@ -6,6 +6,11 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+### Genome-source refactor (in progress)
+
+- Catalog entries use provider/ID identity and provider-validated parameters and metadata. Incompatible catalogs are rejected without being overwritten; there is no migration.
+- Added the shared NCBI REST downloader and verified staging/cache implementation, with synthetic archive, cancellation, refresh-failure, and offline-reuse tests. Role-specific reuse checks only required files, and empty FASTA records are rejected before publication. Catalog download/setup UI and workflow integration are not yet connected; workflows still use the Datasets CLI.
+
 ## [0.0.3] - 2026-11-25
 
 ### License

@@ -1,0 +1,127 @@
+import {createWriteStream} from 'node:fs';
+import {mkdir, readFile, rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {Readable} from 'node:stream';
+import type {ReadableStream as NodeReadableStream} from 'node:stream/web';
+import {pipeline} from 'node:stream/promises';
+import {isVersionedAssemblyAccession, normalizeAccession, ncbiAccessionFormatMessage} from '../accessions/accession.js';
+import {fetchAssemblyMetadata, ncbiDatasetsApiBaseUrl, parseAssemblyReport} from '../accessions/ncbi-metadata.js';
+import {validateNcbiMetadata, type NcbiAssemblyMetadata} from './ncbi-metadata.js';
+import type {GenomeProvider, GenomeReference} from './provider.js';
+import {extractZipMember, zipMembers, type ZipMember} from './zip.js';
+
+export function ncbiMetadata(value: unknown): NcbiAssemblyMetadata | null {
+  const issues: {path: string; message: string}[] = [];
+  validateNcbiMetadata(value, 'metadata', issues);
+  if (issues.length > 0) {
+    throw new Error(issues.map(issue => `${issue.path}: ${issue.message}`).join('; '));
+  }
+  return value as NcbiAssemblyMetadata | null;
+}
+
+function validateReference(id: string, parameters: unknown): GenomeReference {
+  if (!isVersionedAssemblyAccession(id)) {
+    throw new Error(ncbiAccessionFormatMessage);
+  }
+  if (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters) || Object.keys(parameters).length !== 0) {
+    throw new Error('NCBI parameters must be an empty mapping.');
+  }
+  return {source: 'ncbi', id, parameters: {}};
+}
+
+function uniqueMember(members: ZipMember[], description: string, required: boolean): ZipMember | undefined {
+  if (members.length > 1 || (required && members.length !== 1)) {
+    throw new Error(`NCBI package has missing or ambiguous ${description}.`);
+  }
+  return members[0];
+}
+
+export const ncbiCacheDirectoryName = 'ncbi-accessions-cache';
+
+export const ncbiProvider: GenomeProvider = {
+  id: 'ncbi',
+  label: 'NCBI',
+  description: 'Versioned genome assemblies from NCBI Datasets.',
+  cacheDirectory: ncbiCacheDirectoryName,
+  fields: [{id: 'api-key', label: 'API key', kind: 'secret', required: false}],
+  validateReference,
+  validateMetadata(value) { ncbiMetadata(value); },
+  metadataSummary(value) {
+    const metadata = ncbiMetadata(value);
+    return metadata ? [metadata.organism, metadata.assembly_name, metadata.strain, metadata.assembly_type, metadata.refseq_category].filter(Boolean).join(' · ') : 'metadata not retrieved';
+  },
+  async resolveExact(id, context) {
+    context.signal.throwIfAborted();
+    return validateReference(normalizeAccession(id), {});
+  },
+  async lookupMetadata(reference, context) {
+    validateReference(reference.id, reference.parameters);
+    context.signal.throwIfAborted();
+    const result = await fetchAssemblyMetadata(reference.id, {apiKey: context.secrets['api-key'], fetchImpl: context.fetchImpl, signal: context.signal});
+    context.signal.throwIfAborted();
+    if (result.state === 'failed') {
+      throw new Error(result.message);
+    }
+    return result.metadata;
+  },
+  async download(reference, kinds, staging, context) {
+    validateReference(reference.id, reference.parameters);
+    context.signal.throwIfAborted();
+    const url = new URL(`${ncbiDatasetsApiBaseUrl}/genome/accession/${encodeURIComponent(reference.id)}/download`);
+    url.searchParams.append('include_annotation_type', 'GENOME_FASTA');
+    if (kinds.includes('gff3')) {
+      url.searchParams.append('include_annotation_type', 'GENOME_GFF');
+    }
+    let response: Response;
+    try {
+      response = await (context.fetchImpl ?? fetch)(url, {
+        headers: {accept: 'application/zip', ...(context.secrets['api-key'] ? {'api-key': context.secrets['api-key']} : {})},
+        signal: context.signal,
+      });
+    } catch {
+      context.signal.throwIfAborted();
+      throw new Error('NCBI could not be reached. Check the network connection and retry.');
+    }
+    if (!response.ok || !response.body) {
+      throw new Error(`NCBI genome request failed (HTTP ${String(response.status)}).`);
+    }
+    const archive = join(staging, 'dataset.zip');
+    try {
+      await pipeline(Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>), createWriteStream(archive, {flags: 'wx', mode: 0o600}), {signal: context.signal});
+      const members = await zipMembers(archive);
+      const prefix = `ncbi_dataset/data/${reference.id}/`;
+      const fasta = uniqueMember(members.filter(member => member.name.startsWith(prefix) && !member.name.slice(prefix.length).includes('/') && member.name.endsWith('_genomic.fna')), 'genome FASTA', true)!;
+      const gff3 = kinds.includes('gff3') ? uniqueMember(members.filter(member => member.name === `${prefix}genomic.gff`), 'genome GFF3', false) : undefined;
+      const report = uniqueMember(members.filter(member => member.name === 'ncbi_dataset/data/assembly_data_report.jsonl'), 'assembly report', true)!;
+      if (report.size > 16 * 1024 * 1024) {
+        throw new Error('NCBI assembly report is too large.');
+      }
+      const reportDirectory = join(staging, 'ncbi_dataset', 'data');
+      await mkdir(reportDirectory, {recursive: true});
+      const reportPath = join(reportDirectory, 'assembly_data_report.jsonl');
+      await extractZipMember(archive, report, reportPath, context.signal);
+      let reports: unknown[];
+      try {
+        reports = (await readFile(reportPath, 'utf8')).split('\n').filter(line => line.trim()).map(line => JSON.parse(line) as unknown);
+      } catch {
+        throw new Error('NCBI package contains an unreadable assembly report.');
+      }
+      const matching = reports.map(value => parseAssemblyReport(value, reference.id, 'cached-download-report', new Date().toISOString())).filter(value => value !== undefined);
+      if (matching.length !== 1 || reports.length !== 1) {
+        throw new Error('NCBI package does not contain exactly one matching assembly report.');
+      }
+      await extractZipMember(archive, fasta, join(staging, 'genomic.fna'), context.signal);
+      if (gff3) {
+        await extractZipMember(archive, gff3, join(staging, 'genomic.gff'), context.signal);
+      }
+      return {
+        files: {fasta: 'genomic.fna', ...(gff3 ? {gff3: 'genomic.gff'} : {})},
+        metadata: matching[0],
+        facts: {source: 'ncbi', id: reference.id, api: 'datasets-v2-rest'},
+        annotation: kinds.includes('gff3') ? (gff3 ? 'available' : 'unavailable') : 'not-requested',
+      };
+    } finally {
+      await rm(archive, {force: true});
+    }
+  },
+};

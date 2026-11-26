@@ -1,3 +1,5 @@
+import {sameReference, type GenomeReference} from '../../genome-sources/provider.js';
+import {ncbiMetadata} from '../../genome-sources/ncbi.js';
 import React, {useLayoutEffect, useRef, useState} from 'react';
 import {Box, measureElement, Text, useInput, useWindowSize, type DOMElement} from 'ink';
 import {Alert} from '@inkjs/ui';
@@ -45,13 +47,13 @@ export function localFields(name: string, description: string): LocalAccessionFi
 /** Replaces only the local name and description of an existing entry. */
 export function withLocalFields(
   catalog: AccessionCatalog,
-  accession: string,
+  reference: GenomeReference,
   fields: LocalAccessionFields,
 ): AccessionCatalog {
   return {
     ...catalog,
     accessions: catalog.accessions.map(entry => {
-      if (entry.accession !== accession) {
+      if (!sameReference(entry, reference)) {
         return entry;
       }
       const {name: _name, description: _description, ...facts} = entry;
@@ -95,12 +97,12 @@ export function AccessionForm({
   const [layout, setLayout] = useState({details: 0, chrome: 12});
   const [detailsScroll, setDetailsScroll] = useState(0);
   const [stage, setStage] = useState<'accession' | 'details'>(editing ? 'details' : 'accession');
-  const [accession, setAccession] = useState(editing?.accession ?? '');
+  const [accession, setAccession] = useState(editing?.id ?? '');
   const [lookup, setLookup] = useState<MetadataFetchResult>();
   const [name, setName] = useState(editing?.name ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [selectedRow, setSelectedRow] = useState<DetailRow>('name');
-  const metadata = editing ? editing.ncbi : lookup?.state === 'retrieved' ? lookup.metadata : null;
+  const metadata = editing ? editing.source === 'ncbi' ? ncbiMetadata(editing.metadata) : null : lookup?.state === 'retrieved' ? lookup.metadata : null;
   const sections = metadata ? metadataSections(metadata) : [];
   // In the lookup step, the accession field or its look-up button.
   const [lookupSelected, setLookupSelected] = useState(false);
@@ -126,7 +128,7 @@ export function AccessionForm({
       setProblems([`Accession: ${ncbiAccessionFormatMessage}`]);
       return;
     }
-    if (catalog.accessions.some(entry => entry.accession === candidate)) {
+    if (catalog.accessions.some(entry => entry.source === 'ncbi' && entry.id === candidate)) {
       setProblems([`Accession: ${candidate} is already in the catalog`]);
       return;
     }
@@ -156,14 +158,14 @@ export function AccessionForm({
   const submit = (): void => {
     const fields = localFields(name, description);
     const candidate = editing
-      ? withLocalFields(catalog, editing.accession, fields)
+      ? withLocalFields(catalog, editing, fields)
       : withAccession(catalog, {
-        accession,
+        source: 'ncbi', id: accession, parameters: {},
         ...fields,
-        ncbi: lookup?.state === 'retrieved' ? lookup.metadata : null,
+        metadata: lookup?.state === 'retrieved' ? lookup.metadata : null,
         cached_copies: [],
       });
-    const entry = candidate.accessions.find(candidateEntry => candidateEntry.accession === accession);
+    const entry = candidate.accessions.find(candidateEntry => candidateEntry.source === (editing?.source ?? 'ncbi') && candidateEntry.id === accession);
     if (!entry) {
       return;
     }
@@ -291,7 +293,7 @@ export function AccessionForm({
   return (
     <Box ref={pageRef} flexDirection="column">
       <EditPage
-        title={editing ? `Edit ${editing.accession}` : 'Add accession'}
+        title={editing ? `Edit ${editing.id}` : 'Add accession'}
         description={terminalRows >= 20 ? pageDescription : undefined}
         shortcuts={['Tab/↑/↓ — Field', 'PageUp/PageDown — Details', selectedRow === 'save' && 'Enter — Save']}
         back="Cancel"

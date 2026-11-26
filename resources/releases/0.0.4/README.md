@@ -2,18 +2,20 @@
 
 ## Goal
 
-Let workflows use genomes from VEuPathDB sites, such as FungiDB, as well as from NCBI, with each remote source behind one shared interface.
+Download and inspect genomes from the catalog before starting an analysis, then reuse those files in a workflow.
 
 ## Scope
 
 - [ ] [Genome sources: NCBI and VEuPathDB behind one interface](01_genome_sources.md).
 
+Status: in progress. Catalog/provider identity and the NCBI REST/cache implementation are tested; catalog/setup UI, workflow handoff, and authenticated VEuPathDB verification remain open. See the detail file's implementation progress.
+
 ## Delivery order
 
-1. Move NCBI behind the genome-source interface without changing behavior.
-2. Generalize the catalog, workflow configuration, key store, cache discovery, and resolver.
-3. Add VEuPathDB.
-4. Verify the integrated release with a real VEuPathDB key and update its changelog and package version at release preparation, not during planning.
+1. Establish the shared catalog entry and required and optional provider methods.
+2. Deliver the catalog download and inspection path with NCBI REST; reuse the downloader from Snakemake.
+3. Add VEuPathDB and verify its site- and release-specific behavior.
+4. Verify both providers end to end before release preparation.
 
 ## Exclusions
 

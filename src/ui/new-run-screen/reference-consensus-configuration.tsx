@@ -1,3 +1,4 @@
+import {ncbiMetadata} from '../../genome-sources/ncbi.js';
 import {basename, resolve} from 'node:path';
 import React, {useEffect, useState} from 'react';
 import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
@@ -174,7 +175,7 @@ function backboneSection(prepared: PreparedReferenceConsensusRun, inspection: Ru
   }
   const entry = inspection.backboneEntry;
   const copies = entry && recordedCacheState(entry) === 'cached' ? entry.cached_copies : [];
-  const facts = entry?.ncbi;
+  const facts = ncbiMetadata(entry?.metadata ?? null);
   return {
     id: 'backbone',
     title: 'Backbone',
