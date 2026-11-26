@@ -1,6 +1,6 @@
 import {arch, availableParallelism, cpus, platform, totalmem} from 'node:os';
 import {isAbsolute} from 'node:path';
-import {isVersionedAssemblyAccession, ncbiAccessionFormatMessage} from '../accessions/accession.js';
+import {isVersionedAssemblyAccession, ncbiAccessionFormatMessage} from '../accessions/provider/ncbi/accession.js';
 import type {BuildInfo} from '../build-info.js';
 
 /** Validation helpers and sections shared by every workflow's run configuration. */

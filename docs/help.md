@@ -17,7 +17,7 @@ Files copied into a run from outside are marked **imported**. Files the run comp
 ## Catalogs
 
 - **Isolates** store identity and lineage independently of sequencing data. Their read sets record a library, platform, layout, and multiple file groups. Confirm library identity during import; workflows explicitly select compatible read sets and snapshot their effective settings.
-- **NCBI accessions** store versioned assembly accessions, NCBI metadata, and locations of download caches. Catalog identity includes the provider, so equal IDs from different sources remain separate. Incompatible catalogs are refused without being overwritten; there is no automatic migration. Workflows download an assembly only when a run needs it. Accession details show Assembly, Genome statistics, and Linked records as consecutive sections. PageUp/PageDown (or fn + ↑/↓) scrolls the details and local copies; editable fields and Save stay visible. Assembly includes the metadata retrieval date and source as labelled rows. The release date is not a submission date; missing facts are marked as not reported. Refresh metadata from the accession list to fill new fields on existing entries.
+- **Genome sources** store provider-scoped identifiers, metadata, and verified download locations. Download and inspect genomes before creating a run; see [Genome sources](genome-sources.md) for keys, provider credentials, and current workflow-integration limits. Incompatible catalogs are refused without being overwritten; there is no migration.
 
 See [Managing isolates](isolates.md) for the list, edit form, read sets, and library identity. Each supported sequencing technique has its own help file and tab, currently [Illumina](illumina.md). Press `?` in the list or on an edit-form choice or button to open these tabs.
 
@@ -29,7 +29,7 @@ Catalogs are stored locally for your user. Runs save snapshots of the catalog en
 
 At launch, GenoPilot checks that Pixi, Conda, Snakemake, and Python match its requirements. With your consent, it installs them in its own data directory without administrator rights. Snakemake creates each workflow step's pinned environment when first needed.
 
-The tooling page shows GenoPilot's version. Development builds also show the Git commit and its date when known, with a warning if the build included uncommitted changes. This distinguishes development builds that share a version number.
+Manage tooling has separate Tooling and Accession Providers tabs. Provider credentials do not determine runtime readiness. The tooling page shows GenoPilot's version. Development builds also show the Git commit and its date when known, with a warning if the build included uncommitted changes. This distinguishes development builds that share a version number.
 
 ## Keys
 

@@ -3,7 +3,8 @@ import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
-import {ApiKeyTab} from '../../src/ui/accessions-screen/api-key-tab.js';
+import {ProviderForm} from '../../src/ui/tooling-screen/provider-form.js';
+import {ncbiProvider} from '../../src/accessions/provider/ncbi/index.js';
 import {pressKey, waitFor, rendered} from '../wait.js';
 
 // Behavior is observed through the injected callbacks, test data, and the page structure (the
@@ -67,23 +68,21 @@ function renderTab(
   let checks = 0;
   let clears = 0;
   const instance = render(
-    <ApiKeyTab
-      page={{title: 'Test page'}}
-      inputActive
-      checkConfigured={async () => {
+    <ProviderForm provider={ncbiProvider} inputActive onBack={() => {}} settings={{
+      read: async (): Promise<Record<string, string>> => {
         checks += 1;
-        return options.checkConfigured ? options.checkConfigured() : false;
-      }}
-      saveKey={async key => {
-        saved.push(key);
-        await options.saveKey?.(key);
-      }}
-      clearKey={async () => {
+        const configured = await options.checkConfigured?.();
+        return configured ? {'api-key': 'never-prefill-this'} : {};
+      },
+      save: async (_provider, _field, value) => {
+        saved.push(value);
+        await options.saveKey?.(value);
+      },
+      clear: async () => {
         clears += 1;
         await options.clearKey?.();
-      }}
-      keyPath={keyPath}
-    />,
+      },
+    }} />,
     {
       exitOnCtrlC: false,
       interactive: true,
@@ -112,11 +111,11 @@ async function ready(tab: ReturnType<typeof renderTab>): Promise<void> {
   await rendered(tab.instance);
 }
 
-test('checks the key status and shows where the key is stored', async context => {
+test('checks configuration without revealing stored values', async context => {
   const tab = renderTab(context);
   await ready(tab);
 
-  assert.ok(tab.output.read().includes(keyPath));
+  assert.ok(!tab.output.read().includes('never-prefill-this'));
 });
 
 test('shows a failed status check', async context => {
@@ -127,7 +126,7 @@ test('shows a failed status check', async context => {
   });
   await ready(tab);
 
-  await waitFor(() => tab.output.read().includes('test status failure'), 'the failure to be shown');
+  await waitFor(() => /Not saved:|Unable to read/.test(tab.output.read()), 'the failure to be shown');
 });
 
 test('masks the typed key, saves it from the button, and checks the status again', async context => {
@@ -213,7 +212,7 @@ test('keeps the draft after a failed save so it can be saved again', async conte
 
   await press(tab.input, 'abc');
   await submit(tab.input);
-  await waitFor(() => tab.output.read().includes('test save failure'), 'the failure to be shown');
+  await waitFor(() => /Not saved:|Unable to save/.test(tab.output.read()), 'the failure to be shown');
 
   // The button stays selected, so Enter tries again with the same draft.
   await press(tab.input, ENTER);

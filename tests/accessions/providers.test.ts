@@ -7,9 +7,9 @@ import test from 'node:test';
 import {emptyAccessionCatalog, validateAccessionCatalog, withAccession} from '../../src/accessions/catalog.js';
 import {applyCacheScan, deleteAccessionCaches, scanAccessionCaches} from '../../src/accessions/cache-discovery.js';
 import {loadAccessionCatalog, updateAccessionCatalog} from '../../src/accessions/store.js';
-import {genomeSources} from '../../src/genome-sources/registry.js';
-import {ncbiProvider} from '../../src/genome-sources/ncbi.js';
-import {GenomeProviderRegistry, missingProviderFields, referenceKey} from '../../src/genome-sources/provider.js';
+import {genomeSources} from '../../src/accessions/registry.js';
+import {ncbiProvider} from '../../src/accessions/provider/ncbi/index.js';
+import {GenomeProviderRegistry, missingProviderFields, referenceKey} from '../../src/accessions/provider.js';
 
 const other = {...ncbiProvider, id: 'synthetic', cacheDirectory: 'synthetic-cache', validateReference(id: string, parameters: unknown) {
   return {...ncbiProvider.validateReference(id, parameters), source: 'synthetic'};
@@ -60,6 +60,9 @@ test('registry detects optional methods and validates declared secret fields', (
   assert.equal(missingProviderFields(required, {token: 'configured-not-service-verified'}).length, 0);
   assert.throws(() => registry.register(exactOnly), /Duplicate/);
   assert.throws(() => new GenomeProviderRegistry([{...required, fields: [...required.fields, ...required.fields]}]), /field/);
+  assert.throws(() => new GenomeProviderRegistry([{...exactOnly, artifacts: []}]), /artifact/);
+  assert.throws(() => new GenomeProviderRegistry([{...exactOnly, artifacts: [...exactOnly.artifacts, ...exactOnly.artifacts]}]), /artifact/);
+  assert.throws(() => new GenomeProviderRegistry([{...exactOnly, artifacts: [{kind: 'fasta', label: ''}]}]), /artifact/);
 });
 
 test('locked store rejects old schemas without replacing their contents', async context => {

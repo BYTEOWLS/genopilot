@@ -8,7 +8,11 @@ import {
   type CacheScan,
   type CacheScanner,
 } from '../../accessions/cache-discovery.js';
-import type {AssemblyMetadataFetcher} from '../../accessions/ncbi-metadata.js';
+import {genomeSources} from '../../accessions/registry.js';
+import type {GenomeProviderRegistry} from '../../accessions/provider.js';
+import {providerSettings, type ProviderSettings} from '../../tooling/provider-settings.js';
+import type {CatalogDownloader} from './download-form.js';
+
 import {
   defaultOutputRoot,
   knownOutputRoots,
@@ -22,16 +26,12 @@ import {TabBar, type TabDefinition} from '../components/tabs.js';
 import {Page, type PageProps} from '../components/page.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AccessionsTab} from './accessions-tab.js';
-import {
-  ApiKeyTab,
-  type NcbiAccessStatusCheck,
-  type NcbiApiKeyClearer,
-  type NcbiApiKeySaver,
-} from './api-key-tab.js';
 import {RootsTab} from './roots-tab.js';
 import type {accessionGenomeView} from '../../accessions/views.js';
 
-export type AccessionsTabId = 'accessions' | 'roots' | 'api-key';
+const defaultSettings = providerSettings();
+
+export type AccessionsTabId = 'accessions' | 'roots';
 
 /** The shared title, detail, and tab bar each tab renders its own page with. */
 export type AccessionsPageFrame = Pick<PageProps, 'title' | 'detail' | 'header'>;
@@ -39,7 +39,6 @@ export type AccessionsPageFrame = Pick<PageProps, 'title' | 'detail' | 'header'>
 const tabs: readonly TabDefinition<AccessionsTabId>[] = [
   {id: 'accessions', label: 'Accessions'},
   {id: 'roots', label: 'Output roots'},
-  {id: 'api-key', label: 'NCBI API key'},
 ];
 
 type CatalogState =
@@ -51,11 +50,7 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/**
- * Manages the accession catalog, the output roots its caches are discovered in, and the optional
- * NCBI API key. Opening the screen discovers verified caches; it never downloads or deletes
- * assembly files except when the researcher removes an entry.
- */
+/** Saved genome identities, verified downloads, and their output roots. */
 export function AccessionsScreen({
   onBack,
   inputActive,
@@ -63,14 +58,13 @@ export function AccessionsScreen({
   catalogPath,
   loadCatalog,
   updateCatalog,
-  fetchMetadata,
+  registry = genomeSources,
+  settings = defaultSettings,
+  download,
+  onConfigureProvider,
   scanCaches = scanAccessionCaches,
   deleteCaches = deleteAccessionCaches,
   readDirectory,
-  checkApiKeyConfigured,
-  saveApiKey,
-  clearApiKey,
-  apiKeyPath,
   buildGenomeView,
 }: {
   onBack: () => void;
@@ -80,14 +74,13 @@ export function AccessionsScreen({
   catalogPath: string;
   loadCatalog: AccessionCatalogLoader;
   updateCatalog: AccessionCatalogUpdater;
-  fetchMetadata: AssemblyMetadataFetcher;
+  registry?: GenomeProviderRegistry;
+  settings?: ProviderSettings;
+  download?: CatalogDownloader;
+  onConfigureProvider: (source: string) => void;
   scanCaches?: CacheScanner;
   deleteCaches?: AccessionCacheDeleter;
   readDirectory?: DirectoryReader;
-  checkApiKeyConfigured?: NcbiAccessStatusCheck;
-  saveApiKey: NcbiApiKeySaver;
-  clearApiKey: NcbiApiKeyClearer;
-  apiKeyPath?: string;
 }): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<AccessionsTabId>('accessions');
   const [catalogState, setCatalogState] = useState<CatalogState>({state: 'loading'});
@@ -99,9 +92,7 @@ export function AccessionsScreen({
   });
   // Discovery only reads files and saves atomically, so leaving mid-scan is safe; only open forms
   // and running edits hold the tab bar and Esc.
-  const locked = activeTab !== 'api-key' && locks[activeTab];
-  // While the key field holds a draft, ←/→ move its cursor instead of switching tabs.
-  const [apiKeyDraft, setApiKeyDraft] = useState(false);
+  const locked = locks[activeTab];
 
   const rescan = useCallback((): void => {
     setScanning(true);
@@ -160,13 +151,12 @@ export function AccessionsScreen({
       activeId={activeTab}
       onChange={setActiveTab}
       inputActive={inputActive && !locked}
-      arrowKeys={!(activeTab === 'api-key' && apiKeyDraft)}
     />
   );
   // Every tab renders its own page under the same title; only the active one carries the tab bar,
   // so its keys are handled once.
   const frameFor = (tab: AccessionsTabId): AccessionsPageFrame => ({
-    title: 'NCBI accessions',
+    title: 'Genome catalog',
     detail: [
       ready ? `${String(ready.loaded.catalog.accessions.length)} in catalog` : undefined,
       scanning && ready ? 'verifying caches…' : undefined,
@@ -179,7 +169,7 @@ export function AccessionsScreen({
 
   return (
     <Box flexDirection="column">
-      {!ready && activeTab !== 'api-key' ? (
+      {!ready ? (
         <Page {...frameFor(activeTab)} description={`Catalog: ${sanitizeTerminalText(catalogPath)}`}>
           {catalogState.state === 'failed' ? (
             <Box flexDirection="column">
@@ -204,7 +194,11 @@ export function AccessionsScreen({
             inputActive={inputActive && activeTab === 'accessions'}
             verifying={scanning}
             updateCatalog={updateCatalog}
-            fetchMetadata={fetchMetadata}
+            registry={registry}
+            settings={settings}
+            download={download}
+            onConfigure={onConfigureProvider}
+            defaultRoot={defaultOutputRoot(currentDirectory)}
             deleteCaches={deleteCaches}
             onCatalogChange={setLoaded}
             onRescan={rescan}
@@ -234,17 +228,6 @@ export function AccessionsScreen({
           />
         </Box>
       ) : null}
-      <Box flexDirection="column" display={activeTab === 'api-key' ? 'flex' : 'none'}>
-        <ApiKeyTab
-          page={frameFor('api-key')}
-          inputActive={inputActive && activeTab === 'api-key'}
-          checkConfigured={checkApiKeyConfigured}
-          saveKey={saveApiKey}
-          clearKey={clearApiKey}
-          keyPath={apiKeyPath}
-          onDraftChange={setApiKeyDraft}
-        />
-      </Box>
     </Box>
   );
 }

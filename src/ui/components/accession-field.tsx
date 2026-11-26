@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {Alert} from '@inkjs/ui';
-import {isVersionedAssemblyAccession, normalizeAccession} from '../../accessions/accession.js';
+import {isVersionedAssemblyAccession, normalizeAccession} from '../../accessions/provider/ncbi/accession.js';
 import {
   accessionDisplayName,
   accessionFactsSummary,
@@ -193,12 +193,12 @@ function ConflictExplanation({entry}: {entry: AccessionEntry}): React.JSX.Elemen
         A versioned accession always names the same assembly files, so every cached copy of it must
         have identical checksums. These copies differ, so at least one was damaged or changed after
         it was downloaded, and GenoPilot cannot tell which one is right. Remove the entry under
-        Manage NCBI accessions, which deletes its cached copies, and add it again; the next run
+        Manage genome sources, which deletes its cached copies, and add it again; the next run
         downloads a fresh copy.
       </Alert>
       {entry.cached_copies.map(copy => (
         <Text key={copy.path} color={mutedColor} wrap="wrap">
-          {'  '}{sanitizeTerminalText(copy.path)} · FASTA {copy.fasta_sha256.slice(0, 12)}
+          {'  '}{sanitizeTerminalText(copy.path)} · FASTA {copy.fasta_sha256?.slice(0, 12) ?? 'not downloaded'}
           {copy.gff3_sha256 ? ` · GFF3 ${copy.gff3_sha256.slice(0, 12)}` : ''}
         </Text>
       ))}
@@ -262,7 +262,7 @@ export function AccessionPicker({
   return (
     <Page
       title="Choose an accession"
-      description={`For ${sanitizeTerminalText(fieldLabel)}, from the accession catalog. To add one, use Manage NCBI accessions.`}
+      description={`For ${sanitizeTerminalText(fieldLabel)}, from the accession catalog. To add one, use Manage genome sources.`}
       shortcuts={entries.length > 0 ? ['↑/↓ — Select', !selectedConflicts && 'Enter — Choose'] : []}
       back="Cancel"
     >

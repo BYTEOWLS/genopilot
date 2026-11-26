@@ -8,7 +8,7 @@ Download and inspect genomes from the catalog before starting an analysis, then 
 
 - [ ] [Genome sources: NCBI and VEuPathDB behind one interface](01_genome_sources.md).
 
-Status: in progress. Catalog/provider identity and the NCBI REST/cache implementation are tested; catalog/setup UI, workflow handoff, and authenticated VEuPathDB verification remain open. See the detail file's implementation progress.
+Status: in progress. Catalog review, metadata-only saving, provider-declared artifact selection, download progress, and provider setup UI are implemented. The packaged Node/Python copy bridge is tested, including cross-root reader protection; workflow configuration/rule integration and authenticated VEuPathDB verification remain open. See the detail file's implementation progress.
 
 ## Delivery order
 

@@ -4,7 +4,10 @@ import {stripVTControlCharacters} from 'node:util';
 import test from 'node:test';
 import React from 'react';
 import {render} from 'ink';
+import {defaultTheme} from '@inkjs/ui';
 import type {AccessionEntry} from '../../src/accessions/catalog.js';
+import {genomeSources} from '../../src/accessions/registry.js';
+import type {GenomeDownloadProgress} from '../../src/accessions/provider.js';
 import {AccessionForm} from '../../src/ui/accessions-screen/accession-form.js';
 import {pressKey, rendered, waitFor as waitUntil} from '../wait.js';
 
@@ -46,9 +49,8 @@ test('accession details page within the terminal while fields, save, and failure
   const submitted: AccessionEntry[] = [];
   let cancelled = false;
   const app = render(<AccessionForm
-    catalog={{schema_version: 2, output_roots: [], accessions: [editing]}}
+    registry={genomeSources}
     editing={editing} inputActive
-    fetchMetadata={async () => {throw new Error('unexpected lookup');}}
     onSubmit={async entry => {submitted.push(entry); throw new Error(`failure-marker ${'long failure '.repeat(80)}`);}}
     onCancel={() => {cancelled = true;}}
   />, {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
@@ -95,3 +97,136 @@ test('accession details page within the terminal while fields, save, and failure
   await press('\x1b');
   assert.equal(cancelled, true);
 });
+
+for (const variant of ['info', 'warning'] as const) {
+  test(`editor status uses an ${variant} alert`, async context => {
+    const input = new Input();
+    const output = new Output();
+    const config = defaultTheme.components.Alert!.config as (props: {variant: string}) => {icon: string};
+    const app = render(<AccessionForm registry={genomeSources} inputActive
+      editing={{source: 'ncbi', id: 'GCA_000000001.1', parameters: {}, metadata: null, cached_copies: []}}
+      onSubmit={async () => {}} onCancel={() => {}} onDownload={() => {}} onRefreshMetadata={async () => {}}
+      message={{text: 'status-marker', variant}}
+    />, {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
+    context.after(() => app.unmount());
+    await rendered(app);
+    assert.ok(output.frame().includes(config({variant}).icon), output.frame());
+    assert.ok(output.frame().includes('status-marker'));
+    assert.ok(output.frame().split('\n').length <= output.rows, output.frame());
+  });
+}
+
+test('inline download progress and cancellation remain visible after resizing', async context => {
+  const input = new Input();
+  const output = new Output();
+  let started = false;
+  let cancelled = false;
+  function Editor() {
+    const [progress, setProgress] = React.useState<GenomeDownloadProgress>();
+    return <AccessionForm registry={genomeSources} inputActive progress={progress}
+      editing={{source: 'ncbi', id: 'GCA_000000001.1', parameters: {}, metadata: null, cached_copies: []}}
+      onSubmit={async () => {}} onCancel={() => {}}
+      onRefreshMetadata={async () => {}}
+      onDownload={async signal => {
+        started = true;
+        setProgress({phase: 'downloading', bytes: 1024, total: 4096});
+        try {
+          await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => {
+            cancelled = true;
+            reject(signal.reason);
+          }, {once: true}));
+        } finally {
+          setProgress(undefined);
+        }
+      }} />;
+  }
+  const app = render(<Editor />, {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
+  context.after(() => app.unmount());
+  await rendered(app);
+  await pressKey(input, '\t');
+  await pressKey(input, '\t');
+  await pressKey(input, '\r');
+  await waitFor(() => started, output);
+  output.rows = 18;
+  output.columns = 60;
+  output.emit('resize');
+  await rendered(app);
+  assert.ok(output.frame().split('\n').length <= output.rows, output.frame());
+  await pressKey(input, '\x1b');
+  await waitFor(() => cancelled, output);
+});
+
+test('metadata refresh is a selectable editor action and does not intercept typing', async context => {
+  const input = new Input();
+  const output = new Output();
+  let refreshed = 0;
+  const saved: AccessionEntry[] = [];
+  const app = render(<AccessionForm registry={genomeSources}
+    editing={{source: 'ncbi', id: 'GCA_000000001.1', parameters: {}, metadata: null, cached_copies: []}}
+    inputActive onDownload={() => {}} onRefreshMetadata={async () => { refreshed += 1; }}
+    onSubmit={async entry => { saved.push(entry); }} onCancel={() => {}}
+  />, {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
+  context.after(() => app.unmount());
+  await rendered(app);
+  const press = async (key: string) => {
+    await pressKey(input, key);
+    await rendered(app);
+  };
+  await press('m');
+  await press('\r');
+  assert.equal(refreshed, 0);
+  await press('\t');
+  await press('\t');
+  await press('\t');
+  output.rows = 18;
+  output.columns = 60;
+  output.emit('resize');
+  await rendered(app);
+  assert.ok(output.frame().split('\n').length <= output.rows, output.frame());
+  assert.ok(output.frame().split('\n').some(line => line.startsWith('› [ ')));
+  await press('\r');
+  assert.equal(refreshed, 1);
+  assert.equal(saved.length, 0);
+  await press('\t');
+  await press('\r');
+  await waitFor(() => saved.length === 1, output);
+  assert.equal(saved[0]?.name, 'm');
+});
+
+for (const activation of ['button', 'shortcut'] as const) {
+  test(`accession editor downloads by ${activation} without intercepting typed text`, async context => {
+    const input = new Input();
+    const output = new Output();
+    let downloads = 0;
+    const saved: AccessionEntry[] = [];
+    const app = render(<AccessionForm registry={genomeSources}
+      editing={{source: 'ncbi', id: 'GCA_000000001.1', parameters: {}, metadata: null, cached_copies: []}}
+      inputActive onDownload={() => { downloads += 1; }}
+      onSubmit={async entry => { saved.push(entry); throw new Error('save-marker'); }} onCancel={() => {}}
+    />, {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false});
+    context.after(() => app.unmount());
+    await rendered(app);
+    const press = async (key: string) => {
+      await pressKey(input, key);
+      await rendered(app);
+    };
+    await press('g');
+    await press('\r');
+    assert.equal(downloads, 0, 'typing and Enter in fields never start a download');
+    await press('\t');
+    await press('\t');
+    output.rows = 18;
+    output.columns = 60;
+    output.emit('resize');
+    await rendered(app);
+    assert.ok(output.frame().split('\n').length <= output.rows, output.frame());
+    assert.ok(output.frame().split('\n').some(line => line.startsWith('› [ ')), 'download action remains visible');
+    await press(activation === 'button' ? '\r' : 'g');
+    assert.equal(downloads, 1);
+    assert.equal(saved.length, 0, 'download does not implicitly save labels');
+    await press('\t');
+    await press('\r');
+    await waitFor(() => saved.length === 1, output);
+    assert.equal(saved[0]?.name, 'g', 'the download shortcut remains ordinary text in a field');
+  });
+}

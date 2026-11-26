@@ -1,7 +1,7 @@
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
 import {resolve} from 'node:path';
-import {normalizeAccession} from '../../accessions/accession.js';
+import {normalizeAccession} from '../../accessions/provider/ncbi/accession.js';
 import {conflictingCopiesMessage, recordedCacheState} from '../../accessions/catalog.js';
 import {readCatalogedAccessions, type AccessionCatalogReader} from '../../accessions/store.js';
 import {

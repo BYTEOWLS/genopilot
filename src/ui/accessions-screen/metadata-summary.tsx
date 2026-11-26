@@ -1,4 +1,4 @@
-import type {NcbiAssemblyMetadata} from '../../genome-sources/ncbi-metadata.js';
+import type {NcbiAssemblyMetadata} from '../../accessions/provider/ncbi/metadata.js';
 import type {ParameterRow} from '../components/parameter-list.js';
 import {formatLocalDate, formatLocalDateTime} from '../utils.js';
 

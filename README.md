@@ -368,6 +368,10 @@ npm uninstall --global @byteowls/genopilot
 
 Report problems and propose workflows through issues, as described in [`CONTRIBUTING.md`](CONTRIBUTING.md); pull requests are accepted on invitation. Report vulnerabilities privately, following [`SECURITY.md`](SECURITY.md). Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
+## Acknowledgements
+
+I gratefully acknowledge [Thomas Svoboda](https://orcid.org/0000-0003-0502-301X) for his guidance in genetics and valuable feedback on researchers’ needs and the practical use of GenoPilot.
+
 ## License
 
 [MIT](LICENSE)

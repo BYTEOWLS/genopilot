@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {parse, stringify} from 'yaml';
 import {emptyAccessionCatalog, validateAccessionCatalog} from '../../src/accessions/catalog.js';
-import {parseAssemblyReport} from '../../src/accessions/ncbi-metadata.js';
+import {parseAssemblyReport} from '../../src/accessions/provider/ncbi/metadata-fetch.js';
 import {metadataSections} from '../../src/ui/accessions-screen/metadata-summary.js';
 import {formatLocalDate, formatLocalDateTime} from '../../src/ui/utils.js';
 

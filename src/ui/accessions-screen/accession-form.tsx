@@ -1,25 +1,16 @@
-import {sameReference, type GenomeReference} from '../../genome-sources/provider.js';
-import {ncbiMetadata} from '../../genome-sources/ncbi.js';
-import React, {useLayoutEffect, useRef, useState} from 'react';
+import {sameReference, type GenomeReference, type GenomeProviderRegistry, type GenomeDownloadProgress, type FileKind} from '../../accessions/provider.js';
+import {ncbiMetadata} from '../../accessions/provider/ncbi/index.js';
+import React, {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {Box, measureElement, Text, useInput, useWindowSize, type DOMElement} from 'ink';
-import {Alert} from '@inkjs/ui';
-import {
-  isVersionedAssemblyAccession,
-  ncbiAccessionFormatMessage,
-  normalizeAccession,
-} from '../../accessions/accession.js';
+import {Alert, ProgressBar} from '@inkjs/ui';
+import {formatBytes} from '../../workflows/systems-check.js';
 import type {ScannedCopy} from '../../accessions/cache-discovery.js';
 import {
-  AccessionCatalogValidationError,
   recordedCacheState,
-  validateAccessionCatalog,
-  withAccession,
   type AccessionCatalog,
   type AccessionEntry,
 } from '../../accessions/catalog.js';
-import type {AssemblyMetadataFetcher, MetadataFetchResult} from '../../accessions/ncbi-metadata.js';
-import {TextField} from '../components/text-field.js';
-import {EditPage} from '../components/page.js';
+import {EditPage, SaveButton} from '../components/page.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
@@ -28,9 +19,9 @@ import {ParameterList, parameterLabelWidth, type ParameterRow} from '../componen
 import {Section} from '../components/section.js';
 import {formatLocalDateTime} from '../utils.js';
 
-type DetailRow = 'name' | 'description' | 'save';
+type DetailRow = 'name' | 'description' | 'download' | 'refresh' | 'artifacts' | 'metadata' | 'save';
 
-const detailRows: readonly DetailRow[] = ['name', 'description', 'save'];
+export type AccessionMessage = {text: string; variant: 'info' | 'warning' | 'error'};
 
 /** The researcher-editable part of an entry; NCBI facts and cached copies are never edited here. */
 export type LocalAccessionFields = Pick<AccessionEntry, 'name' | 'description'>;
@@ -62,54 +53,47 @@ export function withLocalFields(
   };
 }
 
-function lookupProblem(result: MetadataFetchResult | undefined): string | undefined {
-  return result?.state === 'failed' ? result.message : undefined;
-}
-
-/**
- * Adds an accession after looking up its NCBI metadata, or edits an entry's local name and
- * description. Adding never downloads assembly files.
- */
-export function AccessionForm({
-  catalog,
-  editing,
-  fetchMetadata,
-  onSubmit,
-  onCancel,
-  inputActive,
-  unverifiedCopies = [],
-}: {
-  catalog: AccessionCatalog;
-  /** The entry being edited; undefined when adding one. */
-  editing?: AccessionEntry;
-  /** Damaged cache directories of the edited accession, as found by the latest scan. */
+/** Shared genome details: edit catalog labels, or confirm a download after reviewing metadata. */
+export function AccessionForm({editing, registry, onSubmit, onCancel, inputActive, unverifiedCopies = [], downloadRoot, onSaveMetadata, progress, downloadArtifacts = [], onChooseArtifacts, onDownload, onRefreshMetadata, onCancelMetadataRefresh, message}: {
+  editing: AccessionEntry;
+  /** A destination switches this form to read-only metadata review with a Download action. */
+  downloadRoot?: string;
+  onSaveMetadata?: (entry: AccessionEntry) => Promise<void>;
+  downloadArtifacts?: readonly FileKind[];
+  onChooseArtifacts?: () => void;
+  onDownload?: (signal: AbortSignal) => void | Promise<void>;
+  message?: AccessionMessage;
+  onRefreshMetadata?: () => Promise<void>;
+  onCancelMetadataRefresh?: () => void;
+  progress?: GenomeDownloadProgress;
+  registry: GenomeProviderRegistry;
   unverifiedCopies?: readonly ScannedCopy[];
-  fetchMetadata: AssemblyMetadataFetcher;
-  /** Receives the entry to save; an edited entry differs only in its name and description. */
   onSubmit: (entry: AccessionEntry) => Promise<void>;
   onCancel: () => void;
   inputActive: boolean;
 }): React.JSX.Element {
+  const reviewing = downloadRoot !== undefined;
+  const selectableRows: readonly DetailRow[] = reviewing
+    ? [...(onChooseArtifacts ? ['artifacts' as const] : []), ...(onSaveMetadata ? ['metadata' as const] : []), 'save']
+    : ['name', 'description', ...(onDownload ? ['download' as const] : []), ...(onRefreshMetadata ? ['refresh' as const] : []), 'save'];
   const {rows: terminalRows, columns} = useWindowSize();
   const pageRef = useRef<DOMElement>(null);
   const viewportRef = useRef<DOMElement>(null);
   const detailsRef = useRef<DOMElement>(null);
   const [layout, setLayout] = useState({details: 0, chrome: 12});
   const [detailsScroll, setDetailsScroll] = useState(0);
-  const [stage, setStage] = useState<'accession' | 'details'>(editing ? 'details' : 'accession');
-  const [accession, setAccession] = useState(editing?.id ?? '');
-  const [lookup, setLookup] = useState<MetadataFetchResult>();
+  const accession = editing.id;
   const [name, setName] = useState(editing?.name ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
-  const [selectedRow, setSelectedRow] = useState<DetailRow>('name');
-  const metadata = editing ? editing.source === 'ncbi' ? ncbiMetadata(editing.metadata) : null : lookup?.state === 'retrieved' ? lookup.metadata : null;
+  const [selectedRow, setSelectedRow] = useState<DetailRow>(reviewing ? 'save' : 'name');
+  const metadata = editing.source === 'ncbi' ? ncbiMetadata(editing.metadata) : null;
   const sections = metadata ? metadataSections(metadata) : [];
-  // In the lookup step, the accession field or its look-up button.
-  const [lookupSelected, setLookupSelected] = useState(false);
-  const [busy, setBusy] = useState<'looking-up' | 'saving'>();
+  const [busy, setBusy] = useState<'saving' | 'metadata' | 'refreshing' | 'downloading'>();
+  const downloadController = useRef<AbortController | undefined>(undefined);
+  useEffect(() => () => downloadController.current?.abort(), []);
   const [problems, setProblems] = useState<string[]>([]);
-  const typing = stage === 'accession' ? !lookupSelected : selectedRow === 'name' || selectedRow === 'description';
-  useHomeSuspension(busy ? 'busy' : typing ? 'typing' : undefined);
+  const typing = selectedRow === 'name' || selectedRow === 'description';
+  useHomeSuspension(!inputActive ? undefined : busy ? 'busy' : typing ? 'typing' : undefined);
   const viewportHeight = Math.min(layout.details || 1, Math.max(1, terminalRows - layout.chrome));
   const maximumScroll = Math.max(0, layout.details - viewportHeight);
   const scrollOffset = Math.min(detailsScroll, maximumScroll);
@@ -122,136 +106,96 @@ export function AccessionForm({
     }
   });
 
-  const lookUp = (): void => {
-    const candidate = normalizeAccession(accession);
-    if (!isVersionedAssemblyAccession(candidate)) {
-      setProblems([`Accession: ${ncbiAccessionFormatMessage}`]);
-      return;
-    }
-    if (catalog.accessions.some(entry => entry.source === 'ncbi' && entry.id === candidate)) {
-      setProblems([`Accession: ${candidate} is already in the catalog`]);
-      return;
-    }
-    setAccession(candidate);
-    setProblems([]);
-    setBusy('looking-up');
-    fetchMetadata(candidate).then(
-      result => {
-        setBusy(undefined);
-        setLookup(result);
-        // A lookup that NCBI answered without this accession means the accession is wrong;
-        // any other failure only means the facts are not available right now.
-        if (result.state === 'failed' && result.kind === 'not-found') {
-          setProblems([result.message]);
-          return;
-        }
-        setStage('details');
-        setSelectedRow('name');
-      },
-      error => {
-        setBusy(undefined);
-        setProblems([error instanceof Error ? error.message : String(error)]);
-      },
-    );
-  };
-
   const submit = (): void => {
-    const fields = localFields(name, description);
-    const candidate = editing
-      ? withLocalFields(catalog, editing, fields)
-      : withAccession(catalog, {
-        source: 'ncbi', id: accession, parameters: {},
-        ...fields,
-        metadata: lookup?.state === 'retrieved' ? lookup.metadata : null,
-        cached_copies: [],
-      });
-    const entry = candidate.accessions.find(candidateEntry => candidateEntry.source === (editing?.source ?? 'ncbi') && candidateEntry.id === accession);
-    if (!entry) {
-      return;
-    }
-    try {
-      validateAccessionCatalog(candidate);
-    } catch (error) {
-      setProblems(error instanceof AccessionCatalogValidationError
-        ? error.issues.map(issue => `${issue.path.replace(/^\$\.accessions\[\d+\]\./, '')}: ${issue.message}`)
-        : [error instanceof Error ? error.message : String(error)]);
-      return;
-    }
+    const {name: _name, description: _description, ...facts} = editing;
+    const entry = reviewing ? editing : {...facts, ...localFields(name, description)};
     setProblems([]);
-    setBusy('saving');
-    onSubmit(entry).catch(error => {
+    setBusy(selectedRow === 'metadata' ? 'metadata' : 'saving');
+    const save = selectedRow === 'metadata' && onSaveMetadata ? onSaveMetadata : onSubmit;
+    save(entry).catch(error => {
       setBusy(undefined);
       setProblems([error instanceof Error ? error.message : String(error)]);
     });
   };
 
+  const refreshMetadata = async (): Promise<void> => {
+    if (!onRefreshMetadata) {
+      return;
+    }
+    setProblems([]);
+    setBusy('refreshing');
+    try {
+      await onRefreshMetadata();
+    } catch (error) {
+      setProblems([error instanceof Error ? error.message : String(error)]);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  const download = async (): Promise<void> => {
+    if (!onDownload) {
+      return;
+    }
+    const controller = new AbortController();
+    downloadController.current = controller;
+    setProblems([]);
+    setBusy('downloading');
+    try {
+      await onDownload(controller.signal);
+    } catch (error) {
+      setProblems([controller.signal.aborted ? 'Download cancelled. The previous verified copy remains usable.' : error instanceof Error ? error.message : String(error)]);
+    } finally {
+      downloadController.current = undefined;
+      setBusy(undefined);
+    }
+  };
+
   useInput(
-    (_input, key) => {
+    (input, key) => {
       if (busy) {
+        if (key.escape) {
+          if (busy === 'refreshing') {
+            onCancelMetadataRefresh?.();
+          } else if (busy === 'downloading') {
+            downloadController.current?.abort();
+          }
+        }
+        return;
+      }
+      if (!reviewing && onRefreshMetadata && ((!typing && input === 'm') || (key.return && selectedRow === 'refresh'))) {
+        void refreshMetadata();
+        return;
+      }
+      if (!reviewing && onDownload && ((!typing && input === 'g') || (key.return && selectedRow === 'download'))) {
+        void download();
         return;
       }
       if (key.escape) {
         onCancel();
         return;
       }
-      if (stage === 'accession') {
-        if (key.tab || key.upArrow || key.downArrow) {
-          setLookupSelected(current => !current);
-        } else if (key.return && lookupSelected) {
-          lookUp();
-        }
-        return;
-      }
       if (key.pageUp || key.pageDown) {
         setDetailsScroll(Math.max(0, Math.min(maximumScroll, scrollOffset + (key.pageUp ? -viewportHeight : viewportHeight))));
         return;
       }
-      const index = detailRows.indexOf(selectedRow);
+      const index = selectableRows.indexOf(selectedRow);
       if (key.tab || key.upArrow || key.downArrow) {
         const offset = key.upArrow || (key.tab && key.shift) ? -1 : 1;
-        setSelectedRow(detailRows[(index + offset + detailRows.length) % detailRows.length] ?? 'name');
+        setSelectedRow(selectableRows[(index + offset + selectableRows.length) % selectableRows.length] ?? 'save');
+        return;
+      }
+      if (key.return && selectedRow === 'artifacts') {
+        onChooseArtifacts?.();
         return;
       }
       // Enter never submits from a text field.
-      if (key.return && selectedRow === 'save') {
+      if (key.return && (selectedRow === 'save' || selectedRow === 'metadata')) {
         submit();
       }
     },
     {isActive: inputActive},
   );
-
-  const unavailable = lookupProblem(lookup);
-
-  const pageDescription =
-    'Cataloging an accession does not download its assembly; a workflow that needs it downloads it on demand.';
-
-  if (stage === 'accession') {
-    return (
-      <EditPage
-        title="Add accession"
-        description={pageDescription}
-        shortcuts={['Tab/↑/↓ — Field', lookupSelected && 'Enter — Look up']}
-        back="Cancel"
-        saveLabel="Look up NCBI metadata"
-        saveSelected={lookupSelected}
-        saving={busy === 'looking-up'}
-        savingLabel="Looking up NCBI metadata…"
-        problems={problems}
-        problemsTitle="Not looked up:"
-      >
-        <TextField
-          label="Accession"
-          required
-          selected={!lookupSelected}
-          inputActive={inputActive && !busy}
-          defaultValue={accession}
-          displayValue={accession}
-          placeholder="Versioned assembly accession, e.g. GCF_000149205.2"
-          onChange={setAccession}
-        />
-      </EditPage>
-    );
-  }
 
   const shownProblems = problems.slice(0, 1).map(problem => {
     const text = sanitizeTerminalText(problem).replace(/\s+/g, ' ');
@@ -293,32 +237,43 @@ export function AccessionForm({
   return (
     <Box ref={pageRef} flexDirection="column">
       <EditPage
-        title={editing ? `Edit ${editing.id}` : 'Add accession'}
-        description={terminalRows >= 20 ? pageDescription : undefined}
-        shortcuts={['Tab/↑/↓ — Field', 'PageUp/PageDown — Details', selectedRow === 'save' && 'Enter — Save']}
-        back="Cancel"
-        saveLabel={editing ? 'Save changes' : 'Add to catalog'}
+        title={reviewing ? `Review ${editing.id}` : `Edit ${editing.id}`}
+        description={undefined}
+        shortcuts={busy ? [] : ['Tab/↑/↓ — Action or field', 'PageUp/PageDown — Details', !reviewing && !!onDownload && !typing && 'g — Download / refresh', !reviewing && !!onRefreshMetadata && !typing && 'm — Refresh metadata', reviewing && (selectedRow === 'artifacts' ? 'Enter — Choose artifacts' : selectedRow === 'metadata' ? 'Enter — Save metadata' : selectedRow === 'save' && 'Enter — Download')]}
+        back={busy === 'refreshing' ? 'Cancel lookup' : busy === 'downloading' || (busy === 'saving' && reviewing) ? 'Cancel download' : 'Cancel'}
+        saveLabel={reviewing ? 'Download selected artifacts' : 'Save changes'}
+        savingLabel={reviewing ? 'Downloading…' : 'Saving…'}
         saveSelected={selectedRow === 'save'}
         saving={busy === 'saving'}
         problems={shownProblems}
+        after={message && !busy && shownProblems.length === 0 ? <Alert variant={message.variant}>{sanitizeTerminalText(message.text)}</Alert> : undefined}
       >
-        <ParameterList rows={localRows} selectedId={selectedRow} inputActive={inputActive && !busy} labelWidth={labelWidth} />
-        <Box ref={viewportRef} height={viewportHeight} overflow="hidden" flexDirection="column" marginTop={1}>
+        <Section title={reviewing ? 'Download destination' : 'Catalog labels'} marginTop={0}>
+          <ParameterList rows={reviewing ? [
+            {id: 'provider', label: 'Provider', value: registry.get(editing.source).label},
+            localRows[0]!, {id: 'root', label: 'Output root', value: downloadRoot},
+            ...(onChooseArtifacts && busy !== 'saving' ? [{id: 'artifacts', label: 'Artifacts',
+              value: oneLine(registry.get(editing.source).artifacts.filter(artifact => downloadArtifacts.includes(artifact.kind)).map(artifact => artifact.label).join(', ') || 'None selected'), choice: true}] : []),
+          ] : localRows}
+            selectedId={selectedRow} inputActive={inputActive && !busy} labelWidth={labelWidth} />
+        </Section>
+        <Box ref={viewportRef} display={busy === 'downloading' ? 'none' : 'flex'} height={viewportHeight} overflow="hidden" flexDirection="column" marginTop={1}>
           <Box ref={detailsRef} marginTop={-scrollOffset} flexDirection="column" flexShrink={0}>
+            {reviewing && Object.keys(editing.parameters).length > 0 ? <Section title="Pinned parameters" marginTop={0}>
+              <ParameterList rows={Object.entries(editing.parameters).map(([id, value]) => ({id, label: id, value: typeof value === 'string' ? value : JSON.stringify(value) ?? 'not provided'}))} inputActive={false} />
+            </Section> : null}
             {sections.map((section, index) => (
               <Section key={section.id} title={section.title} marginTop={index === 0 ? 0 : 1}>
                 <ParameterList rows={section.rows} inputActive={false} labelWidth={labelWidth} />
               </Section>
             ))}
             {!metadata ? (
-              <Box flexShrink={0} flexDirection="column">
-                <Alert variant="warning">
-                  NCBI metadata was not retrieved{unavailable ? `: ${sanitizeTerminalText(unavailable)}` : '.'}
-                  {' '}You can save now and refresh the metadata later.
-                </Alert>
-              </Box>
+              <Section title="Provider metadata" marginTop={0}>
+                <Text wrap="wrap">{sanitizeTerminalText(registry.get(editing.source).metadataSummary(editing.metadata))}</Text>
+                {reviewing && !registry.get(editing.source).lookupMetadata ? <Text wrap="wrap">This provider does not offer metadata lookup. Check the pinned reference before downloading.</Text> : null}
+              </Section>
             ) : null}
-            {editing ? (
+            {!reviewing ? (
               <Section title="Local copies">
                 {editing.cached_copies.length === 0 && unverifiedCopies.length === 0 ? (
                   <Text color={mutedColor} wrap="wrap">
@@ -346,9 +301,25 @@ export function AccessionForm({
             ) : null}
           </Box>
         </Box>
-        <Text color={mutedColor} wrap="truncate">
+        {busy !== 'downloading' ? <Text color={mutedColor} wrap="truncate">
           {maximumScroll > 0 ? `${scrollOffset > 0 ? '↑ ' : ''}${scrollOffset + 1}–${Math.min(layout.details, scrollOffset + viewportHeight)} / ${layout.details}${scrollOffset < maximumScroll ? ' ↓' : ''}` : ' '}
-        </Text>
+        </Text> : null}
+        {progress ? <Section title="Download progress">
+          <ParameterList rows={progress.phase === 'downloading' ? [{
+            id: 'transfer', label: 'Received', value: `${formatBytes(progress.bytes)}${progress.total ? ` / ${formatBytes(progress.total)}` : ' (total size not supplied)'}`,
+          }] : [{id: 'phase', label: 'Stage', value: {
+            requesting: 'Requesting genome package…', extracting: 'Extracting genome files…',
+            verifying: 'Validating files and checksums…', publishing: 'Publishing verified files…',
+          }[progress.phase]}]} inputActive={false} />
+          {progress.phase === 'downloading' && progress.total ? <ProgressBar value={Math.min(100, 100 * progress.bytes / progress.total)} /> : null}
+        </Section> : null}
+        {!reviewing && (onDownload || onRefreshMetadata) ? <Box marginTop={1} flexDirection="column">
+          {onDownload ? <SaveButton label="Download / refresh" selected={selectedRow === 'download'} busyLabel={busy === 'downloading' ? 'Downloading…' : undefined} /> : null}
+          {onRefreshMetadata ? <SaveButton label="Refresh metadata" selected={selectedRow === 'refresh'} busyLabel={busy === 'refreshing' ? 'Looking up metadata…' : undefined} /> : null}
+        </Box> : null}
+        {reviewing && onSaveMetadata && busy !== 'saving' ? <Box marginTop={1}>
+          <SaveButton label="Save metadata only" selected={selectedRow === 'metadata'} busyLabel={busy === 'metadata' ? 'Saving metadata…' : undefined} />
+        </Box> : null}
       </EditPage>
     </Box>
   );

@@ -1,7 +1,7 @@
 import {basename, isAbsolute, resolve} from 'node:path';
 import {parse} from 'yaml';
-import {genomeSources} from '../genome-sources/registry.js';
-import {referenceKey, sameReference, type GenomeReference} from '../genome-sources/provider.js';
+import {genomeSources} from './registry.js';
+import {referenceKey, sameReference, type GenomeReference} from './provider.js';
 
 export const ACCESSION_CATALOG_SCHEMA_VERSION = 2 as const;
 
@@ -9,7 +9,7 @@ export const ACCESSION_CATALOG_SCHEMA_VERSION = 2 as const;
 export type CachedCopy = {
   path: string;
   verified_at: string;
-  fasta_sha256: string;
+  fasta_sha256?: string;
   gff3_sha256?: string;
 };
 
@@ -128,7 +128,10 @@ function validateCachedCopy(value: unknown, accession: unknown, path: string, is
     issues.push({path: `${path}.path`, message: 'must be a directory named after the accession'});
   }
   validateTimestamp(value.verified_at, `${path}.verified_at`, issues);
-  validateSha256(value.fasta_sha256, `${path}.fasta_sha256`, issues, true);
+  if (value.fasta_sha256 === undefined && value.gff3_sha256 === undefined) {
+    issues.push({path, message: 'must record at least one artifact checksum'});
+  }
+  validateSha256(value.fasta_sha256, `${path}.fasta_sha256`, issues, false);
   validateSha256(value.gff3_sha256, `${path}.gff3_sha256`, issues, false);
 }
 
@@ -255,14 +258,14 @@ export type RecordedCacheState = 'not-cached' | 'cached' | 'conflict';
 /** Why an accession whose cached copies conflict cannot be used, for a validation problem. */
 export const conflictingCopiesMessage =
   'has cached copies whose checksums disagree in the accession catalog; remove the entry under ' +
-  'Manage NCBI accessions, which deletes its cached copies, before using it';
+  'Manage genome sources, which deletes its cached copies, before using it';
 
 export function recordedCacheState(entry: AccessionEntry): RecordedCacheState {
   if (entry.cached_copies.length === 0) {
     return 'not-cached';
   }
-  const fastaChecksums = new Set(entry.cached_copies.map(copy => copy.fasta_sha256));
-  // A FASTA-only copy (from a target-only download) does not contradict one that also has GFF3.
+  const fastaChecksums = new Set(entry.cached_copies.flatMap(copy => copy.fasta_sha256 ?? []));
+  // Different artifact subsets do not conflict; compare only checksums actually recorded.
   const gff3Checksums = new Set(entry.cached_copies.flatMap(copy => copy.gff3_sha256 ?? []));
   return fastaChecksums.size > 1 || gff3Checksums.size > 1 ? 'conflict' : 'cached';
 }

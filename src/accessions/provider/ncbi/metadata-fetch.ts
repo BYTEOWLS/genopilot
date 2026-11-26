@@ -1,4 +1,4 @@
-import type {NcbiAssemblyMetadata, NcbiMetadataSource} from '../genome-sources/ncbi-metadata.js';
+import type {NcbiAssemblyMetadata, NcbiMetadataSource} from './metadata.js';
 
 /** The pinned NCBI Datasets REST API version that metadata is read from. */
 export const ncbiDatasetsApiBaseUrl = 'https://api.ncbi.nlm.nih.gov/datasets/v2';

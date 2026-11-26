@@ -3,8 +3,8 @@ import {createReadStream} from 'node:fs';
 import {lstat, mkdir, readdir, readFile, realpath, rm, stat} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {pipeline} from 'node:stream/promises';
-import {genomeSources} from '../genome-sources/registry.js';
-import {referenceKey, type FileKind, type GenomeReference, type GenomeProviderRegistry} from '../genome-sources/provider.js';
+import {genomeSources} from './registry.js';
+import {referenceKey, type FileKind, type GenomeReference, type GenomeProviderRegistry} from './provider.js';
 import {
   type AccessionCatalog,
   type AccessionEntry,
@@ -81,8 +81,8 @@ const sha256Pattern = /^[0-9a-f]{64}$/;
 
 async function readRecordedChecksums(
   directory: string,
-  includeGff3: boolean,
-): Promise<{fasta: string; gff3?: string} | string> {
+  kinds?: readonly FileKind[],
+): Promise<{fasta?: string; gff3?: string} | string> {
   let source: string;
   try {
     source = await readFile(join(directory, checksumsFileName), 'utf8');
@@ -100,14 +100,25 @@ async function readRecordedChecksums(
   if (typeof parsed !== 'object' || parsed === null) {
     return `${checksumsFileName} is not a checksum record`;
   }
-  const {fasta, gff3} = parsed as {fasta?: unknown; gff3?: unknown};
-  if (typeof fasta !== 'string' || !sha256Pattern.test(fasta)) {
-    return `${checksumsFileName} records no FASTA checksum`;
+  const values = parsed as {fasta?: unknown; gff3?: unknown};
+  if (values.fasta === undefined && values.gff3 === undefined) {
+    return `${checksumsFileName} records no artifacts`;
   }
-  if (includeGff3 && gff3 !== undefined && (typeof gff3 !== 'string' || !sha256Pattern.test(gff3))) {
-    return `${checksumsFileName} records an invalid GFF3 checksum`;
+  const selected: {fasta?: string; gff3?: string} = {};
+  for (const kind of kinds ?? ['fasta', 'gff3']) {
+    const value = values[kind];
+    if (value === undefined) {
+      if (kind === 'fasta' && kinds?.includes('fasta')) {
+        return `${checksumsFileName} records no FASTA checksum`;
+      }
+      continue;
+    }
+    if (typeof value !== 'string' || !sha256Pattern.test(value)) {
+      return `${checksumsFileName} records an invalid ${kind === 'fasta' ? 'FASTA' : 'GFF3'} checksum`;
+    }
+    selected[kind] = value;
   }
-  return includeGff3 && typeof gff3 === 'string' ? {fasta, gff3} : {fasta};
+  return selected;
 }
 
 /** Verify requested files; catalog discovery checks every recorded file by default. */
@@ -116,16 +127,16 @@ export async function inspectCopy(
   root: string,
   directory: string,
   metadata: unknown = null,
-  {signal, kinds = ['fasta', 'gff3']}: {signal?: AbortSignal; kinds?: readonly FileKind[]} = {},
+  {signal, kinds}: {signal?: AbortSignal; kinds?: readonly FileKind[]} = {},
 ): Promise<ScannedCopy> {
   signal?.throwIfAborted();
   const base = {...reference, root, path: directory, metadata};
-  const recorded = await readRecordedChecksums(directory, kinds.includes('gff3'));
+  const recorded = await readRecordedChecksums(directory, kinds);
   if (typeof recorded === 'string') {
     return {...base, state: 'incomplete', problem: recorded};
   }
   const files = [
-    {name: fastaFileName, expected: recorded.fasta},
+    ...(recorded.fasta ? [{name: fastaFileName, expected: recorded.fasta}] : []),
     ...(recorded.gff3 ? [{name: gff3FileName, expected: recorded.gff3}] : []),
   ];
   for (const file of files) {
@@ -137,7 +148,7 @@ export async function inspectCopy(
       return {...base, state: 'checksum-invalid', problem: `${file.name} does not match its recorded checksum`};
     }
   }
-  return {...base, state: 'verified', fasta_sha256: recorded.fasta, ...(recorded.gff3 ? {gff3_sha256: recorded.gff3} : {})};
+  return {...base, state: 'verified', ...(recorded.fasta ? {fasta_sha256: recorded.fasta} : {}), ...(recorded.gff3 ? {gff3_sha256: recorded.gff3} : {})};
 }
 
 /** Removes repeated roots while keeping their order. */
@@ -231,7 +242,8 @@ export function applyCacheScan(
   const copiesFor = (entry: AccessionEntry | undefined, key: string): CachedCopy[] =>
     (verified.get(key) ?? []).map(copy => {
       const next: CachedCopy = {
-        path: copy.path, verified_at: scan.scannedAt, fasta_sha256: copy.fasta_sha256!,
+        path: copy.path, verified_at: scan.scannedAt,
+        ...(copy.fasta_sha256 ? {fasta_sha256: copy.fasta_sha256} : {}),
         ...(copy.gff3_sha256 ? {gff3_sha256: copy.gff3_sha256} : {}),
       };
       return entry?.cached_copies.find(previous => sameCopy(previous, next)) ?? next;

@@ -14,7 +14,7 @@ export const welcomeCommands = [
   {id: 'help', label: 'Help', group: 'primary'},
   {id: 'gff3-replace', label: 'Find and replace in GFF3', description: 'Rename IDs and values', group: 'secondary'},
   {id: 'manage-isolates', label: 'Manage isolates', group: 'secondary'},
-  {id: 'manage-accessions', label: 'Manage NCBI accessions', group: 'secondary'},
+  {id: 'manage-accessions', label: 'Manage accessions', group: 'secondary'},
   {id: 'check-tooling', label: 'Manage tooling', group: 'secondary'},
 ] as const satisfies readonly CommandDefinition[];
 

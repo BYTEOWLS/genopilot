@@ -1,5 +1,5 @@
-import {ncbiMetadata} from '../../src/genome-sources/ncbi.js';
-import {parseAssemblyReport} from '../../src/accessions/ncbi-metadata.js';
+import {ncbiMetadata} from '../../src/accessions/provider/ncbi/index.js';
+import {parseAssemblyReport} from '../../src/accessions/provider/ncbi/metadata-fetch.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {mkdir, mkdtemp, readdir, realpath, rm, stat, symlink, writeFile} from 'node:fs/promises';

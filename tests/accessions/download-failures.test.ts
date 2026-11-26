@@ -4,9 +4,9 @@ import {mkdir, mkdtemp, readFile, readdir, rm, writeFile} from 'node:fs/promises
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
-import {resolveGenomeCache} from '../../src/genome-sources/cache.js';
-import {ncbiProvider} from '../../src/genome-sources/ncbi.js';
-import {GenomeProviderRegistry} from '../../src/genome-sources/provider.js';
+import {resolveGenomeCache} from '../../src/accessions/cache.js';
+import {ncbiProvider} from '../../src/accessions/provider/ncbi/index.js';
+import {GenomeProviderRegistry} from '../../src/accessions/provider.js';
 import {deleteAccessionCaches} from '../../src/accessions/cache-discovery.js';
 
 const reference = {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}};

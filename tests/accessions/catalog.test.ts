@@ -1,4 +1,4 @@
-import {ncbiMetadata} from '../../src/genome-sources/ncbi.js';
+import {ncbiMetadata} from '../../src/accessions/provider/ncbi/index.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {

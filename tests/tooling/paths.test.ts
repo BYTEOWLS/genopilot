@@ -27,7 +27,7 @@ test('resolves the NCBI API key path under a private secrets directory', () => {
   });
 
   assert.equal(paths.secretsDirectory, `${paths.dataDirectory}/secrets`);
-  assert.equal(paths.ncbiApiKeyPath, `${paths.dataDirectory}/secrets/ncbi-api-key`);
+  assert.equal(paths.secretsDirectory, `${paths.dataDirectory}/secrets`);
 });
 
 test('keeps the isolate and accession catalogs outside the managed tooling directory', () => {

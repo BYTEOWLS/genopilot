@@ -1,4 +1,4 @@
-import {ncbiMetadata} from '../../genome-sources/ncbi.js';
+import {ncbiMetadata} from '../../accessions/provider/ncbi/index.js';
 import {basename, resolve} from 'node:path';
 import React, {useEffect, useState} from 'react';
 import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
@@ -9,7 +9,8 @@ import {readPairs, type IsolateCatalog} from '../../isolates/catalog.js';
 import {illuminaCompatibility} from '../../isolates/illumina/metadata.js';
 import {lineage, trimmedStatus} from '../../isolates/presentation.js';
 import {loadIsolateCatalog} from '../../isolates/store.js';
-import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
+import {providerSettings} from '../../tooling/provider-settings.js';
+import {ncbiProvider} from '../../accessions/provider/ncbi/index.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import type {GenoPilotDetails} from '../../workflows/configuration-validation.js';
 import {
@@ -63,7 +64,7 @@ async function defaultLoadIsolateCatalog(): Promise<IsolateCatalog> {
 }
 
 async function defaultNcbiApiKeyCheck(): Promise<boolean> {
-  return isNcbiApiKeyConfigured(resolveToolingPaths().ncbiApiKeyPath);
+  return !!(await providerSettings().read(ncbiProvider))['api-key'];
 }
 
 async function defaultRegisterAccessionCaches(outputRoot: string, currentDirectory: string): Promise<string> {
@@ -175,6 +176,7 @@ function backboneSection(prepared: PreparedReferenceConsensusRun, inspection: Ru
   }
   const entry = inspection.backboneEntry;
   const copies = entry && recordedCacheState(entry) === 'cached' ? entry.cached_copies : [];
+  const fastaChecksum = copies.find(copy => copy.fasta_sha256)?.fasta_sha256;
   const facts = ncbiMetadata(entry?.metadata ?? null);
   return {
     id: 'backbone',
@@ -193,7 +195,7 @@ function backboneSection(prepared: PreparedReferenceConsensusRun, inspection: Ru
       },
       {
         label: 'FASTA checksum',
-        value: copies[0] ? `sha256 ${copies[0].fasta_sha256}` : 'Not known yet; recorded when downloaded',
+        value: fastaChecksum ? `sha256 ${fastaChecksum}` : 'Not known yet; recorded when downloaded',
       },
     ],
   };
@@ -423,7 +425,7 @@ export function ReferenceConsensusConfigurationScreen({
         ...(usesNcbi
           ? [{
               label: 'NCBI API key',
-              value: apiKeyConfigured ? 'Configured' : 'Not set (rate-limited) — add one in Manage NCBI accessions',
+              value: apiKeyConfigured ? 'Configured' : 'Not set (rate-limited) — configure in Manage tooling → Accession Providers',
             }]
           : []),
       ];

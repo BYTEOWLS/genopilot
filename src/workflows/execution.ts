@@ -3,7 +3,8 @@ import {mkdir, open} from 'node:fs/promises';
 import {dirname, delimiter, join, resolve} from 'node:path';
 import {finished} from 'node:stream/promises';
 import {packagedPath} from '../package-root.js';
-import {readNcbiApiKey} from '../tooling/ncbi-api-key.js';
+import {providerSettings} from '../tooling/provider-settings.js';
+import {ncbiProvider} from '../accessions/provider/ncbi/index.js';
 import {resolveToolingPaths, type ToolingPaths} from '../tooling/paths.js';
 import {formatCompactUtcTimestamp} from './timestamps.js';
 import {RUN_EVENTS_FILENAME} from './run-events.js';
@@ -175,13 +176,13 @@ export async function executeSnakemakeRun(
   {
     paths = resolveToolingPaths(),
     spawnProcess = spawn as WorkflowProcessSpawner,
-    readApiKey = readNcbiApiKey,
+    readApiKey = async () => (await providerSettings(paths.secretsDirectory).read(ncbiProvider))['api-key'],
     loggerDirectory = packagedLoggerDirectory,
     readProcesses = readProcessList,
   }: {
     paths?: ToolingPaths;
     spawnProcess?: WorkflowProcessSpawner;
-    readApiKey?: (path: string) => Promise<string | undefined>;
+    readApiKey?: () => Promise<string | undefined>;
     loggerDirectory?: string;
     readProcesses?: ProcessListReader;
   } = {},
@@ -192,7 +193,7 @@ export async function executeSnakemakeRun(
     throw cancelled();
   }
   await mkdir(dirname(prepared.stdoutLogPath), {recursive: true, mode: 0o700});
-  const apiKey = await readApiKey(paths.ncbiApiKeyPath);
+  const apiKey = await readApiKey();
   const environment: NodeJS.ProcessEnv = {
     HOME: process.env.HOME,
     LANG: process.env.LANG,

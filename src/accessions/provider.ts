@@ -1,13 +1,18 @@
 export type GenomeReference = {source: string; id: string; parameters: Record<string, unknown>};
 export type FileKind = 'fasta' | 'gff3';
+export type GenomeArtifact = {kind: FileKind; label: string};
 export type ProviderField = {id: string; label: string; kind: 'secret'; required: boolean};
+export type GenomeDownloadProgress =
+  | {phase: 'requesting' | 'extracting' | 'verifying' | 'publishing'}
+  | {phase: 'downloading'; bytes: number; total?: number};
 export type ProviderContext = {
   signal: AbortSignal;
   secrets: Readonly<Record<string, string>>;
   fetchImpl?: typeof fetch;
+  onProgress?: (progress: GenomeDownloadProgress) => void;
 };
 export type DownloadFacts = {
-  files: {fasta: string; gff3?: string};
+  files: {fasta?: string; gff3?: string};
   metadata: unknown;
   facts: Record<string, unknown>;
   annotation: 'available' | 'unavailable' | 'not-requested';
@@ -20,6 +25,7 @@ export interface GenomeProvider {
   description: string;
   cacheDirectory: string;
   fields: readonly ProviderField[];
+  artifacts: readonly GenomeArtifact[];
   validateReference(id: string, parameters: unknown): GenomeReference;
   validateMetadata(metadata: unknown): void;
   metadataSummary(metadata: unknown): string;
@@ -53,6 +59,16 @@ export class GenomeProviderRegistry {
     }
     if (this.has(provider.id) || this.list().some(other => other.cacheDirectory === provider.cacheDirectory)) {
       throw new Error('Duplicate provider or cache directory.');
+    }
+    const artifacts = new Set<FileKind>();
+    for (const artifact of provider.artifacts) {
+      if (!['fasta', 'gff3'].includes(artifact.kind) || !artifact.label.trim() || artifacts.has(artifact.kind)) {
+        throw new Error('Invalid or duplicate provider artifact.');
+      }
+      artifacts.add(artifact.kind);
+    }
+    if (artifacts.size === 0) {
+      throw new Error('A genome provider must declare downloadable artifacts.');
     }
     const fields = new Set<string>();
     for (const field of provider.fields) {

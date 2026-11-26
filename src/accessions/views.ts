@@ -10,7 +10,10 @@ export async function accessionGenomeView(entry: AccessionEntry, application: {n
   if (recordedCacheState(entry) !== 'cached') {
     throw new Error('A verified, non-conflicting cached copy is required to view this accession.');
   }
-  const copy = entry.cached_copies[0]!;
+  const copy = entry.cached_copies.find(copy => copy.fasta_sha256);
+  if (!copy?.fasta_sha256) {
+    throw new Error('A verified genome FASTA is required to view this entry.');
+  }
   const fasta = join(copy.path, 'genomic.fna');
   const annotation = copy.gff3_sha256 ? join(copy.path, 'genomic.gff') : undefined;
   const referenceSnapshot = await verify(fasta, copy.fasta_sha256, signal);

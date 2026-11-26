@@ -1,8 +1,8 @@
-import {ncbiMetadata} from '../../genome-sources/ncbi.js';
+import {ncbiMetadata} from '../../accessions/provider/ncbi/index.js';
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
 import {basename, resolve} from 'node:path';
-import {normalizeAccession} from '../../accessions/accession.js';
+import {normalizeAccession} from '../../accessions/provider/ncbi/accession.js';
 import {
   conflictingCopiesMessage,
   recordedCacheState,

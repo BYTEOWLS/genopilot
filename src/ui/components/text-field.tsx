@@ -17,6 +17,7 @@ export function TextField({
   displayValue,
   placeholder = 'Type or paste',
   preview,
+  mask,
   onChange,
 }: {
   label: string;
@@ -28,6 +29,7 @@ export function TextField({
   displayValue: string;
   placeholder?: string;
   preview?: string;
+  mask?: string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -43,6 +45,7 @@ export function TextField({
             <TextInput
               isDisabled={!inputActive}
               defaultValue={defaultValue}
+              mask={mask}
               placeholder={placeholder}
               onChange={onChange}
             />

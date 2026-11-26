@@ -3,7 +3,7 @@ import {access, mkdir, readdir, readFile, rm, rmdir, stat, writeFile} from 'node
 import {constants} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {stringify} from 'yaml';
-import {ncbiCacheDirectoryName} from '../genome-sources/ncbi.js';
+import {ncbiCacheDirectoryName} from '../accessions/provider/ncbi/index.js';
 import {formatCompactUtcTimestamp} from './timestamps.js';
 import type {ConfigurationValidationIssue, CpuMode} from './configuration-validation.js';
 

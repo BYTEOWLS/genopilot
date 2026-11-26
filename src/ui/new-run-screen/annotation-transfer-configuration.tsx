@@ -4,7 +4,8 @@ import React, {useEffect, useState} from 'react';
 import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
 import {refreshAccessionCaches} from '../../accessions/registration.js';
 import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
-import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
+import {providerSettings} from '../../tooling/provider-settings.js';
+import {ncbiProvider} from '../../accessions/provider/ncbi/index.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import type {GenoPilotDetails} from '../../workflows/configuration-validation.js';
 import type {AnnotationTransferConfiguration} from '../../workflows/annotation-transfer/configuration.js';
@@ -53,7 +54,7 @@ export type NcbiCacheEntryFinder = (
 export type AccessionCacheRegistration = (outputRoot: string, currentDirectory: string) => Promise<string>;
 
 async function defaultNcbiApiKeyCheck(): Promise<boolean> {
-  return isNcbiApiKeyConfigured(resolveToolingPaths().ncbiApiKeyPath);
+  return !!(await providerSettings().read(ncbiProvider))['api-key'];
 }
 
 async function defaultRegisterAccessionCaches(outputRoot: string, currentDirectory: string): Promise<string> {
@@ -265,7 +266,7 @@ export function AnnotationTransferConfigurationScreen({
           label: 'NCBI API key',
           value: apiKeyConfigured
             ? 'Configured'
-            : 'Not set (rate-limited) — add one in Manage NCBI accessions',
+            : 'Not set (rate-limited) — configure in Manage tooling → Accession Providers',
         });
         for (const input of ['reference', 'target'] as const) {
           const configuredInput = run.configuration.inputs[input];

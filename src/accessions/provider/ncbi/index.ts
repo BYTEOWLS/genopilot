@@ -1,13 +1,13 @@
 import {createWriteStream} from 'node:fs';
 import {mkdir, readFile, rm} from 'node:fs/promises';
 import {join} from 'node:path';
-import {Readable} from 'node:stream';
+import {Readable, Transform} from 'node:stream';
 import type {ReadableStream as NodeReadableStream} from 'node:stream/web';
 import {pipeline} from 'node:stream/promises';
-import {isVersionedAssemblyAccession, normalizeAccession, ncbiAccessionFormatMessage} from '../accessions/accession.js';
-import {fetchAssemblyMetadata, ncbiDatasetsApiBaseUrl, parseAssemblyReport} from '../accessions/ncbi-metadata.js';
-import {validateNcbiMetadata, type NcbiAssemblyMetadata} from './ncbi-metadata.js';
-import type {GenomeProvider, GenomeReference} from './provider.js';
+import {isVersionedAssemblyAccession, normalizeAccession, ncbiAccessionFormatMessage} from './accession.js';
+import {fetchAssemblyMetadata, ncbiDatasetsApiBaseUrl, parseAssemblyReport} from './metadata-fetch.js';
+import {validateNcbiMetadata, type NcbiAssemblyMetadata} from './metadata.js';
+import type {GenomeProvider, GenomeReference} from '../../provider.js';
 import {extractZipMember, zipMembers, type ZipMember} from './zip.js';
 
 export function ncbiMetadata(value: unknown): NcbiAssemblyMetadata | null {
@@ -44,6 +44,7 @@ export const ncbiProvider: GenomeProvider = {
   description: 'Versioned genome assemblies from NCBI Datasets.',
   cacheDirectory: ncbiCacheDirectoryName,
   fields: [{id: 'api-key', label: 'API key', kind: 'secret', required: false}],
+  artifacts: [{kind: 'fasta', label: 'Genome sequence (FASTA)'}, {kind: 'gff3', label: 'Genome annotation (GFF3)'}],
   validateReference,
   validateMetadata(value) { ncbiMetadata(value); },
   metadataSummary(value) {
@@ -68,10 +69,14 @@ export const ncbiProvider: GenomeProvider = {
     validateReference(reference.id, reference.parameters);
     context.signal.throwIfAborted();
     const url = new URL(`${ncbiDatasetsApiBaseUrl}/genome/accession/${encodeURIComponent(reference.id)}/download`);
-    url.searchParams.append('include_annotation_type', 'GENOME_FASTA');
+    if (kinds.includes('fasta')) {
+      url.searchParams.append('include_annotation_type', 'GENOME_FASTA');
+    }
     if (kinds.includes('gff3')) {
       url.searchParams.append('include_annotation_type', 'GENOME_GFF');
     }
+    context.onProgress?.({phase: 'requesting'});
+    context.signal.throwIfAborted();
     let response: Response;
     try {
       response = await (context.fetchImpl ?? fetch)(url, {
@@ -87,10 +92,28 @@ export const ncbiProvider: GenomeProvider = {
     }
     const archive = join(staging, 'dataset.zip');
     try {
-      await pipeline(Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>), createWriteStream(archive, {flags: 'wx', mode: 0o600}), {signal: context.signal});
+      const length = Number(response.headers.get('content-length'));
+      const total = Number.isSafeInteger(length) && length > 0 && !response.headers.get('content-encoding') ? length : undefined;
+      let bytes = 0;
+      let reported = 0;
+      context.onProgress?.({phase: 'downloading', bytes, ...(total ? {total} : {})});
+      const count = new Transform({transform(chunk: Buffer, _encoding, callback) {
+        bytes += chunk.length;
+        // Bound UI updates by bytes, without timers or guessing a missing transfer length.
+        if (reported === 0 || bytes - reported >= 1024 * 1024) {
+          context.onProgress?.({phase: 'downloading', bytes, ...(total ? {total} : {})});
+          reported = bytes;
+        }
+        callback(null, chunk);
+      }});
+      await pipeline(Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>), count, createWriteStream(archive, {flags: 'wx', mode: 0o600}), {signal: context.signal});
+      context.signal.throwIfAborted();
+      context.onProgress?.({phase: 'downloading', bytes, ...(total ? {total} : {})});
+      context.signal.throwIfAborted();
+      context.onProgress?.({phase: 'extracting'});
       const members = await zipMembers(archive);
       const prefix = `ncbi_dataset/data/${reference.id}/`;
-      const fasta = uniqueMember(members.filter(member => member.name.startsWith(prefix) && !member.name.slice(prefix.length).includes('/') && member.name.endsWith('_genomic.fna')), 'genome FASTA', true)!;
+      const fasta = kinds.includes('fasta') ? uniqueMember(members.filter(member => member.name.startsWith(prefix) && !member.name.slice(prefix.length).includes('/') && member.name.endsWith('_genomic.fna')), 'genome FASTA', true)! : undefined;
       const gff3 = kinds.includes('gff3') ? uniqueMember(members.filter(member => member.name === `${prefix}genomic.gff`), 'genome GFF3', false) : undefined;
       const report = uniqueMember(members.filter(member => member.name === 'ncbi_dataset/data/assembly_data_report.jsonl'), 'assembly report', true)!;
       if (report.size > 16 * 1024 * 1024) {
@@ -110,12 +133,14 @@ export const ncbiProvider: GenomeProvider = {
       if (matching.length !== 1 || reports.length !== 1) {
         throw new Error('NCBI package does not contain exactly one matching assembly report.');
       }
-      await extractZipMember(archive, fasta, join(staging, 'genomic.fna'), context.signal);
+      if (fasta) {
+        await extractZipMember(archive, fasta, join(staging, 'genomic.fna'), context.signal);
+      }
       if (gff3) {
         await extractZipMember(archive, gff3, join(staging, 'genomic.gff'), context.signal);
       }
       return {
-        files: {fasta: 'genomic.fna', ...(gff3 ? {gff3: 'genomic.gff'} : {})},
+        files: {...(fasta ? {fasta: 'genomic.fna'} : {}), ...(gff3 ? {gff3: 'genomic.gff'} : {})},
         metadata: matching[0],
         facts: {source: 'ncbi', id: reference.id, api: 'datasets-v2-rest'},
         annotation: kinds.includes('gff3') ? (gff3 ? 'available' : 'unavailable') : 'not-requested',

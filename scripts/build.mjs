@@ -60,6 +60,19 @@ const gff3Worker = await build({
   minifySyntax: true,
 });
 
+// Noninteractive genome resolver; shares provider/cache code with the catalog.
+const genomeSource = await build({
+  metafile: true,
+  entryPoints: ['src/accessions/entry.ts'],
+  outfile: 'dist/genome-source.js',
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node24',
+  minifyWhitespace: true,
+  minifySyntax: true,
+});
+
 await mkdir('dist/browser/assets', {recursive: true});
 const page = await build({metafile: true, entryPoints: ['src/browser/page/main.tsx'], outfile: 'dist/browser/assets/page.js', bundle: true, platform: 'browser', format: 'esm', minify: true, legalComments: 'eof'});
 await writeFile('dist/browser/assets/index.html', `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${applicationLabel} · Documentation</title><link rel="stylesheet" href="page.css"></head><body><div id="root"></div><script type="module" src="page.js"></script></body></html>`);
@@ -91,7 +104,7 @@ function permitted(license) {
 }
 
 const packages = new Set();
-for (const result of [cli, gff3Worker, page, igv]) {
+for (const result of [cli, gff3Worker, genomeSource, page, igv]) {
   for (const input of Object.keys(result.metafile.inputs).filter(path => path.includes('node_modules/'))) {
     packages.add(await packageDirectory(input));
   }
