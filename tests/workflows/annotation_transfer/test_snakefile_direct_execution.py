@@ -8,6 +8,7 @@ locally installed bioinformatics tooling to collect at all.
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -16,7 +17,8 @@ import time
 import unittest
 from pathlib import Path
 
-from ..shared._load import LOGGING_DIR
+from ..shared._load import LOGGING_DIR, PROJECT_ROOT
+from ..shared.cache_fixture import cached_genome
 from ._load import FIXTURES_DIR, WORKFLOW_DIR
 
 SNAKEMAKE_BIN = shutil.which("snakemake")
@@ -32,7 +34,7 @@ def write_local_config(run_dir: Path) -> Path:
     config_path.write_text(
         "\n".join(
             [
-                "schema_version: 1",
+                "schema_version: 2",
                 "workflow_id: annotation-transfer",
                 "workflow_version: 1",
                 "genopilot:",
@@ -234,6 +236,29 @@ class LocalSourceExecutionTests(unittest.TestCase):
     on the LiftOn stages; see FullPipelineExecutionTests for those, gated
     on lifton/miniprot/minimap2 actually being installed."""
 
+    @unittest.skipUnless((shutil.which("node") or os.environ.get("GENOPILOT_NODE_EXECUTABLE")) and
+                         (PROJECT_ROOT / "dist" / "genome-source.js").is_file(), "build the Node resolver first")
+    def test_reuses_a_cross_root_provider_cache_without_the_catalog_or_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            run_dir = root / "run"
+            run_dir.mkdir()
+            config_path = write_local_config(run_dir)
+            remote = cached_genome(root / "other-root", FIXTURES_DIR / "reference.fasta", FIXTURES_DIR / "reference.gff3")
+            text = config_path.read_text()
+            start, end = text.index("inputs:\n"), text.index("lifton:\n")
+            config_path.write_text(text[:start] + "inputs: " + json.dumps({
+                "reference": remote, "target": {"source": "local", "fasta": str(FIXTURES_DIR / "target.fasta")},
+            }) + "\n" + text[end:])
+            result = run_snakemake(run_dir, config_path, "results/input-validation.json")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for kind in ("fasta", "gff3"):
+                record = json.loads((run_dir / "provenance" / f"reference.{kind}.json").read_text())
+                self.assertFalse(record["downloaded"])
+                self.assertEqual(record["origin"], "imported")
+                self.assertEqual(record["checksum"]["value"], remote["copy"][f"{kind}_sha256"])
+            self.assertEqual((run_dir / "resolved/reference.fasta").read_bytes(), (FIXTURES_DIR / "reference.fasta").read_bytes())
+
     def test_resolves_and_validates_the_synthetic_fixtures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             run_dir = Path(tmp) / "runs" / "test-run"
@@ -406,6 +431,86 @@ class LocalSourceExecutionTests(unittest.TestCase):
 
 
 @unittest.skipUnless(SNAKEMAKE_BIN, "snakemake is not installed on PATH")
+@unittest.skipUnless((shutil.which("node") or os.environ.get("GENOPILOT_NODE_EXECUTABLE")) and
+                     (PROJECT_ROOT / "dist" / "genome-source.js").is_file(), "build the Node resolver first")
+class ParallelProviderResolutionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.run_dir = self.root / "run"
+        self.run_dir.mkdir()
+        self.config_path = write_local_config(self.run_dir)
+        self.events_path = self.run_dir / "events.jsonl"
+
+    def run_inputs(self, reference: dict, target: dict) -> subprocess.CompletedProcess:
+        text = self.config_path.read_text()
+        start, end = text.index("inputs:\n"), text.index("lifton:\n")
+        self.config_path.write_text(text[:start] + "inputs: " + json.dumps({
+            "reference": reference, "target": target,
+        }) + "\n" + text[end:])
+        return run_snakemake(
+            self.run_dir, self.config_path, "--cores", "2", "--keep-going",
+            "--logger", "genopilot-run-events",
+            "--logger-genopilot-run-events-path", str(self.events_path),
+            "resolved/reference.fasta", "resolved/target.fasta",
+            env={**os.environ, "PYTHONPATH": str(LOGGING_DIR)},
+        )
+
+    def test_shared_genome_resolvers_are_serialized_by_snakemake(self) -> None:
+        reference = cached_genome(self.root / "cache", FIXTURES_DIR / "reference.fasta", FIXTURES_DIR / "reference.gff3")
+        target = {**reference, "copy": {key: value for key, value in reference["copy"].items() if key != "gff3_sha256"}}
+        result = self.run_inputs(reference, target)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("shared_genome_cache=1", result.stdout + result.stderr)
+        active = set()
+        started = set()
+        for line in self.events_path.read_text().splitlines():
+            event = json.loads(line)
+            if event["type"] == "job-started":
+                self.assertFalse(active, "same-genome resolver jobs must not overlap")
+                active.add(event["job_id"])
+                started.add(event["rule"])
+            elif event["type"] == "job-finished":
+                active.discard(event["job_id"])
+        self.assertEqual(started, {"resolve_reference", "resolve_target"})
+        self.assertFalse(active)
+        for role in ("reference", "target"):
+            record = json.loads((self.run_dir / f"provenance/{role}.fasta.json").read_text())
+            self.assertFalse(record["downloaded"])
+            self.assertEqual(record["checksum"]["value"], reference["copy"]["fasta_sha256"])
+            self.assertEqual((self.run_dir / f"resolved/{role}.fasta").read_bytes(), (FIXTURES_DIR / "reference.fasta").read_bytes())
+
+    def test_different_genomes_do_not_consume_the_serializing_resource(self) -> None:
+        reference = cached_genome(self.root / "cache", FIXTURES_DIR / "reference.fasta", FIXTURES_DIR / "reference.gff3")
+        target = cached_genome(self.root / "cache", FIXTURES_DIR / "target.fasta", identifier="GCA_000000002.1")
+        result = self.run_inputs(reference, target)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("shared_genome_cache=0", result.stdout + result.stderr)
+        self.assertNotIn("shared_genome_cache=1", result.stdout + result.stderr)
+        edges = rule_dependencies(self.run_dir, self.config_path)
+        self.assertNotIn(("resolve_reference", "resolve_target"), edges)
+        self.assertNotIn(("resolve_target", "resolve_reference"), edges)
+
+    def test_missing_reference_annotation_does_not_block_target_resolution(self) -> None:
+        target = cached_genome(self.root, FIXTURES_DIR / "reference.fasta")
+        cache = Path(target["copy"]["path"])
+        record_path = cache / "genome.json"
+        record = json.loads(record_path.read_text())
+        record["annotation"] = "unavailable"
+        record_path.write_text(json.dumps(record))
+        reference = {key: value for key, value in target.items() if key != "copy"}
+        result = self.run_inputs(reference, target)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((self.run_dir / "resolved/target.fasta").is_file())
+        self.assertFalse((self.run_dir / "resolved/reference.fasta").exists())
+        provenance = json.loads((self.run_dir / "provenance/target.fasta.json").read_text())
+        self.assertFalse(provenance["downloaded"])
+        self.assertIn("gff3", (self.run_dir / "logs/resolve-reference.log").read_text())
+        self.assertFalse((cache.parent / ("." + target["reference"]["id"] + ".lock")).exists())
+
+
+@unittest.skipUnless(SNAKEMAKE_BIN, "snakemake is not installed on PATH")
 class DirectExecutionContractTests(unittest.TestCase):
     """Exercises the complete DAG with deterministic synthetic LiftOn evidence.
 
@@ -426,9 +531,25 @@ class DirectExecutionContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             run_dir, config_path, _bin_dir, env = self.prepare(Path(tmp))
 
-            first = run_snakemake(run_dir, config_path, env=env)
+            env["PYTHONPATH"] = str(LOGGING_DIR)
+            events_path = run_dir / "events.jsonl"
+            first = run_snakemake(
+                run_dir, config_path,
+                "--logger", "genopilot-run-events",
+                "--logger-genopilot-run-events-path", str(events_path), env=env,
+            )
 
             self.assertEqual(first.returncode, 0, first.stderr)
+            provenance = json.loads((run_dir / "provenance/run.json").read_text())
+            started = {
+                event["rule"]: event for line in events_path.read_text().splitlines()
+                if (event := json.loads(line)).get("type") == "job-started"
+            }
+            for command in provenance["commands"]:
+                if command["rule"] in ("resolve_reference", "resolve_target"):
+                    actual = shlex.split(started[command["rule"]]["command"])
+                    self.assertEqual(command["argv"], actual[:len(command["argv"])])
+                    self.assertTrue(Path(command["argv"][0]).is_absolute())
             summary_path = run_dir / "results" / "summary.json"
             artifacts_path = run_dir / "artifacts.yaml"
             self.assertEqual(

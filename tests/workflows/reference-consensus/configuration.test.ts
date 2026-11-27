@@ -11,12 +11,12 @@ import {parseIsolateSnapshot} from '../../../src/workflows/reference-consensus/s
 import {testMachine, testMachineYaml} from '../machine.js';
 
 const validConfiguration = {
-  schema_version: 1,
+  schema_version: 2,
   workflow_id: 'reference-consensus',
   workflow_version: 1,
   genopilot: {version: '1.2.3', igv: '3.8.9'},
   inputs: {
-    backbone: {source: 'ncbi', accession: 'GCF_000149205.2', ncbi_cache_mode: 'reuse'},
+    backbone: {source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}}, cache_mode: 'reuse'},
     isolates_file: 'isolates.yaml',
     selected_isolates: ['isolate-a', 'isolate-b'],
     selected_read_sets: ['isolate-a/reads', 'isolate-b/reads'],
@@ -53,7 +53,7 @@ function issuePaths(value: unknown): string[] {
 
 test('parses a saved configuration directly from YAML', () => {
   const parsed = parseReferenceConsensusConfiguration(`
-schema_version: 1
+schema_version: 2
 workflow_id: reference-consensus
 workflow_version: 1
 genopilot:
@@ -197,11 +197,11 @@ test('saves the tie scope and the trusted isolate only where they apply', () => 
 
 test('refuses an unversioned accession and a backbone mixing both sources', () => {
   assert.deepEqual(issuePaths(withChange(value => {
-    value.inputs.backbone.accession = 'GCF_000149205';
-  })), ['$.inputs.backbone.accession']);
+    value.inputs.backbone.reference.id = 'GCF_000149205';
+  })), ['$.inputs.backbone.reference']);
   assert.deepEqual(issuePaths(withChange(value => {
-    value.inputs.backbone = {source: 'local', fasta: '/data/backbone.fa', accession: 'GCF_000149205.2'};
-  })), ['$.inputs.backbone.accession']);
+    value.inputs.backbone = {source: 'local', fasta: '/data/backbone.fa', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}}};
+  })), ['$.inputs.backbone.reference']);
   assert.deepEqual(issuePaths(withChange(value => {
     value.inputs.backbone = {source: 'local', fasta: 'relative/backbone.fa'};
   })), ['$.inputs.backbone.fasta']);
@@ -222,4 +222,10 @@ test('parses a snapshot holding exactly the selection, in order', () => {
     () => parseIsolateSnapshot(source.replace('trimmed: true', 'trimmed: yes please'), ['isolate-a']),
     ReferenceConsensusConfigurationError,
   );
+});
+
+test('rejects the previous saved configuration schema without migration', () => {
+  const previous = structuredClone(validConfiguration);
+  previous.schema_version = 1;
+  assert.throws(() => validateReferenceConsensusConfiguration(previous), ReferenceConsensusConfigurationError);
 });

@@ -1,4 +1,5 @@
 import {ncbiMetadata} from '../../accessions/provider/ncbi/index.js';
+import {snapshotGenomeCopy, type GenomeCacheMode} from '../genome-input.js';
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
 import {basename, resolve} from 'node:path';
@@ -19,7 +20,6 @@ import {
   type CpuMode,
   type GenoPilotDetails,
   type MachineDetails,
-  type NcbiCacheMode,
 } from '../configuration-validation.js';
 import {
   buildRunId,
@@ -28,7 +28,7 @@ import {
   createRunWorkspace,
   discoverSavedRuns,
   effectiveCpuCount,
-  hasNcbiCacheEntry,
+  hasGenomeCacheEntry,
   resolveDraftPath,
   stringifyRunFile,
   type PathInspection,
@@ -144,7 +144,7 @@ export function buildReferenceConsensusRun(
     genopilot,
     inputs: {
       backbone: draft.backboneSource === 'ncbi'
-        ? {source: 'ncbi', accession: normalizeAccession(draft.backboneAccession), ncbi_cache_mode: 'reuse'}
+        ? {source: 'remote', reference: {source: 'ncbi', id: normalizeAccession(draft.backboneAccession), parameters: {}}, cache_mode: 'reuse'}
         : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.backboneFasta)},
       isolates_file: ISOLATE_SNAPSHOT_FILENAME,
       selected_isolates: isolates.map(isolate => isolate.id),
@@ -232,12 +232,14 @@ export async function inspectPreparedRun(
   const issues: ConfigurationValidationIssue[] = [];
   const {backbone} = prepared.configuration.inputs;
   let backboneEntry: AccessionEntry | undefined;
-  if (backbone.source === 'ncbi') {
+  if (backbone.source === 'remote') {
     // The catalog is optional bookkeeping: an unreadable one does not block a run.
     const cataloged = await readAccessions().catch(() => []);
-    backboneEntry = cataloged.find(entry => entry.source === 'ncbi' && entry.id === backbone.accession);
+    backboneEntry = cataloged.find(entry => entry.source === backbone.reference.source && entry.id === backbone.reference.id);
     if (backboneEntry && recordedCacheState(backboneEntry) === 'conflict') {
-      issues.push({path: '$.inputs.backbone.accession', message: conflictingCopiesMessage});
+      issues.push({path: '$.inputs.backbone.reference', message: conflictingCopiesMessage});
+    } else {
+      snapshotGenomeCopy(backbone, ['fasta'], cataloged);
     }
   } else {
     await checkReadableFile(backbone.fasta, '$.inputs.backbone.fasta', issues, inspectPath);
@@ -344,14 +346,14 @@ export async function hasBackboneCacheEntry(
   inspectPath: PathInspection = stat,
 ): Promise<boolean> {
   const {backbone} = prepared.configuration.inputs;
-  if (backbone.source !== 'ncbi') {
+  if (backbone.source !== 'remote') {
     return false;
   }
   try {
-    return await hasNcbiCacheEntry(prepared.configuration.run.output_root, backbone.accession, inspectPath);
+    return !!backbone.copy || await hasGenomeCacheEntry(prepared.configuration.run.output_root, backbone.reference, inspectPath);
   } catch (error) {
     throw new ReferenceConsensusConfigurationError([
-      {path: '$.inputs.backbone.ncbi_cache_mode', message: error instanceof Error ? error.message : String(error)},
+      {path: '$.inputs.backbone.cache_mode', message: error instanceof Error ? error.message : String(error)},
     ]);
   }
 }
@@ -359,11 +361,14 @@ export async function hasBackboneCacheEntry(
 /** Applies the researcher's explicit cache decision without changing the rest of the run. */
 export function applyBackboneCacheMode(
   prepared: PreparedReferenceConsensusRun,
-  mode: NcbiCacheMode,
+  mode: GenomeCacheMode,
 ): PreparedReferenceConsensusRun {
   const configuration = structuredClone(prepared.configuration);
-  if (configuration.inputs.backbone.source === 'ncbi') {
-    configuration.inputs.backbone.ncbi_cache_mode = mode;
+  if (configuration.inputs.backbone.source === 'remote') {
+    configuration.inputs.backbone.cache_mode = mode;
+    if (mode === 'refresh') {
+      delete configuration.inputs.backbone.copy;
+    }
   }
   return {...prepared, configuration: validateReferenceConsensusConfiguration(configuration)};
 }
@@ -379,6 +384,7 @@ export async function savePreparedRun(
   validateReferenceConsensusConfiguration(prepared.configuration);
   validateIsolateSnapshot(prepared.snapshot, prepared.configuration.inputs.selected_isolates, prepared.configuration.inputs.selected_read_sets);
   await inspectPreparedRun(prepared, dependencies);
+  validateReferenceConsensusConfiguration(prepared.configuration);
   const written = await createRunWorkspace(
     prepared.outputDirectory,
     [

@@ -20,7 +20,7 @@ import {stringifyRunFile} from '../../../src/workflows/run-preparation.js';
 import {testMachine} from '../machine.js';
 
 const configuration = validateReferenceConsensusConfiguration({
-  schema_version: 1,
+  schema_version: 2,
   workflow_id: 'reference-consensus',
   workflow_version: 1,
   genopilot: {version: '1.2.3', igv: '3.8.9'},

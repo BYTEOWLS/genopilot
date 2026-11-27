@@ -2,6 +2,8 @@
 
 This page explains every item of the annotation transfer result page, grouped by its tabs. The counts and their values are those of the pinned LiftOn release (see *Tools* in the README); how the transfer works is explained in the workflow's [README](README.md). The Run Details tab, the run files every workflow shows, and the derived files made from a finished run are explained in the general [run results](../../docs/run-results.md) page.
 
+Resolved remote inputs remain imported. Their per-file provenance records the pinned provider reference, checksums, provider facts, Node version, and whether files were downloaded or reused from a verified copy. The run's resolver commands record the actual Snakemake Python executable and absolute packaged script path.
+
 ## Overview
 
 The overview shows the execution outcome, the workflow's own status, the target's unresolved bases, and the check of the transferred annotation.

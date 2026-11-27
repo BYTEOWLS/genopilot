@@ -176,8 +176,8 @@ function overviewSections(result: ReferenceConsensusResult): RowSection[] {
     origin += backbone.downloaded ? ', downloaded in this run' : ', reused from the verified download cache';
   }
   const backboneRows: ParameterRow[] = [
-    {id: 'backbone.source', label: 'Source', value: backbone.source === 'ncbi' ? 'NCBI accession' : backbone.source === 'local' ? 'local file' : 'unknown', muted: !backbone.source},
-    {id: 'backbone.identity', label: backbone.source === 'ncbi' ? 'Accession' : 'File', value: backbone.accession ?? backbone.path ?? 'not recorded', muted: !(backbone.accession ?? backbone.path)},
+    {id: 'backbone.source', label: 'Source', value: backbone.source === 'local' ? 'local file' : backbone.source ?? 'unknown', muted: !backbone.source},
+    {id: 'backbone.identity', label: backbone.id ? 'Genome ID' : 'File', value: backbone.id ?? backbone.path ?? 'not recorded', muted: !(backbone.id ?? backbone.path)},
     {id: 'backbone.checksum', label: 'SHA-256', value: backbone.sha256 ?? 'not recorded', muted: !backbone.sha256},
     {id: 'backbone.origin', label: 'Origin', value: origin},
   ];
@@ -212,8 +212,8 @@ function annotationTransferRows(result: ReferenceConsensusResult, fasta: string,
   return [
     {id: 'annotation_transfer.workflow', label: 'Workflow', value: 'annotation transfer, as a new run'},
     {id: 'annotation_transfer.target', label: 'Target FASTA', value: fasta},
-    {id: 'annotation_transfer.reference', label: 'Reference', value: backbone.source === 'ncbi' && backbone.accession
-      ? `NCBI accession ${backbone.accession}, with its annotation`
+    {id: 'annotation_transfer.reference', label: 'Reference', value: backbone.id
+      ? `${backbone.source} genome ${backbone.id}, with its annotation`
       : `${backbone.path ?? 'the backbone FASTA'} with a GFF3 annotation of it`},
     {id: 'annotation_transfer.unresolved', label: 'Unresolved bases', value: unresolved === undefined
       ? 'not counted'

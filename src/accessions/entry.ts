@@ -44,7 +44,7 @@ try {
   await withGenomeCache(request, {signal: abort.signal, secrets}, async genome => {
     abort.signal.throwIfAborted();
     awaitingCopy = true;
-    await new Promise<void>((resolve, reject) => process.stdout.write(`${JSON.stringify(genome)}\n`, error => error ? reject(error) : resolve()));
+    await new Promise<void>((resolve, reject) => process.stdout.write(`${JSON.stringify({...genome, resolver: {node_version: process.version}})}\n`, error => error ? reject(error) : resolve()));
     const acknowledgment = await iterator.next();
     abort.signal.throwIfAborted();
     if (acknowledgment.done || acknowledgment.value !== '{"copied":true}') {

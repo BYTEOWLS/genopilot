@@ -454,7 +454,7 @@ test('asks how to handle a cached backbone and saves the decision', async contex
   await press(input, ENTER);
   await waitFor(() => saved !== undefined, 'the run is saved');
   const backbone = saved?.configuration.inputs.backbone;
-  assert.equal(backbone?.source === 'ncbi' ? backbone.ncbi_cache_mode : undefined, 'refresh');
+  assert.equal(backbone?.source === 'remote' ? backbone.cache_mode : undefined, 'refresh');
 });
 
 test('scrolls a review taller than the terminal', async context => {

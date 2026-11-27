@@ -16,7 +16,7 @@ import {
 } from '../../src/ui/new-run-screen/annotation-transfer-configuration.js';
 import WorkflowConfigurationScreen from '../../src/ui/new-run-screen/workflow-configuration.js';
 import type {
-  NcbiCacheEntryFinder,
+  GenomeCacheEntryFinder,
   PreviousRunsLoader,
 } from '../../src/ui/new-run-screen/annotation-transfer-configuration.js';
 import type {AnnotationTransferConfiguration} from '../../src/workflows/annotation-transfer/configuration.js';
@@ -173,7 +173,7 @@ function renderConfiguration(
     onBack?: () => void;
     checkNcbiApiKey?: () => Promise<boolean>;
     discoverPreviousRuns?: PreviousRunsLoader;
-    findCacheEntries?: NcbiCacheEntryFinder;
+    findCacheEntries?: GenomeCacheEntryFinder;
     executeSnakemakeRun?: typeof executeSnakemakeRun;
     registerAccessionCaches?: AccessionCacheRegistration;
     recordRate?: (prepared: PreparedAnnotationTransferRun) => Promise<string | undefined>;
@@ -585,8 +585,8 @@ test('switches the reference to an NCBI accession independently of the target', 
   await startReview(input, output);
   const {frame, prepared} = await waitForReview(output, () => reviewed);
   const {reference, target} = prepared.configuration.inputs;
-  assert.equal(reference.source, 'ncbi');
-  assert.equal(reference.source === 'ncbi' ? reference.accession : undefined, 'GCF_000149205.2');
+  assert.equal(reference.source, 'remote');
+  assert.equal(reference.source === 'remote' ? reference.reference.id : undefined, 'GCF_000149205.2');
   assert.equal(target.source, 'local');
   assert.equal(apiKeyChecks, 1);
   assert.match(fieldLine(frame, 'reference-accession') ?? '', /GCF_000149205\.2/);
@@ -642,7 +642,7 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
     executeSnakemakeRun: async run => ({...run, exitCode: 0}),
     findCacheEntries: async () => {
       cacheLookups += 1;
-      return [{input: 'reference', accession: 'GCF_000149205.2'}];
+      return [{input: 'reference', id: 'GCF_000149205.2'}];
     },
   });
   registerCleanup(context, instance);
@@ -673,7 +673,7 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
   await pressKey(input, ENTER);
   await waitFor(() => saved !== undefined, 'the configuration is saved');
   const reference = saved?.configuration.inputs.reference;
-  assert.equal(reference?.source === 'ncbi' ? reference.ncbi_cache_mode : undefined, 'refresh');
+  assert.equal(reference?.source === 'remote' ? reference.cache_mode : undefined, 'refresh');
 });
 
 test('shows only manifest parameters that are not hidden', async context => {
@@ -825,7 +825,7 @@ test('opens the file browser with Enter from a local path field and selects a fi
 
 test('labels a previous run by its name and creation time, not its run ID', () => {
   const configuration = {
-    schema_version: 1,
+    schema_version: 2,
     workflow_id: 'annotation-transfer',
     workflow_version: 1,
     genopilot: {version: '1.2.3', igv: '3.8.9'},

@@ -19,8 +19,14 @@ def copy_genome(request: dict, destinations: dict[str, Path]) -> dict:
     Closing stdin without acknowledgment is a failed consumer, never successful reuse.
     """
     entry = Path(__file__).resolve().parents[3] / "dist" / "genome-source.js"
+    node = os.environ.get("GENOPILOT_NODE_EXECUTABLE") or shutil.which("node")
+    if not node:
+        raise RuntimeError(
+            "Node is required to resolve genome sources. Put node on PATH or set "
+            "GENOPILOT_NODE_EXECUTABLE to its absolute executable path."
+        )
     process = subprocess.Popen(
-        ["node", str(entry)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        [node, str(entry)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True,
     )
     staged: dict[str, Path] = {}

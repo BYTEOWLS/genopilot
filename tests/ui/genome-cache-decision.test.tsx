@@ -3,7 +3,7 @@ import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
-import {NcbiCacheDecisionPage, type NcbiCacheModes} from '../../src/ui/new-run-screen/ncbi-cache-decision.js';
+import {GenomeCacheDecisionPage, type GenomeCacheModes} from '../../src/ui/new-run-screen/genome-cache-decision.js';
 import {pressKey} from '../wait.js';
 
 const ENTER = '\r';
@@ -41,10 +41,10 @@ class TestOutput extends Writable {
 
 function renderPage(context: TestContext) {
   const input = new TestInput();
-  const continued: NcbiCacheModes[] = [];
+  const continued: GenomeCacheModes[] = [];
   let backs = 0;
   const instance = render(
-    <NcbiCacheDecisionPage
+    <GenomeCacheDecisionPage
       entries={[{id: 'reference', label: 'Reference GCF_000001.1'}, {id: 'target', label: 'Target GCF_000002.1'}]}
       inputActive
       onBack={() => {

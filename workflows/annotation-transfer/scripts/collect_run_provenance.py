@@ -28,7 +28,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "shared" / "scripts"))
+SHARED_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "shared" / "scripts"
+sys.path.insert(0, str(SHARED_SCRIPTS_DIR))
 
 from provenance import (  # noqa: E402
     CHECKSUM_ALGORITHM,
@@ -145,7 +146,7 @@ def producer_record(config: dict, stage: str, snakemake_python_version: str) -> 
     # Rules without their own Conda environment run on Snakemake's interpreter, which the
     # managed tooling pins; the rule environments pin the `python` of the others.
     stage_tools = {
-        "resolve-inputs": ["python", "ncbi-datasets-cli"],
+        "resolve-inputs": ["snakemake-python"],
         "validate-inputs": ["snakemake-python"],
         "transfer-annotation": ["lifton", "miniprot", "minimap2", "parasail-python"],
         "validate-annotation": ["snakemake-python"],
@@ -210,15 +211,17 @@ def build_artifacts(config: dict, snakemake_python_version: str) -> list[dict]:
     return artifacts
 
 
-def _resolve_command(config: dict, role: str) -> dict:
+def _resolve_command(config: dict, role: str, snakemake_python_executable: str) -> dict:
     source = config["inputs"][role]
     argv = [
-        "python3",
-        "resolve_input.py",
+        snakemake_python_executable,
+        str(SHARED_SCRIPTS_DIR / "resolve_input.py"),
         "--role",
         role,
-        "--source-type",
-        source["source"],
+        "--input-json",
+        json.dumps(source, sort_keys=True),
+        "--output-root",
+        config["run"]["output_root"],
         "--fasta-destination",
         f"resolved/{role}.fasta",
         "--fasta-provenance",
@@ -231,26 +234,13 @@ def _resolve_command(config: dict, role: str) -> dict:
             "--gff3-provenance",
             "provenance/reference.gff3.json",
         ]
-    if source["source"] == "local":
-        argv += ["--local-fasta", source["fasta"]]
-        if role == "reference":
-            argv += ["--local-gff3", source["gff3"]]
-    else:
-        argv += [
-            "--accession",
-            source["accession"],
-            "--cache-dir",
-            str(Path(config["run"]["output_root"]) / "ncbi-accessions-cache"),
-            "--cache-mode",
-            source.get("ncbi_cache_mode", "reuse"),
-        ]
     return {"rule": f"resolve_{role}", "argv": argv}
 
 
-def build_commands(config: dict) -> list[dict]:
+def build_commands(config: dict, snakemake_python_executable: str) -> list[dict]:
     return [
-        _resolve_command(config, "reference"),
-        _resolve_command(config, "target"),
+        _resolve_command(config, "reference", snakemake_python_executable),
+        _resolve_command(config, "target", snakemake_python_executable),
         {
             "rule": "validate_inputs",
             "argv": [
@@ -338,6 +328,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--manifest-schema-version", type=int, required=True)
     parser.add_argument("--snakemake-version", required=True)
     parser.add_argument("--snakemake-python-version", required=True)
+    parser.add_argument("--snakemake-python-executable", required=True)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--provenance", type=Path, required=True)
     return parser.parse_args(argv)
@@ -391,18 +382,13 @@ def main(argv: list[str] | None = None) -> int:
             "machine": config["resources"]["machine"],
             "benchmark": "logs/transfer-annotation.benchmark.tsv",
         },
-        "commands": build_commands(config),
+        "commands": build_commands(config, args.snakemake_python_executable),
         "tool_versions": {
             "configured": configured_tool_versions(ENVS_DIRS),
             "observed": {
                 **observed_tool_versions(),
                 "snakemake": {"version": args.snakemake_version, "source": "workflow-runtime"},
                 "snakemake-python": {"version": args.snakemake_python_version, "source": "workflow-runtime"},
-            },
-            "input_resolution": {
-                key: value.get("datasets_cli_version")
-                for key, value in input_provenance.items()
-                if value.get("datasets_cli_version")
             },
         },
         "inputs": input_provenance,

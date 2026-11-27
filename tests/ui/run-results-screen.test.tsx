@@ -74,7 +74,7 @@ function compatibleResult(): CompatibleAnnotationTransferResult {
     kind: 'compatible',
     workflow: {id: 'annotation-transfer', version: 1},
     configuration: {
-      schema_version: 1,
+      schema_version: 2,
       workflow_id: 'annotation-transfer',
       workflow_version: 1,
       genopilot: {version: '1.2.3', igv: '3.8.9'},

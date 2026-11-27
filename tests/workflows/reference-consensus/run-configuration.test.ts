@@ -22,7 +22,7 @@ import {
 } from '../../../src/workflows/reference-consensus/run-configuration.js';
 import {diskEstimateInputs} from '../../../src/workflows/reference-consensus/disk-estimate.js';
 import {parseIsolateSnapshot} from '../../../src/workflows/reference-consensus/snapshot.js';
-import {createRunWorkspace, ncbiCacheDirectory} from '../../../src/workflows/run-preparation.js';
+import {createRunWorkspace, genomeCacheDirectory} from '../../../src/workflows/run-preparation.js';
 import {machineDetails} from '../../../src/workflows/configuration-validation.js';
 
 const now = new Date('2026-09-25T10:00:00.000Z');
@@ -176,7 +176,7 @@ test('refuses a backbone accession whose cataloged copies conflict', async conte
     now,
   );
   assert.deepEqual(prepared.configuration.inputs.backbone, {
-    source: 'ncbi', accession: 'GCF_000149205.2', ncbi_cache_mode: 'reuse',
+    source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}}, cache_mode: 'reuse',
   });
   const copy = (path: string, sha: string) => ({path, verified_at: now.toISOString(), fasta_sha256: sha});
   const conflicting: AccessionEntry = {
@@ -186,7 +186,7 @@ test('refuses a backbone accession whose cataloged copies conflict', async conte
   };
   await assert.rejects(
     inspectPreparedRun(prepared, {readAccessions: async () => [conflicting]}),
-    error => issuesOf(error).some(issue => issue.path === '$.inputs.backbone.accession'),
+    error => issuesOf(error).some(issue => issue.path === '$.inputs.backbone.reference'),
   );
   const inspection = await inspectPreparedRun(prepared, {
     readAccessions: async () => [{...conflicting, cached_copies: [copy('/one', 'a'.repeat(64))]}],
@@ -272,7 +272,7 @@ test('asks about an existing backbone cache entry and saves the decision', async
   assert.equal(await hasBackboneCacheEntry(prepared), true);
   const refreshed = applyBackboneCacheMode(prepared, 'refresh');
   assert.deepEqual(refreshed.configuration.inputs.backbone, {
-    source: 'ncbi', accession: 'GCF_000149205.2', ncbi_cache_mode: 'refresh',
+    source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}}, cache_mode: 'refresh',
   });
 });
 
@@ -351,10 +351,32 @@ test('sums each isolate\'s read files and the local backbone for the disk estima
   assert.ok(withoutBackbone.note);
 
   // A backbone in the download cache counts, without a note.
-  const cacheDirectory = ncbiCacheDirectory(ncbi.configuration.run.output_root, 'GCF_000149205.2');
+  const cacheDirectory = genomeCacheDirectory(ncbi.configuration.run.output_root, {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}});
   await mkdir(cacheDirectory, {recursive: true});
   await writeFile(join(cacheDirectory, 'genomic.fna'), '>chr1\nACGTACGT\n');
   assert.deepEqual(await diskEstimateInputs(ncbi), {
     inputs: {isolateReadBytes: [reads, 4 * reads], genomeBytes: Buffer.byteLength('>chr1\nACGTACGT\n'), effectiveCpus: 2},
   });
+});
+
+test('saves a cross-root backbone snapshot without requiring annotation', async context => {
+  const {tempDir, catalog, draft} = await fixture(context);
+  const prepared = buildReferenceConsensusRun(
+    {...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000000001.1'},
+    catalog, tempDir, genopilot, 8, now,
+  );
+  const copy = {path: '/elsewhere/GCF_000000001.1', verified_at: now.toISOString(), fasta_sha256: 'a'.repeat(64)};
+  const path = await savePreparedRun(prepared, {readAccessions: async () => [{
+    source: 'ncbi', id: 'GCF_000000001.1', parameters: {}, metadata: null, cached_copies: [copy],
+  }]});
+  const saved = parseReferenceConsensusConfiguration(await readFile(path, 'utf8'));
+  assert.equal(saved.schema_version, 2);
+  assert.equal(saved.inputs.backbone.source, 'remote');
+  if (saved.inputs.backbone.source === 'remote') {
+    assert.deepEqual(saved.inputs.backbone.copy, {path: copy.path, fasta_sha256: copy.fasta_sha256});
+    assert.deepEqual(saved.inputs.backbone.reference, {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}});
+  }
+  assert.equal(await hasBackboneCacheEntry(prepared), true);
+  const refresh = applyBackboneCacheMode(prepared, 'refresh');
+  assert.equal(refresh.configuration.inputs.backbone.source === 'remote' ? refresh.configuration.inputs.backbone.copy : undefined, undefined);
 });

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {chmod, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
+import {chmod, mkdtemp, open, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
@@ -101,7 +101,7 @@ test('builds exact managed Snakemake commands that differ only by mode', async c
   );
 });
 
-test('streams output, exports the API key only in the child environment, and retains complete logs', async context => {
+test('streams output, excludes credentials from the child environment, and retains complete logs', async context => {
   const {tempDir, paths} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
   const runDirectory = join(tempDir, 'run');
@@ -128,14 +128,32 @@ test('streams output, exports the API key only in the child environment, and ret
     prepared,
     (event: {stream: string; text: string}) => output.push(`${event.stream}:${event.text}`),
     undefined,
-    {paths, readApiKey: async () => 'private-key'},
+    {paths},
   );
 
   assert.equal(result.exitCode, 0);
-  assert.ok(output.some(line => line.includes('stdout:out:private-key')));
-  assert.equal(await readFile(result.stdoutLogPath, 'utf8'), 'out:private-key\n');
+  assert.ok(output.some(line => line.includes('stdout:out:missing')));
+  assert.equal(await readFile(result.stdoutLogPath, 'utf8'), 'out:missing\n');
   assert.equal(await readFile(result.stderrLogPath, 'utf8'), 'warning\n');
   assert.doesNotMatch(prepared.command, /private-key/);
+});
+
+test('exports the running Node executable independently of the managed PATH', async context => {
+  const {tempDir, paths} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  const runDirectory = join(tempDir, 'run');
+  const prepared = prepareSnakemakeRun({
+    mode: 'execute', runDirectory,
+    configurationPath: join(runDirectory, 'config.yaml'),
+    snakefilePath: join(tempDir, 'Snakefile'), cores: 1, paths,
+  });
+  prepared.executable = process.execPath;
+  prepared.arguments = ['--eval', 'process.stdout.write(process.env.GENOPILOT_NODE_EXECUTABLE ?? "missing")'];
+  const result = await executeSnakemakeRun(prepared, undefined, undefined, {
+    paths,
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(await readFile(result.stdoutLogPath, 'utf8'), process.execPath);
 });
 
 test('returns a non-zero exit code and preserves failure output', async context => {
@@ -155,7 +173,6 @@ test('returns a non-zero exit code and preserves failure output', async context 
 
   const result = await executeSnakemakeRun(prepared, undefined, undefined, {
     paths,
-    readApiKey: async () => undefined,
   });
   assert.equal(result.exitCode, 7);
   assert.equal(await readFile(result.stderrLogPath, 'utf8'), 'failed\n');
@@ -181,8 +198,7 @@ test('samples the memory of an execution\'s process tree with ps, but not of a d
     prepared.arguments = mode === 'execute' ? untilFlag(flag) : ['--eval', ''];
     const result = await executeSnakemakeRun(prepared, undefined, undefined, {
       paths,
-      readApiKey: async () => undefined,
-      readProcesses: sampleThen(() => writeFile(flag, '')),
+        readProcesses: sampleThen(() => writeFile(flag, '')),
     });
     peaks.push(result.peakMemoryBytes);
   }
@@ -207,8 +223,7 @@ test('reports a process start failure while retaining empty logs', async context
   await assert.rejects(
     executeSnakemakeRun(prepared, undefined, undefined, {
       paths,
-      readApiKey: async () => undefined,
-    }),
+      }),
     /ENOENT/,
   );
   assert.equal(await readFile(prepared.stdoutLogPath, 'utf8'), '');
@@ -234,7 +249,6 @@ test('keeps the peak memory of a cancelled execution on its error', async contex
   // Cancels once the running child has been sampled.
   const error: unknown = await executeSnakemakeRun(prepared, undefined, controller.signal, {
     paths,
-    readApiKey: async () => undefined,
     readProcesses: sampleThen(() => { setImmediate(() => controller.abort()); }),
   }).then(() => assert.fail('expected the cancelled run to reject'), (reason: unknown) => reason);
   assert.match(String(error), /Snakemake run cancelled\./);
@@ -262,10 +276,10 @@ test('does not spawn after cancellation during setup and still closes its log fi
     executeSnakemakeRun(prepared, undefined, controller.signal, {
       paths,
       spawnProcess: () => {spawned = true; throw new Error('must not spawn');},
-      readApiKey: async () => {
-        // Cancel while setup is awaiting dependencies, before there is a child to signal.
+      openLog: async (...args) => {
+        const file = await open(...args);
         controller.abort();
-        return undefined;
+        return file;
       },
     }),
     /Snakemake run cancelled\./,
@@ -298,7 +312,7 @@ test('cancels a running detached process and drains both logs before rejecting',
       started = true;
       controller.abort();
     }
-  }, controller.signal, {paths, readApiKey: async () => undefined, readProcesses: async () => []}), /Snakemake run cancelled\./);
+  }, controller.signal, {paths, readProcesses: async () => []}), /Snakemake run cancelled\./);
   assert.equal(started, true);
   assert.equal(await readFile(prepared.stdoutLogPath, 'utf8'), 'started\n');
   assert.equal(await readFile(prepared.stderrLogPath, 'utf8'), 'stopped\n');

@@ -1,3 +1,4 @@
+import {snapshotGenomeCopy, type GenomeCacheMode} from '../genome-input.js';
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -11,7 +12,7 @@ import {
   createRunWorkspace,
   discoverSavedRuns,
   effectiveCpuCount,
-  hasNcbiCacheEntry,
+  hasGenomeCacheEntry,
   resolveDraftPath,
   stringifyRunFile,
   type PathInspection,
@@ -25,7 +26,6 @@ import {
   type AnnotationTransferConfiguration,
   type ConfigurationValidationIssue,
   type CpuMode,
-  type NcbiCacheMode,
   validateAnnotationTransferConfiguration,
 } from './configuration.js';
 import {machineDetails, type GenoPilotDetails, type MachineDetails} from '../configuration-validation.js';
@@ -101,9 +101,9 @@ export function buildAnnotationTransferConfiguration(
       reference:
         draft.referenceSource === 'ncbi'
           ? {
-              source: 'ncbi',
-              accession: normalizeAccession(draft.referenceAccession),
-              ncbi_cache_mode: 'reuse',
+              source: 'remote',
+              reference: {source: 'ncbi', id: normalizeAccession(draft.referenceAccession), parameters: {}},
+              cache_mode: 'reuse',
             }
           : {
               source: 'local',
@@ -113,9 +113,9 @@ export function buildAnnotationTransferConfiguration(
       target:
         draft.targetSource === 'ncbi'
           ? {
-              source: 'ncbi',
-              accession: normalizeAccession(draft.targetAccession),
-              ncbi_cache_mode: 'reuse',
+              source: 'remote',
+              reference: {source: 'ncbi', id: normalizeAccession(draft.targetAccession), parameters: {}},
+              cache_mode: 'reuse',
             }
           : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.targetFasta)},
     },
@@ -147,49 +147,52 @@ export function buildAnnotationTransferConfiguration(
   };
 }
 
-export type NcbiCacheInput = 'reference' | 'target';
+export type GenomeCacheInput = 'reference' | 'target';
 
-export type NcbiCacheEntry = {
-  input: NcbiCacheInput;
-  accession: string;
+export type GenomeCacheEntry = {
+  input: GenomeCacheInput;
+  id: string;
 };
 
-/** Returns configured NCBI inputs whose accession cache directory already exists. */
-export async function findNcbiCacheEntries(
+/** Returns remote inputs with a snapshotted copy or an existing provider cache directory. */
+export async function findGenomeCacheEntries(
   prepared: PreparedAnnotationTransferRun,
   inspectPath: PathInspection = stat,
-): Promise<NcbiCacheEntry[]> {
-  const entries: NcbiCacheEntry[] = [];
+): Promise<GenomeCacheEntry[]> {
+  const entries: GenomeCacheEntry[] = [];
   for (const input of ['reference', 'target'] as const) {
     const configured = prepared.configuration.inputs[input];
-    if (configured.source !== 'ncbi') {
+    if (configured.source !== 'remote') {
       continue;
     }
     let cached: boolean;
     try {
-      cached = await hasNcbiCacheEntry(prepared.configuration.run.output_root, configured.accession, inspectPath);
+      cached = !!configured.copy || await hasGenomeCacheEntry(prepared.configuration.run.output_root, configured.reference, inspectPath);
     } catch (error) {
       throw new AnnotationTransferConfigurationError([
-        {path: `$.inputs.${input}.ncbi_cache_mode`, message: error instanceof Error ? error.message : String(error)},
+        {path: `$.inputs.${input}.cache_mode`, message: error instanceof Error ? error.message : String(error)},
       ]);
     }
     if (cached) {
-      entries.push({input, accession: configured.accession});
+      entries.push({input, id: configured.reference.id});
     }
   }
   return entries;
 }
 
 /** Applies explicit cache decisions without changing the rest of the prepared run. */
-export function applyNcbiCacheModes(
+export function applyGenomeCacheModes(
   prepared: PreparedAnnotationTransferRun,
-  modes: Partial<Record<NcbiCacheInput, NcbiCacheMode>>,
+  modes: Partial<Record<GenomeCacheInput, GenomeCacheMode>>,
 ): PreparedAnnotationTransferRun {
   const configuration = structuredClone(prepared.configuration);
   for (const input of ['reference', 'target'] as const) {
     const configured = configuration.inputs[input];
-    if (configured.source === 'ncbi') {
-      configured.ncbi_cache_mode = modes[input] ?? configured.ncbi_cache_mode ?? 'reuse';
+    if (configured.source === 'remote') {
+      configured.cache_mode = modes[input] ?? configured.cache_mode;
+      if (configured.cache_mode === 'refresh') {
+        delete configured.copy;
+      }
     }
   }
   return {...prepared, configuration: validateAnnotationTransferConfiguration(configuration)};
@@ -214,17 +217,19 @@ export async function validatePreparedRunPaths(
 ): Promise<void> {
   const issues: ConfigurationValidationIssue[] = [];
   const {reference, target} = prepared.configuration.inputs;
-  const ncbiInputs = [['$.inputs.reference.accession', reference], ['$.inputs.target.accession', target]] as const;
-  if (ncbiInputs.some(([, input]) => input.source === 'ncbi')) {
+  const remoteInputs = [['$.inputs.reference.reference', reference], ['$.inputs.target.reference', target]] as const;
+  if (remoteInputs.some(([, input]) => input.source === 'remote')) {
     // The catalog is optional bookkeeping: an unreadable one does not block a run, and its accession
     // field already says it is unavailable.
     const cataloged = await readAccessions().catch(() => []);
-    for (const [path, input] of ncbiInputs) {
-      const entry = input.source === 'ncbi'
-        ? cataloged.find(candidate => candidate.source === input.source && candidate.id === input.accession)
+    for (const [path, input] of remoteInputs) {
+      const entry = input.source === 'remote'
+        ? cataloged.find(candidate => candidate.source === input.reference.source && candidate.id === input.reference.id)
         : undefined;
       if (entry && recordedCacheState(entry) === 'conflict') {
         issues.push({path, message: conflictingCopiesMessage});
+      } else if (input.source === 'remote') {
+        snapshotGenomeCopy(input, input === reference ? ['fasta', 'gff3'] : ['fasta'], cataloged);
       }
     }
   }
@@ -252,8 +257,14 @@ export async function validatePreparedRunPaths(
   }
 }
 
-export async function savePreparedRun(prepared: PreparedAnnotationTransferRun): Promise<string> {
-  await validatePreparedRunPaths(prepared);
+export async function savePreparedRun(
+  prepared: PreparedAnnotationTransferRun,
+  inspectPath: PathInspection = stat,
+  readAccessions: AccessionCatalogReader = readCatalogedAccessions,
+): Promise<string> {
+  validateAnnotationTransferConfiguration(prepared.configuration);
+  await validatePreparedRunPaths(prepared, inspectPath, readAccessions);
+  validateAnnotationTransferConfiguration(prepared.configuration);
   const written = await createRunWorkspace(
     prepared.outputDirectory,
     [{name: 'config.yaml', content: stringifyRunFile(prepared.configuration)}],

@@ -12,12 +12,12 @@ import {testMachine} from '../machine.js';
 const fixtures = join(import.meta.dirname, '../../fixtures/annotation-transfer');
 
 const configuration = {
-  schema_version: 1,
+  schema_version: 2,
   workflow_id: 'annotation-transfer',
   workflow_version: 1,
   genopilot: {version: '1.2.3', igv: '3.8.9'},
   inputs: {
-    reference: {source: 'ncbi', accession: 'GCA_000000001.1'},
+    reference: {source: 'remote', reference: {source: 'ncbi', id: 'GCA_000000001.1', parameters: {}}, cache_mode: 'reuse'},
     target: {source: 'local', fasta: '/data/target.fasta'},
   },
   lifton: {profile: 'same-species'},

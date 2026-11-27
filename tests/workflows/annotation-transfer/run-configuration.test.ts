@@ -11,10 +11,10 @@ import {
 import {
   buildAnnotationTransferConfiguration,
   createAnnotationTransferDraft,
-  applyNcbiCacheModes,
+  applyGenomeCacheModes,
   discoverAnnotationTransferRuns,
   effectiveCpuCount,
-  findNcbiCacheEntries,
+  findGenomeCacheEntries,
   buildAnnotationTransferRunId,
   formatRunTimestampPrefix,
   sanitizeRunIdSuffix,
@@ -96,9 +96,8 @@ test('resolves an NCBI accession source independently for the reference and the 
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4);
 
   assert.deepEqual(prepared.configuration.inputs.reference, {
-    source: 'ncbi',
-    accession: 'GCF_000149205.2',
-    ncbi_cache_mode: 'reuse',
+    source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}},
+    cache_mode: 'reuse',
   });
   assert.deepEqual(prepared.configuration.inputs.target, {
     source: 'local',
@@ -116,20 +115,20 @@ test('finds existing accession caches and applies explicit cache modes', async c
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4, now);
   await mkdir(join(tempDir, 'runs', 'ncbi-accessions-cache', 'GCF_000149205.2'), {recursive: true});
 
-  assert.deepEqual(await findNcbiCacheEntries(prepared), [
-    {input: 'reference', accession: 'GCF_000149205.2'},
+  assert.deepEqual(await findGenomeCacheEntries(prepared), [
+    {input: 'reference', id: 'GCF_000149205.2'},
   ]);
 
-  const decided = applyNcbiCacheModes(prepared, {reference: 'refresh'});
+  const decided = applyGenomeCacheModes(prepared, {reference: 'refresh'});
   assert.equal(
-    decided.configuration.inputs.reference.source === 'ncbi'
-      ? decided.configuration.inputs.reference.ncbi_cache_mode
+    decided.configuration.inputs.reference.source === 'remote'
+      ? decided.configuration.inputs.reference.cache_mode
       : undefined,
     'refresh',
   );
   assert.equal(
-    decided.configuration.inputs.target.source === 'ncbi'
-      ? decided.configuration.inputs.target.ncbi_cache_mode
+    decided.configuration.inputs.target.source === 'remote'
+      ? decided.configuration.inputs.target.cache_mode
       : undefined,
     'reuse',
   );
@@ -143,19 +142,19 @@ test('rejects inaccessible or malformed accession cache entries', async context 
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4, now);
 
   await assert.rejects(
-    findNcbiCacheEntries(prepared, async () => {
+    findGenomeCacheEntries(prepared, async () => {
       throw Object.assign(new Error('permission denied'), {code: 'EACCES'});
     }),
     (error: unknown) => {
       assert.ok(error instanceof AnnotationTransferConfigurationError);
-      assert.equal(error.issues[0]?.path, '$.inputs.reference.ncbi_cache_mode');
+      assert.equal(error.issues[0]?.path, '$.inputs.reference.cache_mode');
       assert.match(error.issues[0]?.message ?? '', /cannot be accessed/);
       return true;
     },
   );
 
   await assert.rejects(
-    findNcbiCacheEntries(prepared, async () => ({
+    findGenomeCacheEntries(prepared, async () => ({
       isFile: () => true,
       isDirectory: () => false,
     })),
@@ -281,7 +280,7 @@ test('refuses an NCBI accession whose cataloged copies conflict', async context 
     (error: unknown) => {
       assert.ok(error instanceof AnnotationTransferConfigurationError);
       // Only the reference conflicts; the target's copies agree.
-      assert.deepEqual(error.issues.map(issue => issue.path), ['$.inputs.reference.accession']);
+      assert.deepEqual(error.issues.map(issue => issue.path), ['$.inputs.reference.reference']);
       return true;
     },
   );
@@ -352,4 +351,31 @@ test('discovers saved runs newest first and skips an unreadable one', async cont
     runs.map(run => run.configuration.run.id),
     ['2026-09-02_080000000_Second-run', '2026-09-01_080000000_Baseline-transfer'],
   );
+});
+
+test('saves cross-root provider snapshots with the files required by each role', async context => {
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  draft.referenceSource = 'ncbi';
+  draft.targetSource = 'ncbi';
+  draft.referenceAccession = draft.targetAccession = 'GCF_000000001.1';
+  const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4, now);
+  const single = {path: '/elsewhere/sequence/GCF_000000001.1', verified_at: now.toISOString(), fasta_sha256: 'a'.repeat(64)};
+  const both = {...single, path: '/elsewhere/both/GCF_000000001.1', gff3_sha256: 'b'.repeat(64)};
+  const readAccessions = async () => [{
+    source: 'ncbi', id: draft.referenceAccession, parameters: {}, metadata: null,
+    cached_copies: [single, both],
+  }];
+  const saved = parseAnnotationTransferConfiguration(await readFile(await savePreparedRun(prepared, undefined, readAccessions), 'utf8'));
+  assert.equal(saved.schema_version, 2);
+  assert.equal(saved.inputs.reference.source, 'remote');
+  assert.equal(saved.inputs.target.source, 'remote');
+  if (saved.inputs.reference.source === 'remote' && saved.inputs.target.source === 'remote') {
+    assert.deepEqual(saved.inputs.reference.copy, {path: both.path, fasta_sha256: both.fasta_sha256, gff3_sha256: both.gff3_sha256});
+    assert.deepEqual(saved.inputs.target.copy, {path: single.path, fasta_sha256: single.fasta_sha256});
+    assert.deepEqual(saved.inputs.reference.reference, {source: 'ncbi', id: draft.referenceAccession, parameters: {}});
+  }
+  assert.equal(await findGenomeCacheEntries(prepared).then(entries => entries.length), 2);
+  const refresh = applyGenomeCacheModes(prepared, {reference: 'refresh'});
+  assert.equal(refresh.configuration.inputs.reference.source === 'remote' ? refresh.configuration.inputs.reference.copy : undefined, undefined);
 });

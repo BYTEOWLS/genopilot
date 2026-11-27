@@ -37,12 +37,15 @@ catalog facts and paths, not a consumer lease. All
 files are checked before publication. Refresh keeps the prior directory until
 commit and restores it if publication fails. Deletion uses the same lock. Locks
 are not stolen automatically; an interrupted process may require inspecting and
-removing its lock. Classic and ZIP64 single-part archives are supported for stored
+removing its lock. Workflow rules coordinate same-genome consumers through
+Snakemake resources without weakening the cache lease. Cross-instance cache
+contention still fails explicitly rather than waiting. Classic and ZIP64 single-part
+archives are supported for stored
 and deflated members. ZIP64 sizes and offsets must fit safe integers; malformed
 records, multipart/encrypted archives, unsupported compression, and directories
 larger than 64 MiB fail before publication.
 
-## Remaining integration
+## Workflow handoff
 
 Catalog download and provider setup are registry-driven. Every provider requires
 metadata/reference review and explicit Download confirmation. Optional metadata
@@ -66,10 +69,21 @@ an active download before publication; EOF after a valid acknowledgment is norma
 The installed-package check exercises
 this pair from an unrelated directory, including blocked refresh during copying,
 cross-root reuse, annotation-only copies, corrupt-copy rejection, and abandoned consumers.
+Managed execution exports its running Node path as `GENOPILOT_NODE_EXECUTABLE`;
+the Python bridge uses it without requiring Node on the restricted job PATH.
+Direct execution falls back to `node` on PATH and explains how to configure it
+when absent. Installed-package verification exercises the bridge with an empty PATH.
 
-Workflow configuration, resolver, rules, and provenance still need wiring to that
-bridge. Current workflow downloads still use the Datasets CLI and do not write the
-new provider cache record. Review finding 4 is not closed for workflow runs until
-this integration replaces the old resolver path. VEuPathDB is not registered:
-authenticated current/older-release evidence is required first. See
+Both workflow configurations use schema 2 and save `{source: remote, reference,
+cache_mode, copy?}`. The reference snapshots provider identity and parameters;
+`copy` records a catalog path and only the role-required digests. Incomplete copies
+are not snapshotted. Refresh removes the snapshot and writes into the run's output
+root. The resolver/rules use this bridge for remote inputs; local file copying is
+unchanged. Per-file provenance records provider facts, parameters, Node version,
+checksums, and `downloaded`; verified reuse remains `imported`. The Datasets CLI
+environment and tool/citation entries are removed. Installed-package verification
+also invokes the workflow resolver CLI for reference, target, and backbone roles.
+Direct-Snakemake cache-reuse tests require the pinned runtime and built bundle.
+VEuPathDB is not registered: authenticated current/older-release evidence is
+required first. See
 `resources/releases/0.0.4/01_genome_sources.md` for delivery order and acceptance.

@@ -6,6 +6,8 @@ This page explains every item of the cohort consensus result page, grouped by it
 
 Whether a cohort consensus is available, worked out from the records the workflow wrote: it is available once any cohort completed, and the active one is the latest. Without one, the status names the isolates that have not completed. Paths marked missing should exist but do not.
 
+Resolved remote inputs remain imported. Their per-file provenance records the pinned provider reference, checksums, provider facts, Node version, and whether files were downloaded or reused from a verified copy.
+
 ## Overview
 
 ### Backbone

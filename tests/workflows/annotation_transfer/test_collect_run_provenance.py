@@ -101,6 +101,8 @@ class CollectRunProvenanceTests(unittest.TestCase):
                     "9.11.3",
                     "--snakemake-python-version",
                     "3.0.0",
+                    "--snakemake-python-executable",
+                    "/managed runtime/bin/python",
                     "--artifacts",
                     "artifacts.yaml",
                     "--provenance",
@@ -153,6 +155,13 @@ class CollectRunProvenanceTests(unittest.TestCase):
         self.assertEqual(provenance["tool_versions"]["configured"], configured)
         self.assertEqual(provenance["tool_versions"]["observed"]["snakemake"]["version"], "9.11.3")
         self.assertTrue(all("argv" in command for command in provenance["commands"]))
+        for role in ("reference", "target"):
+            command = next(item for item in provenance["commands"] if item["rule"] == f"resolve_{role}")
+            self.assertEqual(command["argv"][:2], [
+                "/managed runtime/bin/python", str(collect.SHARED_SCRIPTS_DIR / "resolve_input.py"),
+            ])
+            self.assertEqual(command["argv"][command["argv"].index("--input-json") + 1],
+                             json.dumps(self.config["inputs"][role], sort_keys=True))
         transfer = next(item for item in provenance["commands"] if item["rule"] == "transfer_annotation")
         self.assertEqual(transfer["argv"][-1], "3")
         self.assertEqual(
@@ -178,7 +187,7 @@ class PackagedEnvironmentTests(unittest.TestCase):
     def test_packaged_environments_pin_every_recorded_stage_tool(self) -> None:
         configured = collect.configured_tool_versions(collect.ENVS_DIRS)
 
-        for name in ("python", "lifton", "miniprot", "minimap2", "parasail-python", "ncbi-datasets-cli"):
+        for name in ("python", "lifton", "miniprot", "minimap2", "parasail-python"):
             self.assertIn(name, configured)
 
 

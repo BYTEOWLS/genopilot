@@ -100,12 +100,6 @@ test('pins an installable LiftOn environment including native parasail support',
   assert.ok(environment.pip.has('lifton'));
 });
 
-test('pins Python for dependency-free rule scripts in the NCBI environment', async () => {
-  const environment = await readPinnedEnvironment('ncbi-datasets-cli', '../shared/envs/');
-
-  assert.ok(environment.conda.has('python'));
-  assert.ok(environment.conda.has('ncbi-datasets-cli'));
-});
 
 test('references existing packaged workflow files', async () => {
   const manifest = parseWorkflowManifest(await readResource('manifest.yaml'));

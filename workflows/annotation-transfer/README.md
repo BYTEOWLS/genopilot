@@ -9,7 +9,11 @@ The result is a target annotation to review, not a curated one: genes the target
 - **Reference**: a genome FASTA and its annotation GFF3 [2], either local files or a versioned NCBI assembly accession downloaded with both.
 - **Target**: the genome FASTA to annotate, either a local file or a versioned NCBI assembly accession.
 
-Both are copied into the run directory with a SHA-256 checksum before any step reads them, so no later step depends on where an input came from. An NCBI download is kept in a cache shared by all runs and reused only after its checksum matches.
+Both are copied into the run directory with a SHA-256 checksum before any step reads them, so no later step depends on where an input came from. NCBI files are downloaded through the Datasets REST API [8], using the same verified cache as the catalog.
+
+Remote inputs save a pinned provider reference and a `reuse` or `refresh` cache decision. Reuse can snapshot a verified catalog copy from another output root; the resolver rechecks the role-required checksums and protects the files through copying. Missing files download through the same packaged REST implementation used by the catalog. Direct Snakemake execution needs Node on PATH or an absolute `GENOPILOT_NODE_EXECUTABLE`; managed execution supplies it. No Datasets CLI is installed or invoked. Input provenance records the reference, provider facts, Node version, checksums, and `downloaded`; verified reuse remains `imported`, not a computed or cached stage. Resolver command records use Snakemake's actual Python executable and the packaged script's absolute path. Saved configurations use schema 2; older configurations require a new run, not migration.
+
+When reference and target name the same remote genome, Snakemake resolves them one at a time to avoid cache-lock contention. Different genomes remain parallelizable. The jobs stay independent, so missing reference annotation does not prevent target resolution under `--keep-going`.
 
 ## Parameters
 
@@ -107,7 +111,7 @@ The versions are pinned only in the files linked below and recorded in every run
 | Tool | Role | Pinned in | Reference |
 |---|---|---|---|
 | Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`pixi.toml`](../../runtime/pixi.toml)) | [7] |
-| NCBI Datasets CLI | downloading NCBI accessions | [`ncbi-datasets-cli`](../shared/envs/ncbi-datasets-cli/environment.yaml) | [8] |
+
 | LiftOn | annotation transfer | [`lifton`](envs/lifton/environment.yaml) | [1] |
 | minimap2 | DNA alignment inside Liftoff | [`lifton`](envs/lifton/environment.yaml) | [4] |
 | miniprot | protein-to-genome alignment | [`lifton`](envs/lifton/environment.yaml) | [5] |

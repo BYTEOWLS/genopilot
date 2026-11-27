@@ -69,12 +69,12 @@ const manifest: WorkflowManifest = {
 const isolateIds = ['iso-a', 'iso-b', 'iso-c', 'iso-d', 'iso-e', 'iso-f', 'iso-g', 'iso-h'];
 
 const configuration = validateReferenceConsensusConfiguration({
-  schema_version: 1,
+  schema_version: 2,
   workflow_id: 'reference-consensus',
   workflow_version: 1,
   genopilot: {version: '1.2.3', igv: '3.8.9'},
   inputs: {
-    backbone: {source: 'ncbi', accession: 'GCF_000000001.1'},
+    backbone: {source: 'remote', reference: {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}}, cache_mode: 'reuse'},
     isolates_file: 'isolates.yaml',
     selected_isolates: isolateIds,
     selected_read_sets: isolateIds.map(id => `${id}/reads`),
@@ -135,7 +135,7 @@ function consensusResult(): ReferenceConsensusResult {
   return {
     backbone: {
       source: 'ncbi',
-      accession: 'GCF_000000001.1',
+      id: 'GCF_000000001.1',
       sha256: 'c'.repeat(64),
       origin: 'imported',
       downloaded: false,

@@ -86,7 +86,7 @@ async function verifiedBackbone(context: Context & {signal?: AbortSignal}): Prom
   }
   const fasta = backbone.paths.fasta.absolutePath;
   const snapshot = await verifyFileChecksum(fasta, backbone.sha256, context.signal);
-  return {name: backbone.accession ?? 'Backbone', fasta, snapshot,
+  return {name: backbone.id ?? 'Backbone', fasta, snapshot,
     ...(existsSync(`${fasta}.fai`) ? {index: `${fasta}.fai`} : {})};
 }
 
@@ -98,10 +98,10 @@ export async function consensusSitesView(context: Context & {cohort: CohortResul
   const view = base(context, `sites:${cohort.id}:${createHash('sha256').update(JSON.stringify(listed.map(siteItemId))).digest('hex')}`, `Iteration ${cohort.iteration} · loci`,
     reference, result.isolates.flatMap(isolate => evidenceTracks(isolate, false)));
   view.provenance.sources[0]!.label = `Verified ${backbone.origin ?? 'imported'} backbone`;
-  if (backbone.accession) {
+  if (backbone.id) {
     const entries = await (context.readAccessions ?? readCatalogedAccessions)().catch(() => []);
     context.signal?.throwIfAborted();
-    const entry = entries.find(entry => entry.source === 'ncbi' && entry.id === backbone.accession && recordedCacheState(entry) === 'cached');
+    const entry = entries.find(entry => entry.source === backbone.source && entry.id === backbone.id && recordedCacheState(entry) === 'cached');
     const copy = entry?.cached_copies.find(copy => copy.fasta_sha256 === backbone.sha256 && copy.gff3_sha256);
     if (copy?.gff3_sha256) {
       const file = join(copy.path, 'genomic.gff');

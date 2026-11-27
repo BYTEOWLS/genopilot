@@ -25,6 +25,7 @@ import importlib.metadata
 import json
 import platform
 import shlex
+import sys
 
 
 def _record_provenance_args(wildcards):
@@ -39,6 +40,8 @@ def _record_provenance_args(wildcards):
         importlib.metadata.version("snakemake"),
         "--snakemake-python-version",
         platform.python_version(),
+        "--snakemake-python-executable",
+        sys.executable,
         "--artifacts",
         "artifacts.yaml",
         "--provenance",

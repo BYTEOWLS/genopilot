@@ -8,7 +8,7 @@ Download and inspect genomes from the catalog before starting an analysis, then 
 
 - [ ] [Genome sources: NCBI and VEuPathDB behind one interface](01_genome_sources.md).
 
-Status: in progress. Catalog review, metadata-only saving, provider-declared artifact selection, download progress, and provider setup UI are implemented. The packaged Node/Python copy bridge is tested, including cross-root reader protection; workflow configuration/rule integration and authenticated VEuPathDB verification remain open. See the detail file's implementation progress.
+Status: in progress. Catalog review, metadata-only saving, provider-declared artifact selection, download progress, and provider setup UI are implemented. Both workflows now use the packaged Node/Python bridge, with schema-2 provider references, role-specific cross-root snapshots, protected copying, and provider provenance; the Datasets CLI is removed. Installed-package resolver checks pass without Node on PATH. Both workflows' offline cross-root reuse checks pass through the pinned Snakemake runtime. Same-genome reference/target resolution is serialized by Snakemake without adding a dependency between the jobs. Direct cache-miss download verification and authenticated VEuPathDB evidence/implementation remain open. See the detail file's implementation progress.
 
 ## Delivery order
 

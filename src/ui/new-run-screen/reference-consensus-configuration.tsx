@@ -90,9 +90,9 @@ async function defaultRegisterAccessionCaches(outputRoot: string, currentDirecto
 function previousRunFormValues(configuration: ReferenceConsensusConfiguration): WorkflowFormValues {
   const {backbone} = configuration.inputs;
   return {
-    'backbone-source': backbone.source,
+    'backbone-source': backbone.source === 'local' ? 'local' : backbone.reference.source,
     'backbone-fasta': backbone.source === 'local' ? backbone.fasta : '',
-    'backbone-accession': backbone.source === 'ncbi' ? backbone.accession : '',
+    'backbone-accession': backbone.source === 'remote' ? backbone.reference.id : '',
     isolates: configuration.inputs.selected_read_sets.join(','),
     'voting-method': configuration.consensus.voting_method,
     'include-backbone-vote': configuration.consensus.include_backbone_vote ? 'yes' : 'no',
@@ -153,7 +153,7 @@ function resolvedValues(prepared: PreparedReferenceConsensusRun): WorkflowFormVa
   const {backbone} = configuration.inputs;
   return {
     'backbone-fasta': backbone.source === 'local' ? backbone.fasta : '',
-    'backbone-accession': backbone.source === 'ncbi' ? backbone.accession : '',
+    'backbone-accession': backbone.source === 'remote' ? backbone.reference.id : '',
     isolates: `${String(configuration.inputs.selected_read_sets.length)} selected, listed below`,
     'min-allele-fraction': String(configuration.calling.min_allele_fraction),
     'output-root': configuration.run.output_root,
@@ -184,12 +184,12 @@ function backboneSection(prepared: PreparedReferenceConsensusRun, inspection: Ru
     rows: [
       {label: 'Name', value: entry ? accessionDisplayName(entry) : 'Not in the accession catalog'},
       {label: 'Source', value: 'NCBI accession'},
-      {label: 'Accession', value: backbone.accession},
+      {label: 'Accession', value: backbone.reference.id},
       ...(facts ? [{label: 'Organism', value: facts.organism}] : []),
       ...(facts?.strain ? [{label: 'Strain', value: facts.strain}] : []),
       {
         label: 'Cache',
-        value: backbone.ncbi_cache_mode === 'refresh'
+        value: backbone.cache_mode === 'refresh'
           ? 'Download a fresh copy'
           : 'Reuse the cache after checksum verification when available, otherwise download',
       },
@@ -410,7 +410,7 @@ export function ReferenceConsensusConfigurationScreen({
     );
     const inspection = await inspectRun(prepared);
     const system = await checkSystem(prepared);
-    const usesNcbi = prepared.configuration.inputs.backbone.source === 'ncbi';
+    const usesNcbi = prepared.configuration.inputs.backbone.source === 'remote';
     const apiKeyConfigured = usesNcbi ? await checkNcbiApiKey() : false;
     const cached = usesNcbi ? await checkBackboneCache(prepared) : false;
 
@@ -447,10 +447,10 @@ export function ReferenceConsensusConfigurationScreen({
     const {backbone} = prepared.configuration.inputs;
     return {
       ...review,
-      ncbiCache: {
+      genomeCache: {
         entries: [{
           id: 'backbone',
-          label: `Backbone ${backbone.source === 'ncbi' ? backbone.accession : ''}`,
+          label: `Backbone ${backbone.source === 'remote' ? backbone.reference.id : ''}`,
         }],
         apply: modes => prepareForReview(applyBackboneCacheMode(prepared, modes.backbone ?? 'reuse')),
       },
@@ -485,7 +485,7 @@ export function ReferenceConsensusConfigurationScreen({
         prepared.snapshot.isolates.map(isolate => isolate.id),
       )}
       onRunSucceeded={prepared => {
-        const ncbi = prepared.configuration.inputs.backbone.source === 'ncbi';
+        const ncbi = prepared.configuration.inputs.backbone.source === 'remote';
         const measures = recordsRunRates(manifest);
         if (!ncbi && !measures) {
           return undefined;

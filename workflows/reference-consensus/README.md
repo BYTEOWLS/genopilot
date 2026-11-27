@@ -11,6 +11,9 @@ Status: the initial cohort consensus is implemented. Every isolate gets its alig
 
 Archive-renamed Illumina reads are supported using supplied library identity. Original Illumina headers contribute optional sequencing metadata, not proof of library identity. Unknown previous processing must be reviewed before execution. Other platforms/layouts are not supported.
 
+Remote inputs save a pinned provider reference and a `reuse` or `refresh` cache decision. Reuse can snapshot a verified catalog copy from another output root; the resolver rechecks the role-required checksums and protects the files through copying. Missing files download through the same packaged REST implementation used by the catalog. Direct Snakemake execution needs Node on PATH or an absolute `GENOPILOT_NODE_EXECUTABLE`; managed execution supplies it. No Datasets CLI is installed or invoked. Input provenance records the reference, provider facts, Node version, checksums, and `downloaded`; verified reuse remains `imported`, not a computed or cached stage. Saved configurations use schema 2; older configurations require a new run, not migration.
+
+
 ## Parameters
 
 | Parameter | Default | Meaning |
@@ -89,7 +92,7 @@ The same deletion in a repeat, such as one `A` removed from `AAAA`, can be writt
 
 The workflow runs three stages before any isolate is processed:
 
-1. **Resolve backbone**: copy the local FASTA or download the NCBI accession, and record its checksum.
+1. **Resolve backbone**: copy the local FASTA or resolve the saved provider reference through the Datasets REST API [19], and record its checksum.
 2. **Validate inputs**: check the backbone FASTA's structure and that every read file can be read.
 3. **Index backbone**: build the bwa and samtools indexes.
 
@@ -366,7 +369,7 @@ Every scientific step runs in one pinned environment; Snakemake schedules the st
 | Tool | Role | Pinned in | Reference |
 |---|---|---|---|
 | Snakemake | scheduling, per-step environments, reruns | GenoPilot runtime ([`pixi.toml`](../../runtime/pixi.toml)) | [17] |
-| NCBI Datasets CLI | downloading an NCBI backbone | [`ncbi-datasets-cli`](../shared/envs/ncbi-datasets-cli/environment.yaml) | [19] |
+
 | fastp | read QC and light adapter trimming | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [4] |
 | bwa mem | read alignment | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [5, 6] |
 | samtools | sorting, duplicate marking, alignment statistics, FASTA indexes | [`short-read-calling`](envs/short-read-calling/environment.yaml) | [7, 11] |

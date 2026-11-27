@@ -17,15 +17,15 @@ import {
   type WorkflowOutput,
 } from '../../workflows/execution.js';
 import {
-  applyNcbiCacheModes,
+  applyGenomeCacheModes,
   buildAnnotationTransferConfiguration,
   createAnnotationTransferDraft,
   discoverAnnotationTransferRuns,
-  findNcbiCacheEntries,
+  findGenomeCacheEntries,
   savePreparedRun,
   validatePreparedRunPaths,
   type AnnotationTransferConfigurationDraft,
-  type NcbiCacheEntry,
+  type GenomeCacheEntry,
   type PreparedAnnotationTransferRun,
 } from '../../workflows/annotation-transfer/run-configuration.js';
 import type {WorkflowManifest, WorkflowStage} from '../../workflows/manifest.js';
@@ -47,9 +47,9 @@ export type PreparedRunValidator = (prepared: PreparedAnnotationTransferRun) => 
 export type PreparedRunSaver = (prepared: PreparedAnnotationTransferRun) => Promise<string>;
 export type NcbiApiKeyCheck = () => Promise<boolean>;
 export type PreviousRunsLoader = (currentDirectory: string) => Promise<readonly PreviousWorkflowRun[]>;
-export type NcbiCacheEntryFinder = (
+export type GenomeCacheEntryFinder = (
   prepared: PreparedAnnotationTransferRun,
-) => Promise<readonly NcbiCacheEntry[]>;
+) => Promise<readonly GenomeCacheEntry[]>;
 /** Records the NCBI caches under a finished run's output root in the accession catalog. */
 export type AccessionCacheRegistration = (outputRoot: string, currentDirectory: string) => Promise<string>;
 
@@ -78,20 +78,20 @@ async function defaultRegisterAccessionCaches(outputRoot: string, currentDirecto
 }
 
 function usesNcbiInput(prepared: PreparedAnnotationTransferRun): boolean {
-  return prepared.configuration.inputs.reference.source === 'ncbi' ||
-    prepared.configuration.inputs.target.source === 'ncbi';
+  return prepared.configuration.inputs.reference.source === 'remote' ||
+    prepared.configuration.inputs.target.source === 'remote';
 }
 
 function previousRunFormValues(configuration: AnnotationTransferConfiguration): WorkflowFormValues {
   const {reference, target} = configuration.inputs;
   return {
-    'reference-source': reference.source,
+    'reference-source': reference.source === 'local' ? 'local' : reference.reference.source,
     'reference-fasta': reference.source === 'local' ? reference.fasta : '',
     'reference-gff3': reference.source === 'local' ? reference.gff3 : '',
-    'reference-accession': reference.source === 'ncbi' ? reference.accession : '',
-    'target-source': target.source,
+    'reference-accession': reference.source === 'remote' ? reference.reference.id : '',
+    'target-source': target.source === 'local' ? 'local' : target.reference.source,
     'target-fasta': target.source === 'local' ? target.fasta : '',
-    'target-accession': target.source === 'ncbi' ? target.accession : '',
+    'target-accession': target.source === 'remote' ? target.reference.id : '',
     'minimum-protein-identity': String(configuration.review.minimum_protein_identity),
     'cpu-allocation': configuration.resources.cpu_mode,
     'manual-cpu-limit': String(configuration.resources.manual_limit ?? ''),
@@ -160,9 +160,9 @@ function resolvedValues(
     // the raw 'local'/'ncbi' value.
     'reference-fasta': reference.source === 'local' ? reference.fasta : '',
     'reference-gff3': reference.source === 'local' ? reference.gff3 : '',
-    'reference-accession': reference.source === 'ncbi' ? reference.accession : '',
+    'reference-accession': reference.source === 'remote' ? reference.reference.id : '',
     'target-fasta': target.source === 'local' ? target.fasta : '',
-    'target-accession': target.source === 'ncbi' ? target.accession : '',
+    'target-accession': target.source === 'remote' ? target.reference.id : '',
     'lifton-profile': configuration.lifton.profile,
     'minimum-protein-identity': String(configuration.review.minimum_protein_identity),
     'cpu-allocation': configuration.resources.cpu_mode,
@@ -185,7 +185,7 @@ export function AnnotationTransferConfigurationScreen({
   stages = [],
   checkNcbiApiKey = defaultNcbiApiKeyCheck,
   discoverPreviousRuns = defaultDiscoverPreviousRuns,
-  findCacheEntries = findNcbiCacheEntries,
+  findCacheEntries = findGenomeCacheEntries,
   snakefilePath,
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
   executeSnakemakeRun = defaultExecuteSnakemakeRun,
@@ -206,7 +206,7 @@ export function AnnotationTransferConfigurationScreen({
   stages?: readonly WorkflowStage[];
   checkNcbiApiKey?: NcbiApiKeyCheck;
   discoverPreviousRuns?: PreviousRunsLoader;
-  findCacheEntries?: NcbiCacheEntryFinder;
+  findCacheEntries?: GenomeCacheEntryFinder;
   /** The workflow's entry Snakefile, from its discovered directory. */
   snakefilePath: string;
   prepareSnakemakeRun?: typeof defaultPrepareSnakemakeRun;
@@ -270,11 +270,11 @@ export function AnnotationTransferConfigurationScreen({
         });
         for (const input of ['reference', 'target'] as const) {
           const configuredInput = run.configuration.inputs[input];
-          if (configuredInput.source === 'ncbi') {
+          if (configuredInput.source === 'remote') {
             effectiveOptions.push({
               label: `${input === 'reference' ? 'Reference' : 'Target'} NCBI cache`,
               value:
-                configuredInput.ncbi_cache_mode === 'refresh'
+                configuredInput.cache_mode === 'refresh'
                   ? 'Download fresh copy'
                   : 'Reuse cache after checksum verification when available',
             });
@@ -297,13 +297,13 @@ export function AnnotationTransferConfigurationScreen({
     }
     return {
       ...review,
-      ncbiCache: {
+      genomeCache: {
         entries: cacheEntries.map(entry => ({
           id: entry.input,
-          label: `${entry.input === 'reference' ? 'Reference' : 'Target'} ${entry.accession}`,
+          label: `${entry.input === 'reference' ? 'Reference' : 'Target'} ${entry.id}`,
         })),
         apply: modes =>
-          prepareForReview(applyNcbiCacheModes(prepared, {reference: modes.reference, target: modes.target})),
+          prepareForReview(applyGenomeCacheModes(prepared, {reference: modes.reference, target: modes.target})),
       },
     };
   };

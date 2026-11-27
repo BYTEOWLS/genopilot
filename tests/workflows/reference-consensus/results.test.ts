@@ -35,12 +35,12 @@ const manifest: WorkflowManifest = {
 };
 
 const configuration = validateReferenceConsensusConfiguration({
-  schema_version: 1,
+  schema_version: 2,
   workflow_id: 'reference-consensus',
   workflow_version: 1,
   genopilot: {version: '1.2.3', igv: '3.8.9'},
   inputs: {
-    backbone: {source: 'ncbi', accession: 'GCF_000000001.1'},
+    backbone: {source: 'remote', reference: {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}}, cache_mode: 'reuse'},
     isolates_file: 'isolates.yaml',
     selected_isolates: isolateIds,
     selected_read_sets: isolateIds.map(id => `${id}/reads`),
@@ -177,9 +177,9 @@ async function runDirectory(
   await touch(directory, 'results/input-validation.json');
   await touch(directory, 'resolved/backbone.fasta');
   await writeJson(directory, 'provenance/backbone.fasta.json', {
-    schema_version: 1,
+    schema_version: 2,
     source: 'ncbi',
-    accession: 'GCF_000000001.1',
+    id: 'GCF_000000001.1',
     downloaded: false,
     checksum: {algorithm: 'sha256', value: 'c'.repeat(64)},
     origin: 'imported',
@@ -209,8 +209,8 @@ test('reads a completed run: backbone, isolates, and the initial cohort', async 
   const {result} = loaded;
 
   assert.deepEqual(
-    {source: result.backbone.source, accession: result.backbone.accession, downloaded: result.backbone.downloaded, issues: result.backbone.issues},
-    {source: 'ncbi', accession: 'GCF_000000001.1', downloaded: false, issues: []},
+    {source: result.backbone.source, id: result.backbone.id, downloaded: result.backbone.downloaded, issues: result.backbone.issues},
+    {source: 'ncbi', id: 'GCF_000000001.1', downloaded: false, issues: []},
   );
   assert.deepEqual(result.isolates.map(isolate => [isolate.id, isolate.state, isolate.promotionCandidate]), [
     ['isolate-a', 'completed', true],

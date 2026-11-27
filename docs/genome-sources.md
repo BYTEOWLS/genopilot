@@ -1,6 +1,6 @@
 # Genome sources
 
-**Manage genome sources** downloads and inspects genomes without creating a run. NCBI is currently the only registered provider. Workflow reuse of these downloads is still being connected; the catalog's REST download path is not yet the workflow download path.
+**Manage genome sources** downloads and inspects genomes without creating a run. NCBI is currently the only registered provider. Catalog and workflow downloads use the same REST implementation.
 
 ## Download and inspect
 
@@ -25,6 +25,14 @@ During a download, the review shows received bytes and, when the provider suppli
 Successful downloads are verified, rescanned, and selected. Press `v` to inspect a verified copy when the browser is available. If requested annotation is unavailable, any verified FASTA remains usable for roles that do not require GFF3. An annotation-only request with no available GFF3 keeps its metadata but publishes no empty cache. A network or annotation request failure is not reported as absent annotation.
 
 Enter edits the selected entry's local name and description. Its **Download / refresh** action downloads directly without saving or discarding unsaved labels. PageUp/PageDown scrolls metadata and local copies while fields and action buttons remain visible. The editor also offers **Refresh metadata** when the provider supports lookup; `m` activates it outside text fields. Refresh keeps unsaved labels, failures remain retryable, and Escape cancels an active lookup. On the list, `r` rescans caches. `d` confirms removal of the entry and its copies under known roots. Entries from different providers remain separate even when their identifiers match.
+
+## Reuse in a workflow
+
+Workflow inputs save the provider, pinned identifier, parameters, and an explicit `reuse` or `refresh` cache decision. Reuse snapshots a catalog copy only when it contains every file required by that input role. Copies in another output root can be reused without downloading; the resolver rechecks their required checksums and keeps refresh and deletion excluded until copying finishes. An uncached entry downloads on demand. Refresh downloads to the run's output root, leaving any cross-root copy unchanged.
+
+Direct Snakemake execution uses the same packaged Node downloader, without the TUI or the Datasets CLI. Node must be on PATH, or `GENOPILOT_NODE_EXECUTABLE` must name its absolute executable path. Managed execution supplies that path automatically. Reused and newly downloaded inputs remain `imported`; provenance records the provider reference, facts, checksums, and whether a download occurred. Missing required annotation blocks only roles that need it.
+
+Saved workflow configurations now use schema 2. Older configurations are rejected without migration; create a new run.
 
 ## Provider settings
 
