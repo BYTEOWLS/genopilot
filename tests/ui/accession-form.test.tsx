@@ -116,6 +116,55 @@ for (const variant of ['info', 'warning'] as const) {
   });
 }
 
+test('review checkboxes follow focus and keep actions visible in a short terminal', async context => {
+  const input = new Input();
+  const output = new Output();
+  output.columns = 60;
+  output.rows = 18;
+  let downloads = 0;
+  const changes: string[][] = [];
+  function Review() {
+    const [kinds, setKinds] = React.useState<readonly ('fasta' | 'gff3')[]>(['fasta', 'gff3']);
+    return <AccessionForm registry={genomeSources} inputActive downloadRoot="/runs"
+      editing={{source: 'ncbi', id: 'GCA_000000001.1', parameters: {}, metadata: null, cached_copies: []}}
+      downloadArtifacts={kinds} onArtifactsChange={next => { changes.push([...next]); setKinds(next); }}
+      onSaveMetadata={async () => {}} onSubmit={async () => { downloads++; throw new Error('retry-marker'); }} onCancel={() => {}} />;
+  }
+  const app = render(<Review />, {stdin: input, stdout: output, stderr: output, interactive: true, exitOnCtrlC: false, patchConsole: false});
+  context.after(() => app.unmount());
+  const fits = () => output.frame().split('\n').length <= output.rows;
+  const press = async (key: string) => { await pressKey(input, key); await rendered(app); assert.ok(fits(), output.frame()); };
+  await rendered(app);
+  assert.ok(fits(), output.frame());
+  // Scroll details while an action owns focus, then return to the first checkbox.
+  await press('\x1b[6~');
+  await press('\t');
+  assert.match(output.frame().split('\n').find(line => line.startsWith('› ')) ?? '', /\[x\]/);
+  await press('\x1b[C');
+  assert.deepEqual(changes.at(-1), ['gff3']);
+  await press('\r');
+  assert.equal(downloads, 0);
+  await press('\t');
+  output.columns = 70;
+  output.rows = 20;
+  output.emit('resize');
+  await rendered(app);
+  assert.ok(fits(), output.frame());
+  assert.match(output.frame().split('\n').find(line => line.startsWith('› ')) ?? '', /\[x\]/);
+  await press('\x1b[D');
+  assert.deepEqual(changes.at(-1), []);
+  await press('\x1b[A');
+  output.columns = 60;
+  output.rows = 18;
+  output.emit('resize');
+  await rendered(app);
+  assert.ok(fits(), output.frame());
+  await press('\x1b[A'); // Wrap from the first artifact to the download action.
+  await press('\r');
+  await waitFor(() => output.frame().includes('retry-marker') && fits(), output);
+  assert.equal(downloads, 1);
+});
+
 test('inline download progress and cancellation remain visible after resizing', async context => {
   const input = new Input();
   const output = new Output();

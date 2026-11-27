@@ -145,8 +145,8 @@ test('provider artifacts can be unchecked independently before an explicitly con
   await screen.press('\r');
   await waitFor(() => screen.output.output.includes(reviewMetadata.organism), 'review');
   await screen.press('\t');
-  await screen.press('\r');
-  await screen.press(' '); // Uncheck FASTA; GFF3 remains selected.
+  await screen.press('\r'); // Enter on a checkbox does not submit or open another page.
+  await screen.press(' '); // Uncheck FASTA inline; GFF3 remains selected.
   await screen.press('\r');
   assert.equal(requests.length, 0, 'choosing artifacts is not download confirmation');
   await screen.press('\x1b[A');
@@ -169,12 +169,9 @@ test('an injected provider owns the artifact list; an empty selection cannot dow
   await effectsSettled();
   await screen.press('\x1b[A');
   await screen.press('\r');
+  await waitFor(() => screen.output.output.includes(singleArtifact.get('third').artifacts[0]!.label), 'inline declared artifact');
   await screen.press('\t');
-  await screen.press('\r');
-  await waitFor(() => screen.output.output.includes(singleArtifact.get('third').artifacts[0]!.label), 'declared artifact list');
-  await screen.press('\x1b[B'); // A one-item list wraps to its only declared artifact.
   await screen.press(' ');
-  await screen.press('\r');
   await screen.press('\x1b[A');
   await screen.press('\r');
   assert.equal(downloaded, false);
@@ -187,11 +184,12 @@ test('an injected provider owns the artifact list; an empty selection cannot dow
   assert.equal(downloaded, false);
 });
 
-test('cancelling artifact edits keeps the prior selection', async context => {
+test('leaving inline artifact edits cancels review without saving or downloading', async context => {
   let kinds: readonly string[] | undefined;
+  let saved = false;
   const reference = {source: 'ncbi', id: 'GCA_000000001.1', parameters: {}};
   const screen = mount(context, <DownloadForm registry={registry} settings={{read: async () => ({}), save: async () => {}, clear: async () => {}}}
-    outputRoot="/runs" inputActive existing={reference} onRecord={async () => {}} onCancel={() => {}} onConfigure={() => {}} onComplete={() => {}}
+    outputRoot="/runs" inputActive existing={reference} onRecord={async () => { saved = true; }} onCancel={() => {}} onConfigure={() => {}} onComplete={() => {}}
     download={async request => {
       kinds = request.kinds;
       return {reference, fasta: '/fasta.fna', fasta_sha256: 'a'.repeat(64), facts: {}, metadata: null, annotation: 'unavailable', downloaded: true};
@@ -201,12 +199,18 @@ test('cancelling artifact edits keeps the prior selection', async context => {
   await screen.press('\r');
   await waitFor(() => screen.output.output.includes(reviewMetadata.organism), 'review');
   await screen.press('\t');
-  await screen.press('\r');
   await screen.press(' ');
+  screen.output.rows = 20;
+  screen.output.columns = 70;
+  screen.output.emit('resize');
+  await rendered(screen.app);
   await screen.press('\x1b');
-  await screen.press('\x1b[A');
+  assert.equal(kinds, undefined);
+  assert.equal(saved, false);
+  // A new review resets all provider artifacts to checked.
   await screen.press('\r');
-  await waitFor(() => !!kinds, 'confirmed download');
+  await screen.press('\r');
+  await waitFor(() => !!kinds, 'confirmed download after a fresh review');
   assert.deepEqual(kinds, ['fasta', 'gff3']);
 });
 

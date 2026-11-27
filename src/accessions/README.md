@@ -51,9 +51,11 @@ Catalog download and provider setup are registry-driven. Every provider requires
 metadata/reference review and explicit Download confirmation. Optional metadata
 lookup runs before review; failure never starts a download. Review can save only
 metadata, preserving existing labels/cache copies, or explicitly download files.
-The review's artifact chooser uses the shared selectable list; Space toggles checks,
-Enter applies them, and Escape keeps the prior selection. All provider-declared
-artifacts start selected. An empty selection still permits metadata-only saving,
+The review renders provider artifacts through the shared `CheckboxGroup`, also
+used by the GFF3 attribute form. It composes `ParameterList` and owns toggle keys;
+the form owns navigation and a focus-following review viewport. Tab and arrows move focus; Space or left/right toggles a checkbox.
+Enter activates action buttons only; Escape leaves review without downloading.
+All provider-declared artifacts start selected. An empty selection still permits metadata-only saving,
 but cannot start a download.
 Provider progress callbacks report actual transfer bytes (optional total) and
 extraction, verification, and publication stages; the noninteractive entry point

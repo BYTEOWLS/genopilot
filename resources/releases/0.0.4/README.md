@@ -15,7 +15,7 @@ Status: in progress. Catalog review, metadata-only saving, provider-declared art
 1. Establish the shared catalog entry and required and optional provider methods.
 2. Deliver the catalog download and inspection path with NCBI REST; reuse the downloader from Snakemake.
 3. Finish direct-Snakemake cache-miss download verification with NCBI.
-4. Add VEuPathDB as the final open implementation step, including authenticated evidence and site- and release-specific verification.
+4. Add VEuPathDB as the final open implementation step: supported-site selection, organism/genome search and results, additional whole-genome artifacts (proteins, transcripts, CDS), and authenticated site- and release-specific verification. Shared review artifact selection is inline for every provider.
 5. Run final release verification for both providers before release preparation.
 
 ## Exclusions

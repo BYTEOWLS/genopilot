@@ -34,6 +34,8 @@ This is a prerequisite of [INSDC submission preparation](../../insdc-submission/
 
 The screen shows an info note that the sequence IDs in column 1 must match the FASTA headers and are therefore never changed; [`docs/gff3-find-and-replace.md`](../../../../docs/gff3-find-and-replace.md), the screen's help, explains the same with an example.
 
+Attribute checkboxes use the shared `CheckboxGroup` with the download review. The component renders choices and handles Space/←/→ toggles; this form owns navigation, validation, and the All-attributes override. Cohort tables and searchable read-set pickers remain separate layouts.
+
 Before writing, a screen built on `EditPage` previews the replacement on the chosen file: the number of changed values per attribute, a sample of old → new values for each, the number of unchanged and unmatched IDs, and the number of aliases it will add. Replacing in free text, such as a `product` description, is intended but easy to overlook, so the per-attribute counts make it visible. The preview and the rewrite share one TypeScript implementation, so the preview shows exactly what will be written; writing repeats the pass and refuses when the source checksum differs from the preview's. After writing, a result view shows the statistics and the written paths.
 
 It is application post-processing rather than a Snakemake rule because it is a fast single pass over text, needs an interactive preview Snakemake cannot provide, and must not turn every pattern change into a configuration change and rerun.

@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Box, Text, useInput, useWindowSize} from 'ink';
+import {Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
 import {missingProviderFields, type GenomeProviderRegistry, type GenomeReference, type ProviderContext, type GenomeResult, type GenomeDownloadProgress, type FileKind} from '../../accessions/provider.js';
 import {resolveGenomeCache, type GenomeCacheRequest, type VerifiedGenome} from '../../accessions/cache.js';
@@ -13,7 +13,6 @@ import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import type {AccessionEntry} from '../../accessions/catalog.js';
 import {AccessionForm} from './accession-form.js';
-import {ArtifactPicker} from './artifact-picker.js';
 
 export type CatalogDownloader = (request: GenomeCacheRequest, context: ProviderContext, registry: GenomeProviderRegistry) => Promise<VerifiedGenome>;
 
@@ -31,7 +30,7 @@ export function DownloadForm({registry, settings, outputRoot, inputActive, exist
 }): React.JSX.Element {
   const providers = registry.list();
   const [sourceIndex, setSourceIndex] = useState(Math.max(0, providers.findIndex(provider => provider.id === existing?.source)));
-  const [stage, setStage] = useState<'providers' | 'form' | 'results' | 'review' | 'artifacts'>(existing ? 'form' : 'providers');
+  const [stage, setStage] = useState<'providers' | 'form' | 'results' | 'review'>(existing ? 'form' : 'providers');
   const [id, setId] = useState(existing?.id ?? '');
   const [selected, setSelected] = useState(0);
   const [secrets, setSecrets] = useState<Record<string, string>>();
@@ -122,7 +121,7 @@ export function DownloadForm({registry, settings, outputRoot, inputActive, exist
       if (key.escape) { controller.current?.abort(); }
       return;
     }
-    if (stage === 'review' || stage === 'artifacts') {
+    if (stage === 'review') {
       return;
     }
     if (key.escape) {
@@ -146,18 +145,12 @@ export function DownloadForm({registry, settings, outputRoot, inputActive, exist
       else if (action === 'download' || action === 'search' || action === 'browse') { void operate(action); }
     }
   }, {isActive: inputActive});
-  if ((stage === 'review' || stage === 'artifacts') && review && provider) {
-    return <Box flexDirection="column">
-      <Box flexDirection="column" display={stage === 'review' ? 'flex' : 'none'}>
-        <AccessionForm editing={review} registry={registry} downloadRoot={outputRoot} progress={progress}
-          inputActive={inputActive && stage === 'review'} downloadArtifacts={kinds} onChooseArtifacts={() => setStage('artifacts')}
-          onSaveMetadata={async entry => { await onRecord(entry); onCancel(); }}
-          onCancel={() => { setReview(undefined); setStage('form'); }}
-          onSubmit={async () => operate('download', review, true)} />
-      </Box>
-      {stage === 'artifacts' ? <ArtifactPicker artifacts={provider.artifacts} initialKinds={kinds}
-        onConfirm={selected => { setKinds(selected); setStage('review'); }} onCancel={() => setStage('review')} inputActive={inputActive} /> : null}
-    </Box>;
+  if (stage === 'review' && review && provider) {
+    return <AccessionForm editing={review} registry={registry} downloadRoot={outputRoot} progress={progress}
+      inputActive={inputActive} downloadArtifacts={kinds} onArtifactsChange={setKinds}
+      onSaveMetadata={async entry => { await onRecord(entry); onCancel(); }}
+      onCancel={() => { setReview(undefined); setStage('form'); }}
+      onSubmit={async () => operate('download', review, true)} />;
   }
   if (stage !== 'form') {
     const items = stage === 'providers' ? providers.map(item => item.label) : results.map(item => item.summary);

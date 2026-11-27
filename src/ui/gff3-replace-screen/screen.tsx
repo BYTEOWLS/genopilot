@@ -28,6 +28,7 @@ import {PathBrowser} from '../components/path-browser.js';
 import {expandHomeDirectory} from '../components/path-field.js';
 import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 import {Section} from '../components/section.js';
+import {CheckboxGroup, type CheckboxRow} from '../components/checkbox-group.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
@@ -259,17 +260,6 @@ export function Gff3ReplaceScreen({
     });
   };
 
-  const toggle = (row: RowId): void => {
-    if (row === 'regex') {
-      setRegularExpression(current => !current);
-    } else if (row === 'attribute.all') {
-      setAllAttributes(current => !current);
-    } else if (row.startsWith('attribute.') && !allAttributes) {
-      const group = row.slice('attribute.'.length) as AttributeGroup;
-      setGroups(current => current.includes(group) ? current.filter(value => value !== group) : [...current, group]);
-    }
-  };
-
   // A fixed source and a run's output folder are shown but not selectable.
   const rows = rowOrder.filter(row => !(row === 'source' && sourceFixed) && !(row === 'output' && runDirectory));
   // The output folder stops being selectable once the source turns out to lie in a run.
@@ -305,8 +295,8 @@ export function Gff3ReplaceScreen({
       setHelp(true);
       return;
     }
-    if (!textRows.has(selected) && selected !== 'save' && (input === ' ' || key.leftArrow || key.rightArrow)) {
-      toggle(selected);
+    if (selected === 'regex' && (input === ' ' || key.leftArrow || key.rightArrow)) {
+      setRegularExpression(current => !current);
       return;
     }
     if (key.return) {
@@ -371,11 +361,6 @@ export function Gff3ReplaceScreen({
     );
   }
 
-  const attributeValue = (group: AttributeGroup | 'all'): string => {
-    const checked = group === 'all' ? allAttributes : allAttributes || groups.includes(group);
-    const detail = group === 'all' ? 'every attribute, without guard rails' : groupDetails[group];
-    return `${checked ? '[x]' : '[ ]'}${detail ? ` ${detail}` : ''}`;
-  };
   const sourceRow: ParameterRow = sourceFixed
     ? {id: 'source', label: 'GFF3 file', value: sourcePath}
     : {
@@ -403,15 +388,15 @@ export function Gff3ReplaceScreen({
     },
     {id: 'regex', label: 'Regular expression', value: regularExpression ? 'yes' : 'no', choice: true},
   ];
-  const attributeRows: ParameterRow[] = [
+  const attributeRows: CheckboxRow[] = [
     ...attributeGroups.map(group => ({
       id: `attribute.${group}`,
       label: groupLabels[group],
-      value: attributeValue(group),
-      muted: allAttributes,
-      choice: true,
+      checked: allAttributes || groups.includes(group),
+      description: groupDetails[group],
+      disabled: allAttributes,
     })),
-    {id: 'attribute.all', label: 'All attributes', value: attributeValue('all'), choice: true},
+    {id: 'attribute.all', label: 'All attributes', checked: allAttributes, description: 'every attribute, without guard rails'},
   ];
   const outputRow: ParameterRow = runDirectory
     ? {id: 'output', label: 'Output folder', value: `${join(runDirectory, derivedFolderName)} (inside the run)`}
@@ -424,7 +409,7 @@ export function Gff3ReplaceScreen({
     };
   const labelWidth = parameterLabelWidth([...mainRows, ...attributeRows, outputRow]);
   const browsable = selected === 'source' || selected === 'output';
-  const choiceSelected = selected === 'regex' || selected.startsWith('attribute.');
+  const choiceSelected = selected === 'regex';
 
   return (
     <EditPage
@@ -462,7 +447,15 @@ export function Gff3ReplaceScreen({
         <ParameterList rows={mainRows} selectedId={selected} inputActive={inputActive && !busy} labelWidth={labelWidth} />
       </Box>
       <Section title="Attributes searched">
-        <ParameterList rows={attributeRows} selectedId={selected} inputActive={inputActive && !busy} labelWidth={labelWidth} />
+        <CheckboxGroup rows={attributeRows} selectedId={selected} inputActive={inputActive && !busy} labelWidth={labelWidth}
+          onChange={(id, checked) => {
+            if (id === 'attribute.all') {
+              setAllAttributes(checked);
+            } else {
+              const group = id.slice('attribute.'.length) as AttributeGroup;
+              setGroups(current => checked ? [...current, group] : current.filter(value => value !== group));
+            }
+          }} />
       </Section>
       <Box marginTop={1} flexDirection="column">
         <ParameterList rows={[outputRow]} selectedId={selected} inputActive={inputActive && !busy} labelWidth={labelWidth} />

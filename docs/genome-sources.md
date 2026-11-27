@@ -12,7 +12,7 @@ Check the review, then choose **Save metadata only** to keep a catalog entry wit
 
 ## Choose artifacts
 
-In the review, select **Artifacts** and press Enter. The list comes from the provider; NCBI currently offers genome sequence (FASTA) and genome annotation (GFF3). All declared artifacts start checked. Use ↑/↓ to select a row and Space to check or uncheck it; Enter applies the selection, while Escape keeps the previous selection.
+The review shows artifact checkboxes inline, using the provider's list; NCBI currently offers genome sequence (FASTA) and genome annotation (GFF3). All declared artifacts start checked. Use Tab or ↑/↓ to select a checkbox and Space or ←/→ to toggle it. Enter activates only the selected action button; Escape leaves the review without downloading. On short terminals, the review scrolls to the focused checkbox while action buttons remain visible. PageUp/PageDown scrolls the review details.
 
 Only checked artifacts are requested. An unchecked artifact already verified in the cache is retained, not deleted. FASTA and GFF3 can be downloaded independently; an annotation-only entry cannot be opened as a genome until FASTA is present. A workflow still requires the files for its input role, regardless of the catalog download selection. If nothing is checked, use **Save metadata only** instead of downloading.
 

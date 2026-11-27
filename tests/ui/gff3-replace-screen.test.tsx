@@ -126,6 +126,38 @@ test('a change after the preview needs a new preview before writing', async cont
   assert.equal(screen.writes.length, 0);
 });
 
+test('shared inline attribute choices preserve individual selections across All', async context => {
+  const screen = setup(context);
+  await rendered(screen.app);
+  await screen.press('A');
+  await screen.press(DOWN);
+  await screen.press(DOWN);
+  await screen.press(DOWN); // First attribute row.
+  await screen.press('\x1b[D');
+  await screen.press('\r');
+  assert.equal(screen.previews.length, 0, 'Enter on a checkbox never previews');
+  await screen.press(UP);
+  await screen.press(UP);
+  await screen.press(UP);
+  await screen.press(UP); // Save.
+  await screen.press(UP); // All attributes.
+  await screen.press('\x1b[C');
+  await screen.press(UP);
+  await screen.press(' '); // An individual attribute is disabled under All.
+  await screen.press(DOWN);
+  await screen.press(DOWN);
+  await screen.press('\r');
+  await waitFor(() => screen.previews.length === 1, 'the all-attributes preview');
+  assert.equal(screen.previews[0]?.options.attributes, 'all');
+  await screen.press(UP);
+  await screen.press(' '); // Restore the individually selected attributes.
+  await screen.press(DOWN);
+  await screen.press('\r');
+  await waitFor(() => screen.previews.length === 2, 'the individual-attributes preview');
+  assert.deepEqual(screen.previews[1]?.options.attributes, ['Name', 'locus_tag']);
+  assert.equal(screen.writes.length, 0);
+});
+
 test('an empty search is rejected without a preview', async context => {
   const screen = setup(context);
   await rendered(screen.app);
