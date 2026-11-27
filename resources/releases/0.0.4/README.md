@@ -8,14 +8,15 @@ Download and inspect genomes from the catalog before starting an analysis, then 
 
 - [ ] [Genome sources: NCBI and VEuPathDB behind one interface](01_genome_sources.md).
 
-Status: in progress. Catalog review, metadata-only saving, provider-declared artifact selection, download progress, and provider setup UI are implemented. Both workflows now use the packaged Node/Python bridge, with schema-2 provider references, role-specific cross-root snapshots, protected copying, and provider provenance; the Datasets CLI is removed. Installed-package resolver checks pass without Node on PATH. Both workflows' offline cross-root reuse checks pass through the pinned Snakemake runtime. Same-genome reference/target resolution is serialized by Snakemake without adding a dependency between the jobs. Direct cache-miss download verification and authenticated VEuPathDB evidence/implementation remain open. See the detail file's implementation progress.
+Status: in progress. Catalog review, metadata-only saving, provider-declared artifact selection, download progress, and provider setup UI are implemented. Both workflows now use the packaged Node/Python bridge, with schema-2 provider references, role-specific cross-root snapshots, protected copying, and provider provenance; the Datasets CLI is removed. Installed-package resolver checks pass without Node on PATH. Both workflows' offline cross-root reuse checks pass through the pinned Snakemake runtime. Same-genome reference/target resolution is serialized by Snakemake without adding a dependency between the jobs. Live NCBI cache-miss downloads and subsequent reuse pass for reference, target, and backbone roles through direct Snakemake. Provider-independent bundled-resolver tests cover the same roles with two synthetic providers. Authenticated VEuPathDB evidence/implementation is the final open implementation step. See the detail file's implementation progress.
 
 ## Delivery order
 
 1. Establish the shared catalog entry and required and optional provider methods.
 2. Deliver the catalog download and inspection path with NCBI REST; reuse the downloader from Snakemake.
-3. Add VEuPathDB and verify its site- and release-specific behavior.
-4. Verify both providers end to end before release preparation.
+3. Finish direct-Snakemake cache-miss download verification with NCBI.
+4. Add VEuPathDB as the final open implementation step, including authenticated evidence and site- and release-specific verification.
+5. Run final release verification for both providers before release preparation.
 
 ## Exclusions
 

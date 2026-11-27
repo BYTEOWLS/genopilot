@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {createInterface} from 'node:readline';
 import test from 'node:test';
 import {resolveGenomeCache} from '../../src/accessions/cache.js';
-import {ncbiProvider} from '../../src/accessions/provider/ncbi/index.js';
+import {syntheticProvider} from './fixtures/provider.js';
 import {GenomeProviderRegistry} from '../../src/accessions/provider.js';
 import {waitFor} from '../wait.js';
 
@@ -14,11 +14,12 @@ for (const phase of ['downloading', 'awaiting-copy', 'acknowledged'] as const) {
   test(`genome entry handles consumer EOF while ${phase}`, async context => {
     const root = await mkdtemp(join(tmpdir(), 'genopilot-entry-'));
     context.after(() => rm(root, {recursive: true, force: true}));
-    const reference = {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}};
+    const provider = syntheticProvider('synthetic');
+    const reference = {source: provider.id, id: 'genome-1', parameters: {release: 'pinned'}};
     const request = {reference, root, mode: 'refresh' as const, kinds: ['fasta'] as const};
     const original = '>original\nACGT\n';
     const registry = new GenomeProviderRegistry([{
-      ...ncbiProvider,
+      ...provider,
       async download(_reference, _kinds, staging) {
         await writeFile(join(staging, 'genomic.fna'), original);
         return {files: {fasta: 'genomic.fna'}, metadata: null, facts: {}, annotation: 'not-requested'};
@@ -29,8 +30,10 @@ for (const phase of ['downloading', 'awaiting-copy', 'acknowledged'] as const) {
     const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', `
       import {writeFile} from 'node:fs/promises';
       import {join} from 'node:path';
-      import {ncbiProvider} from ${JSON.stringify(new URL('../../src/accessions/provider/ncbi/index.ts', import.meta.url).href)};
-      ncbiProvider.download = async (_reference, _kinds, staging, context) => {
+      import {syntheticProvider} from ${JSON.stringify(new URL('./fixtures/provider.ts', import.meta.url).href)};
+      import {genomeSources} from ${JSON.stringify(new URL('../../src/accessions/registry.ts', import.meta.url).href)};
+      const provider = syntheticProvider('synthetic');
+      provider.download = async (_reference, _kinds, staging, context) => {
         await writeFile(join(staging, 'genomic.fna'), '>replacement\\nTTTT\\n');
         if (${JSON.stringify(phase)} === 'downloading') {
           await new Promise((_resolve, reject) => {
@@ -43,6 +46,7 @@ for (const phase of ['downloading', 'awaiting-copy', 'acknowledged'] as const) {
         }
         return {files: {fasta: 'genomic.fna'}, metadata: null, facts: {}, annotation: 'not-requested'};
       };
+      genomeSources.register(provider);
       await import(${JSON.stringify(new URL('../../src/accessions/entry.ts', import.meta.url).href)});
       process.disconnect();
     `], {stdio: ['pipe', 'pipe', 'pipe', 'ipc'], env: {...process.env, HOME: root}});
@@ -80,6 +84,6 @@ for (const phase of ['downloading', 'awaiting-copy', 'acknowledged'] as const) {
     } else {
       assert.ok(genome?.fasta_sha256);
     }
-    assert.deepEqual(await readdir(join(root, ncbiProvider.cacheDirectory)), [reference.id]);
+    assert.deepEqual(await readdir(join(root, provider.cacheDirectory)), [reference.id]);
   });
 }

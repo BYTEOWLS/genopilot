@@ -84,6 +84,18 @@ checksums, and `downloaded`; verified reuse remains `imported`. The Datasets CLI
 environment and tool/citation entries are removed. Installed-package verification
 also invokes the workflow resolver CLI for reference, target, and backbone roles.
 Direct-Snakemake cache-reuse tests require the pinned runtime and built bundle.
+Provider-independent cache-miss tests bundle the entry point with two synthetic
+providers and exercise all three roles through the packaged Python resolver;
+provider-specific live evidence is separate. To repeat NCBI's live cache-miss and
+subsequent reuse checks for both workflows, build first and put the pinned
+Snakemake and Node on PATH, then run:
+
+```bash
+RUN_NCBI_DOWNLOAD_INTEGRATION=1 python3 -m unittest tests.workflows.shared.test_ncbi_cache_miss_integration -v
+```
+
+Only input-resolution targets run. Downloads stay in temporary directories;
+normal test discovery skips live requests unless explicitly enabled.
 VEuPathDB is not registered: authenticated current/older-release evidence is
 required first. See
 `resources/releases/0.0.4/01_genome_sources.md` for delivery order and acceptance.
