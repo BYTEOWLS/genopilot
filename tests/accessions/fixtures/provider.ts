@@ -24,6 +24,7 @@ export function syntheticProvider(source: string): GenomeProvider {
       }
     },
     metadataSummary: () => '',
+    mapMetadata: () => ({assembly: {}, statistics: {}, provider_attributes: []}),
     async resolveExact(id) {
       return this.validateReference(id, {release: 'pinned'});
     },

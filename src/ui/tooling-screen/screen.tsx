@@ -1,9 +1,11 @@
 import React, {useState} from 'react';
-import {genomeSources} from '../../accessions/registry.js';
+import {accessionSources} from '../../accessions/registry.js';
 import type {GenomeProviderRegistry} from '../../accessions/provider.js';
 import {providerSettings, type ProviderSettings} from '../../tooling/provider-settings.js';
 import {TabBar} from '../components/tabs.js';
 import {ProvidersTab} from './providers-tab.js';
+import {readProviderDocuments} from '../../docs/documents.js';
+import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 import {ProviderForm} from './provider-form.js';
 
 const defaultSettings = providerSettings();
@@ -42,7 +44,7 @@ export function ToolingScreen({
   onCheck,
   onBack,
   inputActive,
-  registry = genomeSources,
+  registry = accessionSources,
   settings = defaultSettings,
   initialProvider,
 }: {
@@ -58,11 +60,16 @@ export function ToolingScreen({
 }): React.JSX.Element {
   const [tab, setTab] = useState<'tools' | 'providers'>(initialProvider ? 'providers' : 'tools');
   const [selectedProvider, setSelectedProvider] = useState(initialProvider);
+  const [helpProvider, setHelpProvider] = useState<string>();
   const [editing, setEditing] = useState(initialProvider && registry.get(initialProvider).fields.length ? initialProvider : undefined);
   const header = <TabBar tabs={[{id: 'tools', label: 'Tooling'}, {id: 'providers', label: 'Accession Providers'}]}
-    activeId={tab} onChange={setTab} inputActive={inputActive && !editing} />;
+    activeId={tab} onChange={setTab} inputActive={inputActive && !editing && !helpProvider} />;
   useInput((input, key) => {
-    if (!inputActive || editing) {
+    if (!inputActive || editing || helpProvider) {
+      return;
+    }
+    if (input === '?' && tab === 'providers') {
+      setHelpProvider(selectedProvider ?? registry.list()[0]?.id);
       return;
     }
     if (key.escape) {
@@ -74,6 +81,11 @@ export function ToolingScreen({
     }
   });
 
+  if (helpProvider) {
+    const provider = registry.get(helpProvider);
+    return <MarkdownDocumentPage title={provider.label} load={() => readProviderDocuments(provider)}
+      onClose={() => setHelpProvider(undefined)} back="Close help" inputActive={inputActive} />;
+  }
   if (editing) {
     return <ProviderForm provider={registry.get(editing)} settings={settings} inputActive={inputActive} onBack={() => setEditing(undefined)} />;
   }

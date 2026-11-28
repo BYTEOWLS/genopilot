@@ -6,7 +6,7 @@ Status: the initial cohort consensus is implemented. Every isolate gets its alig
 
 ## Inputs
 
-- **Backbone**: one assembly FASTA, either a local file or a versioned NCBI assembly accession. It supplies the coordinates and every base an isolate does not change.
+- **Backbone**: one assembly FASTA, either a local file or a genome selected from any registered provider in the catalog. It supplies the coordinates and every base an isolate does not change. Catalog selections snapshot the provider, pinned identifier, and parameters, and reuse only verified genomic FASTA; protein/transcript/CDS files cannot substitute for it. Download genomic FASTA in the catalog before configuring a run; workflow fields do not accept typed identifiers.
 - **Read sets**: explicitly selected paired-end Illumina sets from the isolate catalog. Each set holds one library and multiple R1/R2 file groups across lanes or chunks; several sets may share a confirmed library ID. The immutable snapshot records their paths, metadata, and resolved preprocessing. Later catalog edits never change a run.
 
 Archive-renamed Illumina reads are supported using supplied library identity. Original Illumina headers contribute optional sequencing metadata, not proof of library identity. Unknown previous processing must be reviewed before execution. Other platforms/layouts are not supported.
@@ -304,7 +304,7 @@ The iteration runs by asking Snakemake for its provenance record, `provenance/co
 The consensus is not annotated: this workflow transfers no annotation and keeps only the FASTAs and chains. To annotate it, run the [annotation transfer](../annotation-transfer/README.md) next, as a new run, with:
 
 - **target**: the active iteration's `consensus.fasta`, in `results/cohort/initial/` or `results/cohort/iteration-<n>/`, as a local file;
-- **reference**: the backbone and a GFF3 annotation of it, either the same NCBI accession, whose annotation the transfer downloads, or the local backbone FASTA with a matching GFF3.
+- **reference**: the backbone and a GFF3 annotation of it, either the same catalog genome with its matching annotation available from the provider, or the local backbone FASTA with a matching GFF3.
 
 The consensus keeps the backbone's sequence names, but every winning insertion or deletion shifts the coordinates after it, so the backbone's GFF3 cannot be reused directly and has to be lifted.
 
@@ -360,7 +360,7 @@ Before a run, the start page estimates its disk need from the size of each isola
 | All-sites calls, isolate FASTA, and reports | about 9 × the backbone's bytes, per isolate |
 | Resolved backbone with its index, and one cohort | about 3.6 × the backbone's bytes, per run |
 
-While an isolate is aligned, its trimmed reads and per-pair alignments also need about 1.6 × its read bytes, for as many isolates as the effective CPUs align at once (8 CPUs each). The factors are per byte, so they carry over to other genomes and coverages; the estimate is a rough guide and may be up to a quarter too high. An NCBI backbone counts once it is in the download cache; before its first download, the estimate says it leaves it out. Once a run has completed on the same machine, its measured size, duration, and peak memory replace these factors, scaled by the size of the new run.
+While an isolate is aligned, its trimmed reads and per-pair alignments also need about 1.6 × its read bytes, for as many isolates as the effective CPUs align at once (8 CPUs each). The factors are per byte, so they carry over to other genomes and coverages; the estimate is a rough guide and may be up to a quarter too high. A remote backbone counts once it is in the download cache; before its first download, the estimate says it leaves it out. Once a run has completed on the same machine, its measured size, duration, and peak memory replace these factors, scaled by the size of the new run.
 
 ## Tools
 

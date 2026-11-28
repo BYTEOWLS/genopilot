@@ -126,8 +126,9 @@ test('optional credentials do not block a download; failure retains its canonica
   await screen.press('\r');
   await screen.press('\r');
   await waitFor(() => completed === 1, 'successful confirmed retry');
-  assert.deepEqual(requests[0], {reference, root: '/default/runs', kinds: ['fasta', 'gff3'], mode: 'refresh'});
-  assert.deepEqual(requests[1], {reference, root: '/default/runs', kinds: ['fasta', 'gff3'], mode: 'refresh'});
+  const kinds = ncbiProvider.artifacts.map(artifact => artifact.kind);
+  assert.deepEqual(requests[0], {reference, root: '/default/runs', kinds, mode: 'refresh'});
+  assert.deepEqual(requests[1], {reference, root: '/default/runs', kinds, mode: 'refresh'});
 });
 
 test('provider artifacts can be unchecked independently before an explicitly confirmed download', async context => {
@@ -146,13 +147,13 @@ test('provider artifacts can be unchecked independently before an explicitly con
   await waitFor(() => screen.output.output.includes(reviewMetadata.organism), 'review');
   await screen.press('\t');
   await screen.press('\r'); // Enter on a checkbox does not submit or open another page.
-  await screen.press(' '); // Uncheck FASTA inline; GFF3 remains selected.
+  await screen.press(' '); // Uncheck FASTA inline; the other declared artifacts remain selected.
   await screen.press('\r');
   assert.equal(requests.length, 0, 'choosing artifacts is not download confirmation');
   await screen.press('\x1b[A');
   await screen.press('\r');
   await waitFor(() => completed, 'selected-artifact download');
-  assert.deepEqual(requests, [{reference, kinds: ['gff3'], root: '/runs', mode: 'refresh'}]);
+  assert.deepEqual(requests, [{reference, kinds: ncbiProvider.artifacts.filter(artifact => artifact.kind !== 'fasta').map(artifact => artifact.kind), root: '/runs', mode: 'refresh'}]);
 });
 
 test('an injected provider owns the artifact list; an empty selection cannot download but can save metadata', async context => {
@@ -211,7 +212,7 @@ test('leaving inline artifact edits cancels review without saving or downloading
   await screen.press('\r');
   await screen.press('\r');
   await waitFor(() => !!kinds, 'confirmed download after a fresh review');
-  assert.deepEqual(kinds, ['fasta', 'gff3']);
+  assert.deepEqual(kinds, ncbiProvider.artifacts.map(artifact => artifact.kind));
 });
 
 test('leaving an active download aborts it without reporting completion', async context => {

@@ -7,6 +7,7 @@ import type {ProgressIsolate} from '../../workflows/isolate-progress.js';
 import type {WorkflowParameterDefinition, WorkflowParameterOption} from '../../workflows/parameter-definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AccessionField} from '../components/accession-field.js';
+import type {AccessionCatalogReader} from '../../accessions/store.js';
 import {
   IsolatesField,
   parseIsolateSelection,
@@ -296,6 +297,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   executionIsolates,
   completedIsolates,
   loadIsolates = readCatalogedIsolates,
+  loadAccessions,
   readSetCompatibility,
 }: {
   title: string;
@@ -321,6 +323,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   /** The saved run's isolates whose results are complete, for a run that ended with a failure. */
   completedIsolates?: (payload: T) => Promise<ReadonlySet<string>>;
   loadIsolates?: IsolateCatalogReader;
+  loadAccessions?: AccessionCatalogReader;
   readSetCompatibility?: ReadSetCompatibility;
 }): React.JSX.Element {
   const editableDefinitions = useMemo(
@@ -373,14 +376,13 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   const sections = [...new Set(visibleDefinitions.map(definition => definition.section))];
   const selectedDefinition = visibleEditableDefinitions.find(definition => definition.id === selectedId);
   const continueSelected = selectedId === continueButtonId;
-  // A file path or accession is typed or pasted, and Enter on it opens the file browser or the
-  // accession picker.
+  // Enter opens the file browser or a catalog picker.
   const enterOpensFileChooser = selectedDefinition?.kind === 'file';
   const enterOpensAccessionPicker = selectedDefinition?.kind === 'accession';
   const enterOpensIsolatePicker = selectedDefinition?.kind === 'isolates';
   const showsForm = screen.state === 'editing' || screen.state === 'validating' || screen.state === 'invalid';
   const typing = showsForm && !browserId && selectedDefinition !== undefined &&
-    selectedDefinition.kind !== 'choice' && selectedDefinition.kind !== 'isolates';
+    selectedDefinition.kind !== 'choice' && selectedDefinition.kind !== 'isolates' && selectedDefinition.kind !== 'accession';
   useHomeSuspension(screen.state === 'saving' ? 'busy' : typing ? 'typing' : undefined);
 
   const {rows: terminalRows, columns: terminalColumns} = useWindowSize();
@@ -623,6 +625,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         selected
         inputActive={inputActive}
         value={values[browserId] ?? ''}
+        loadAccessions={loadAccessions}
         onChange={accession => updateValue(browserId, accession)}
         choosing
         onChoosingChange={choose => {
@@ -855,6 +858,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
           } else if (definition.kind === 'accession') {
             return (
               <AccessionField
+                loadAccessions={loadAccessions}
                 key={`${row.key}:${runApplyGeneration}`}
                 label={definition.label}
                 required={definition.required}

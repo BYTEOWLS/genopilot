@@ -13,6 +13,7 @@ import {emptyAccessionCatalog, validateAccessionCatalog} from '../../src/accessi
 const reference = {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}};
 const fasta = '>synthetic\nACGTNN\n';
 const gff3 = '##gff-version 3\nsynthetic\ttest\tgene\t1\t4\t.\t+\t.\tID=g1\n';
+const proteins = '>synthetic_protein\nMPEPTIDEX*\n';
 const report = JSON.stringify({accession: reference.id, organism: {organism_name: 'Synthetic organism'}}) + '\n';
 const prefix = `ncbi_dataset/data/${reference.id}/`;
 
@@ -153,6 +154,59 @@ test('REST package selects only the pinned accession, verifies CRC and publishes
   assert.equal(reused.downloaded, false);
   assert.equal(reused.fasta_sha256, downloaded.fasta_sha256);
   assert.ok(!JSON.stringify(downloaded).includes(key));
+});
+
+test('NCBI protein FASTA is independently requested, verified, preserved, and reused offline', async context => {
+  const directory = await root(context);
+  const request = {reference, root: directory, mode: 'refresh' as const};
+  const calls: string[][] = [];
+  const fetchImpl: typeof fetch = async input => {
+    calls.push(new URL(String(input)).searchParams.getAll('include_annotation_type'));
+    return response(zip([...members(), [`${prefix}protein.faa`, proteins],
+      ['ncbi_dataset/data/GCF_999999999.1/protein.faa', '>wrong\nWRONG\n']], 8, {zip64: true}))(input);
+  };
+  const downloaded = await resolveGenomeCache({...request, kinds: ['proteins']}, {signal: signal(), secrets: {}, fetchImpl});
+  assert.deepEqual(calls, [['PROT_FASTA']]);
+  assert.equal(await readFile(downloaded.proteins!, 'utf8'), proteins);
+  assert.match(downloaded.proteins_sha256!, /^[a-f0-9]{64}$/);
+  assert.equal(downloaded.fasta, undefined);
+  assert.equal(downloaded.gff3, undefined);
+  assert.equal(downloaded.annotation, 'not-requested');
+  const scan = await scanAccessionCaches([directory]);
+  assert.equal(scan.copies[0]?.state, 'verified');
+  assert.equal(scan.copies[0]?.fasta_sha256, undefined);
+  const catalog = validateAccessionCatalog(applyCacheScan(emptyAccessionCatalog(), scan));
+  assert.equal(catalog.accessions[0]?.cached_copies[0]?.proteins_sha256, downloaded.proteins_sha256);
+  await resolveGenomeCache({...request, kinds: ['fasta', 'gff3']}, {signal: signal(), secrets: {}, fetchImpl});
+  assert.deepEqual(calls[1], ['GENOME_FASTA', 'GENOME_GFF']);
+  const reused = await resolveGenomeCache({...request, kinds: ['fasta', 'gff3', 'proteins'], mode: 'reuse'}, {
+    signal: signal(), secrets: {}, fetchImpl: async () => assert.fail('verified proteins must be reusable offline'),
+  });
+  assert.equal(reused.downloaded, false);
+  assert.equal(reused.proteins_sha256, downloaded.proteins_sha256);
+  assert.equal(await readFile(reused.proteins!, 'utf8'), proteins);
+});
+
+test('missing, ambiguous, or invalid NCBI proteins cannot replace verified artifacts', async context => {
+  const directory = await root(context);
+  const request = {reference, root: directory, kinds: ['fasta', 'gff3', 'proteins'] as const, mode: 'refresh' as const};
+  const before = await resolveGenomeCache(request, {signal: signal(), secrets: {}, fetchImpl: async input => {
+    assert.deepEqual(new URL(String(input)).searchParams.getAll('include_annotation_type'), ['GENOME_FASTA', 'GENOME_GFF', 'PROT_FASTA']);
+    return response(zip([...members(), [`${prefix}protein.faa`, proteins]]))(input);
+  }});
+  const cases: {files: [string, string][]; error: RegExp}[] = [
+    {files: members(), error: /no protein FASTA/},
+    {files: [...members(), ['ncbi_dataset/data/GCF_999999999.1/protein.faa', proteins]], error: /no protein FASTA/},
+    {files: [...members(), [`${prefix}protein.faa`, proteins], [`${prefix}protein.faa`, proteins]], error: /ambiguous protein FASTA/},
+    {files: [...members(), [`${prefix}protein.faa`, '>invalid\n123\n']], error: /invalid protein FASTA/},
+    {files: [...members(), [`${prefix}protein.faa`, '>empty\n']], error: /empty genome file/},
+  ];
+  for (const {files, error} of cases) {
+    await assert.rejects(resolveGenomeCache(request, {signal: signal(), secrets: {}, fetchImpl: response(zip(files))}), error);
+    assert.equal(await readFile(before.proteins!, 'utf8'), proteins);
+    assert.equal(await readFile(before.fasta!, 'utf8'), fasta);
+    assert.deepEqual(await readdir(join(directory, 'ncbi-accessions-cache')), [reference.id]);
+  }
 });
 
 for (const zip64Directory of [false, true]) {

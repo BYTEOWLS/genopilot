@@ -8,7 +8,7 @@ import {
   type CacheScan,
   type CacheScanner,
 } from '../../accessions/cache-discovery.js';
-import {genomeSources} from '../../accessions/registry.js';
+import {accessionSources} from '../../accessions/registry.js';
 import type {GenomeProviderRegistry} from '../../accessions/provider.js';
 import {providerSettings, type ProviderSettings} from '../../tooling/provider-settings.js';
 import type {CatalogDownloader} from './download-form.js';
@@ -58,7 +58,7 @@ export function AccessionsScreen({
   catalogPath,
   loadCatalog,
   updateCatalog,
-  registry = genomeSources,
+  registry = accessionSources,
   settings = defaultSettings,
   download,
   onConfigureProvider,

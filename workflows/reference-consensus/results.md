@@ -14,10 +14,10 @@ Resolved remote inputs remain imported. Their per-file provenance records the pi
 
 | Item | Meaning |
 |---|---|
-| Source | Where the backbone assembly came from: a local FASTA file or a versioned NCBI assembly accession. |
-| Accession | The NCBI accession or the local file the backbone was copied from when the run resolved it. |
+| Source | Where the backbone assembly came from: a local FASTA file or a pinned catalog genome from its recorded provider. |
+| Accession | The pinned provider identifier or the local file the backbone was copied from when the run resolved it. |
 | SHA-256 | SHA-256 of the resolved backbone FASTA. Every isolate and cohort result of this run was computed against exactly this file. |
-| Origin | Imported: the backbone came from outside the workflow. For an NCBI accession it also says whether it was downloaded in this run or reused from the verified download cache. |
+| Origin | Imported: the backbone came from outside the workflow. For a catalog genome it also says whether it was downloaded in this run or reused from the verified download cache. |
 
 ### Active cohort
 
@@ -59,7 +59,7 @@ Shown once the active iteration's consensus FASTA exists. The consensus is not a
 |---|---|
 | Workflow | The workflow to start as a new run from the welcome screen. |
 | Target FASTA | The active iteration's consensus FASTA, to choose as the transfer's local target file. |
-| Reference | The backbone, as its NCBI accession, whose annotation the transfer downloads, or as its local FASTA, which needs a GFF3 annotation of the same assembly. |
+| Reference | The backbone, as the same pinned catalog genome with annotation available from its provider, or as its local FASTA, which needs a GFF3 annotation of the same assembly. |
 | Unresolved bases | The consensus bases written as `N` or as IUPAC codes. The transfer lists every gene whose coding sequence contains one for review, since it may look changed only because the base is unknown. |
 
 ## Isolates

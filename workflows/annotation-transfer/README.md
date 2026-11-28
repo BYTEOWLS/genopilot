@@ -6,10 +6,10 @@ The result is a target annotation to review, not a curated one: genes the target
 
 ## Inputs
 
-- **Reference**: a genome FASTA and its annotation GFF3 [2], either local files or a versioned NCBI assembly accession downloaded with both.
-- **Target**: the genome FASTA to annotate, either a local file or a versioned NCBI assembly accession.
+- **Reference**: a genome FASTA and its annotation GFF3 [2], either local files or a genome selected from the catalog. The selected provider must supply both files.
+- **Target**: the genome FASTA to annotate, either a local file or a genome selected from the catalog.
 
-Both are copied into the run directory with a SHA-256 checksum before any step reads them, so no later step depends on where an input came from. NCBI files are downloaded through the Datasets REST API [8], using the same verified cache as the catalog.
+Both are copied into the run directory with a SHA-256 checksum before any step reads them, so no later step depends on where an input came from. Catalog inputs snapshot the provider, pinned identifier, and parameters; reuse checks the required files and checksums. NCBI files use the Datasets REST API [8]; other providers use their own pinned routes through the same verified catalog cache. Download the reference FASTA and GFF3 in one catalog copy, and the target FASTA, before configuring a run. Workflow fields do not accept typed identifiers.
 
 Remote inputs save a pinned provider reference and a `reuse` or `refresh` cache decision. Reuse can snapshot a verified catalog copy from another output root; the resolver rechecks the role-required checksums and protects the files through copying. Missing files download through the same packaged REST implementation used by the catalog. Direct Snakemake execution needs Node on PATH or an absolute `GENOPILOT_NODE_EXECUTABLE`; managed execution supplies it. No Datasets CLI is installed or invoked. Input provenance records the reference, provider facts, Node version, checksums, and `downloaded`; verified reuse remains `imported`, not a computed or cached stage. Resolver command records use Snakemake's actual Python executable and the packaged script's absolute path. Saved configurations use schema 2; older configurations require a new run, not migration.
 
@@ -35,6 +35,8 @@ For every transferred transcript LiftOn compares the target's sequence and prote
 ### Rating the transferred proteins
 
 A transfer only moves coordinates. Comparing proteins tells whether a copied gene model still describes an intact protein in the target, which DNA identity cannot: many synonymous changes leave the protein unchanged, while a single inserted base can shift its reading frame. The summary step therefore rates every coding gene from what LiftOn recorded, without running another tool. It rates the gene's primary target copy, or the gene itself when LiftOn could not place it, and takes the gene's most changed transcript.
+
+A coding reference feature is one LiftOn categorizes as `coding`, or one explicitly typed `protein_coding_gene` in the reference GFF3. LiftOn can label the latter `other`; that reported category stays unchanged in the transfer table, but does not suppress its protein rating. Other non-coding and pseudogene features are not rated unless LiftOn categorizes them as coding.
 
 Each rated gene gets one **protein category**, the most severe that applies:
 
@@ -64,11 +66,11 @@ The rating ranks genes for a closer look; it does not predict their effect. Iden
 
 ## Steps
 
-1. **Resolve inputs**: copy the local files or download the NCBI accessions, and record their checksums.
+1. **Resolve inputs**: copy local files or resolve pinned catalog references, reusing verified files or downloading the required artifacts, and record their checksums.
 2. **Validate inputs**: check the structure of the FASTA and GFF3 files and that the reference annotation's sequence names exist in the reference FASTA, and count the bases that are not A, C, G, or T, warning about those in the target. LiftOn starts only when this check passed; otherwise the report stays in place with every problem it found.
 3. **Transfer annotation**: LiftOn maps the reference gene models onto the target. Its raw GFF3 and its complete output directory are kept unmodified.
 4. **Validate annotation**: check the structure of LiftOn's GFF3: the version header, coordinates, strand, CDS phase, identifiers, and parent relationships. A failed check is kept as a scientific result for review, not treated as a failed run.
-5. **Summarize results**: the per-feature transfer table with the protein rating, the metrics, the target's unresolved bases, and the completion summary with the run status.
+5. **Summarize results**: the per-feature transfer table with the protein rating, the metrics, the target's unresolved bases, and the completion summary with the run status. LiftOn may emit a reference `protein_coding_gene` as `gene`; copies are matched by reference ID and copy number, while reported feature types remain the reference types.
 6. **Record provenance**: the run's artifact index and provenance record.
 7. **Write citation**: how to cite the run, from its provenance: the tools that ran with their versions and references, a draft methods paragraph, and BibTeX and RIS.
 
@@ -102,7 +104,7 @@ Before a run, the start page estimates its disk need from the size of the refere
 | Resolved reference genome | 1 × the reference FASTA's bytes |
 | Resolved reference annotation, the LiftOff, miniprot, and LiftOn annotations with their databases, the extracted gene, transcript, and protein sequences, and the alignment | about 11 × the reference GFF3's bytes |
 
-No step declares temporary files, so the estimated peak equals what the run keeps; scratch files a tool writes and deletes while it runs are not measured. An NCBI input counts once it is in the download cache; before its first download, the estimate says it leaves it out. Once a run has completed on the same machine, its measured size, duration, and peak memory replace these factors, scaled by the size of the new run.
+No step declares temporary files, so the estimated peak equals what the run keeps; scratch files a tool writes and deletes while it runs are not measured. A remote genome counts once it is in the download cache; before its first download, the estimate says it leaves it out. Once a run has completed on the same machine, its measured size, duration, and peak memory replace these factors, scaled by the size of the new run.
 
 ## Tools
 

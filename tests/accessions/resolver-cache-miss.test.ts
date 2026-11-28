@@ -30,10 +30,10 @@ test('bundled resolver downloads provider references on cache misses through the
   // Test-only startup registration; production has no plugin loader or test-provider switch.
   await build({
     stdin: {contents: `
-      import {genomeSources} from './src/accessions/registry.ts';
+      import {accessionSources} from './src/accessions/registry.ts';
       import {syntheticProvider} from './tests/accessions/fixtures/provider.ts';
-      genomeSources.register(syntheticProvider('synthetic-a'));
-      genomeSources.register(syntheticProvider('synthetic-b'));
+      accessionSources.register(syntheticProvider('synthetic-a'));
+      accessionSources.register(syntheticProvider('synthetic-b'));
       await import('./src/accessions/entry.ts');
     `, resolveDir: process.cwd()},
     outfile: join(packaged, 'dist/genome-source.js'),

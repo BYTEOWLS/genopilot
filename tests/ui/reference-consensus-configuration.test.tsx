@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {downloadedNcbiGenome} from '../genomes.js';
 import {testReadSet} from '../read-sets.js';
 import {readFileSync} from 'node:fs';
 import {PassThrough, Writable} from 'node:stream';
@@ -7,7 +8,7 @@ import React from 'react';
 import {render} from 'ink';
 import {packagedPath} from '../../src/package-root.js';
 import type {Isolate, IsolateCatalog} from '../../src/isolates/catalog.js';
-import {ReferenceConsensusConfigurationScreen} from '../../src/ui/new-run-screen/reference-consensus-configuration.js';
+import {ReferenceConsensusConfigurationScreen, previousRunFormValues} from '../../src/ui/new-run-screen/reference-consensus-configuration.js';
 import type {executeSnakemakeRun} from '../../src/workflows/execution.js';
 import {parseWorkflowManifest} from '../../src/workflows/manifest.js';
 import {parseParameterDefinitions} from '../../src/workflows/parameter-definitions.js';
@@ -15,7 +16,9 @@ import type {
   PreparedReferenceConsensusRun,
   RunInspection,
 } from '../../src/workflows/reference-consensus/run-configuration.js';
-import {pressKey as press, waitFor} from '../wait.js';
+import {pressKey as press, waitFor, rendered} from '../wait.js';
+import {selectedGenome} from '../../src/accessions/selection.js';
+import type {AccessionEntry} from '../../src/accessions/catalog.js';
 
 const packagedParameterDefinitions = parseParameterDefinitions(
   readFileSync(new URL('../../workflows/reference-consensus/manifest.parameters.yaml', import.meta.url), 'utf8'),
@@ -121,7 +124,16 @@ async function chooseOption(input: TestInput, output: TestOutput, id: string, va
 
 async function typeInto(input: TestInput, output: TestOutput, id: string, value: string): Promise<void> {
   await focusField(input, output, id);
-  await press(input, value);
+  if (definitionsById.get(id)?.kind === 'accession') {
+    await press(input, ENTER);
+    await waitForFrame(output, frame => fieldLine(frame, id) === undefined && frame.includes(value));
+    for (let attempt = 0; attempt < 2 && !selectedLine(output.lastFrame())?.includes(value); attempt += 1) {
+      await press(input, '\x1b[B');
+    }
+    await press(input, ENTER);
+  } else {
+    await press(input, value);
+  }
   await waitForFrame(output, frame => fieldLine(frame, id)?.includes(value) ?? false);
 }
 
@@ -159,6 +171,9 @@ function renderScreen(
     saveRun?: (prepared: PreparedReferenceConsensusRun) => Promise<string>;
     executeSnakemakeRun?: typeof executeSnakemakeRun;
     backboneCached?: boolean;
+    loadAccessions?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['loadAccessions'];
+    discoverPreviousRuns?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['discoverPreviousRuns'];
+    checkNcbiApiKey?: () => Promise<boolean>;
     rows?: number;
     checkSystem?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['checkSystem'];
     recordRate?: React.ComponentProps<typeof ReferenceConsensusConfigurationScreen>['recordRate'];
@@ -191,8 +206,9 @@ function renderScreen(
       }}
       saveRun={options.saveRun ?? (async () => '/research/runs/config.yaml')}
       checkBackboneCache={async () => options.backboneCached ?? false}
-      checkNcbiApiKey={async () => true}
-      discoverPreviousRuns={async () => []}
+      checkNcbiApiKey={options.checkNcbiApiKey ?? (async () => true)}
+      loadAccessions={options.loadAccessions ?? (async () => ['GCF_000149205.2', 'GCA_000011425.1'].map(downloadedNcbiGenome))}
+      discoverPreviousRuns={options.discoverPreviousRuns ?? (async () => [])}
       executeSnakemakeRun={options.executeSnakemakeRun}
       registerAccessionCaches={async () => 'Recorded.'}
       // Never the test machine's disks or hardware.
@@ -209,7 +225,7 @@ function renderScreen(
     },
   );
   context.after(() => instance.unmount());
-  return {input, output, reviewed, snapshotLoads: () => snapshotLoads};
+  return {input, output, instance, reviewed, snapshotLoads: () => snapshotLoads};
 }
 
 async function chooseIsolates(input: TestInput, output: TestOutput, ids: readonly string[]): Promise<void> {
@@ -233,6 +249,44 @@ async function chooseIsolates(input: TestInput, output: TestOutput, ids: readonl
   await press(input, ENTER);
   await waitForFrame(output, frame => fieldLine(frame, 'isolates')?.includes(`${String(ids.length)} selected`) ?? false);
 }
+
+test('a catalog backbone retains its non-NCBI reference, metadata, and previous-run selection', async context => {
+  const reference = {source: 'veupathdb', id: 'FungiDB-71_ExampleA', parameters: {site: 'FungiDB', release: 71, organism_abbreviation: 'ExampleA'}};
+  const entry: AccessionEntry = {...reference, name: 'catalog-backbone-marker', metadata: {...reference.parameters, organism: 'provider-organism-marker', assembly: 'provider-assembly-marker'}, cached_copies: [{path: `/catalog/${reference.id}`, verified_at: '2026-01-01T00:00:00Z', fasta_sha256: 'a'.repeat(64)}]};
+  const options = {
+    rows: 60,
+    loadAccessions: async () => [entry],
+    inspectRun: async () => ({sameFiles: [], backboneEntry: entry}),
+    checkNcbiApiKey: async () => assert.fail('another provider must not check NCBI credentials'),
+  };
+  const first = renderScreen(context, options);
+  await waitForFrame(first.output, frame => selectedLine(frame) !== undefined);
+  await focusField(first.input, first.output, 'backbone-accession');
+  await press(first.input, ENTER);
+  await waitForFrame(first.output, frame => selectedLine(frame)?.includes(reference.id) ?? false);
+  await press(first.input, ENTER);
+  await waitForFrame(first.output, frame => fieldLine(frame, 'backbone-accession')?.includes(reference.id) ?? false);
+  await chooseIsolates(first.input, first.output, [catalog.isolates[0]!.id]);
+  await startReview(first.input, first.output);
+  await waitFor(() => first.reviewed.length === 1, 'catalog backbone review');
+  const prepared = first.reviewed[0]!;
+  await waitForFrame(first.output, frame => frame.includes('provider-organism-marker'));
+  assert.deepEqual(prepared.configuration.inputs.backbone.source === 'remote' ? prepared.configuration.inputs.backbone.reference : undefined, reference);
+  const values = previousRunFormValues(prepared.configuration);
+  assert.equal(values['backbone-source'], 'remote');
+  assert.deepEqual(selectedGenome(values['backbone-accession']!), reference);
+  first.instance.unmount();
+  let loaded = false;
+  const second = renderScreen(context, {...options, discoverPreviousRuns: async () => { loaded = true; return [{label: 'previous-backbone-marker', values}]; }});
+  await waitForFrame(second.output, frame => selectedLine(frame) !== undefined);
+  await waitFor(() => loaded, 'previous backbone selection loads');
+  await rendered(second.instance);
+  await press(second.input, PAGE_DOWN);
+  await waitForFrame(second.output, frame => fieldLine(frame, 'backbone-accession')?.includes(reference.id) ?? false);
+  await startReview(second.input, second.output);
+  await waitFor(() => second.reviewed.length === 1, 'prefilled backbone review');
+  assert.deepEqual(second.reviewed[0]!.configuration.inputs.backbone.source === 'remote' ? second.reviewed[0]!.configuration.inputs.backbone.reference : undefined, reference);
+});
 
 test('requires at least one isolate before preparing the run', async context => {
   const {input, output, snapshotLoads} = renderScreen(context);

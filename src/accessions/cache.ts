@@ -4,8 +4,8 @@ import {copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFi
 import {basename, dirname, join, resolve} from 'node:path';
 import {createInterface} from 'node:readline';
 import {inspectCopy} from './cache-discovery.js';
-import {genomeSources} from './registry.js';
-import {missingProviderFields, type FileKind, type GenomeProviderRegistry, type GenomeReference, type ProviderContext} from './provider.js';
+import {accessionSources} from './registry.js';
+import {artifactFiles, fileKinds, missingProviderFields, type ArtifactPaths, type ArtifactDigests, type FileKind, type GenomeProviderRegistry, type GenomeReference, type ProviderContext} from './provider.js';
 
 export type GenomeCacheRequest = {
   reference: GenomeReference;
@@ -14,19 +14,33 @@ export type GenomeCacheRequest = {
   mode: 'reuse' | 'refresh';
   copy?: {path: string; fasta_sha256?: string; gff3_sha256?: string};
 };
-export type VerifiedGenome = {
+export type VerifiedGenome = ArtifactPaths & ArtifactDigests & {
   reference: GenomeReference;
-  fasta?: string;
-  gff3?: string;
-  fasta_sha256?: string;
-  gff3_sha256?: string;
   metadata: unknown;
   facts: Record<string, unknown>;
+  originals?: Partial<Record<FileKind, string>>;
   downloaded: boolean;
   annotation: 'available' | 'unavailable' | 'not-requested';
 };
 
-type CacheRecord = {reference: GenomeReference; metadata: unknown; facts: Record<string, unknown>; annotation: VerifiedGenome['annotation']};
+type CacheRecord = {reference: GenomeReference; metadata: unknown; facts: Record<string, unknown>; originals?: Partial<Record<FileKind, string>>; annotation: VerifiedGenome['annotation']};
+
+function artifactFacts(facts: Record<string, unknown>): Record<string, unknown> {
+  return typeof facts.artifacts === 'object' && facts.artifacts !== null && !Array.isArray(facts.artifacts)
+    ? facts.artifacts as Record<string, unknown> : {};
+}
+
+function artifactResult(directory: string, kinds: readonly FileKind[], digests: ArtifactDigests): ArtifactPaths & ArtifactDigests {
+  const result: ArtifactPaths & ArtifactDigests = {};
+  for (const kind of kinds) {
+    const digest = digests[`${kind}_sha256`];
+    if (digest) {
+      result[kind] = join(directory, artifactFiles[kind]);
+      result[`${kind}_sha256`] = digest;
+    }
+  }
+  return result;
+}
 
 async function verified(directory: string, request: GenomeCacheRequest, registry: GenomeProviderRegistry, signal: AbortSignal, allArtifacts = false): Promise<VerifiedGenome | undefined> {
   try {
@@ -43,15 +57,24 @@ async function verified(directory: string, request: GenomeCacheRequest, registry
     if (copy.state !== 'verified') {
       return undefined;
     }
+    for (const kind of allArtifacts ? fileKinds : request.kinds) {
+      const original = record.originals?.[kind];
+      if (original !== undefined) {
+        const originalDirectory = await lstat(join(directory, 'original'));
+        if (!originalDirectory.isDirectory() || originalDirectory.isSymbolicLink()
+          || await validateFile(join(directory, 'original', artifactFiles[kind]), kind, signal) !== original) {
+          return undefined;
+        }
+      }
+    }
     if (request.copy && ((request.kinds.includes('fasta') && copy.fasta_sha256 !== request.copy.fasta_sha256) || (request.kinds.includes('gff3') && copy.gff3_sha256 !== request.copy.gff3_sha256))) {
       return undefined;
     }
     if (!allArtifacts && request.kinds.includes('gff3') && !copy.gff3_sha256 && record.annotation !== 'unavailable') {
       return undefined;
     }
-    return {reference, ...(copy.fasta_sha256 ? {fasta: join(directory, 'genomic.fna'), fasta_sha256: copy.fasta_sha256} : {}),
-      ...(copy.gff3_sha256 ? {gff3: join(directory, 'genomic.gff'), gff3_sha256: copy.gff3_sha256} : {}),
-      metadata: record.metadata, facts: record.facts, annotation: allArtifacts || request.kinds.includes('gff3') ? record.annotation : 'not-requested', downloaded: false};
+    return {reference, ...artifactResult(directory, allArtifacts ? fileKinds : request.kinds, copy),
+      metadata: record.metadata, facts: record.facts, originals: record.originals, annotation: allArtifacts || request.kinds.includes('gff3') ? record.annotation : 'not-requested', downloaded: false};
   } catch {
     signal.throwIfAborted();
     return undefined;
@@ -75,15 +98,16 @@ async function validateFile(path: string, kind: FileKind, signal: AbortSignal): 
       if (!line.trim()) {
         continue;
       }
-      if (kind === 'fasta') {
+      if (kind !== 'gff3') {
         if (line.startsWith('>') && line.slice(1).trim()) {
           if (header && !sequence) {
             throw new Error('Provider returned an empty FASTA sequence record.');
           }
           header = true;
           sequence = false;
-        } else if (!header || !/^[ACGTRYSWKMBDHVNacgtryswkmbdhvn]+$/.test(line)) {
-          throw new Error('Provider returned invalid nucleotide FASTA.');
+        } else if (!header || !(kind === 'proteins' ? /^[A-Za-z*]+$/ : kind === 'transcripts'
+          ? /^[ACGTRYSWKMBDHVNUacgtryswkmbdhvnu]+$/ : /^[ACGTRYSWKMBDHVNacgtryswkmbdhvn]+$/).test(line)) {
+          throw new Error(`Provider returned invalid ${kind === 'proteins' ? 'protein' : 'nucleotide'} FASTA.`);
         } else {
           sequence = true;
         }
@@ -95,14 +119,14 @@ async function validateFile(path: string, kind: FileKind, signal: AbortSignal): 
     lines.close();
     stream.destroy();
   }
-  if ((kind === 'fasta' && (!header || !sequence)) || details.size === 0) {
+  if ((kind !== 'gff3' && (!header || !sequence)) || details.size === 0) {
     throw new Error('Provider returned an empty genome file.');
   }
   return hash.digest('hex');
 }
 
 /** Catalog resolution returns facts; workflow consumers must use withGenomeCache. */
-export async function resolveGenomeCache(request: GenomeCacheRequest, context: ProviderContext, registry: GenomeProviderRegistry = genomeSources): Promise<VerifiedGenome> {
+export async function resolveGenomeCache(request: GenomeCacheRequest, context: ProviderContext, registry: GenomeProviderRegistry = accessionSources): Promise<VerifiedGenome> {
   return withGenomeCache(request, context, async genome => genome, registry);
 }
 
@@ -111,9 +135,11 @@ export async function withGenomeCache<T>(
   request: GenomeCacheRequest,
   context: ProviderContext,
   consume: (genome: VerifiedGenome) => Promise<T>,
-  registry: GenomeProviderRegistry = genomeSources,
+  registry: GenomeProviderRegistry = accessionSources,
 ): Promise<T> {
   const reference = registry.validateReference(request.reference);
+  // Compare provider-canonical parameters, not the caller's YAML/JSON key ordering.
+  request = {...request, reference};
   const provider = registry.get(reference.source);
   if (!['reuse', 'refresh'].includes(request.mode) || request.kinds.length === 0 || request.kinds.some(kind => !provider.artifacts.some(artifact => artifact.kind === kind)) || new Set(request.kinds).size !== request.kinds.length) {
     throw new Error('Invalid genome cache mode or requested files.');
@@ -154,8 +180,11 @@ export async function withGenomeCache<T>(
     }
     staging = await mkdtemp(join(canonicalCache, `.${reference.id}-staging-`));
     const result = await provider.download(reference, request.kinds, staging, context);
-    const filenames = {fasta: 'genomic.fna', gff3: 'genomic.gff'} as const;
-    for (const kind of ['fasta', 'gff3'] as const) {
+    const filenames = artifactFiles;
+    if ([...Object.keys(result.files), ...Object.keys(result.originals ?? {})].some(kind => !fileKinds.includes(kind as FileKind))) {
+      throw new Error('Provider returned an unknown artifact.');
+    }
+    for (const kind of fileKinds) {
       if (result.files[kind] !== undefined && (result.files[kind] !== filenames[kind] || !request.kinds.includes(kind))) {
         throw new Error('Provider returned an unexpected or unrequested genome artifact.');
       }
@@ -163,25 +192,28 @@ export async function withGenomeCache<T>(
     if (result.files.gff3 && result.annotation !== 'available') {
       throw new Error('Provider returned contradictory annotation availability.');
     }
-    if (request.kinds.includes('fasta') && !result.files.fasta) {
+    if (request.kinds.some(kind => kind !== 'gff3' && !result.files[kind])) {
       throw new Error('Provider returned no requested FASTA artifact.');
     }
     if (request.kinds.includes('gff3') && !result.files.gff3 && result.annotation !== 'unavailable') {
       throw new Error('Provider did not establish whether the requested annotation is available.');
     }
-    if (!result.files.fasta && !result.files.gff3) {
+    if (!fileKinds.some(kind => result.files[kind])) {
       throw new Error('The selected artifacts are unavailable. The previous verified files are unchanged.');
     }
     provider.validateMetadata(result.metadata);
     context.onProgress?.({phase: 'verifying'});
     // Retain verified, unselected artifacts rather than treating an unchecked box as deletion.
-    const previous = {
-      fasta: await verified(destination, {...request, copy: undefined, kinds: ['fasta']}, registry, context.signal),
-      gff3: await verified(destination, {...request, copy: undefined, kinds: ['gff3']}, registry, context.signal),
-    };
+    const previous: Partial<Record<FileKind, VerifiedGenome>> = {};
+    for (const {kind} of provider.artifacts) {
+      const copy = await verified(destination, {...request, copy: undefined, kinds: [kind]}, registry, context.signal);
+      if (copy) {
+        previous[kind] = copy;
+      }
+    }
     const files = {...result.files};
     const preserved: Partial<Record<FileKind, string>> = {};
-    for (const kind of ['fasta', 'gff3'] as const) {
+    for (const kind of fileKinds) {
       const artifact = previous[kind];
       if (!request.kinds.includes(kind) && artifact?.[kind]) {
         await copyFile(artifact[kind]!, join(staging, filenames[kind]));
@@ -189,8 +221,41 @@ export async function withGenomeCache<T>(
         preserved[kind] = artifact[`${kind}_sha256`];
       }
     }
+    // Derived files keep their original evidence and per-artifact facts across partial refreshes.
+    const originals: Partial<Record<FileKind, string>> = {};
+    const perArtifact = {...artifactFacts(result.facts)};
+    for (const kind of fileKinds) {
+      const expected = `original/${filenames[kind]}`;
+      const supplied = result.originals?.[kind];
+      const previousOriginal = preserved[kind] ? previous[kind]?.originals?.[kind] : undefined;
+      if (supplied !== undefined && (supplied !== expected || !result.files[kind])) {
+        throw new Error('Provider returned unexpected original artifact evidence.');
+      }
+      if (previousOriginal) {
+        const sourceDirectory = dirname(previous[kind]![kind]!);
+        const source = join(sourceDirectory, expected);
+        if (await validateFile(source, kind, context.signal) !== previousOriginal) {
+          throw new Error('Original artifact evidence no longer matches its checksum.');
+        }
+        await mkdir(join(staging, 'original'), {recursive: true});
+        await copyFile(source, join(staging, expected));
+      }
+      if (supplied || previousOriginal) {
+        originals[kind] = await validateFile(join(staging, expected), kind, context.signal);
+        if (previousOriginal && originals[kind] !== previousOriginal) {
+          throw new Error('Original artifact evidence changed while copying.');
+        }
+      }
+      if (preserved[kind]) {
+        const retained = artifactFacts(previous[kind]!.facts)[kind];
+        if (retained !== undefined) {
+          perArtifact[kind] = retained;
+        }
+      }
+    }
+    const facts = {...result.facts, ...(Object.keys(perArtifact).length ? {artifacts: perArtifact} : {})};
     const checksums: Partial<Record<FileKind, string>> = {};
-    for (const kind of ['fasta', 'gff3'] as const) {
+    for (const kind of fileKinds) {
       if (files[kind]) {
         checksums[kind] = await validateFile(join(staging, filenames[kind]), kind, context.signal);
         if (preserved[kind] && checksums[kind] !== preserved[kind]) {
@@ -198,12 +263,12 @@ export async function withGenomeCache<T>(
         }
       }
     }
-    if (preserved.gff3 && previous.fasta?.fasta_sha256 && checksums.fasta !== previous.fasta.fasta_sha256) {
-      throw new Error('The pinned genome sequence changed. Refresh sequence and annotation together.');
+    if (fileKinds.some(kind => kind !== 'fasta' && preserved[kind]) && previous.fasta?.fasta_sha256 && checksums.fasta !== previous.fasta.fasta_sha256) {
+      throw new Error('The pinned genome sequence changed. Refresh sequence and annotation together, including any preserved proteins, transcripts, or CDS.');
     }
     const annotation = result.annotation === 'not-requested' ? previous.gff3?.annotation ?? 'not-requested' : result.annotation;
     await writeFile(join(staging, 'checksums.json'), JSON.stringify(checksums), {flag: 'wx', mode: 0o600});
-    await writeFile(join(staging, 'genome.json'), JSON.stringify({reference, metadata: result.metadata, facts: result.facts, annotation}), {flag: 'wx', mode: 0o600});
+    await writeFile(join(staging, 'genome.json'), JSON.stringify({reference, metadata: result.metadata, facts, annotation, ...(Object.keys(originals).length ? {originals} : {})}), {flag: 'wx', mode: 0o600});
     if (!(await verified(staging, {...request, copy: undefined}, registry, context.signal, true))) {
       throw new Error('Staged genome failed checksum verification.');
     }
@@ -234,9 +299,8 @@ export async function withGenomeCache<T>(
       throw error;
     }
     const value: VerifiedGenome = {reference,
-      ...(request.kinds.includes('fasta') && checksums.fasta ? {fasta: join(destination, 'genomic.fna'), fasta_sha256: checksums.fasta} : {}),
-      ...(request.kinds.includes('gff3') && checksums.gff3 ? {gff3: join(destination, 'genomic.gff'), gff3_sha256: checksums.gff3} : {}),
-      metadata: result.metadata, facts: result.facts, annotation: result.annotation, downloaded: true};
+      ...artifactResult(destination, request.kinds, Object.fromEntries(fileKinds.filter(kind => checksums[kind]).map(kind => [`${kind}_sha256`, checksums[kind]]))),
+      metadata: result.metadata, facts, originals, annotation: result.annotation, downloaded: true};
     if (backup) {
       await rm(backup, {recursive: true, force: true}).catch(() => {});
     }

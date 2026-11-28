@@ -1,15 +1,20 @@
 # Genome-source boundary
 
-`registry.ts` registers packaged providers. Shared catalog, storage, discovery,
+`registry.ts` exports `accessionSources`, the registry of packaged providers. Shared catalog, storage, discovery,
 registration, and view operations live here alongside the cache and provider contract.
 Provider-specific code lives under `provider/<id>/`: `provider/ncbi/` owns accession
 validation, metadata fetching and validation, REST downloads, and ZIP extraction.
-VEuPathDB will live under `provider/veupathdb/` when implemented. NCBI API evidence
+`provider/veupathdb/` owns supported-site mapping, canonical release/organism IDs,
+paged current-release organism discovery, and authenticated raw-file downloads. NCBI API evidence
 is recorded in `provider/ncbi/README.md`. Catalog identity is `(source, id)`;
 providers validate parameters and metadata. Exact resolution and staged download
 are required; metadata lookup, search, and browse are optional methods. Providers
 declare `artifacts` as supported file kinds and display labels. The current formats
-are FASTA and GFF3; the catalog renders the declaration, not its own artifact list.
+are genomic FASTA, GFF3, proteins, transcripts, and CDS; the catalog renders the
+declaration, not its own artifact list. Artifact identity is separate from FASTA
+format: only genomic FASTA satisfies a workflow's genome requirement. Catalog
+schema 3 records each artifact's checksum independently and rejects older catalogs
+without migration; existing cache directories can be rediscovered.
 
 `cache.ts` writes fixed genome filenames, SHA-256 checksums, and `genome.json`
 (reference, metadata, provider facts, annotation availability). Discovery validates
@@ -27,8 +32,11 @@ subset. Workflows must request and snapshot the files their role actually requir
 Partial refresh verifies unselected artifacts independently under the same source
 lock, so repairing a damaged artifact does not discard a valid unchecked file.
 Copied files are rehashed against their old digests before publication. A changed
-FASTA cannot be combined silently with preserved annotation: refresh both together.
+genomic FASTA cannot be combined silently with preserved annotation, proteins,
+transcripts, or CDS: refresh the affected artifacts together.
 An unavailable annotation-only request publishes no empty cache.
+
+Providers may return byte-identical source evidence through `originals`, using fixed `original/<artifact filename>` paths. The cache hashes these files, stores their digests in `genome.json`, verifies them on reuse, and preserves evidence for unchecked derived artifacts during partial refresh. Provider-owned `facts.artifacts` retains matching per-artifact provenance; the top-level facts describe the latest request.
 
 Downloads use a per-entry filesystem lock and a private staging directory. Workflow
 consumers use `withGenomeCache`, which holds that same lock through consumption,
@@ -45,6 +53,18 @@ and deflated members. ZIP64 sizes and offsets must fit safe integers; malformed
 records, multipart/encrypted archives, unsupported compression, and directories
 larger than 64 MiB fail before publication.
 
+## Shared metadata
+
+`metadata.ts` owns the typed Assembly and Genome statistics contract. Every provider implements `mapMetadata` over its validated persisted facts, returning the common fields, ordered provider-specific attributes, and separate retrieval provenance. NCBI maps both REST and cached assembly reports; shared screens never interpret NCBI records directly. The editor and download review use one renderer, stable field IDs, units, and explicit unavailable values.
+
+This normalized projection is not separately persisted: provider metadata remains authoritative in catalogs and `genome.json`. Existing schema-3 records remain readable; new optional VEuPathDB facts need no migration or file redownload. Old records show unavailable fields until metadata is refreshed. No checksums, identity, or workflow snapshots change.
+
+VEuPathDB maps organism, strain, strain taxon ID, and contig count. Its overloaded genome version (which can be a date), rounded megabases, and supercontigs remain custom attributes rather than guessed assembly names, exact bp lengths, or scaffold counts. Database release is never an assembly release date. Historical references retain pinned parameters only when current discovery cannot establish compatible facts. Missing metadata is not computed from files or enriched through another provider.
+
+## Provider help
+
+Each packaged provider contributes `docs/provider-<id>.md`, readable on GitHub and in the shared Markdown document page. `readProviderDocuments` opens that provider's page followed by shared catalog guidance. Global Help includes the registered providers' pages without a shared provider-name list. Tooling provider selection/setup and accession download/details/review expose `?` outside text fields, preserving drafts and choices on return. Provider help owns purpose, website search links, credentials, exact API discovery/search scope, and scientific transformations; implementation/API evidence stays in each provider's source README.
+
 ## Workflow handoff
 
 Catalog download and provider setup are registry-driven. Every provider requires
@@ -55,6 +75,8 @@ The review renders provider artifacts through the shared `CheckboxGroup`, also
 used by the GFF3 attribute form. It composes `ParameterList` and owns toggle keys;
 the form owns navigation and a focus-following review viewport. Tab and arrows move focus; Space or left/right toggles a checkbox.
 Enter activates action buttons only; Escape leaves review without downloading.
+Providers may declare boolean `downloadOptions` alongside artifacts, with labels, defaults, and canonical reference transformations. The review applies defaults before metadata lookup and carries toggled references into saving/download. VEuPathDB's mitochondrial inclusion defaults off and yields a separate filtered identity; its genomic-pair classification dependencies are downloaded even when only one genomic artifact is selected. Optional `downloadSummary` formats provider facts for the shared completion notice.
+
 All provider-declared artifacts start selected. An empty selection still permits metadata-only saving,
 but cannot start a download.
 Provider progress callbacks report actual transfer bytes (optional total) and
@@ -98,6 +120,31 @@ RUN_NCBI_DOWNLOAD_INTEGRATION=1 python3 -m unittest tests.workflows.shared.test_
 
 Only input-resolution targets run. Downloads stay in temporary directories;
 normal test discovery skips live requests unless explicitly enabled.
-VEuPathDB is not registered: authenticated current/older-release evidence is
-required first. See
-`resources/releases/0.0.4/01_genome_sources.md` for delivery order and acceptance.
+VEuPathDB is registered alongside NCBI. Its provider declares supported sites;
+`DownloadForm` renders the site chooser without owning a site/host table. Discovery
+pages `GenomeDataTypes` and matches all query words locally against organism
+names, record IDs, and file abbreviations. Search covers the current release only;
+exact pinned references can download older releases. Historical metadata review
+shows only the pinned parameters, never current organism facts mislabeled as old.
+The provider constructs verified HTTPS release-specific routes rather than
+following stale HTTP/Current_Release metadata links, and refuses redirects.
+
+Live evidence covers all five FungiDB artifacts, historical FASTA/GFF3, the packaged
+Python copy bridge, and pinned-Snakemake offline reuse for all three input roles.
+Run after building with a local key file:
+
+```bash
+RUN_VEUPATHDB_DOWNLOAD_INTEGRATION=1 VEUPATHDB_KEY_FILE=/path/to/private/key pnpm exec tsx --import ./tests/setup.ts --test tests/accessions/veupathdb-live.test.ts
+```
+
+Both guided workflow forms use the full catalog. `selection.ts` serializes only
+the provider-canonical reference into string-valued form state; the field renders
+the identifier, not JSON. Previous-run prefill preserves that snapshot, and both
+draft builders validate it without reconstructing NCBI parameters. Workflow fields
+are selection-only; identifiers are entered in the catalog. Only entries with genomic
+FASTA can be selected, and save-time checks require every role-required file in one
+verified copy before starting a guided run. Reviews use provider metadata
+summaries, and NCBI-only optional-key/strain checks are guarded by provider identity.
+Required-file snapshots canonicalize parameters before comparison, so YAML key
+order does not cause redundant downloads.
+See `provider/veupathdb/README.md` for API evidence and limitations.

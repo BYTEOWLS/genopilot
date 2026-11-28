@@ -1,9 +1,9 @@
 import {ncbiMetadata} from '../../accessions/provider/ncbi/index.js';
-import {snapshotGenomeCopy, type GenomeCacheMode} from '../genome-input.js';
+import {requireDownloadedGenome, type GenomeCacheMode} from '../genome-input.js';
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
 import {basename, resolve} from 'node:path';
-import {normalizeAccession} from '../../accessions/provider/ncbi/accession.js';
+import {selectedGenome} from '../../accessions/selection.js';
 import {
   conflictingCopiesMessage,
   recordedCacheState,
@@ -51,7 +51,7 @@ import {
 import {ISOLATE_SNAPSHOT_SCHEMA_VERSION, validateIsolateSnapshot, type IsolateSnapshot} from './snapshot.js';
 
 export type ReferenceConsensusDraft = {
-  backboneSource: 'local' | 'ncbi';
+  backboneSource: 'local' | 'remote';
   backboneFasta: string;
   backboneAccession: string;
   /** Explicit isolate/read-set keys, as offered by the selection picker. */
@@ -143,8 +143,8 @@ export function buildReferenceConsensusRun(
     workflow_version: REFERENCE_CONSENSUS_WORKFLOW_VERSION,
     genopilot,
     inputs: {
-      backbone: draft.backboneSource === 'ncbi'
-        ? {source: 'remote', reference: {source: 'ncbi', id: normalizeAccession(draft.backboneAccession), parameters: {}}, cache_mode: 'reuse'}
+      backbone: draft.backboneSource === 'remote'
+        ? {source: 'remote', reference: selectedGenome(draft.backboneAccession), cache_mode: 'reuse'}
         : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.backboneFasta)},
       isolates_file: ISOLATE_SNAPSHOT_FILENAME,
       selected_isolates: isolates.map(isolate => isolate.id),
@@ -204,7 +204,7 @@ const bracesMessage = "path contains '{' or '}', which Snakemake cannot use as a
 
 /** What checking the prepared run found out that the review shows. */
 export type RunInspection = {
-  /** The accession-catalog entry of an NCBI backbone, when it is cataloged. */
+  /** The backbone's accession-catalog entry, when available. */
   backboneEntry?: AccessionEntry;
   /** Read paths of the selection that name one file more than once. */
   sameFiles: readonly {first: string; second: string}[];
@@ -233,13 +233,12 @@ export async function inspectPreparedRun(
   const {backbone} = prepared.configuration.inputs;
   let backboneEntry: AccessionEntry | undefined;
   if (backbone.source === 'remote') {
-    // The catalog is optional bookkeeping: an unreadable one does not block a run.
     const cataloged = await readAccessions().catch(() => []);
     backboneEntry = cataloged.find(entry => entry.source === backbone.reference.source && entry.id === backbone.reference.id);
     if (backboneEntry && recordedCacheState(backboneEntry) === 'conflict') {
       issues.push({path: '$.inputs.backbone.reference', message: conflictingCopiesMessage});
     } else {
-      snapshotGenomeCopy(backbone, ['fasta'], cataloged);
+      requireDownloadedGenome(backbone, ['fasta'], cataloged, '$.inputs.backbone.reference', issues);
     }
   } else {
     await checkReadableFile(backbone.fasta, '$.inputs.backbone.fasta', issues, inspectPath);
@@ -299,7 +298,7 @@ function backboneSampleNames(prepared: PreparedReferenceConsensusRun, inspection
   if (backbone.source === 'local') {
     return [basename(backbone.fasta).replace(/\.(fa|fasta|fna)(\.gz)?$/i, '')];
   }
-  const strain = ncbiMetadata(inspection.backboneEntry?.metadata ?? null)?.strain;
+  const strain = backbone.reference.source === 'ncbi' ? ncbiMetadata(inspection.backboneEntry?.metadata ?? null)?.strain : undefined;
   return strain ? [strain] : [];
 }
 

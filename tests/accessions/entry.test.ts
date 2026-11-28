@@ -31,7 +31,7 @@ for (const phase of ['downloading', 'awaiting-copy', 'acknowledged'] as const) {
       import {writeFile} from 'node:fs/promises';
       import {join} from 'node:path';
       import {syntheticProvider} from ${JSON.stringify(new URL('./fixtures/provider.ts', import.meta.url).href)};
-      import {genomeSources} from ${JSON.stringify(new URL('../../src/accessions/registry.ts', import.meta.url).href)};
+      import {accessionSources} from ${JSON.stringify(new URL('../../src/accessions/registry.ts', import.meta.url).href)};
       const provider = syntheticProvider('synthetic');
       provider.download = async (_reference, _kinds, staging, context) => {
         await writeFile(join(staging, 'genomic.fna'), '>replacement\\nTTTT\\n');
@@ -46,7 +46,7 @@ for (const phase of ['downloading', 'awaiting-copy', 'acknowledged'] as const) {
         }
         return {files: {fasta: 'genomic.fna'}, metadata: null, facts: {}, annotation: 'not-requested'};
       };
-      genomeSources.register(provider);
+      accessionSources.register(provider);
       await import(${JSON.stringify(new URL('../../src/accessions/entry.ts', import.meta.url).href)});
       process.disconnect();
     `], {stdio: ['pipe', 'pipe', 'pipe', 'ipc'], env: {...process.env, HOME: root}});

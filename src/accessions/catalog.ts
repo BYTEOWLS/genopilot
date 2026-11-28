@@ -1,16 +1,14 @@
 import {basename, isAbsolute, resolve} from 'node:path';
 import {parse} from 'yaml';
-import {genomeSources} from './registry.js';
-import {referenceKey, sameReference, type GenomeReference} from './provider.js';
+import {accessionSources} from './registry.js';
+import {fileKinds, referenceKey, sameReference, type ArtifactDigests, type GenomeReference} from './provider.js';
 
-export const ACCESSION_CATALOG_SCHEMA_VERSION = 2 as const;
+export const ACCESSION_CATALOG_SCHEMA_VERSION = 3 as const;
 
 /** A cache directory that matched its recorded checksums when discovery last ran. */
-export type CachedCopy = {
+export type CachedCopy = ArtifactDigests & {
   path: string;
   verified_at: string;
-  fasta_sha256?: string;
-  gff3_sha256?: string;
 };
 
 export type AccessionEntry = GenomeReference & {
@@ -123,16 +121,17 @@ function validateCachedCopy(value: unknown, accession: unknown, path: string, is
     issues.push({path, message: 'must be a mapping'});
     return;
   }
-  rejectUnknownFields(value, ['path', 'verified_at', 'fasta_sha256', 'gff3_sha256'], path, issues);
+  rejectUnknownFields(value, ['path', 'verified_at', ...fileKinds.map(kind => `${kind}_sha256`)], path, issues);
   if (validateAbsolutePath(value.path, `${path}.path`, issues) && basename(value.path) !== accession) {
     issues.push({path: `${path}.path`, message: 'must be a directory named after the accession'});
   }
   validateTimestamp(value.verified_at, `${path}.verified_at`, issues);
-  if (value.fasta_sha256 === undefined && value.gff3_sha256 === undefined) {
+  if (!fileKinds.some(kind => value[`${kind}_sha256`] !== undefined)) {
     issues.push({path, message: 'must record at least one artifact checksum'});
   }
-  validateSha256(value.fasta_sha256, `${path}.fasta_sha256`, issues, false);
-  validateSha256(value.gff3_sha256, `${path}.gff3_sha256`, issues, false);
+  for (const kind of fileKinds) {
+    validateSha256(value[`${kind}_sha256`], `${path}.${kind}_sha256`, issues, false);
+  }
 }
 
 function validateEntry(value: unknown, path: string, issues: Issues): void {
@@ -142,7 +141,7 @@ function validateEntry(value: unknown, path: string, issues: Issues): void {
   }
   rejectUnknownFields(value, ['source', 'id', 'parameters', 'name', 'description', 'metadata', 'cached_copies'], path, issues);
   try {
-    genomeSources.validateReference(value);
+    accessionSources.validateReference(value);
   } catch (error) {
     issues.push({path, message: error instanceof Error ? error.message : 'invalid genome reference'});
   }
@@ -150,9 +149,9 @@ function validateEntry(value: unknown, path: string, issues: Issues): void {
   if (value.description !== undefined && typeof value.description !== 'string') {
     issues.push({path: `${path}.description`, message: 'must be a string when present'});
   }
-  if (typeof value.source === 'string' && genomeSources.has(value.source)) {
+  if (typeof value.source === 'string' && accessionSources.has(value.source)) {
     try {
-      genomeSources.get(value.source).validateMetadata(value.metadata);
+      accessionSources.get(value.source).validateMetadata(value.metadata);
     } catch (error) {
       issues.push({path: `${path}.metadata`, message: error instanceof Error ? error.message : 'invalid metadata'});
     }
@@ -246,7 +245,7 @@ export function accessionDisplayName(entry: AccessionEntry): string {
 
 /** Provider-owned facts that tell genomes apart at a glance. */
 export function accessionFactsSummary(entry: AccessionEntry): string {
-  return genomeSources.get(entry.source).metadataSummary(entry.metadata);
+  return accessionSources.get(entry.source).metadataSummary(entry.metadata);
 }
 
 /**
@@ -258,14 +257,12 @@ export type RecordedCacheState = 'not-cached' | 'cached' | 'conflict';
 /** Why an accession whose cached copies conflict cannot be used, for a validation problem. */
 export const conflictingCopiesMessage =
   'has cached copies whose checksums disagree in the accession catalog; remove the entry under ' +
-  'Manage genome sources, which deletes its cached copies, before using it';
+  'Manage accessions, which deletes its cached copies, before using it';
 
 export function recordedCacheState(entry: AccessionEntry): RecordedCacheState {
   if (entry.cached_copies.length === 0) {
     return 'not-cached';
   }
-  const fastaChecksums = new Set(entry.cached_copies.flatMap(copy => copy.fasta_sha256 ?? []));
   // Different artifact subsets do not conflict; compare only checksums actually recorded.
-  const gff3Checksums = new Set(entry.cached_copies.flatMap(copy => copy.gff3_sha256 ?? []));
-  return fastaChecksums.size > 1 || gff3Checksums.size > 1 ? 'conflict' : 'cached';
+  return fileKinds.some(kind => new Set(entry.cached_copies.flatMap(copy => copy[`${kind}_sha256`] ?? [])).size > 1) ? 'conflict' : 'cached';
 }

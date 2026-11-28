@@ -99,7 +99,7 @@ Each count is followed by its share of the rated genes.
 
 | Item | Meaning |
 |---|---|
-| Coding genes rated | Every coding reference gene: its primary target copy, or the gene itself when it was not placed. Additional copies and non-coding features are not rated. |
+| Coding genes rated | Every reference feature categorized by LiftOn as `coding` or explicitly typed `protein_coding_gene` in the reference GFF3, even if LiftOn calls it `other`: its primary target copy, or the gene itself when it was not placed. Additional copies and other non-coding features are not rated. |
 | Minimum protein identity | The run parameter: a gene whose protein identity lies below it is listed with the reason *below threshold*. |
 | Categories | The rated genes per protein category; each gene has exactly one. See *Protein categories* below. |
 | Showing | The review reason the list shows, and how many genes have each reason. Press `f` to show the genes with the next reason. One gene can have several reasons, so the reason counts can add up to more than the listed genes. |
@@ -142,7 +142,7 @@ Rewrites of this run's GFF3 made with find and replace, listed under the run dir
 
 | Item | Meaning |
 |---|---|
-| Per-feature transfer table (TSV) | One row per selected reference feature and per target copy, with LiftOn's target identifiers, coordinates, transfer method, lowest identities, and mutation classes. |
+| Per-feature transfer table (TSV) | One row per selected reference feature and per target copy, with LiftOn's target identifiers, coordinates, transfer method, lowest identities, and mutation classes. Feature types are the reference types, even when LiftOn emits a coding feature as `gene`. |
 | Metrics (JSON) | All metrics shown on this page with their persisted one-line definitions, in machine-readable form. |
 | Completion summary (JSON) | The entry point read by this application: run status, the metrics, and links to all reports and evidence. |
 | Validation report (JSON) | Every structural validation error and warning found in the transferred GFF3. |

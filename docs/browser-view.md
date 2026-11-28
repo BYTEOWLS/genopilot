@@ -12,7 +12,7 @@ Opening another document page with `v` replaces the browser's view. Closing the 
 
 ## Genome views
 
-Select a verified cached accession under Manage genome sources and press `v` to view its sequence and available annotation. GenoPilot checks the recorded checksums again before opening; conflicting or damaged copies cannot be viewed. It does not download an accession just to display it.
+Select a verified cached accession under Manage accessions and press `v` to view its sequence and available annotation. GenoPilot checks the recorded checksums again before opening; conflicting or damaged copies cannot be viewed. It does not download an accession just to display it.
 
 Run-result screens can also offer genome views through the same `v` shortcut when their reference and provenance are available; each workflow's result help explains its entry points and coordinate system.
 

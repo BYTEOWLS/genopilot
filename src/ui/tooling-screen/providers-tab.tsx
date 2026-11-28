@@ -40,7 +40,7 @@ export function ProvidersTab({registry, settings, selectedId, onSelect, onEdit, 
     }
   }, {isActive: inputActive});
   return (
-    <Page {...page} shortcuts={['Enter — Configure provider', 'Tab/←/→ — Tab']}>
+    <Page {...page} shortcuts={['Enter — Configure provider', '? — Help', 'Tab/←/→ — Tab']}>
       <Section title="Accession Providers" marginTop={0}>
         <SelectableList count={providers.length} selectedIndex={selectedIndex} onSelect={index => onSelect(providers[index]!.id)}
           active={inputActive} height={Math.max(2, rows - 14)} noun="providers"

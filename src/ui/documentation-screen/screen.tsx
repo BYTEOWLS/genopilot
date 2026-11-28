@@ -3,10 +3,12 @@ import {Alert} from '@inkjs/ui';
 import {Box, Text, useInput} from 'ink';
 import {
   generalDocumentNames,
+  providerDocumentName,
   readGeneralDocuments,
   readWorkflowDocuments,
   type DocumentsLoader,
 } from '../../docs/documents.js';
+import {accessionSources} from '../../accessions/registry.js';
 import type {DiscoveredWorkflow} from '../../workflows/discovery.js';
 import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 import {Page} from '../components/page.js';
@@ -25,7 +27,7 @@ export function DocumentationScreen({
   discoverWorkflows,
   onBack,
   inputActive,
-  loadGeneral = () => readGeneralDocuments(generalDocumentNames),
+  loadGeneral = () => readGeneralDocuments([...generalDocumentNames, ...accessionSources.list().map(providerDocumentName)]),
   loadWorkflow = workflow => readWorkflowDocuments(workflow),
 }: {
   appLabel: string;

@@ -20,7 +20,7 @@ import {sanitizeTerminalText} from '../sanitize.js';
 import {NewRunScreen} from '../new-run-screen/screen.js';
 import {genoPilotDetails} from '../../workflows/configuration-validation.js';
 import {AccessionsScreen} from '../accessions-screen/screen.js';
-import {genomeSources} from '../../accessions/registry.js';
+import {accessionSources} from '../../accessions/registry.js';
 import type {GenomeProviderRegistry} from '../../accessions/provider.js';
 import {providerSettings, type ProviderSettings} from '../../tooling/provider-settings.js';
 
@@ -85,7 +85,7 @@ export function WelcomeScreen({
   workflowDiscovery,
   runDiscovery,
   onWorkflowSelected,
-  providers = genomeSources,
+  providers = accessionSources,
   providerSettings: settings = defaultProviderSettings,
   isolateCatalogPath = resolveToolingPaths().isolateCatalogPath,
   loadIsolates,

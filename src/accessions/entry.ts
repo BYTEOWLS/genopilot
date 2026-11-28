@@ -1,6 +1,6 @@
 import {createInterface} from 'node:readline';
 import {withGenomeCache, type GenomeCacheRequest} from './cache.js';
-import {genomeSources} from './registry.js';
+import {accessionSources} from './registry.js';
 import {providerError, providerSettings} from '../tooling/provider-settings.js';
 
 // Two-message stdin handshake: request, then {copied:true} after verified paths on stdout.
@@ -39,8 +39,8 @@ try {
     || Object.keys(request).some(key => !['reference', 'kinds', 'root', 'mode', 'copy'].includes(key))) {
     throw new Error('Invalid genome request.');
   }
-  const reference = genomeSources.validateReference(request.reference);
-  secrets = await providerSettings().read(genomeSources.get(reference.source));
+  const reference = accessionSources.validateReference(request.reference);
+  secrets = await providerSettings().read(accessionSources.get(reference.source));
   await withGenomeCache(request, {signal: abort.signal, secrets}, async genome => {
     abort.signal.throwIfAborted();
     awaitingCopy = true;

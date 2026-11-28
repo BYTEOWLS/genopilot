@@ -480,7 +480,7 @@ test('opens the accession manager by command ID and returns to the menu', async 
     commands: accessionsOnlyCommands,
     loadAccessions: async () => {
       loads += 1;
-      return {catalog: {schema_version: 2, output_roots: [], accessions: []}, revision: undefined};
+      return {catalog: {schema_version: 3, output_roots: [], accessions: []}, revision: undefined};
     },
     updateAccessions: async () => {
       throw new Error('unexpected');

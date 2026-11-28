@@ -3,7 +3,7 @@ import {access, mkdir, readdir, readFile, rm, rmdir, stat, writeFile} from 'node
 import {constants} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {stringify} from 'yaml';
-import {genomeSources} from '../accessions/registry.js';
+import {accessionSources} from '../accessions/registry.js';
 import type {GenomeReference} from '../accessions/provider.js';
 import {formatCompactUtcTimestamp} from './timestamps.js';
 import type {ConfigurationValidationIssue, CpuMode} from './configuration-validation.js';
@@ -72,7 +72,7 @@ export function resolveDraftPath(currentDirectory: string, value: string): strin
 
 /** Where a run's provider inputs are cached: beside, not inside, its run directories. */
 export function genomeCacheDirectory(outputRoot: string, reference: GenomeReference): string {
-  return resolve(outputRoot, genomeSources.get(reference.source).cacheDirectory, reference.id);
+  return resolve(outputRoot, accessionSources.get(reference.source).cacheDirectory, reference.id);
 }
 
 /**

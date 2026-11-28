@@ -29,7 +29,7 @@ Catalogs are stored locally for your user. Runs save snapshots of the catalog en
 
 At launch, GenoPilot checks that Pixi, Conda, Snakemake, and Python match its requirements. With your consent, it installs them in its own data directory without administrator rights. Snakemake creates each workflow step's pinned environment when first needed.
 
-Manage tooling has separate Tooling and Accession Providers tabs. Provider credentials do not determine runtime readiness. The tooling page shows GenoPilot's version. Development builds also show the Git commit and its date when known, with a warning if the build included uncommitted changes. This distinguishes development builds that share a version number.
+Manage tooling has separate Tooling and Accession Providers tabs. Provider credentials do not determine runtime readiness. Press `?` on the provider list or a provider setup save button for its help. The same pages are tabs in Help: [NCBI](provider-ncbi.md) and [VEuPathDB](provider-veupathdb.md), including FungiDB API-key instructions, website links, and exact discovery/search choices. The tooling page shows GenoPilot's version. Development builds also show the Git commit and its date when known, with a warning if the build included uncommitted changes. This distinguishes development builds that share a version number.
 
 ## Keys
 

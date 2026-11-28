@@ -33,9 +33,13 @@ function issuesFor(value: unknown): {path: string; message: string}[] {
   assert.fail('Expected the catalog to be rejected.');
 }
 
+test('rejects the previous artifact catalog schema without migration', () => {
+  assert.throws(() => validateAccessionCatalog({...emptyAccessionCatalog(), schema_version: 2}), AccessionCatalogValidationError);
+});
+
 test('accepts metadata without a strain and an uncached entry', () => {
   const catalog = parseAccessionCatalog(`
-schema_version: 2
+schema_version: 3
 output_roots: [/analysis/genopilot]
 accessions:
   - source: ncbi

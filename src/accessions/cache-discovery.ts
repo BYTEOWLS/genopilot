@@ -3,8 +3,8 @@ import {createReadStream} from 'node:fs';
 import {lstat, mkdir, readdir, readFile, realpath, rm, stat} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {pipeline} from 'node:stream/promises';
-import {genomeSources} from './registry.js';
-import {referenceKey, type FileKind, type GenomeReference, type GenomeProviderRegistry} from './provider.js';
+import {accessionSources} from './registry.js';
+import {artifactFiles, fileKinds, referenceKey, type ArtifactDigests, type FileKind, type GenomeReference, type GenomeProviderRegistry} from './provider.js';
 import {
   type AccessionCatalog,
   type AccessionEntry,
@@ -14,12 +14,10 @@ import {
 
 // Fixed names shared by the cache writer and workflow resolver.
 const checksumsFileName = 'checksums.json';
-const fastaFileName = 'genomic.fna';
-const gff3FileName = 'genomic.gff';
 
 export type ScannedCopyState = 'verified' | 'incomplete' | 'checksum-invalid';
 
-export type ScannedCopy = GenomeReference & {
+export type ScannedCopy = GenomeReference & ArtifactDigests & {
   /** The output root the copy was found in; a directory reached through two roots counts once. */
   root: string;
   /** Canonical directory path, so one directory reached through two roots is listed once. */
@@ -27,8 +25,6 @@ export type ScannedCopy = GenomeReference & {
   state: ScannedCopyState;
   /** Why an unverified copy is not trusted. */
   problem?: string;
-  fasta_sha256?: string;
-  gff3_sha256?: string;
   metadata: unknown;
 };
 
@@ -82,7 +78,7 @@ const sha256Pattern = /^[0-9a-f]{64}$/;
 async function readRecordedChecksums(
   directory: string,
   kinds?: readonly FileKind[],
-): Promise<{fasta?: string; gff3?: string} | string> {
+): Promise<Partial<Record<FileKind, string>> | string> {
   let source: string;
   try {
     source = await readFile(join(directory, checksumsFileName), 'utf8');
@@ -100,16 +96,19 @@ async function readRecordedChecksums(
   if (typeof parsed !== 'object' || parsed === null) {
     return `${checksumsFileName} is not a checksum record`;
   }
-  const values = parsed as {fasta?: unknown; gff3?: unknown};
-  if (values.fasta === undefined && values.gff3 === undefined) {
+  const values = parsed as Partial<Record<FileKind, unknown>>;
+  if (Object.keys(values).some(kind => !fileKinds.includes(kind as FileKind))) {
+    return `${checksumsFileName} records an unknown artifact`;
+  }
+  if (!fileKinds.some(kind => values[kind] !== undefined)) {
     return `${checksumsFileName} records no artifacts`;
   }
-  const selected: {fasta?: string; gff3?: string} = {};
-  for (const kind of kinds ?? ['fasta', 'gff3']) {
+  const selected: Partial<Record<FileKind, string>> = {};
+  for (const kind of kinds ?? fileKinds) {
     const value = values[kind];
     if (value === undefined) {
-      if (kind === 'fasta' && kinds?.includes('fasta')) {
-        return `${checksumsFileName} records no FASTA checksum`;
+      if (kind !== 'gff3' && kinds?.includes(kind)) {
+        return `${checksumsFileName} records no ${kind === 'fasta' ? 'FASTA' : kind} checksum`;
       }
       continue;
     }
@@ -135,10 +134,7 @@ export async function inspectCopy(
   if (typeof recorded === 'string') {
     return {...base, state: 'incomplete', problem: recorded};
   }
-  const files = [
-    ...(recorded.fasta ? [{name: fastaFileName, expected: recorded.fasta}] : []),
-    ...(recorded.gff3 ? [{name: gff3FileName, expected: recorded.gff3}] : []),
-  ];
+  const files = fileKinds.filter(kind => recorded[kind]).map(kind => ({name: artifactFiles[kind], expected: recorded[kind]!}));
   for (const file of files) {
     const path = join(directory, file.name);
     if (!(await isFile(path))) {
@@ -148,7 +144,7 @@ export async function inspectCopy(
       return {...base, state: 'checksum-invalid', problem: `${file.name} does not match its recorded checksum`};
     }
   }
-  return {...base, state: 'verified', ...(recorded.fasta ? {fasta_sha256: recorded.fasta} : {}), ...(recorded.gff3 ? {gff3_sha256: recorded.gff3} : {})};
+  return {...base, state: 'verified', ...Object.fromEntries(fileKinds.filter(kind => recorded[kind]).map(kind => [`${kind}_sha256`, recorded[kind]]))};
 }
 
 /** Removes repeated roots while keeping their order. */
@@ -163,7 +159,7 @@ export function uniqueRoots(roots: readonly string[]): string[] {
 export async function scanAccessionCaches(
   roots: readonly string[],
   now: () => Date = () => new Date(),
-  registry: GenomeProviderRegistry = genomeSources,
+  registry: GenomeProviderRegistry = accessionSources,
 ): Promise<CacheScan> {
   const scan: CacheScan = {scannedAt: now().toISOString(), cacheDirectories: [], copies: [], ignored: [], rootProblems: []};
   const seen = new Set<string>();
@@ -215,7 +211,7 @@ export async function scanAccessionCaches(
 }
 
 function sameCopy(left: CachedCopy, right: CachedCopy): boolean {
-  return left.path === right.path && left.fasta_sha256 === right.fasta_sha256 && left.gff3_sha256 === right.gff3_sha256;
+  return left.path === right.path && fileKinds.every(kind => left[`${kind}_sha256`] === right[`${kind}_sha256`]);
 }
 
 /**
@@ -243,8 +239,7 @@ export function applyCacheScan(
     (verified.get(key) ?? []).map(copy => {
       const next: CachedCopy = {
         path: copy.path, verified_at: scan.scannedAt,
-        ...(copy.fasta_sha256 ? {fasta_sha256: copy.fasta_sha256} : {}),
-        ...(copy.gff3_sha256 ? {gff3_sha256: copy.gff3_sha256} : {}),
+        ...Object.fromEntries(fileKinds.filter(kind => copy[`${kind}_sha256`]).map(kind => [`${kind}_sha256`, copy[`${kind}_sha256`]])),
       };
       return entry?.cached_copies.find(previous => sameCopy(previous, next)) ?? next;
     }).concat(entry?.cached_copies.filter(outsideScan) ?? [])
@@ -272,7 +267,7 @@ export function applyCacheScan(
 export async function deleteAccessionCaches(
   roots: readonly string[],
   reference: GenomeReference,
-  registry: GenomeProviderRegistry = genomeSources,
+  registry: GenomeProviderRegistry = accessionSources,
 ): Promise<string[]> {
   const validated = registry.validateReference(reference);
   const provider = registry.get(validated.source);

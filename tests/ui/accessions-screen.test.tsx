@@ -314,7 +314,7 @@ for (const annotation of ['available', 'unavailable'] as const) {
       downloads += 1;
       assert.deepEqual(request, {
         reference: {source: 'ncbi', id: accession, parameters: {}},
-        kinds: ['fasta', 'gff3'], root: '/project/runs', mode: 'refresh',
+        kinds: ncbiProvider.artifacts.map(artifact => artifact.kind), root: '/project/runs', mode: 'refresh',
       });
       context.onProgress?.({phase: 'downloading', bytes: 1024, total: 4096});
       await transfer;

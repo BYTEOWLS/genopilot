@@ -1,7 +1,9 @@
 import React, {useEffect, useState} from 'react';
-import {Box, Text, useInput} from 'ink';
+import {Box, Text, useInput, useWindowSize} from 'ink';
 import {Alert} from '@inkjs/ui';
-import {isVersionedAssemblyAccession, normalizeAccession} from '../../accessions/provider/ncbi/accession.js';
+import {genomeSelection, selectedGenome} from '../../accessions/selection.js';
+import {sameReference} from '../../accessions/provider.js';
+import {accessionSources} from '../../accessions/registry.js';
 import {
   accessionDisplayName,
   accessionFactsSummary,
@@ -13,6 +15,8 @@ import {sanitizeTerminalText} from '../sanitize.js';
 import {mutedColor} from '../theme.js';
 import {Page} from './page.js';
 import {TextField} from './text-field.js';
+import {Section} from './section.js';
+import {SelectableList} from './selectable-list.js';
 
 /** The accession catalog as a form offers it: still loading, loaded, or unreadable. */
 export type AccessionChoices =
@@ -28,7 +32,7 @@ function useAccessionChoices(loadAccessions: AccessionCatalogReader): AccessionC
     loadAccessions().then(
       entries => {
         if (active) {
-          setChoices({state: 'ready', entries: entries.filter(entry => entry.source === 'ncbi')});
+          setChoices({state: 'ready', entries});
         }
       },
       error => {
@@ -44,7 +48,6 @@ function useAccessionChoices(loadAccessions: AccessionCatalogReader): AccessionC
   return choices;
 }
 
-const visibleEntryCount = 12;
 const noEntries: readonly AccessionEntry[] = [];
 
 function cacheLabel(entry: AccessionEntry): string {
@@ -64,6 +67,7 @@ export type AccessionHintKind =
   | 'unavailable'
   | 'invalid'
   | 'uncataloged'
+  | 'not-downloaded'
   | 'cataloged'
   | 'conflict';
 
@@ -71,34 +75,35 @@ export type AccessionHint = {kind: AccessionHintKind; text: string; color?: stri
 
 /** The line under the field: whether the value is usable and what the catalog knows about it. */
 export function accessionHint(value: string, choices: AccessionChoices): AccessionHint {
-  const accession = normalizeAccession(value);
-  const valid = isVersionedAssemblyAccession(accession);
+  const reference = selectedGenome(value);
+  const accession = reference?.id ?? value.trim();
+  const valid = reference !== undefined;
+  const accessionMenuLabel = "\"Manage accessions\""
   if (accession.length > 0 && !valid) {
-    return {kind: 'invalid', text: 'Not a versioned NCBI assembly accession, e.g. GCF_000149205.2', color: 'yellow'};
+    return {kind: 'invalid', text: 'Choose a downloaded genome from the catalog', color: 'yellow'};
   }
   if (choices.state === 'loading') {
-    return {kind: 'loading', text: valid ? 'Valid format · checking the accession catalog…' : 'Loading the accession catalog…'};
+    return {kind: 'loading', text: 'Loading the accession catalog…'};
   }
   if (choices.state === 'failed') {
     return {
       kind: 'unavailable',
-      text: valid
-        ? 'Valid format · accession catalog unavailable, so it was not checked'
-        : 'Accession catalog unavailable — type or paste the accession',
+      text: 'Accession catalog unavailable — reopen the field to retry',
       color: 'yellow',
     };
   }
   if (!valid) {
     return {
       kind: 'empty',
-      text: choices.entries.length === 0
-        ? 'No accessions cataloged yet — type or paste one'
-        : `${String(choices.entries.length)} cataloged — press Enter to choose`,
+      text: `${String(choices.entries.length)} cataloged — press Enter to choose`,
+      // text: choices.entries.length === 0
+      //     ? `Download a genome in ${accessionMenuLabel} first`
+      //   : `${String(choices.entries.length)} cataloged — press Enter to choose`,
     };
   }
-  const entry = choices.entries.find(candidate => candidate.source === 'ncbi' && candidate.id === accession);
+  const entry = choices.entries.find(candidate => reference && sameReference(candidate, reference));
   if (!entry) {
-    return {kind: 'uncataloged', text: 'Valid; not in the accession catalog'};
+    return {kind: 'uncataloged', text: `Not in the accession catalog — download it in ${accessionMenuLabel}`, color: 'yellow'};
   }
   if (recordedCacheState(entry) === 'conflict') {
     return {
@@ -107,13 +112,15 @@ export function accessionHint(value: string, choices: AccessionChoices): Accessi
       color: 'yellow',
     };
   }
+  if (!entry.cached_copies.some(copy => copy.fasta_sha256)) {
+    return {kind: 'not-downloaded', text: 'Download genomic FASTA in Manage accessions first', color: 'yellow'};
+  }
   return {kind: 'cataloged', text: [accessionDisplayName(entry), accessionFactsSummary(entry), cacheLabel(entry)].join(' · ')};
 }
 
 /**
- * A versioned NCBI assembly accession that is typed or pasted, or chosen with Enter from the
- * accession catalog, which the field reads itself. The line below it says whether the value is
- * valid and what the catalog knows about it; the form still validates on save.
+ * A genome chosen from any registered catalog provider, with a snapshotted reference.
+ * Only downloaded genomic FASTA entries can be chosen; the form checks role-required files on save.
  *
  * While `choosing`, the field renders only the catalog picker, so its form shows nothing else and
  * ignores its own keys; the form owns that state so it can do both.
@@ -128,7 +135,7 @@ export function AccessionField({
   choosing,
   onChoosingChange,
   loadAccessions = readCatalogedAccessions,
-  placeholder = 'Type or paste an accession, or press Enter to choose',
+  placeholder = 'Press Enter to choose a downloaded genome',
 }: {
   label: string;
   required?: boolean;
@@ -156,7 +163,7 @@ export function AccessionField({
       <AccessionPicker
         fieldLabel={label}
         choices={choices}
-        initialAccession={normalizeAccession(value)}
+        initialAccession={value}
         onSelect={accession => {
           onChange(accession);
           onChoosingChange(false);
@@ -168,6 +175,8 @@ export function AccessionField({
   }
 
   const hint = accessionHint(value, choices);
+  const reference = selectedGenome(value);
+  const shownValue = reference?.id ?? '';
   return (
     <>
       <TextField
@@ -175,8 +184,9 @@ export function AccessionField({
         required={required}
         selected={selected}
         inputActive={inputActive}
-        defaultValue={value}
-        displayValue={value.length > 0 ? value : 'Not set'}
+        editable={false}
+        defaultValue={shownValue}
+        displayValue={shownValue.length > 0 ? shownValue : 'Not set'}
         placeholder={placeholder}
         onChange={onChange}
       />
@@ -186,22 +196,19 @@ export function AccessionField({
 }
 
 /** Explains why an accession whose cached copies disagree cannot be chosen, listing the copies. */
-function ConflictExplanation({entry}: {entry: AccessionEntry}): React.JSX.Element {
+function ConflictExplanation({entry, maxCopies}: {entry: AccessionEntry; maxCopies: number}): React.JSX.Element {
   return (
     <Box marginTop={1} flexDirection="column">
-      <Alert variant="warning" title={`${sanitizeTerminalText(entry.id)} cannot be used: its cached copies conflict`}>
-        A versioned accession always names the same assembly files, so every cached copy of it must
-        have identical checksums. These copies differ, so at least one was damaged or changed after
-        it was downloaded, and GenoPilot cannot tell which one is right. Remove the entry under
-        Manage genome sources, which deletes its cached copies, and add it again; the next run
-        downloads a fresh copy.
+      <Alert variant="warning">
+        Cached copies disagree. Inspect this genome in Manage accessions before selecting it.
       </Alert>
-      {entry.cached_copies.map(copy => (
-        <Text key={copy.path} color={mutedColor} wrap="wrap">
+      {entry.cached_copies.slice(0, maxCopies).map(copy => (
+        <Text key={copy.path} color={mutedColor} wrap="truncate">
           {'  '}{sanitizeTerminalText(copy.path)} · FASTA {copy.fasta_sha256?.slice(0, 12) ?? 'not downloaded'}
           {copy.gff3_sha256 ? ` · GFF3 ${copy.gff3_sha256.slice(0, 12)}` : ''}
         </Text>
       ))}
+      {entry.cached_copies.length > maxCopies ? <Text color={mutedColor} wrap="truncate">{entry.cached_copies.length - maxCopies} more copies; inspect them in Manage accessions.</Text> : null}
     </Box>
   );
 }
@@ -227,13 +234,16 @@ export function AccessionPicker({
   inputActive: boolean;
 }): React.JSX.Element {
   const entries = choices.state === 'ready' ? choices.entries : noEntries;
+  const {rows} = useWindowSize();
   const [selectedIndex, setSelectedIndex] = useState(0);
   // Preselect the current value once the catalog has loaded.
   useEffect(() => {
-    setSelectedIndex(Math.max(0, entries.findIndex(entry => entry.source === 'ncbi' && entry.id === initialAccession)));
+    const reference = selectedGenome(initialAccession ?? '');
+    setSelectedIndex(Math.max(0, entries.findIndex(entry => reference && sameReference(entry, reference))));
   }, [entries, initialAccession]);
   const selectedEntry = entries[selectedIndex];
   const selectedConflicts = selectedEntry !== undefined && recordedCacheState(selectedEntry) === 'conflict';
+  const canSelect = selectedEntry !== undefined && !selectedConflicts && selectedEntry.cached_copies.some(copy => copy.fasta_sha256);
 
   useInput(
     (_input, key) => {
@@ -244,57 +254,51 @@ export function AccessionPicker({
       if (entries.length === 0) {
         return;
       }
-      if (key.upArrow || key.downArrow) {
-        const offset = key.upArrow ? -1 : 1;
-        setSelectedIndex(index => (index + offset + entries.length) % entries.length);
-      } else if (key.return && selectedEntry && !selectedConflicts) {
-        onSelect(selectedEntry.id);
+      if (key.return && selectedEntry && canSelect) {
+        onSelect(genomeSelection(selectedEntry));
       }
     },
     {isActive: inputActive},
   );
 
-  const visibleStart = Math.max(
-    0,
-    Math.min(selectedIndex - Math.floor(visibleEntryCount / 2), entries.length - visibleEntryCount),
-  );
+  const menuLabel = "\"Manage accessions\""
 
   return (
     <Page
       title="Choose an accession"
-      description={`For ${sanitizeTerminalText(fieldLabel)}, from the accession catalog. To add one, use Manage genome sources.`}
-      shortcuts={entries.length > 0 ? ['↑/↓ — Select', !selectedConflicts && 'Enter — Choose'] : []}
+      description={selectedConflicts ? `For ${sanitizeTerminalText(fieldLabel)}.` : `For ${sanitizeTerminalText(fieldLabel)}, from the accession catalog. To add one, use Manage accessions.`}
+      shortcuts={entries.length > 0 ? [canSelect && 'Enter — Choose'] : []}
       back="Cancel"
     >
       {choices.state === 'loading' ? <Text>Loading the accession catalog…</Text> : null}
       {choices.state === 'failed' ? (
         <>
-          <Text color="red">Unable to load the accession catalog.</Text>
-          <Text wrap="wrap">{sanitizeTerminalText(choices.message)}</Text>
+        <Alert variant="error">
+          Unable to load the accession catalog.
+          {sanitizeTerminalText(choices.message)}
+        </Alert>
         </>
       ) : null}
       {choices.state === 'ready' && entries.length === 0 ? (
-        <Text wrap="wrap">No accessions cataloged yet. Type or paste the accession into the field instead.</Text>
+          <Alert variant="warning">No accessions cataloged yet. Download a genome in {menuLabel} first.</Alert>
       ) : null}
-      {entries.slice(visibleStart, visibleStart + visibleEntryCount).map((entry, offset) => {
-        const selected = visibleStart + offset === selectedIndex;
-        const conflict = recordedCacheState(entry) === 'conflict';
-        return (
-          <Text key={entry.id} color={selected ? 'cyan' : undefined} wrap="truncate">
-            {selected ? '› ' : '  '}
-            {conflict ? '⚠ ' : ''}
-            {sanitizeTerminalText(accessionDisplayName(entry))}
-            {entry.name ? <Text color={mutedColor}> ({entry.id})</Text> : null}
-            {' · '}
-            <Text color={conflict ? 'yellow' : undefined}>{cacheLabel(entry)}</Text>
-            {' · '}{sanitizeTerminalText(accessionFactsSummary(entry))}
-          </Text>
-        );
-      })}
-      {entries.length > visibleEntryCount ? (
-        <Text color={mutedColor}>{selectedIndex + 1} of {entries.length}</Text>
-      ) : null}
-      {selectedEntry && selectedConflicts ? <ConflictExplanation entry={selectedEntry} /> : null}
+      {entries.length > 0 ? <Section title="Catalog genomes" marginTop={0}>
+        <SelectableList count={entries.length} selectedIndex={selectedIndex} onSelect={setSelectedIndex}
+          active={inputActive} height={Math.max(2, rows - 10 - (selectedConflicts ? 8 : canSelect ? 0 : 1))} noun="genomes"
+          renderItem={(index, selected) => {
+            const entry = entries[index]!;
+            const conflict = recordedCacheState(entry) === 'conflict';
+            return <Text color={selected ? 'cyan' : undefined} wrap="truncate">
+              {selected ? '› ' : '  '}{conflict ? '⚠ ' : ''}{sanitizeTerminalText(accessionDisplayName(entry))}
+              {entry.name ? <Text color={mutedColor}> ({entry.id})</Text> : null}
+              {' · '}{sanitizeTerminalText(accessionSources.get(entry.source).label)}{' · '}
+              <Text color={conflict ? 'yellow' : undefined}>{cacheLabel(entry)}</Text>
+              {' · '}{sanitizeTerminalText(accessionFactsSummary(entry))}
+            </Text>;
+          }} />
+      </Section> : null}
+      {selectedEntry && !selectedConflicts && !canSelect ? <Text color="yellow" wrap="truncate">Download genomic FASTA in {menuLabel} first.</Text> : null}
+      {selectedEntry && selectedConflicts ? <ConflictExplanation entry={selectedEntry} maxCopies={Math.max(0, Math.min(2, rows - 16))} /> : null}
     </Page>
   );
 }

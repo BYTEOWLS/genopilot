@@ -7,10 +7,12 @@ versioned assembly request:
 GET /datasets/v2/genome/accession/{id}/download
     ?include_annotation_type=GENOME_FASTA
     &include_annotation_type=GENOME_GFF
+    &include_annotation_type=PROT_FASTA
 
 ncbi_dataset/data/assembly_data_report.jsonl
 ncbi_dataset/data/{id}/{id}_{assembly_name}_genomic.fna
 ncbi_dataset/data/{id}/genomic.gff
+ncbi_dataset/data/{id}/protein.faa
 ```
 
 The API also returned `dataset_catalog.json`, `md5sum.txt`, and a README; these
@@ -26,5 +28,12 @@ FASTA and GFF3, without keeping downloaded data in the repository. Synthetic tes
 also cover ZIP64 directories, streamed data descriptors, malformed/unsafe fields,
 CRC failures, and cancellation before publication.
 
-Reference: https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/rest-api/
+Protein FASTA is independently selectable through `PROT_FASTA`. Only the exact assembly's `protein.faa` member is accepted; the shared cache stores it as `proteins.faa`, validates amino-acid FASTA, records its checksum, and supports protein-only/offline reuse and partial refresh. A missing requested protein member fails with an instruction to deselect proteins; ambiguous or invalid members never replace verified files. GFF3 availability remains independent.
+
+The official OpenAPI schema lists `PROT_FASTA`. A live protein-only request also confirmed the exact member path and amino-acid records; downloaded files were temporary and were not kept in the repository. Synthetic ZIP tests cover protein-only and combined requests, source-scoped selection, validation failures, checksums, preservation, and reuse.
+
+References:
+
+- https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/rest-api/
+- https://github.com/ncbi/datasets/blob/master/datasets.openapi.yaml
 

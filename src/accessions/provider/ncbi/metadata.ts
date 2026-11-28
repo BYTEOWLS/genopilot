@@ -1,3 +1,5 @@
+import type {GenomeAssembly, GenomeStatistics} from '../../metadata.js';
+
 /** Where fetched NCBI facts came from: the live Datasets API or a cached download's own report. */
 export type NcbiMetadataSource = 'datasets-v2-rest' | 'cached-download-report';
 
@@ -5,27 +7,8 @@ export type NcbiMetadataSource = 'datasets-v2-rest' | 'cached-download-report';
  * Lightweight facts NCBI reports for an assembly. Optional fields are omitted when NCBI does not
  * provide them; they are never guessed or filled in by the researcher.
  */
-export type NcbiAssemblyMetadata = {
+export type NcbiAssemblyMetadata = GenomeAssembly & GenomeStatistics & {
   organism: string;
-  tax_id?: number;
-  assembly_name?: string;
-  assembly_level?: string;
-  assembly_status?: string;
-  /** Whether the assembly is haploid, diploid, and so on. */
-  assembly_type?: string;
-  /** RefSeq's designation, such as `reference genome`; most assemblies have none. */
-  refseq_category?: string;
-  strain?: string;
-  /** Who submitted the assembly to NCBI. */
-  submitter?: string;
-  /** Assembly release date, not the submission or metadata retrieval date. */
-  release_date?: string;
-  total_sequence_length?: number;
-  gc_percent?: number;
-  number_of_contigs?: number;
-  number_of_scaffolds?: number;
-  contig_n50?: number;
-  scaffold_n50?: number;
   bioproject_accession?: string;
   biosample_accession?: string;
   retrieved_at: string;

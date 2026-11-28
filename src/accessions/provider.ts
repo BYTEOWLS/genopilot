@@ -1,5 +1,13 @@
+import type {GenomeMetadata} from './metadata.js';
+
 export type GenomeReference = {source: string; id: string; parameters: Record<string, unknown>};
-export type FileKind = 'fasta' | 'gff3';
+export const artifactFiles = {
+  fasta: 'genomic.fna', gff3: 'genomic.gff', proteins: 'proteins.faa', transcripts: 'transcripts.fna', cds: 'cds.fna',
+} as const;
+export type FileKind = keyof typeof artifactFiles;
+export const fileKinds = Object.keys(artifactFiles) as FileKind[];
+export type ArtifactPaths = Partial<Record<FileKind, string>>;
+export type ArtifactDigests = Partial<Record<`${FileKind}_sha256`, string>>;
 export type GenomeArtifact = {kind: FileKind; label: string};
 export type ProviderField = {id: string; label: string; kind: 'secret'; required: boolean};
 export type GenomeDownloadProgress =
@@ -10,9 +18,13 @@ export type ProviderContext = {
   secrets: Readonly<Record<string, string>>;
   fetchImpl?: typeof fetch;
   onProgress?: (progress: GenomeDownloadProgress) => void;
+  /** Provider-declared discovery site; credentials remain separate. */
+  site?: string;
 };
 export type DownloadFacts = {
-  files: {fasta?: string; gff3?: string};
+  files: ArtifactPaths;
+  /** Optional byte-identical evidence for derived artifacts, under original/<artifact filename>. */
+  originals?: ArtifactPaths;
   metadata: unknown;
   facts: Record<string, unknown>;
   annotation: 'available' | 'unavailable' | 'not-requested';
@@ -26,9 +38,22 @@ export interface GenomeProvider {
   cacheDirectory: string;
   fields: readonly ProviderField[];
   artifacts: readonly GenomeArtifact[];
+  /** Nonsecret choices become part of the canonical reference and cache identity. */
+  downloadOptions?: readonly {
+    id: string;
+    label: string;
+    description: string;
+    defaultValue: boolean;
+    checked(reference: GenomeReference): boolean;
+    apply(reference: GenomeReference, checked: boolean): GenomeReference;
+  }[];
+  sites?: readonly {id: string; label: string}[];
   validateReference(id: string, parameters: unknown): GenomeReference;
   validateMetadata(metadata: unknown): void;
   metadataSummary(metadata: unknown): string;
+  downloadSummary?(facts: Record<string, unknown>): string | undefined;
+  /** Map validated provider facts into the shared genome contract, including unavailable facts. */
+  mapMetadata(metadata: unknown): GenomeMetadata;
   resolveExact(id: string, context: ProviderContext): Promise<GenomeReference>;
   download(reference: GenomeReference, kinds: readonly FileKind[], stagingDirectory: string, context: ProviderContext): Promise<DownloadFacts>;
   lookupMetadata?(reference: GenomeReference, context: ProviderContext): Promise<unknown>;
@@ -62,13 +87,17 @@ export class GenomeProviderRegistry {
     }
     const artifacts = new Set<FileKind>();
     for (const artifact of provider.artifacts) {
-      if (!['fasta', 'gff3'].includes(artifact.kind) || !artifact.label.trim() || artifacts.has(artifact.kind)) {
+      if (!fileKinds.includes(artifact.kind) || !artifact.label.trim() || artifacts.has(artifact.kind)) {
         throw new Error('Invalid or duplicate provider artifact.');
       }
       artifacts.add(artifact.kind);
     }
     if (artifacts.size === 0) {
       throw new Error('A genome provider must declare downloadable artifacts.');
+    }
+    if (provider.sites && (provider.sites.length === 0 || new Set(provider.sites.map(site => site.id)).size !== provider.sites.length
+      || provider.sites.some(site => !/^[A-Za-z][A-Za-z0-9-]*$/.test(site.id) || !site.label.trim()))) {
+      throw new Error('Invalid provider discovery sites.');
     }
     const fields = new Set<string>();
     for (const field of provider.fields) {

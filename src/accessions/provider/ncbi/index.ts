@@ -7,6 +7,7 @@ import {pipeline} from 'node:stream/promises';
 import {isVersionedAssemblyAccession, normalizeAccession, ncbiAccessionFormatMessage} from './accession.js';
 import {fetchAssemblyMetadata, ncbiDatasetsApiBaseUrl, parseAssemblyReport} from './metadata-fetch.js';
 import {validateNcbiMetadata, type NcbiAssemblyMetadata} from './metadata.js';
+import {emptyGenomeMetadata} from '../../metadata.js';
 import type {GenomeProvider, GenomeReference} from '../../provider.js';
 import {extractZipMember, zipMembers, type ZipMember} from './zip.js';
 
@@ -44,12 +45,31 @@ export const ncbiProvider: GenomeProvider = {
   description: 'Versioned genome assemblies from NCBI Datasets.',
   cacheDirectory: ncbiCacheDirectoryName,
   fields: [{id: 'api-key', label: 'API key', kind: 'secret', required: false}],
-  artifacts: [{kind: 'fasta', label: 'Genome sequence (FASTA)'}, {kind: 'gff3', label: 'Genome annotation (GFF3)'}],
+  artifacts: [{kind: 'fasta', label: 'Genome sequence (FASTA)'}, {kind: 'gff3', label: 'Genome annotation (GFF3)'},
+    {kind: 'proteins', label: 'Annotated proteins (FASTA)'}],
   validateReference,
   validateMetadata(value) { ncbiMetadata(value); },
   metadataSummary(value) {
     const metadata = ncbiMetadata(value);
     return metadata ? [metadata.organism, metadata.assembly_name, metadata.strain, metadata.assembly_type, metadata.refseq_category].filter(Boolean).join(' · ') : 'metadata not retrieved';
+  },
+  mapMetadata(value) {
+    const facts = ncbiMetadata(value);
+    if (!facts) {
+      return emptyGenomeMetadata();
+    }
+    const {total_sequence_length, gc_percent, number_of_contigs, number_of_scaffolds, contig_n50, scaffold_n50,
+      bioproject_accession, biosample_accession, retrieved_at, source, ...assembly} = facts;
+    return {
+      assembly,
+      statistics: {total_sequence_length, gc_percent, number_of_contigs, number_of_scaffolds, contig_n50, scaffold_n50},
+      provider_attributes: [
+        ...(bioproject_accession ? [{id: 'bioproject_accession', label: 'BioProject', value: `https://www.ncbi.nlm.nih.gov/bioproject/${encodeURIComponent(bioproject_accession)}`}] : []),
+        ...(biosample_accession ? [{id: 'biosample_accession', label: 'BioSample', value: `https://www.ncbi.nlm.nih.gov/biosample/${encodeURIComponent(biosample_accession)}`}] : []),
+      ],
+      retrieved_at,
+      retrieval_source: source === 'datasets-v2-rest' ? 'NCBI Datasets API' : 'NCBI assembly report from a previous download',
+    };
   },
   async resolveExact(id, context) {
     context.signal.throwIfAborted();
@@ -74,6 +94,9 @@ export const ncbiProvider: GenomeProvider = {
     }
     if (kinds.includes('gff3')) {
       url.searchParams.append('include_annotation_type', 'GENOME_GFF');
+    }
+    if (kinds.includes('proteins')) {
+      url.searchParams.append('include_annotation_type', 'PROT_FASTA');
     }
     context.onProgress?.({phase: 'requesting'});
     context.signal.throwIfAborted();
@@ -115,6 +138,10 @@ export const ncbiProvider: GenomeProvider = {
       const prefix = `ncbi_dataset/data/${reference.id}/`;
       const fasta = kinds.includes('fasta') ? uniqueMember(members.filter(member => member.name.startsWith(prefix) && !member.name.slice(prefix.length).includes('/') && member.name.endsWith('_genomic.fna')), 'genome FASTA', true)! : undefined;
       const gff3 = kinds.includes('gff3') ? uniqueMember(members.filter(member => member.name === `${prefix}genomic.gff`), 'genome GFF3', false) : undefined;
+      const proteins = kinds.includes('proteins') ? uniqueMember(members.filter(member => member.name === `${prefix}protein.faa`), 'protein FASTA', false) : undefined;
+      if (kinds.includes('proteins') && !proteins) {
+        throw new Error('NCBI supplied no protein FASTA for this assembly. Deselect annotated proteins in download review to download its other available artifacts.');
+      }
       const report = uniqueMember(members.filter(member => member.name === 'ncbi_dataset/data/assembly_data_report.jsonl'), 'assembly report', true)!;
       if (report.size > 16 * 1024 * 1024) {
         throw new Error('NCBI assembly report is too large.');
@@ -139,8 +166,11 @@ export const ncbiProvider: GenomeProvider = {
       if (gff3) {
         await extractZipMember(archive, gff3, join(staging, 'genomic.gff'), context.signal);
       }
+      if (proteins) {
+        await extractZipMember(archive, proteins, join(staging, 'proteins.faa'), context.signal);
+      }
       return {
-        files: {...(fasta ? {fasta: 'genomic.fna'} : {}), ...(gff3 ? {gff3: 'genomic.gff'} : {})},
+        files: {...(fasta ? {fasta: 'genomic.fna'} : {}), ...(gff3 ? {gff3: 'genomic.gff'} : {}), ...(proteins ? {proteins: 'proteins.faa'} : {})},
         metadata: matching[0],
         facts: {source: 'ncbi', id: reference.id, api: 'datasets-v2-rest'},
         annotation: kinds.includes('gff3') ? (gff3 ? 'available' : 'unavailable') : 'not-requested',

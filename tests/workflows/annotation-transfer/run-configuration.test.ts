@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {ncbiSelection, downloadedNcbiGenome} from '../../genomes.js';
 import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -88,9 +89,8 @@ test('resolves draft paths and records requested and effective options', async c
 test('resolves an NCBI accession source independently for the reference and the target', async context => {
   const {tempDir, draft} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
-  draft.referenceSource = 'ncbi';
-  // Pasted with surrounding whitespace and typed in lowercase.
-  draft.referenceAccession = '  gcf_000149205.2  ';
+  draft.referenceSource = 'remote';
+  draft.referenceAccession = ncbiSelection('GCF_000149205.2');
   draft.targetSource = 'local';
 
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4);
@@ -108,10 +108,10 @@ test('resolves an NCBI accession source independently for the reference and the 
 test('finds existing accession caches and applies explicit cache modes', async context => {
   const {tempDir, draft} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
-  draft.referenceSource = 'ncbi';
-  draft.referenceAccession = 'GCF_000149205.2';
-  draft.targetSource = 'ncbi';
-  draft.targetAccession = 'GCA_000149205.2';
+  draft.referenceSource = 'remote';
+  draft.referenceAccession = ncbiSelection('GCF_000149205.2');
+  draft.targetSource = 'remote';
+  draft.targetAccession = ncbiSelection('GCA_000149205.2');
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4, now);
   await mkdir(join(tempDir, 'runs', 'ncbi-accessions-cache', 'GCF_000149205.2'), {recursive: true});
 
@@ -137,8 +137,8 @@ test('finds existing accession caches and applies explicit cache modes', async c
 test('rejects inaccessible or malformed accession cache entries', async context => {
   const {tempDir, draft} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
-  draft.referenceSource = 'ncbi';
-  draft.referenceAccession = 'GCF_000149205.2';
+  draft.referenceSource = 'remote';
+  draft.referenceAccession = ncbiSelection('GCF_000149205.2');
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4, now);
 
   await assert.rejects(
@@ -242,23 +242,36 @@ test('reports missing inputs and an existing run before saving', async context =
   );
 });
 
-test('does not check the filesystem for an NCBI-sourced input', async context => {
+test('drafts reject typed genome identifiers for either remote role', async context => {
   const {tempDir, draft} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
-  draft.referenceSource = 'ncbi';
-  draft.referenceAccession = 'GCF_000149205.2';
+  for (const remote of [{referenceSource: 'remote' as const, referenceAccession: 'GCF_000149205.2'},
+    {targetSource: 'remote' as const, targetAccession: 'GCF_000149205.2'}]) {
+    assert.throws(() => buildAnnotationTransferConfiguration({...draft, ...remote}, tempDir, genopilot, 4), AnnotationTransferConfigurationError);
+  }
+});
+
+test('requires a downloaded reference with both genomic FASTA and annotation', async context => {
+  const {tempDir, draft} = await fixture();
+  context.after(() => rm(tempDir, {recursive: true, force: true}));
+  draft.referenceSource = 'remote';
+  draft.referenceAccession = ncbiSelection('GCF_000149205.2');
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4);
 
-  await validatePreparedRunPaths(prepared, undefined, async () => []);
+  for (const entries of [[], [{...downloadedNcbiGenome('GCF_000149205.2'), cached_copies: []}],
+    [{...downloadedNcbiGenome('GCF_000149205.2'), cached_copies: [{...downloadedNcbiGenome('GCF_000149205.2').cached_copies[0]!, gff3_sha256: undefined}]}]]) {
+    await assert.rejects(validatePreparedRunPaths(prepared, undefined, async () => entries), AnnotationTransferConfigurationError);
+  }
+  await validatePreparedRunPaths(prepared, undefined, async () => [downloadedNcbiGenome('GCF_000149205.2')]);
 });
 
 test('refuses an NCBI accession whose cataloged copies conflict', async context => {
   const {tempDir, draft} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
-  draft.referenceSource = 'ncbi';
-  draft.referenceAccession = 'GCF_000149205.2';
-  draft.targetSource = 'ncbi';
-  draft.targetAccession = 'GCA_000011425.1';
+  draft.referenceSource = 'remote';
+  draft.referenceAccession = ncbiSelection('GCF_000149205.2');
+  draft.targetSource = 'remote';
+  draft.targetAccession = ncbiSelection('GCA_000011425.1');
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4);
   const copy = (path: string, checksum: string) =>
     ({path, verified_at: '2026-01-01T00:00:00.000Z', fasta_sha256: checksum.repeat(64)});
@@ -284,10 +297,10 @@ test('refuses an NCBI accession whose cataloged copies conflict', async context 
       return true;
     },
   );
-  // An unreadable catalog does not block the run.
-  await validatePreparedRunPaths(prepared, undefined, async () => {
+  // An unreadable catalog cannot establish a downloaded reference.
+  await assert.rejects(validatePreparedRunPaths(prepared, undefined, async () => {
     throw new Error('catalog is broken');
-  });
+  }), AnnotationTransferConfigurationError);
 });
 
 test('atomically saves a complete configuration without overwriting a run', async context => {
@@ -356,14 +369,14 @@ test('discovers saved runs newest first and skips an unreadable one', async cont
 test('saves cross-root provider snapshots with the files required by each role', async context => {
   const {tempDir, draft} = await fixture();
   context.after(() => rm(tempDir, {recursive: true, force: true}));
-  draft.referenceSource = 'ncbi';
-  draft.targetSource = 'ncbi';
-  draft.referenceAccession = draft.targetAccession = 'GCF_000000001.1';
+  draft.referenceSource = 'remote';
+  draft.targetSource = 'remote';
+  draft.referenceAccession = draft.targetAccession = ncbiSelection('GCF_000000001.1');
   const prepared = buildAnnotationTransferConfiguration(draft, tempDir, genopilot, 4, now);
   const single = {path: '/elsewhere/sequence/GCF_000000001.1', verified_at: now.toISOString(), fasta_sha256: 'a'.repeat(64)};
   const both = {...single, path: '/elsewhere/both/GCF_000000001.1', gff3_sha256: 'b'.repeat(64)};
   const readAccessions = async () => [{
-    source: 'ncbi', id: draft.referenceAccession, parameters: {}, metadata: null,
+    source: 'ncbi', id: 'GCF_000000001.1', parameters: {}, metadata: null,
     cached_copies: [single, both],
   }];
   const saved = parseAnnotationTransferConfiguration(await readFile(await savePreparedRun(prepared, undefined, readAccessions), 'utf8'));
@@ -373,7 +386,7 @@ test('saves cross-root provider snapshots with the files required by each role',
   if (saved.inputs.reference.source === 'remote' && saved.inputs.target.source === 'remote') {
     assert.deepEqual(saved.inputs.reference.copy, {path: both.path, fasta_sha256: both.fasta_sha256, gff3_sha256: both.gff3_sha256});
     assert.deepEqual(saved.inputs.target.copy, {path: single.path, fasta_sha256: single.fasta_sha256});
-    assert.deepEqual(saved.inputs.reference.reference, {source: 'ncbi', id: draft.referenceAccession, parameters: {}});
+    assert.deepEqual(saved.inputs.reference.reference, {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}});
   }
   assert.equal(await findGenomeCacheEntries(prepared).then(entries => entries.length), 2);
   const refresh = applyGenomeCacheModes(prepared, {reference: 'refresh'});

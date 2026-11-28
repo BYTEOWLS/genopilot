@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import {ncbiSelection, downloadedNcbiGenome} from '../../genomes.js';
 import {link, mkdir, mkdtemp, readdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test, {type TestContext} from 'node:test';
 import type {AccessionEntry} from '../../../src/accessions/catalog.js';
+import {genomeSelection} from '../../../src/accessions/selection.js';
 import {testReadSet, testSnapshotReadSet} from '../../read-sets.js';
 import type {ReadPair, IsolateCatalog} from '../../../src/isolates/catalog.js';
 import {
@@ -165,10 +167,20 @@ test('blocks a missing read file and an unreadable backbone before review', asyn
   });
 });
 
+test('requires catalog selection and downloaded genomic FASTA before inspecting a remote backbone', async context => {
+  const {tempDir, catalog, draft} = await fixture(context);
+  const id = 'GCF_000149205.2';
+  assert.throws(() => buildReferenceConsensusRun({...draft, backboneSource: 'remote', backboneAccession: id}, catalog, tempDir, genopilot, 8, now), ReferenceConsensusConfigurationError);
+  for (const entries of [[], [{...downloadedNcbiGenome(id), cached_copies: []}], [{...downloadedNcbiGenome(id), cached_copies: [{path: `/catalog/${id}`, verified_at: now.toISOString(), proteins_sha256: 'a'.repeat(64)}]}]]) {
+    const prepared = buildReferenceConsensusRun({...draft, backboneSource: 'remote', backboneAccession: ncbiSelection(id)}, catalog, tempDir, genopilot, 8, now);
+    await assert.rejects(inspectPreparedRun(prepared, {readAccessions: async () => entries}), error => issuesOf(error).some(issue => issue.path === '$.inputs.backbone.reference'));
+  }
+});
+
 test('refuses a backbone accession whose cataloged copies conflict', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
   const prepared = buildReferenceConsensusRun(
-    {...draft, backboneSource: 'ncbi', backboneAccession: 'gcf_000149205.2'},
+    {...draft, backboneSource: 'remote', backboneAccession: ncbiSelection('GCF_000149205.2')},
     catalog,
     tempDir,
     genopilot,
@@ -207,10 +219,10 @@ test('warns about linked read files, a possible backbone sample, and mixed trimm
   const strain: AccessionEntry = {
     source: 'ncbi', id: 'GCF_000149205.2', parameters: {},
     metadata: {organism: 'Example organism', strain: 'ISOLATE-B', retrieved_at: now.toISOString(), source: 'datasets-v2-rest'},
-    cached_copies: [],
+    cached_copies: downloadedNcbiGenome('GCF_000149205.2').cached_copies,
   };
   const prepared = buildReferenceConsensusRun(
-    {...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000149205.2'},
+    {...draft, backboneSource: 'remote', backboneAccession: ncbiSelection('GCF_000149205.2')},
     catalog,
     tempDir,
     genopilot,
@@ -260,7 +272,7 @@ test('removes a partly written run workspace when a later file fails', async con
 test('asks about an existing backbone cache entry and saves the decision', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
   const prepared = buildReferenceConsensusRun(
-    {...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000149205.2'},
+    {...draft, backboneSource: 'remote', backboneAccession: ncbiSelection('GCF_000149205.2')},
     catalog,
     tempDir,
     genopilot,
@@ -283,10 +295,10 @@ test('does not take an isolate named after the backbone strain for the backbone 
   const strain: AccessionEntry = {
     source: 'ncbi', id: 'GCF_000149205.2', parameters: {},
     metadata: {organism: 'Example organism', strain: 'FGSC A4', retrieved_at: now.toISOString(), source: 'datasets-v2-rest'},
-    cached_copies: [],
+    cached_copies: downloadedNcbiGenome('GCF_000149205.2').cached_copies,
   };
   const prepared = buildReferenceConsensusRun(
-    {...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000149205.2'},
+    {...draft, backboneSource: 'remote', backboneAccession: ncbiSelection('GCF_000149205.2')},
     catalog,
     tempDir,
     genopilot,
@@ -345,7 +357,7 @@ test('sums each isolate\'s read files and the local backbone for the disk estima
   const withMissing = await diskEstimateInputs(prepared);
   assert.deepEqual(withMissing.inputs.isolateReadBytes, [reads, 4 * reads]);
 
-  const ncbi = buildReferenceConsensusRun({...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000149205.2'}, catalog, tempDir, genopilot, 8, now);
+  const ncbi = buildReferenceConsensusRun({...draft, backboneSource: 'remote', backboneAccession: ncbiSelection('GCF_000149205.2')}, catalog, tempDir, genopilot, 8, now);
   const withoutBackbone = await diskEstimateInputs(ncbi);
   assert.equal(withoutBackbone.inputs.genomeBytes, undefined);
   assert.ok(withoutBackbone.note);
@@ -359,22 +371,23 @@ test('sums each isolate\'s read files and the local backbone for the disk estima
   });
 });
 
-test('saves a cross-root backbone snapshot without requiring annotation', async context => {
+test('saves a cross-root catalog backbone with its provider parameters and required files only', async context => {
   const {tempDir, catalog, draft} = await fixture(context);
+  const reference = {source: 'veupathdb', id: 'FungiDB-71_ExampleA', parameters: {site: 'FungiDB', release: 71, organism_abbreviation: 'ExampleA'}};
   const prepared = buildReferenceConsensusRun(
-    {...draft, backboneSource: 'ncbi', backboneAccession: 'GCF_000000001.1'},
+    {...draft, backboneSource: 'remote', backboneAccession: genomeSelection(reference)},
     catalog, tempDir, genopilot, 8, now,
   );
-  const copy = {path: '/elsewhere/GCF_000000001.1', verified_at: now.toISOString(), fasta_sha256: 'a'.repeat(64)};
+  const copy = {path: `/elsewhere/${reference.id}`, verified_at: now.toISOString(), fasta_sha256: 'a'.repeat(64), proteins_sha256: 'b'.repeat(64)};
   const path = await savePreparedRun(prepared, {readAccessions: async () => [{
-    source: 'ncbi', id: 'GCF_000000001.1', parameters: {}, metadata: null, cached_copies: [copy],
+    ...reference, parameters: {organism_abbreviation: 'ExampleA', release: 71, site: 'FungiDB'}, metadata: {...reference.parameters, organism: 'synthetic-organism'}, cached_copies: [copy],
   }]});
   const saved = parseReferenceConsensusConfiguration(await readFile(path, 'utf8'));
   assert.equal(saved.schema_version, 2);
   assert.equal(saved.inputs.backbone.source, 'remote');
   if (saved.inputs.backbone.source === 'remote') {
     assert.deepEqual(saved.inputs.backbone.copy, {path: copy.path, fasta_sha256: copy.fasta_sha256});
-    assert.deepEqual(saved.inputs.backbone.reference, {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}});
+    assert.deepEqual(saved.inputs.backbone.reference, reference);
   }
   assert.equal(await hasBackboneCacheEntry(prepared), true);
   const refresh = applyBackboneCacheMode(prepared, 'refresh');

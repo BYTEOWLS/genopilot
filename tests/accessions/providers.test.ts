@@ -7,14 +7,14 @@ import test from 'node:test';
 import {emptyAccessionCatalog, validateAccessionCatalog, withAccession} from '../../src/accessions/catalog.js';
 import {applyCacheScan, deleteAccessionCaches, scanAccessionCaches} from '../../src/accessions/cache-discovery.js';
 import {loadAccessionCatalog, updateAccessionCatalog} from '../../src/accessions/store.js';
-import {genomeSources} from '../../src/accessions/registry.js';
+import {accessionSources} from '../../src/accessions/registry.js';
 import {ncbiProvider} from '../../src/accessions/provider/ncbi/index.js';
 import {GenomeProviderRegistry, missingProviderFields, referenceKey} from '../../src/accessions/provider.js';
 
 const other = {...ncbiProvider, id: 'synthetic', cacheDirectory: 'synthetic-cache', validateReference(id: string, parameters: unknown) {
   return {...ncbiProvider.validateReference(id, parameters), source: 'synthetic'};
 }};
-genomeSources.register(other);
+accessionSources.register(other);
 const reference = {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}};
 const second = {...reference, source: other.id};
 const entry = (ref = reference) => ({...ref, metadata: null, cached_copies: []});
@@ -31,7 +31,7 @@ test('catalog identity, replacement, and discovery use the provider and ID pair'
   assert.throws(() => validateAccessionCatalog({...catalog, accessions: [{...entry(), parameters: {api_key: 'not-allowed'}}]}));
 
   for (const ref of [reference, second]) {
-    const directory = join(root, genomeSources.get(ref.source).cacheDirectory, ref.id);
+    const directory = join(root, accessionSources.get(ref.source).cacheDirectory, ref.id);
     await mkdir(directory, {recursive: true});
     const fasta = `>synthetic\n${ref.source === 'ncbi' ? 'ACGT' : 'AAAA'}\n`;
     await writeFile(join(directory, 'genomic.fna'), fasta);

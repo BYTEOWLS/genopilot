@@ -7,13 +7,18 @@ import {Section} from '../components/section.js';
 import {TextField} from '../components/text-field.js';
 import {useHomeSuspension} from '../home-navigation.js';
 import {sanitizeTerminalText} from '../sanitize.js';
+import {Alert} from "@inkjs/ui";
+import {readProviderDocuments, type DocumentsLoader} from '../../docs/documents.js';
+import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 
-export function ProviderForm({provider, settings, inputActive, onBack}: {
+export function ProviderForm({provider, settings, inputActive, onBack, loadHelp = () => readProviderDocuments(provider)}: {
   provider: GenomeProvider;
   settings: ProviderSettings;
   inputActive: boolean;
   onBack: () => void;
+  loadHelp?: DocumentsLoader;
 }): React.JSX.Element {
+  const [showHelp, setShowHelp] = useState(false);
   const [configured, setConfigured] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [generation, setGeneration] = useState(0);
@@ -23,7 +28,7 @@ export function ProviderForm({provider, settings, inputActive, onBack}: {
   const [message, setMessage] = useState<string>();
   const {rows} = useWindowSize();
   const field = provider.fields[selected];
-  useHomeSuspension(busy ? 'busy' : field ? 'typing' : undefined);
+  useHomeSuspension(showHelp ? undefined : busy ? 'busy' : field ? 'typing' : undefined);
   useEffect(() => {
     let active = true;
     settings.read(provider).then(values => {
@@ -62,7 +67,11 @@ export function ProviderForm({provider, settings, inputActive, onBack}: {
     }
   };
   useInput((input, key) => {
-    if (busy) {
+    if (busy || showHelp) {
+      return;
+    }
+    if (input === '?' && !field) {
+      setShowHelp(true);
       return;
     }
     if (key.escape) {
@@ -84,13 +93,16 @@ export function ProviderForm({provider, settings, inputActive, onBack}: {
       }, () => setProblems(['Unable to clear provider setting.'])).finally(() => setBusy(false));
     }
   }, {isActive: inputActive});
+  if (showHelp) {
+    return <MarkdownDocumentPage title={provider.label} load={loadHelp} onClose={() => setShowHelp(false)} back="Close help" inputActive={inputActive} />;
+  }
   const capacity = Math.max(1, rows - 17);
   const first = Math.max(0, Math.min(selected, provider.fields.length - capacity));
   return (
     <EditPage title={provider.label} description={provider.description}
-      shortcuts={['Tab/↑/↓ — Field', !field && 'Enter — Save', field && 'Ctrl+X — Clear stored secret', field && 'Ctrl+U — Clear draft']}
+      shortcuts={['Tab/↑/↓ — Field', !field && 'Enter — Save', !field && '? — Help', field && 'Ctrl+X — Clear stored secret', field && 'Ctrl+U — Clear draft']}
       saveLabel="Save settings" saveSelected={!field} saving={busy} problems={problems}
-      after={message ? <Text wrap="wrap">{sanitizeTerminalText(message)}</Text> : undefined}>
+      after={message ? <Alert variant={"info"}>{sanitizeTerminalText(message)}</Alert> : undefined}>
       <Section title="Provider credentials" marginTop={0}>
         {provider.fields.slice(first, first + capacity).map(item => (
           <TextField key={`${item.id}-${generation}`} label={`${item.label} (${configured.includes(item.id) ? 'configured' : item.required ? 'required' : 'optional, not set'})`}

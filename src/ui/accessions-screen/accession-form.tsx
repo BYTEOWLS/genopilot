@@ -1,5 +1,4 @@
 import {sameReference, type GenomeReference, type GenomeProviderRegistry, type GenomeDownloadProgress, type FileKind} from '../../accessions/provider.js';
-import {ncbiMetadata} from '../../accessions/provider/ncbi/index.js';
 import React, {useEffect, useLayoutEffect, useRef, useState} from 'react';
 import {Box, measureElement, Text, useInput, useWindowSize, type DOMElement} from 'ink';
 import {Alert, ProgressBar} from '@inkjs/ui';
@@ -19,12 +18,14 @@ import {ParameterList, parameterLabelWidth, type ParameterRow} from '../componen
 import {Section} from '../components/section.js';
 import {CheckboxGroup} from '../components/checkbox-group.js';
 import {formatLocalDateTime} from '../utils.js';
+import {readProviderDocuments, type DocumentsLoader} from '../../docs/documents.js';
+import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
 
-type DetailRow = 'name' | 'description' | 'download' | 'refresh' | `artifact.${FileKind}` | 'metadata' | 'save';
+type DetailRow = 'name' | 'description' | 'download' | 'refresh' | `artifact.${FileKind}` | `option.${string}` | 'metadata' | 'save';
 
 export type AccessionMessage = {text: string; variant: 'info' | 'warning' | 'error'};
 
-/** The researcher-editable part of an entry; NCBI facts and cached copies are never edited here. */
+/** The researcher-editable part of an entry; provider facts and cached copies are read-only. */
 export type LocalAccessionFields = Pick<AccessionEntry, 'name' | 'description'>;
 
 export function localFields(name: string, description: string): LocalAccessionFields {
@@ -55,13 +56,15 @@ export function withLocalFields(
 }
 
 /** Shared genome details: edit catalog labels, or confirm a download after reviewing metadata. */
-export function AccessionForm({editing, registry, onSubmit, onCancel, inputActive, unverifiedCopies = [], downloadRoot, onSaveMetadata, progress, downloadArtifacts = [], onArtifactsChange, onDownload, onRefreshMetadata, onCancelMetadataRefresh, message}: {
+export function AccessionForm({editing, registry, onSubmit, onCancel, inputActive, unverifiedCopies = [], downloadRoot, onSaveMetadata, progress, downloadArtifacts = [], onArtifactsChange, onReferenceChange, onDownload, onRefreshMetadata, onCancelMetadataRefresh, message, loadHelp = () => readProviderDocuments(registry.get(editing.source))}: {
   editing: AccessionEntry;
+  loadHelp?: DocumentsLoader;
   /** A destination switches this form to read-only metadata review with a Download action. */
   downloadRoot?: string;
   onSaveMetadata?: (entry: AccessionEntry) => Promise<void>;
   downloadArtifacts?: readonly FileKind[];
   onArtifactsChange?: (kinds: readonly FileKind[]) => void;
+  onReferenceChange?: (reference: GenomeReference) => void;
   onDownload?: (signal: AbortSignal) => void | Promise<void>;
   message?: AccessionMessage;
   onRefreshMetadata?: () => Promise<void>;
@@ -73,10 +76,13 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
   onCancel: () => void;
   inputActive: boolean;
 }): React.JSX.Element {
+  const [showHelp, setShowHelp] = useState(false);
   const reviewing = downloadRoot !== undefined;
-  const artifacts = registry.get(editing.source).artifacts;
+  const provider = registry.get(editing.source);
+  const artifacts = provider.artifacts;
+  const options = onReferenceChange ? provider.downloadOptions ?? [] : [];
   const selectableRows: readonly DetailRow[] = reviewing
-    ? [...(onArtifactsChange ? artifacts.map(artifact => `artifact.${artifact.kind}` as const) : []), ...(onSaveMetadata ? ['metadata' as const] : []), 'save']
+    ? [...(onArtifactsChange ? [...artifacts.map(artifact => `artifact.${artifact.kind}` as const), ...options.map(option => `option.${option.id}` as const)] : []), ...(onSaveMetadata ? ['metadata' as const] : []), 'save']
     : ['name', 'description', ...(onDownload ? ['download' as const] : []), ...(onRefreshMetadata ? ['refresh' as const] : []), 'save'];
   const {rows: terminalRows, columns} = useWindowSize();
   const pageRef = useRef<DOMElement>(null);
@@ -89,18 +95,18 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
   const [name, setName] = useState(editing?.name ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [selectedRow, setSelectedRow] = useState<DetailRow>(reviewing ? 'save' : 'name');
-  const metadata = editing.source === 'ncbi' ? ncbiMetadata(editing.metadata) : null;
-  const sections = metadata ? metadataSections(metadata) : [];
+  const metadata = registry.get(editing.source).mapMetadata(editing.metadata);
+  const sections = metadataSections(metadata);
   const [busy, setBusy] = useState<'saving' | 'metadata' | 'refreshing' | 'downloading'>();
   const downloadController = useRef<AbortController | undefined>(undefined);
   useEffect(() => () => downloadController.current?.abort(), []);
   const [problems, setProblems] = useState<string[]>([]);
   const typing = selectedRow === 'name' || selectedRow === 'description';
-  useHomeSuspension(!inputActive ? undefined : busy ? 'busy' : typing ? 'typing' : undefined);
+  useHomeSuspension(!inputActive || showHelp ? undefined : busy ? 'busy' : typing ? 'typing' : undefined);
   const viewportHeight = Math.min(layout.details || 1, Math.max(1, terminalRows - layout.chrome));
   // Keep the focused artifact in view, including its heading whenever there is room.
   useLayoutEffect(() => {
-    const index = artifacts.findIndex(artifact => selectedRow === `artifact.${artifact.kind}`);
+    const index = [...artifacts.map(artifact => `artifact.${artifact.kind}`), ...options.map(option => `option.${option.id}`)].indexOf(selectedRow);
     if (reviewing && onArtifactsChange && index >= 0) {
       setDetailsScroll(Math.max(0, layout.artifactsTop + index + 2 - viewportHeight));
     }
@@ -165,6 +171,9 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
 
   useInput(
     (input, key) => {
+      if (showHelp) {
+        return;
+      }
       if (busy) {
         if (key.escape) {
           if (busy === 'refreshing') {
@@ -173,6 +182,10 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
             downloadController.current?.abort();
           }
         }
+        return;
+      }
+      if (input === '?' && !typing) {
+        setShowHelp(true);
         return;
       }
       if (!reviewing && onRefreshMetadata && ((!typing && input === 'm') || (key.return && selectedRow === 'refresh'))) {
@@ -205,6 +218,10 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
     {isActive: inputActive},
   );
 
+  if (showHelp) {
+    return <MarkdownDocumentPage title={provider.label} load={loadHelp} onClose={() => setShowHelp(false)} back="Close help" inputActive={inputActive} />;
+  }
+
   const shownProblems = problems.slice(0, 1).map(problem => {
     const text = sanitizeTerminalText(problem).replace(/\s+/g, ' ');
     const limit = Math.max(12, columns - 8);
@@ -217,7 +234,7 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
   // One label column for the editable rows and every section of facts.
   const labelWidth = parameterLabelWidth([
     {label: 'Description'}, ...sections.flatMap(section => section.rows),
-    ...(reviewing && onArtifactsChange ? artifacts : []),
+    ...(reviewing && onArtifactsChange ? [...artifacts, ...options] : []),
   ]);
   // The editable rows stay one line each, so a long note cannot push Save off a short terminal.
   const oneLine = (value: string): string => {
@@ -248,7 +265,7 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
       <EditPage
         title={reviewing ? `Review ${editing.id}` : `Edit ${editing.id}`}
         description={undefined}
-        shortcuts={busy ? [] : ['Tab/↑/↓ — Action or field', 'PageUp/PageDown — Details', !reviewing && !!onDownload && !typing && 'g — Download / refresh', !reviewing && !!onRefreshMetadata && !typing && 'm — Refresh metadata', reviewing && (selectedRow === 'metadata' ? 'Enter — Save metadata' : selectedRow === 'save' && 'Enter — Download')]}
+        shortcuts={busy ? [] : ['Tab/↑/↓ — Action or field', !typing && '? — Help', 'PageUp/PageDown — Details', !reviewing && !!onDownload && !typing && 'g — Download / refresh', !reviewing && !!onRefreshMetadata && !typing && 'm — Refresh metadata', reviewing && (selectedRow === 'metadata' ? 'Enter — Save metadata' : selectedRow === 'save' && 'Enter — Download')]}
         back={busy === 'refreshing' ? 'Cancel lookup' : busy === 'downloading' || (busy === 'saving' && reviewing) ? 'Cancel download' : 'Cancel'}
         saveLabel={reviewing ? 'Download selected artifacts' : 'Save changes'}
         savingLabel={reviewing ? 'Downloading…' : 'Saving…'}
@@ -271,11 +288,20 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
               </Section>
             </Box> : null}
             {reviewing && onArtifactsChange && busy !== 'saving' ? <Section title="Artifacts">
-              <CheckboxGroup rows={artifacts.map(artifact => ({
-                id: `artifact.${artifact.kind}`, label: artifact.label, checked: downloadArtifacts.includes(artifact.kind),
-              }))} selectedId={selectedRow} inputActive={inputActive && !busy} labelWidth={labelWidth}
-                onChange={(id, checked) => onArtifactsChange(artifacts.filter(artifact => `artifact.${artifact.kind}` === id
-                  ? checked : downloadArtifacts.includes(artifact.kind)).map(artifact => artifact.kind))} />
+              <CheckboxGroup rows={[
+                ...artifacts.map(artifact => ({id: `artifact.${artifact.kind}`, label: artifact.label, checked: downloadArtifacts.includes(artifact.kind)})),
+                ...options.map(option => ({id: `option.${option.id}`, label: option.label, checked: option.checked(editing)})),
+              ]} selectedId={selectedRow} inputActive={inputActive && !busy} labelWidth={labelWidth}
+                onChange={(id, checked) => {
+                  const option = options.find(option => `option.${option.id}` === id);
+                  if (option) {
+                    onReferenceChange?.(option.apply(editing, checked));
+                  } else {
+                    onArtifactsChange(artifacts.filter(artifact => `artifact.${artifact.kind}` === id
+                      ? checked : downloadArtifacts.includes(artifact.kind)).map(artifact => artifact.kind));
+                  }
+                }} />
+              {options.map(option => <Text key={option.id} wrap="wrap">{sanitizeTerminalText(option.description)}</Text>)}
             </Section> : null}
             {reviewing && Object.keys(editing.parameters).length > 0 ? <Section title="Pinned parameters" marginTop={onArtifactsChange ? 1 : 0}>
               <ParameterList rows={Object.entries(editing.parameters).map(([id, value]) => ({id, label: id, value: typeof value === 'string' ? value : JSON.stringify(value) ?? 'not provided'}))} inputActive={false} />
@@ -285,7 +311,7 @@ export function AccessionForm({editing, registry, onSubmit, onCancel, inputActiv
                 <ParameterList rows={section.rows} inputActive={false} labelWidth={labelWidth} />
               </Section>
             ))}
-            {!metadata ? (
+            {editing.metadata === null ? (
               <Section title="Provider metadata" marginTop={onArtifactsChange ? 1 : 0}>
                 <Text wrap="wrap">{sanitizeTerminalText(registry.get(editing.source).metadataSummary(editing.metadata))}</Text>
                 {reviewing && !registry.get(editing.source).lookupMetadata ? <Text wrap="wrap">This provider does not offer metadata lookup. Check the pinned reference before downloading.</Text> : null}

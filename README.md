@@ -147,6 +147,24 @@ pnpm typecheck
 
 The Python suite can also be run independently with `pnpm test:python`.
 
+### Comparing downloaded references
+
+Compare a trusted reference with a downloaded copy locally (Python standard library only):
+
+```bash
+python3 scripts/compare-genome-files.py trusted.fna downloaded.fna
+python3 scripts/compare-genome-files.py trusted.faa downloaded.faa
+python3 scripts/compare-genome-files.py trusted.gff downloaded.gff --limit 5 > comparison.json
+```
+
+The JSON report includes each file's raw SHA-256 and normalized differences. Exit codes are `0` for normalized equality, `1` for differences, and `2` for errors. Gzip inputs are detected by content. `--format fasta|gff|text` overrides filename-based detection; `--limit` bounds examples, not counts.
+
+- FASTA: matches exact IDs regardless of record order or wrapping; reports missing IDs, changed sequences/lengths, and changed headers. Case, ambiguous residues, and terminal protein stops remain significant. Sequence checksums are not alignment identities.
+- GFF: compares all nine columns as an unordered multiset, preserving duplicates. Attribute order and trailing semicolons are ignored; values, coordinates, source, scores, and phase remain significant. Comments and directives are ignored; embedded FASTA is compared separately. A changed row counts once on each side, not as two changed genes.
+- Other text: compares line positions, ignoring newline style. An insertion can shift subsequent comparisons.
+
+Sequence content is streamed; memory grows with FASTA IDs or distinct GFF row hashes, not genome length. Files are read more than once and must remain unchanged during comparison. Empty FASTA/GFF files and malformed record structure fail; this is not a full biological-format validator. The script does not download files or establish release identity: compare the same organism, release, artifact kind, and mitochondrial-inclusion policy. Equality alone cannot explain an annotation-transfer quality change. This developer utility is not included in the npm package.
+
 Build and run the compiled CLI:
 
 ```bash
@@ -271,36 +289,25 @@ Hypothetical example only: Oxford Nanopore is **not supported**. To add it:
 
 ## Accession catalog
 
-Versioned NCBI assembly accessions (`GCA_…`/`GCF_…` with a version suffix) are cataloged in `accessions/accessions.yaml`, beside the isolate catalog and with the same private, locked, atomic saves:
-
-```text
-$HOME/.byteowlsGenopilot/accessions/accessions.yaml
-```
-
-Each entry keeps an optional local name and description apart from the facts NCBI reports (organism, taxon, assembly name, level, status, and type such as haploid, submitter, assembly release date, genome size, GC percentage, contig/scaffold counts and N50, BioProject/BioSample accessions, and the RefSeq category and strain only when NCBI provides them), which record when and from where they were retrieved: the NCBI Datasets v2 API, or the report cached with a download. Details group these facts into Assembly, Genome statistics, and Linked records. Missing facts are marked as not reported; refresh metadata to populate new fields on existing entries. The assembly release date is not a submission date. These optional fields retain the catalog schema version and require no migration. Cataloging an accession never downloads its assembly; workflows download it on demand. Metadata lookups use the optional NCBI API key when one is configured and work without it at NCBI's lower rate limit.
+Genomes are cataloged by `(source, id)` in `$HOME/.byteowlsGenopilot/accessions/accessions.yaml`, beside the isolate catalog, with private, locked, atomic saves. Provider registration, identity validation, discovery, and download dispatch share `src/accessions/registry.ts`.
 
 ```yaml
-schema_version: 1
-output_roots:
-  - "/analysis/genopilot"
+schema_version: 3
+output_roots: []
 accessions:
-  - accession: "GCF_000149205.2"
-    name: "Preferred backbone"
-    ncbi:
-      organism: "Example organism"
-      assembly_name: "Example assembly"
-      assembly_type: "haploid"
-      refseq_category: "reference genome"
-      submitter: "Example submitter"
-      retrieved_at: "2026-01-01T12:00:00.000Z"
-      source: "datasets-v2-rest"
-    cached_copies:
-      - path: "/analysis/genopilot/ncbi-accessions-cache/GCF_000149205.2"
-        verified_at: "2026-01-01T12:00:00.000Z"
-        fasta_sha256: "…"
+  - source: ncbi
+    id: GCF_000149205.2
+    parameters: {}
+    name: Preferred backbone
+    metadata: null
+    cached_copies: []
 ```
 
-`cached_copies` lists the workflow caches that matched their recorded checksums when they were last discovered. Discovery reads only `ncbi-accessions-cache/` directly inside `./runs` and the listed `output_roots`, never contacts NCBI, and adds any verified cache it finds; incomplete or checksum-invalid caches are reported but never recorded. A successful run that used an NCBI input adds its output root. Two verified copies with different files for one versioned accession are reported as a conflict that needs inspection. Removing an accession from the catalog **deletes its cache directories** under the known output roots, so a later workflow that needs it downloads it again.
+Providers own parameters and metadata; credentials are stored separately. Catalog entries can be metadata-only or hold independently verified genomic FASTA, GFF3, proteins, transcripts, and CDS. Non-genomic FASTA never satisfies a workflow's genome requirement. Discovery reads registered provider cache directories under known output roots without network access and records only verified copies. Different checksums for the same artifact and provider/ID are conflicts, not a reason to prefer one copy silently.
+
+Workflow genome fields are selection-only: download each role's required genomic files in the catalog before configuring a run. Form selections and previous-run prefill snapshot provider references, not mutable catalog lookups. Saved input snapshots include only role-required file checksums; the packaged resolver rechecks them under the cache lease. Deleting a catalog entry also deletes its cache directories under known output roots. Incompatible catalogs are rejected without overwriting or migrating them; existing verified cache directories can be rediscovered.
+
+See [genome-source usage](docs/genome-sources.md) and `src/accessions/README.md` for the implementation boundary.
 
 ## Reset managed tooling for installation tests
 

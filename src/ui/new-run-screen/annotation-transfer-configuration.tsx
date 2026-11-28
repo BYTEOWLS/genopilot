@@ -1,9 +1,10 @@
 import {resolve} from 'node:path';
+import {genomeSelection} from '../../accessions/selection.js';
 import {formatLocalDateTime} from '../utils.js';
 import React, {useEffect, useState} from 'react';
 import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
 import {refreshAccessionCaches} from '../../accessions/registration.js';
-import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
+import {loadAccessionCatalog, updateAccessionCatalog, type AccessionCatalogReader} from '../../accessions/store.js';
 import {providerSettings} from '../../tooling/provider-settings.js';
 import {ncbiProvider} from '../../accessions/provider/ncbi/index.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
@@ -70,28 +71,31 @@ async function defaultRegisterAccessionCaches(outputRoot: string, currentDirecto
     });
   } catch (error) {
     throw new Error(
-      `The run succeeded, but its NCBI cache was not recorded in the accession catalog: ${
+      `The run succeeded, but its genome cache was not recorded in the accession catalog: ${
         error instanceof Error ? error.message : String(error)}`,
     );
   }
-  return `Recorded the NCBI accession cache under ${outputRoot} in the accession catalog.`;
+  return `Recorded genome caches under ${outputRoot} in the accession catalog.`;
+}
+
+function usesRemoteInput(prepared: PreparedAnnotationTransferRun): boolean {
+  return Object.values(prepared.configuration.inputs).some(input => input.source === 'remote');
 }
 
 function usesNcbiInput(prepared: PreparedAnnotationTransferRun): boolean {
-  return prepared.configuration.inputs.reference.source === 'remote' ||
-    prepared.configuration.inputs.target.source === 'remote';
+  return Object.values(prepared.configuration.inputs).some(input => input.source === 'remote' && input.reference.source === 'ncbi');
 }
 
-function previousRunFormValues(configuration: AnnotationTransferConfiguration): WorkflowFormValues {
+export function previousRunFormValues(configuration: AnnotationTransferConfiguration): WorkflowFormValues {
   const {reference, target} = configuration.inputs;
   return {
-    'reference-source': reference.source === 'local' ? 'local' : reference.reference.source,
+    'reference-source': reference.source === 'local' ? 'local' : 'remote',
     'reference-fasta': reference.source === 'local' ? reference.fasta : '',
     'reference-gff3': reference.source === 'local' ? reference.gff3 : '',
-    'reference-accession': reference.source === 'remote' ? reference.reference.id : '',
-    'target-source': target.source === 'local' ? 'local' : target.reference.source,
+    'reference-accession': reference.source === 'remote' ? genomeSelection(reference.reference) : '',
+    'target-source': target.source === 'local' ? 'local' : 'remote',
     'target-fasta': target.source === 'local' ? target.fasta : '',
-    'target-accession': target.source === 'remote' ? target.reference.id : '',
+    'target-accession': target.source === 'remote' ? genomeSelection(target.reference) : '',
     'minimum-protein-identity': String(configuration.review.minimum_protein_identity),
     'cpu-allocation': configuration.resources.cpu_mode,
     'manual-cpu-limit': String(configuration.resources.manual_limit ?? ''),
@@ -129,11 +133,11 @@ function annotationTransferDraft(
 ): AnnotationTransferConfigurationDraft {
   return {
     ...createAnnotationTransferDraft(currentDirectory),
-    referenceSource: values['reference-source'] === 'ncbi' ? 'ncbi' : 'local',
+    referenceSource: values['reference-source'] === 'remote' ? 'remote' : 'local',
     referenceFasta: values['reference-fasta'] ?? '',
     referenceGff3: values['reference-gff3'] ?? '',
     referenceAccession: values['reference-accession'] ?? '',
-    targetSource: values['target-source'] === 'ncbi' ? 'ncbi' : 'local',
+    targetSource: values['target-source'] === 'remote' ? 'remote' : 'local',
     targetFasta: values['target-fasta'] ?? '',
     targetAccession: values['target-accession'] ?? '',
     minimumProteinIdentity: values['minimum-protein-identity'] ?? '',
@@ -156,8 +160,8 @@ function resolvedValues(
   const {reference, target} = configuration.inputs;
   return {
     // 'reference-source'/'target-source' are intentionally omitted so the review screen falls
-    // back to the choice field's own friendly label ("Local file"/"NCBI accession") instead of
-    // the raw 'local'/'ncbi' value.
+    // back to the choice field's own friendly source label instead of
+    // the raw source value.
     'reference-fasta': reference.source === 'local' ? reference.fasta : '',
     'reference-gff3': reference.source === 'local' ? reference.gff3 : '',
     'reference-accession': reference.source === 'remote' ? reference.reference.id : '',
@@ -184,6 +188,7 @@ export function AnnotationTransferConfigurationScreen({
   parameterDefinitions = [],
   stages = [],
   checkNcbiApiKey = defaultNcbiApiKeyCheck,
+  loadAccessions,
   discoverPreviousRuns = defaultDiscoverPreviousRuns,
   findCacheEntries = findGenomeCacheEntries,
   snakefilePath,
@@ -205,6 +210,7 @@ export function AnnotationTransferConfigurationScreen({
   parameterDefinitions?: readonly WorkflowParameterDefinition[];
   stages?: readonly WorkflowStage[];
   checkNcbiApiKey?: NcbiApiKeyCheck;
+  loadAccessions?: AccessionCatalogReader;
   discoverPreviousRuns?: PreviousRunsLoader;
   findCacheEntries?: GenomeCacheEntryFinder;
   /** The workflow's entry Snakefile, from its discovered directory. */
@@ -251,7 +257,7 @@ export function AnnotationTransferConfigurationScreen({
     await validatePreparedRun(prepared);
     const usesNcbi = usesNcbiInput(prepared);
     const apiKeyConfigured = usesNcbi ? await checkNcbiApiKey() : false;
-    const cacheEntries = usesNcbi ? await findCacheEntries(prepared) : [];
+    const cacheEntries = usesRemoteInput(prepared) ? await findCacheEntries(prepared) : [];
     const system = await checkSystem(prepared);
 
     const prepareForReview = (
@@ -268,11 +274,13 @@ export function AnnotationTransferConfigurationScreen({
             ? 'Configured'
             : 'Not set (rate-limited) — configure in Manage tooling → Accession Providers',
         });
+      }
+      if (usesRemoteInput(run)) {
         for (const input of ['reference', 'target'] as const) {
           const configuredInput = run.configuration.inputs[input];
           if (configuredInput.source === 'remote') {
             effectiveOptions.push({
-              label: `${input === 'reference' ? 'Reference' : 'Target'} NCBI cache`,
+              label: `${input === 'reference' ? 'Reference' : 'Target'} genome cache`,
               value:
                 configuredInput.cache_mode === 'refresh'
                   ? 'Download fresh copy'
@@ -317,6 +325,7 @@ export function AnnotationTransferConfigurationScreen({
       onBack={onBack}
       inputActive={inputActive}
       prepareRun={prepareRun}
+      loadAccessions={loadAccessions}
       saveRun={saveRun}
       previousRuns={previousRuns}
       prepareSnakemakeRun={(mode, prepared, configurationPath) =>
@@ -333,18 +342,18 @@ export function AnnotationTransferConfigurationScreen({
       }
       resultManifest={manifest}
       onRunSucceeded={prepared => {
-        const ncbi = usesNcbiInput(prepared);
+        const remote = usesRemoteInput(prepared);
         const measures = recordsRunRates(manifest);
-        if (!ncbi && !measures) {
+        if (!remote && !measures) {
           return undefined;
         }
         const measured = measures ? recordRate(prepared) : Promise.resolve(undefined);
-        const registered = ncbi
+        const registered = remote
           ? registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory)
           : Promise.resolve(undefined);
         return {
-          label: ncbi
-            ? 'Recording the NCBI accession cache in the accession catalog…'
+          label: remote
+            ? 'Recording genome caches in the accession catalog…'
             : 'Measuring this run for the next estimate…',
           outcome: Promise.all([registered, measured]).then(notes => notes.filter(Boolean).join(' ') || undefined),
         };

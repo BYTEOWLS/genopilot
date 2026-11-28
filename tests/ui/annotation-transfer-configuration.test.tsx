@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {downloadedNcbiGenome, ncbiSelection} from '../genomes.js';
 import {formatLocalDateTime} from '../../src/ui/utils.js';
 import {readFileSync} from 'node:fs';
 import {mkdir, mkdtemp, rm, writeFile} from 'node:fs/promises';
@@ -12,6 +13,7 @@ import {packagedPath} from '../../src/package-root.js';
 import {
   AnnotationTransferConfigurationScreen,
   previousRunLabel,
+  previousRunFormValues,
   type AccessionCacheRegistration,
 } from '../../src/ui/new-run-screen/annotation-transfer-configuration.js';
 import WorkflowConfigurationScreen from '../../src/ui/new-run-screen/workflow-configuration.js';
@@ -20,7 +22,7 @@ import type {
   PreviousRunsLoader,
 } from '../../src/ui/new-run-screen/annotation-transfer-configuration.js';
 import type {AnnotationTransferConfiguration} from '../../src/workflows/annotation-transfer/configuration.js';
-import type {PreparedAnnotationTransferRun} from '../../src/workflows/annotation-transfer/run-configuration.js';
+import {validatePreparedRunPaths, savePreparedRun, type PreparedAnnotationTransferRun} from '../../src/workflows/annotation-transfer/run-configuration.js';
 import type {executeSnakemakeRun} from '../../src/workflows/execution.js';
 import {
   parseParameterDefinitions,
@@ -28,6 +30,10 @@ import {
 } from '../../src/workflows/parameter-definitions.js';
 import {parseWorkflowManifest} from '../../src/workflows/manifest.js';
 import {testMachine} from '../workflows/machine.js';
+import {selectedGenome} from '../../src/accessions/selection.js';
+import type {AccessionCatalogReader} from '../../src/accessions/store.js';
+import {parseAnnotationTransferConfiguration} from '../../src/workflows/annotation-transfer/configuration.js';
+import {readFile} from 'node:fs/promises';
 import {waitFor, pressKey, rendered} from '../wait.js';
 
 const packagedParameterDefinitions = parseParameterDefinitions(
@@ -172,6 +178,7 @@ function renderConfiguration(
     parameterDefinitions?: readonly WorkflowParameterDefinition[];
     onBack?: () => void;
     checkNcbiApiKey?: () => Promise<boolean>;
+    loadAccessions?: AccessionCatalogReader;
     discoverPreviousRuns?: PreviousRunsLoader;
     findCacheEntries?: GenomeCacheEntryFinder;
     executeSnakemakeRun?: typeof executeSnakemakeRun;
@@ -197,6 +204,7 @@ function renderConfiguration(
       saveRun={options.saveRun}
       parameterDefinitions={options.parameterDefinitions ?? packagedParameterDefinitions}
       checkNcbiApiKey={options.checkNcbiApiKey}
+      loadAccessions={options.loadAccessions ?? (async () => ['GCF_000149205.2', 'GCA_000011425.1'].map(downloadedNcbiGenome))}
       discoverPreviousRuns={options.discoverPreviousRuns ?? (async () => [])}
       findCacheEntries={options.findCacheEntries ?? (async () => [])}
       executeSnakemakeRun={options.executeSnakemakeRun}
@@ -250,7 +258,16 @@ async function startReview(input: TestInput, output: TestOutput): Promise<void> 
 
 async function typeInto(input: TestInput, output: TestOutput, id: string, value: string): Promise<void> {
   await focusField(input, output, id);
-  await pressKey(input, value);
+  if (definitionsById.get(id)?.kind === 'accession') {
+    await pressKey(input, ENTER);
+    await waitForFrame(output, frame => fieldLine(frame, id) === undefined && frame.includes(value));
+    for (let attempt = 0; attempt < 2 && !selectedLine(lastFrame(output))?.includes(value); attempt += 1) {
+      await pressKey(input, '\x1b[B');
+    }
+    await pressKey(input, ENTER);
+  } else {
+    await pressKey(input, value);
+  }
   await waitForFrame(output, frame => fieldLine(frame, id)?.includes(value) ?? false);
 }
 
@@ -307,6 +324,63 @@ async function waitForReview(
   return {frame, prepared};
 }
 
+test('catalog provider references survive selection, role snapshots, saving, and previous-run prefill', async context => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-handoff-'));
+  context.after(() => rm(root, {recursive: true, force: true}));
+  await mkdir(join(root, 'runs'));
+  const reference = {source: 'veupathdb', id: 'FungiDB-71_ExampleA', parameters: {site: 'FungiDB', release: 71, organism_abbreviation: 'ExampleA'}};
+  const single = {path: `/other/sequence/${reference.id}`, verified_at: '2026-01-01T00:00:00Z', fasta_sha256: 'a'.repeat(64)};
+  const both = {...single, path: `/other/both/${reference.id}`, gff3_sha256: 'b'.repeat(64), proteins_sha256: 'c'.repeat(64)};
+  const reader: AccessionCatalogReader = async () => [{...reference, name: 'catalog-genome-marker', metadata: {...reference.parameters, organism: 'organism-marker'}, cached_copies: [single, both]}];
+  let reviewed: PreparedAnnotationTransferRun | undefined;
+  const options = {
+    rows: 60,
+    loadAccessions: reader,
+    validatePreparedRun: async (prepared: PreparedAnnotationTransferRun) => {
+      await validatePreparedRunPaths(prepared, undefined, reader);
+      reviewed = prepared;
+    },
+    checkNcbiApiKey: async () => assert.fail('another provider must not check NCBI credentials'),
+  };
+  const first = renderConfiguration(root, options);
+  registerCleanup(context, first.instance);
+  await waitForForm(first.output);
+  for (const field of ['reference-accession', 'target-accession']) {
+    await focusField(first.input, first.output, field);
+    await pressKey(first.input, ENTER);
+    await waitForFrame(first.output, frame => selectedLine(frame)?.includes(reference.id) ?? false);
+    await pressKey(first.input, ENTER);
+    await waitForFrame(first.output, frame => fieldLine(frame, field)?.includes(reference.id) ?? false);
+  }
+  await startReview(first.input, first.output);
+  const review = await waitForReview(first.output, () => reviewed);
+  const saved = parseAnnotationTransferConfiguration(await readFile(await savePreparedRun(review.prepared, undefined, reader), 'utf8'));
+  assert.equal(saved.inputs.reference.source, 'remote');
+  assert.equal(saved.inputs.target.source, 'remote');
+  if (saved.inputs.reference.source === 'remote' && saved.inputs.target.source === 'remote') {
+    assert.deepEqual(saved.inputs.reference.reference, reference);
+    assert.deepEqual(saved.inputs.target.reference, reference);
+    assert.deepEqual(saved.inputs.reference.copy, {path: both.path, fasta_sha256: both.fasta_sha256, gff3_sha256: both.gff3_sha256});
+    assert.deepEqual(saved.inputs.target.copy, {path: single.path, fasta_sha256: single.fasta_sha256});
+  }
+  first.instance.unmount();
+  const values: Record<string, string> = {...previousRunFormValues(saved), 'run-name': 'prefill-second-marker'};
+  assert.equal(values['reference-source'], 'remote');
+  assert.deepEqual(selectedGenome(values['reference-accession']!), reference);
+  reviewed = undefined;
+  let loaded = false;
+  const second = renderConfiguration(root, {...options, discoverPreviousRuns: async () => { loaded = true; return [{label: 'previous-marker', values}]; }});
+  registerCleanup(context, second.instance);
+  await waitForForm(second.output);
+  await waitFor(() => loaded, 'previous reference projection loads');
+  await rendered(second.instance);
+  await pressKey(second.input, PAGE_DOWN);
+  await waitForFrame(second.output, frame => fieldLine(frame, 'reference-accession')?.includes(reference.id) ?? false);
+  await startReview(second.input, second.output);
+  const again = await waitForReview(second.output, () => reviewed);
+  assert.deepEqual(again.prepared.configuration.inputs.reference.source === 'remote' ? again.prepared.configuration.inputs.reference.reference : undefined, reference);
+});
+
 test('keeps pasted whitespace in a typable local-file-path field', async context => {
   const {input, output, instance} = renderConfiguration('/research');
   registerCleanup(context, instance);
@@ -325,19 +399,19 @@ test('↑/↓ leave a choice field without changing it, and ←/→ change it', 
   registerCleanup(context, instance);
   await waitForForm(output);
 
-  await chooseOption(input, output, 'reference-source', 'ncbi');
+  await chooseOption(input, output, 'reference-source', 'remote');
   const marked = (value: string) => (frame: string): boolean =>
     fieldBlock(frame, 'reference-source').includes(`(●) ${optionLabel('reference-source', value)}`);
   // The mouse wheel sends ↑/↓, so scrolling over a form must never change a value.
   await pressKey(input, ARROW_DOWN);
   await waitForFrame(output, frame => !isSelected(frame, fieldLabel('reference-source')));
-  assert.ok(marked('ncbi')(lastFrame(output)));
+  assert.ok(marked('remote')(lastFrame(output)));
 
   await focusField(input, output, 'reference-source');
   await pressKey(input, ARROW_RIGHT);
   await waitForFrame(output, marked('local'));
   await pressKey(input, ARROW_LEFT);
-  await waitForFrame(output, marked('ncbi'));
+  await waitForFrame(output, marked('remote'));
 });
 
 test('edits all required fields and confirms effective options before saving', async context => {
@@ -461,9 +535,9 @@ test('records the NCBI cache and measures the run after a successful NCBI-source
   registerCleanup(context, instance);
   await waitForForm(output);
 
-  await chooseOption(input, output, 'reference-source', 'ncbi');
+  await chooseOption(input, output, 'reference-source', 'remote');
   await typeInto(input, output, 'reference-accession', 'GCF_000149205.2');
-  await chooseOption(input, output, 'target-source', 'ncbi');
+  await chooseOption(input, output, 'target-source', 'remote');
   await typeInto(input, output, 'target-accession', 'GCA_000011425.1');
   await startReview(input, output);
   await waitForReview(output, () => reviewed);
@@ -574,7 +648,7 @@ test('switches the reference to an NCBI accession independently of the target', 
   registerCleanup(context, instance);
   await waitForForm(output);
 
-  await chooseOption(input, output, 'reference-source', 'ncbi');
+  await chooseOption(input, output, 'reference-source', 'remote');
   assert.equal(fieldLine(lastFrame(output), 'reference-fasta'), undefined);
   assert.equal(fieldLine(lastFrame(output), 'reference-gff3'), undefined);
 
@@ -591,7 +665,7 @@ test('switches the reference to an NCBI accession independently of the target', 
   assert.equal(apiKeyChecks, 1);
   assert.match(fieldLine(frame, 'reference-accession') ?? '', /GCF_000149205\.2/);
   // Choices are reviewed by their option label, not the raw stored value.
-  assert.ok(fieldLine(frame, 'reference-source')?.includes(optionLabel('reference-source', 'ncbi')));
+  assert.ok(fieldLine(frame, 'reference-source')?.includes(optionLabel('reference-source', 'remote')));
   assert.ok(fieldLine(frame, 'target-source')?.includes(optionLabel('target-source', 'local')));
   assert.equal(fieldLine(frame, 'reference-fasta'), undefined);
   assert.equal(fieldLine(frame, 'reference-gff3'), undefined);
@@ -610,9 +684,9 @@ test('reflects the NCBI API key status in the review of an NCBI-sourced run', as
     });
     registerCleanup(context, instance);
     await waitForForm(output);
-    await chooseOption(input, output, 'reference-source', 'ncbi');
+    await chooseOption(input, output, 'reference-source', 'remote');
     await typeInto(input, output, 'reference-accession', 'GCF_000149205.2');
-    await chooseOption(input, output, 'target-source', 'ncbi');
+    await chooseOption(input, output, 'target-source', 'remote');
     await typeInto(input, output, 'target-accession', 'GCA_000011425.1');
     await startReview(input, output);
     const {frame, prepared} = await waitForReview(output, () => reviewed);
@@ -648,7 +722,7 @@ test('asks how to handle an existing NCBI cache entry and saves the decision', a
   registerCleanup(context, instance);
   await waitForForm(output);
 
-  await chooseOption(input, output, 'reference-source', 'ncbi');
+  await chooseOption(input, output, 'reference-source', 'remote');
   await typeInto(input, output, 'reference-accession', 'GCF_000149205.2');
   await chooseOption(input, output, 'target-source', 'local');
   await typeInto(input, output, 'target-fasta', '/data/target.fa');
@@ -735,10 +809,10 @@ test('returns from the form with Escape, and types the letter "b" instead of goi
   registerCleanup(context, instance);
   await waitForForm(output);
 
-  await chooseOption(input, output, 'reference-source', 'ncbi');
-  await focusField(input, output, 'reference-accession');
+  await chooseOption(input, output, 'reference-source', 'local');
+  await focusField(input, output, 'reference-fasta');
   await pressKey(input, 'b');
-  await waitForFrame(output, frame => /:\s*b\s*$/.test(fieldLine(frame, 'reference-accession') ?? ''));
+  await waitForFrame(output, frame => /:\s*b\s*$/.test(fieldLine(frame, 'reference-fasta') ?? ''));
   assert.equal(backCalls, 0);
 
   await pressKey(input, ESCAPE);
@@ -868,8 +942,8 @@ test('steps through previous run history and prefills the form immediately', asy
     {
       label: 'Run A',
       values: {
-        'reference-source': 'ncbi',
-        'reference-accession': 'GCF_000149205.2',
+        'reference-source': 'remote',
+        'reference-accession': ncbiSelection('GCF_000149205.2'),
         'target-source': 'local',
         'target-fasta': '/data/target-a.fa',
         'cpu-allocation': 'automatic',

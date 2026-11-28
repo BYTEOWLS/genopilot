@@ -1,5 +1,5 @@
 import {referenceKey, sameReference, type GenomeReference, type GenomeDownloadProgress} from '../../accessions/provider.js';
-import {resolveGenomeCache} from '../../accessions/cache.js';
+import {resolveGenomeCache, type VerifiedGenome} from '../../accessions/cache.js';
 import React, {useEffect, useRef, useState} from 'react';
 import {Box, Text, useInput} from 'ink';
 import {Alert} from '@inkjs/ui';
@@ -35,6 +35,13 @@ type View =
 
 /** Lines of the accession list, including its position line. */
 const listHeight = 9;
+
+function downloadMessage(genome: VerifiedGenome, registry: GenomeProviderRegistry): AccessionMessage {
+  const unavailable = genome.annotation === 'unavailable';
+  const text = unavailable ? 'Genome verified. Annotation is unavailable; this FASTA can be used for roles that do not require GFF3.' : 'Selected artifacts downloaded and verified.';
+  const summary = registry.get(genome.reference.source).downloadSummary?.(genome.facts);
+  return {text: summary ? `${text} ${summary}` : text, variant: unavailable ? 'warning' : 'info'};
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -202,7 +209,7 @@ export function AccessionsTab({
         return current ? withAccession(latest, {...current, metadata: genome.metadata}) : latest;
       });
       onCatalogChange(next);
-      setMessage({text: genome.annotation === 'unavailable' ? 'Genome verified. Annotation is unavailable; this FASTA can be used for roles that do not require GFF3.' : 'Genome files downloaded and verified.', variant: genome.annotation === 'unavailable' ? 'warning' : 'info'});
+      setMessage(downloadMessage(genome, registry));
       onRescan();
     } catch (error) {
       throw new Error(providerError(error, secrets));
@@ -301,7 +308,7 @@ export function AccessionsTab({
       }}
       onComplete={genome => {
         setSelected(referenceKey(genome.reference));
-        setMessage({text: genome.annotation === 'unavailable' ? 'Genome verified. Annotation is unavailable; this FASTA can be used for roles that do not require GFF3.' : 'Selected artifacts downloaded and verified.', variant: genome.annotation === 'unavailable' ? 'warning' : 'info'});
+        setMessage(downloadMessage(genome, registry));
         setView({kind: 'list'});
         onRescan();
       }} />;
@@ -358,7 +365,7 @@ export function AccessionsTab({
         <Alert variant={providerNotice.required ? 'error' : 'warning'}>{sanitizeTerminalText(providerNotice.text)} Configure credentials in Manage tooling.</Alert>
       </Section> : null}
       {entries.length === 0 ? (
-        <Text wrap="wrap">No genomes yet. Press n to download one; verified caches are added automatically.</Text>
+        <Alert variant={"warning"}>No genomes yet. Press n to download one; verified caches are added automatically.</Alert>
       ) : null}
       <SelectableList
         count={entries.length}
@@ -406,17 +413,17 @@ export function AccessionsTab({
 
       {view.kind === 'confirm-remove' ? (
         <Box marginTop={1} flexDirection="column">
-          <Text color="yellow" wrap="wrap">
+          <Alert variant={"warning"}>
             Remove {sanitizeTerminalText(view.reference.id)} from the catalog?
-          </Text>
+          </Alert>
           {removalTargets.length === 0 ? (
-            <Text wrap="wrap">No cached files exist for it under the known output roots.</Text>
+            <Alert variant={"warning"}>No cached files exist for it under the known output roots.</Alert>
           ) : (
             <>
-              <Text color="yellow" wrap="wrap">
+              <Alert variant={"warning"}>
                 Its cached assembly files will be deleted. A workflow that needs this accession
                 will download it again.
-              </Text>
+              </Alert>
               {removalTargets.map(copy => (
                 <Text key={copy.path} wrap="wrap">  {sanitizeTerminalText(copy.path)}</Text>
               ))}

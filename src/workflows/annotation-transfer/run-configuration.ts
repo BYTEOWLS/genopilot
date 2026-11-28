@@ -1,8 +1,8 @@
-import {snapshotGenomeCopy, type GenomeCacheMode} from '../genome-input.js';
+import {requireDownloadedGenome, type GenomeCacheMode} from '../genome-input.js';
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
 import {resolve} from 'node:path';
-import {normalizeAccession} from '../../accessions/provider/ncbi/accession.js';
+import {selectedGenome} from '../../accessions/selection.js';
 import {conflictingCopiesMessage, recordedCacheState} from '../../accessions/catalog.js';
 import {readCatalogedAccessions, type AccessionCatalogReader} from '../../accessions/store.js';
 import {
@@ -33,7 +33,7 @@ import {machineDetails, type GenoPilotDetails, type MachineDetails} from '../con
 export {effectiveCpuCount, formatRunTimestampPrefix, sanitizeRunIdSuffix} from '../run-preparation.js';
 export type {PathInspection} from '../run-preparation.js';
 
-export type InputSourceMode = 'local' | 'ncbi';
+export type InputSourceMode = 'local' | 'remote';
 
 export type AnnotationTransferConfigurationDraft = {
   referenceSource: InputSourceMode;
@@ -99,10 +99,10 @@ export function buildAnnotationTransferConfiguration(
     genopilot,
     inputs: {
       reference:
-        draft.referenceSource === 'ncbi'
+        draft.referenceSource === 'remote'
           ? {
               source: 'remote',
-              reference: {source: 'ncbi', id: normalizeAccession(draft.referenceAccession), parameters: {}},
+              reference: selectedGenome(draft.referenceAccession),
               cache_mode: 'reuse',
             }
           : {
@@ -111,10 +111,10 @@ export function buildAnnotationTransferConfiguration(
               gff3: resolveDraftPath(currentDirectory, draft.referenceGff3),
             },
       target:
-        draft.targetSource === 'ncbi'
+        draft.targetSource === 'remote'
           ? {
               source: 'remote',
-              reference: {source: 'ncbi', id: normalizeAccession(draft.targetAccession), parameters: {}},
+              reference: selectedGenome(draft.targetAccession),
               cache_mode: 'reuse',
             }
           : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.targetFasta)},
@@ -219,8 +219,6 @@ export async function validatePreparedRunPaths(
   const {reference, target} = prepared.configuration.inputs;
   const remoteInputs = [['$.inputs.reference.reference', reference], ['$.inputs.target.reference', target]] as const;
   if (remoteInputs.some(([, input]) => input.source === 'remote')) {
-    // The catalog is optional bookkeeping: an unreadable one does not block a run, and its accession
-    // field already says it is unavailable.
     const cataloged = await readAccessions().catch(() => []);
     for (const [path, input] of remoteInputs) {
       const entry = input.source === 'remote'
@@ -229,7 +227,7 @@ export async function validatePreparedRunPaths(
       if (entry && recordedCacheState(entry) === 'conflict') {
         issues.push({path, message: conflictingCopiesMessage});
       } else if (input.source === 'remote') {
-        snapshotGenomeCopy(input, input === reference ? ['fasta', 'gff3'] : ['fasta'], cataloged);
+        requireDownloadedGenome(input, input === reference ? ['fasta', 'gff3'] : ['fasta'], cataloged, path, issues);
       }
     }
   }

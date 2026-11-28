@@ -141,7 +141,7 @@ test('ships complete parameter definitions with explicit required fields', async
   });
   assert.deepEqual(byId.get('reference-accession')?.visible_when, {
     parameter: 'reference-source',
-    equals: 'ncbi',
+    equals: 'remote',
   });
   assert.deepEqual(byId.get('target-fasta')?.visible_when, {
     parameter: 'target-source',
@@ -149,7 +149,7 @@ test('ships complete parameter definitions with explicit required fields', async
   });
   assert.deepEqual(byId.get('target-accession')?.visible_when, {
     parameter: 'target-source',
-    equals: 'ncbi',
+    equals: 'remote',
   });
   assert.deepEqual(byId.get('manual-cpu-limit')?.visible_when, {
     parameter: 'cpu-allocation',

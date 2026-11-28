@@ -1,10 +1,11 @@
 import {basename} from 'node:path';
-import {genomeSources} from '../accessions/registry.js';
+import {accessionSources} from '../accessions/registry.js';
 import type {GenomeCacheRequest} from '../accessions/cache.js';
 import type {AccessionEntry} from '../accessions/catalog.js';
-import {sameReference, type FileKind, type GenomeReference} from '../accessions/provider.js';
+import {sameReference, type GenomeReference} from '../accessions/provider.js';
 import {isRecord, rejectUnknownFields, validateAbsolutePath, type ConfigurationValidationIssue} from './configuration-validation.js';
 
+type GenomeInputKind = 'fasta' | 'gff3';
 export type GenomeCacheMode = 'reuse' | 'refresh';
 export type RemoteGenomeInput = {
   source: 'remote';
@@ -15,7 +16,7 @@ export type RemoteGenomeInput = {
 
 /** Saved references are provider-validated; Python trusts application-saved configurations. */
 export function validateRemoteGenomeInput(
-  value: Record<string, unknown>, path: string, kinds: readonly FileKind[],
+  value: Record<string, unknown>, path: string, kinds: readonly GenomeInputKind[],
   issues: ConfigurationValidationIssue[],
 ): RemoteGenomeInput | undefined {
   const before = issues.length;
@@ -24,7 +25,7 @@ export function validateRemoteGenomeInput(
     if (isRecord(value.reference)) {
       rejectUnknownFields(value.reference, ['source', 'id', 'parameters'], `${path}.reference`, issues);
     }
-    genomeSources.validateReference(value.reference);
+    accessionSources.validateReference(value.reference);
   } catch (error) {
     issues.push({path: `${path}.reference`, message: error instanceof Error ? error.message : 'invalid genome reference'});
   }
@@ -53,8 +54,22 @@ export function validateRemoteGenomeInput(
   return issues.length === before ? value as RemoteGenomeInput : undefined;
 }
 
+/** Guided runs require a downloaded copy before saving; direct resolution remains unchanged. */
+export function requireDownloadedGenome(
+  input: RemoteGenomeInput, kinds: readonly GenomeInputKind[], entries: readonly AccessionEntry[],
+  path: string, issues: ConfigurationValidationIssue[],
+): void {
+  const reusable = {...input, cache_mode: 'reuse' as const};
+  snapshotGenomeCopy(reusable, kinds, entries);
+  if (!reusable.copy) {
+    issues.push({path, message: `download the required ${kinds.join(' and ')} files in Manage accessions first`});
+  } else if (input.cache_mode === 'reuse') {
+    input.copy = reusable.copy;
+  }
+}
+
 /** Snapshot only a copy containing every required artifact; resolution rechecks its bytes. */
-export function snapshotGenomeCopy(input: RemoteGenomeInput, kinds: readonly FileKind[], entries: readonly AccessionEntry[]): void {
+export function snapshotGenomeCopy(input: RemoteGenomeInput, kinds: readonly GenomeInputKind[], entries: readonly AccessionEntry[]): void {
   if (input.cache_mode !== 'reuse') {
     delete input.copy;
     return;
@@ -62,8 +77,17 @@ export function snapshotGenomeCopy(input: RemoteGenomeInput, kinds: readonly Fil
   if (input.copy) {
     return;
   }
-  const entry = entries.find(entry => sameReference(entry, input.reference)
-    && JSON.stringify(entry.parameters) === JSON.stringify(input.reference.parameters));
+  const entry = entries.find(entry => {
+    if (!sameReference(entry, input.reference)) {
+      return false;
+    }
+    try {
+      return JSON.stringify(accessionSources.validateReference(entry).parameters) ===
+        JSON.stringify(accessionSources.validateReference(input.reference).parameters);
+    } catch {
+      return false;
+    }
+  });
   const copy = entry?.cached_copies.find(copy => kinds.every(kind => copy[`${kind}_sha256`]));
   if (copy) {
     input.copy = {path: copy.path};

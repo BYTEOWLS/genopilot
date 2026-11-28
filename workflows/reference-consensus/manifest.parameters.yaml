@@ -5,13 +5,13 @@ parameters:
     section: Inputs
     kind: choice
     required: true
-    default: ncbi
+    default: remote
     hidden: false
     options:
       - value: local
         label: Local file
-      - value: ncbi
-        label: NCBI accession
+      - value: remote
+        label: Downloaded catalog genome
   - id: backbone-fasta
     label: Backbone FASTA
     section: Inputs
@@ -23,7 +23,7 @@ parameters:
       parameter: backbone-source
       equals: local
   - id: backbone-accession
-    label: Backbone NCBI accession
+    label: Backbone genome
     section: Inputs
     kind: accession
     required: true
@@ -31,7 +31,7 @@ parameters:
     hidden: false
     visible_when:
       parameter: backbone-source
-      equals: ncbi
+      equals: remote
   - id: isolates
     label: Read sets
     section: Inputs
