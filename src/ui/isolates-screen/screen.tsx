@@ -317,10 +317,10 @@ export function IsolatesScreen({
       ) : null}
       {view.kind === 'confirm-remove' ? (
         <Box marginTop={1}>
-          <Text color="yellow" wrap="wrap">
+          <Alert variant={"warning"}>
             Remove isolate {sanitizeTerminalText(view.id)} from the catalog? Its read files are not
             deleted.
-          </Text>
+          </Alert>
         </Box>
       ) : null}
       {message ? (

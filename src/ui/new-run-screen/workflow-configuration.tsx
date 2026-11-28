@@ -7,6 +7,7 @@ import type {ProgressIsolate} from '../../workflows/isolate-progress.js';
 import type {WorkflowParameterDefinition, WorkflowParameterOption} from '../../workflows/parameter-definitions.js';
 import {sanitizeTerminalText} from '../sanitize.js';
 import {AccessionField} from '../components/accession-field.js';
+import type {AccessionCatalogReader} from '../../accessions/store.js';
 import {
   IsolatesField,
   parseIsolateSelection,
@@ -31,7 +32,7 @@ import {useHomeSuspension} from '../home-navigation.js';
 import {EditPage, Page} from '../components/page.js';
 import {ParameterList, parameterLabelWidth} from '../components/parameter-list.js';
 import {Section} from '../components/section.js';
-import {NcbiCacheDecisionPage, type NcbiCacheEntry, type NcbiCacheModes} from './ncbi-cache-decision.js';
+import {GenomeCacheDecisionPage, type GenomeCacheEntry, type GenomeCacheModes} from './genome-cache-decision.js';
 import type {CohortRerun} from '../run-results-screen/screen.js';
 
 // Chrome this screen renders around the windowed field list: the page title and description,
@@ -94,12 +95,12 @@ export type PreparedWorkflowRun<T> = {
   /** Free disk, CPUs, memory, and the disk estimate, shown right after the warnings. */
   systemCheck?: readonly {label: string; value: string}[];
   /**
-   * Cached NCBI inputs the researcher decides to reuse or download again before the review, and
+   * Cached genome inputs the researcher decides to reuse or download again before the review, and
    * how those decisions are applied; kept together so a decision can never be dropped.
    */
-  ncbiCache?: {
-    entries: readonly NcbiCacheEntry[];
-    apply: (modes: NcbiCacheModes) => PreparedWorkflowRun<T>;
+  genomeCache?: {
+    entries: readonly GenomeCacheEntry[];
+    apply: (modes: GenomeCacheModes) => PreparedWorkflowRun<T>;
   };
 };
 
@@ -118,7 +119,7 @@ type ScreenState<T> =
   | {state: 'editing'}
   | {state: 'validating'}
   | {state: 'invalid'; messages: string[]}
-  | {state: 'ncbi-cache-decision'; ncbiCache: NonNullable<PreparedWorkflowRun<T>['ncbiCache']>}
+  | {state: 'genome-cache-decision'; genomeCache: NonNullable<PreparedWorkflowRun<T>['genomeCache']>}
   // `scroll` is the first review row shown when the review is taller than the terminal.
   | {state: 'review'; prepared: PreparedWorkflowRun<T>; scroll: number}
   | {state: 'saving'; prepared: PreparedWorkflowRun<T>; scroll: number}
@@ -296,6 +297,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   executionIsolates,
   completedIsolates,
   loadIsolates = readCatalogedIsolates,
+  loadAccessions,
   readSetCompatibility,
 }: {
   title: string;
@@ -321,6 +323,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   /** The saved run's isolates whose results are complete, for a run that ended with a failure. */
   completedIsolates?: (payload: T) => Promise<ReadonlySet<string>>;
   loadIsolates?: IsolateCatalogReader;
+  loadAccessions?: AccessionCatalogReader;
   readSetCompatibility?: ReadSetCompatibility;
 }): React.JSX.Element {
   const editableDefinitions = useMemo(
@@ -373,14 +376,13 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
   const sections = [...new Set(visibleDefinitions.map(definition => definition.section))];
   const selectedDefinition = visibleEditableDefinitions.find(definition => definition.id === selectedId);
   const continueSelected = selectedId === continueButtonId;
-  // A file path or accession is typed or pasted, and Enter on it opens the file browser or the
-  // accession picker.
+  // Enter opens the file browser or a catalog picker.
   const enterOpensFileChooser = selectedDefinition?.kind === 'file';
   const enterOpensAccessionPicker = selectedDefinition?.kind === 'accession';
   const enterOpensIsolatePicker = selectedDefinition?.kind === 'isolates';
   const showsForm = screen.state === 'editing' || screen.state === 'validating' || screen.state === 'invalid';
   const typing = showsForm && !browserId && selectedDefinition !== undefined &&
-    selectedDefinition.kind !== 'choice' && selectedDefinition.kind !== 'isolates';
+    selectedDefinition.kind !== 'choice' && selectedDefinition.kind !== 'isolates' && selectedDefinition.kind !== 'accession';
   useHomeSuspension(screen.state === 'saving' ? 'busy' : typing ? 'typing' : undefined);
 
   const {rows: terminalRows, columns: terminalColumns} = useWindowSize();
@@ -474,8 +476,8 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
     setScreen({state: 'validating'});
     prepareRun(values).then(
       prepared => {
-        if (prepared.ncbiCache && prepared.ncbiCache.entries.length > 0) {
-          setScreen({state: 'ncbi-cache-decision', ncbiCache: prepared.ncbiCache});
+        if (prepared.genomeCache && prepared.genomeCache.entries.length > 0) {
+          setScreen({state: 'genome-cache-decision', genomeCache: prepared.genomeCache});
         } else {
           setScreen({state: 'review', prepared, scroll: 0});
         }
@@ -500,7 +502,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
       if (browserId) {
         return;
       }
-      if (screen.state === 'ncbi-cache-decision') {
+      if (screen.state === 'genome-cache-decision') {
         // The cache decision page owns its own keys, including the Esc that returns here.
         return;
       }
@@ -623,6 +625,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
         selected
         inputActive={inputActive}
         value={values[browserId] ?? ''}
+        loadAccessions={loadAccessions}
         onChange={accession => updateValue(browserId, accession)}
         choosing
         onChoosingChange={choose => {
@@ -652,14 +655,14 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
     );
   }
 
-  if (screen.state === 'ncbi-cache-decision') {
-    const {ncbiCache} = screen;
+  if (screen.state === 'genome-cache-decision') {
+    const {genomeCache} = screen;
     return (
-      <NcbiCacheDecisionPage
-        entries={ncbiCache.entries}
+      <GenomeCacheDecisionPage
+        entries={genomeCache.entries}
         inputActive={inputActive}
         onBack={() => setScreen({state: 'editing'})}
-        onContinue={modes => setScreen({state: 'review', prepared: ncbiCache.apply(modes), scroll: 0})}
+        onContinue={modes => setScreen({state: 'review', prepared: genomeCache.apply(modes), scroll: 0})}
       />
     );
   }
@@ -855,6 +858,7 @@ function WorkflowConfigurationScreen<T, R extends WorkflowRun = WorkflowRun>({
           } else if (definition.kind === 'accession') {
             return (
               <AccessionField
+                loadAccessions={loadAccessions}
                 key={`${row.key}:${runApplyGeneration}`}
                 label={definition.label}
                 required={definition.required}

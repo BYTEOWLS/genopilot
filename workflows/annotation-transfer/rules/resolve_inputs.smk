@@ -1,117 +1,59 @@
-"""Resolve the annotation-transfer inputs into canonical, checksummed files.
+"""Copy local inputs or consume provider files under the shared cache lease.
 
-What it does
-  The reference (genome + annotation) and the target (genome) each come from
-  a local file or a versioned NCBI assembly accession. Both sources end up
-  as the same files, so no later step needs to know where an input came
-  from:
-
-    resolve_reference  -> resolved/reference.fasta, resolved/reference.gff3
-    resolve_target     -> resolved/target.fasta
-
-  A local file is copied into the run directory. An NCBI accession is
-  downloaded with the NCBI Datasets CLI into a cache shared by all runs
-  (<output_root>/ncbi-accessions-cache/) and copied from there. Whether an
-  existing cache entry is reused (only after its checksum matches) or
-  downloaded again was decided in GenoPilot and saved as `ncbi_cache_mode`
-  in config.yaml; the rule never asks.
-
-  Each resolved file gets a record in provenance/<file>.json: its SHA-256
-  checksum, its source path or accession, and for NCBI downloads the
-  Datasets CLI version.
-
-Maintainer notes
-  Requires `SHARED_SCRIPTS_DIR_SH` and `SHARED_ENVS_DIR` from the including Snakefile.
-  The params functions take only `wildcards` and repeat this rule's paths
-  as literals: Snakemake does not record a params function that takes
-  `input` or `output` in its job metadata (confirmed against the pinned
-  release), so a configuration-only change such as switching the cache
-  mode would silently not trigger a rerun.
+Saved references, cache decisions, and optional cross-root snapshots are passed
+unchanged to the packaged resolver. Params functions take only wildcards so
+configuration changes are recorded in Snakemake's job metadata.
 """
 
+import json
 import shlex
-from pathlib import Path
 
 
-def _reference_config():
-    return config["inputs"]["reference"]
+# Register the capacity here so direct Snakemake runs need no extra CLI option.
+workflow.register_resource("shared_genome_cache", 1)
 
 
-def _target_config():
-    return config["inputs"]["target"]
-
-
-def _ncbi_cache_dir():
-    return str(Path(config["run"]["output_root"]) / "ncbi-accessions-cache")
+def _shared_genome_cache(wildcards):
+    reference = config["inputs"]["reference"]
+    target = config["inputs"]["target"]
+    return int(
+        reference["source"] == target["source"] == "remote"
+        and reference["reference"]["source"] == target["reference"]["source"]
+        and reference["reference"]["id"] == target["reference"]["id"]
+    )
 
 
 def _reference_input_files(wildcards):
-    reference = _reference_config()
-    if reference["source"] == "local":
-        return [reference["fasta"], reference["gff3"]]
-    return []
+    reference = config["inputs"]["reference"]
+    return [reference["fasta"], reference["gff3"]] if reference["source"] == "local" else []
 
 
 def _target_input_files(wildcards):
-    target = _target_config()
-    if target["source"] == "local":
-        return [target["fasta"]]
-    return []
+    target = config["inputs"]["target"]
+    return [target["fasta"]] if target["source"] == "local" else []
 
 
 def _reference_resolve_args(wildcards):
-    reference = _reference_config()
     args = [
-        "--role",
-        "reference",
-        "--source-type",
-        reference["source"],
-        "--fasta-destination",
-        "resolved/reference.fasta",
-        "--fasta-provenance",
-        "provenance/reference.fasta.json",
-        "--gff3-destination",
-        "resolved/reference.gff3",
-        "--gff3-provenance",
-        "provenance/reference.gff3.json",
+        "--role", "reference",
+        "--input-json", json.dumps(config["inputs"]["reference"], sort_keys=True),
+        "--output-root", config["run"]["output_root"],
+        "--fasta-destination", "resolved/reference.fasta",
+        "--fasta-provenance", "provenance/reference.fasta.json",
+        "--gff3-destination", "resolved/reference.gff3",
+        "--gff3-provenance", "provenance/reference.gff3.json",
     ]
-    if reference["source"] == "local":
-        args += ["--local-fasta", reference["fasta"], "--local-gff3", reference["gff3"]]
-    else:
-        args += [
-            "--accession",
-            reference["accession"],
-            "--cache-dir",
-            _ncbi_cache_dir(),
-            "--cache-mode",
-            reference.get("ncbi_cache_mode", "reuse"),
-        ]
     return " ".join(shlex.quote(str(arg)) for arg in args)
 
 
 def _target_resolve_args(wildcards):
-    target = _target_config()
     args = [
-        "--role",
-        "target",
-        "--source-type",
-        target["source"],
-        "--fasta-destination",
-        "resolved/target.fasta",
-        "--fasta-provenance",
-        "provenance/target.fasta.json",
+        "--role", "target",
+        "--input-json", json.dumps(config["inputs"]["target"], sort_keys=True),
+        "--output-root", config["run"]["output_root"],
+        "--fasta-destination", "resolved/target.fasta",
+        "--fasta-provenance", "provenance/target.fasta.json",
     ]
-    if target["source"] == "local":
-        args += ["--local-fasta", target["fasta"]]
-    else:
-        args += [
-            "--accession",
-            target["accession"],
-            "--cache-dir",
-            _ncbi_cache_dir(),
-            "--cache-mode",
-            target.get("ncbi_cache_mode", "reuse"),
-        ]
     return " ".join(shlex.quote(str(arg)) for arg in args)
 
 
@@ -127,10 +69,10 @@ rule resolve_reference:
         "logs/resolve-reference.log",
     params:
         args=_reference_resolve_args,
-    conda:
-        str(SHARED_ENVS_DIR / "ncbi-datasets-cli" / "environment.yaml")
+    resources:
+        shared_genome_cache=_shared_genome_cache,
     shell:
-        "python3 {SHARED_SCRIPTS_DIR_SH}/resolve_input.py {params.args} > {log} 2>&1"
+        "{PYTHON_SH} {SHARED_SCRIPTS_DIR_SH}/resolve_input.py {params.args} > {log} 2>&1"
 
 
 rule resolve_target:
@@ -143,7 +85,7 @@ rule resolve_target:
         "logs/resolve-target.log",
     params:
         args=_target_resolve_args,
-    conda:
-        str(SHARED_ENVS_DIR / "ncbi-datasets-cli" / "environment.yaml")
+    resources:
+        shared_genome_cache=_shared_genome_cache,
     shell:
-        "python3 {SHARED_SCRIPTS_DIR_SH}/resolve_input.py {params.args} > {log} 2>&1"
+        "{PYTHON_SH} {SHARED_SCRIPTS_DIR_SH}/resolve_input.py {params.args} > {log} 2>&1"

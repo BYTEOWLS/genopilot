@@ -154,8 +154,8 @@ export function withConsensusTiming(
 }
 
 export type BackboneResult = {
-  source?: 'local' | 'ncbi';
-  accession?: string;
+  source?: string;
+  id?: string;
   path?: string;
   sha256?: string;
   origin?: string;
@@ -216,7 +216,7 @@ function detail(error: unknown): string {
 type JsonRead = {kind: 'missing'} | {kind: 'invalid'; issue: RecordIssue} | {kind: 'ok'; value: RecordValue};
 
 /** Reads a JSON record and checks its schema version; a missing file is not an issue by itself. */
-async function readRecord(path: ResultPath): Promise<JsonRead> {
+async function readRecord(path: ResultPath, schemaVersion: number = REFERENCE_CONSENSUS_RECORD_SCHEMA_VERSION): Promise<JsonRead> {
   let source: string;
   try {
     source = await readFile(path.absolutePath, 'utf8');
@@ -234,12 +234,12 @@ async function readRecord(path: ResultPath): Promise<JsonRead> {
   if (!isRecord(value)) {
     return {kind: 'invalid', issue: {path: path.path, message: 'must be a JSON object'}};
   }
-  if (value.schema_version !== REFERENCE_CONSENSUS_RECORD_SCHEMA_VERSION) {
+  if (value.schema_version !== schemaVersion) {
     return {
       kind: 'invalid',
       issue: {
         path: path.path,
-        message: `has schema version ${JSON.stringify(value.schema_version)}; this application reads version ${String(REFERENCE_CONSENSUS_RECORD_SCHEMA_VERSION)}`,
+        message: `has schema version ${JSON.stringify(value.schema_version)}; this application reads version ${String(schemaVersion)}`,
       },
     };
   }
@@ -400,7 +400,7 @@ async function readBackbone(runDirectory: string): Promise<BackboneResult> {
     fasta: await checked(runPath(runDirectory, 'resolved/backbone.fasta')),
     provenance: await checked(runPath(runDirectory, 'provenance/backbone.fasta.json')),
   };
-  const record = await readRecord(paths.provenance);
+  const record = await readRecord(paths.provenance, 2);
   if (record.kind === 'missing') {
     return {paths, issues: []};
   }
@@ -408,11 +408,11 @@ async function readBackbone(runDirectory: string): Promise<BackboneResult> {
     return {paths, issues: [record.issue]};
   }
   const value = record.value;
-  const source = value.source === 'local' || value.source === 'ncbi' ? value.source : undefined;
+  const source = typeof value.source === 'string' ? value.source : undefined;
   const sha256 = field(value, 'checksum', 'value');
   return {
     ...(source ? {source} : {}),
-    ...(typeof value.accession === 'string' ? {accession: value.accession} : {}),
+    ...(typeof value.id === 'string' ? {id: value.id} : {}),
     ...(typeof value.path === 'string' ? {path: value.path} : {}),
     ...(typeof sha256 === 'string' ? {sha256} : {}),
     ...(typeof value.origin === 'string' ? {origin: value.origin} : {}),

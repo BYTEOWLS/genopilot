@@ -1,25 +1,22 @@
 import {parse} from 'yaml';
+import {validateRemoteGenomeInput, type RemoteGenomeInput} from '../genome-input.js';
 import {isolateIdPattern} from '../../isolates/catalog.js';
 import {
   isRecord,
   rejectUnknownFields,
   requireObject,
   validateAbsolutePath,
-  validateAccession,
   validateGenoPilot,
-  validateInputSource,
-  validateNcbiCacheMode,
   validateResources,
   validateRun,
   validateWorkflowIdentity,
   type ConfigurationValidationIssue,
   type GenoPilotDetails,
-  type NcbiCacheMode,
   type ResourceSettings,
   type RunDetails,
 } from '../configuration-validation.js';
 
-export const REFERENCE_CONSENSUS_CONFIGURATION_SCHEMA_VERSION = 1 as const;
+export const REFERENCE_CONSENSUS_CONFIGURATION_SCHEMA_VERSION = 2 as const;
 export const REFERENCE_CONSENSUS_WORKFLOW_ID = 'reference-consensus' as const;
 export const REFERENCE_CONSENSUS_WORKFLOW_VERSION = 1 as const;
 /** The run-relative file holding the selected isolates' snapshot. */
@@ -42,7 +39,7 @@ export const tieScopes: readonly TieScope[] = ['tied-alleles', 'any-allele'];
 
 export type BackboneInput =
   | {source: 'local'; fasta: string}
-  | {source: 'ncbi'; accession: string; ncbi_cache_mode?: NcbiCacheMode};
+  | RemoteGenomeInput;
 
 /**
  * Per-isolate callability and calling thresholds. Only haploid calling is supported; the ploidy
@@ -114,20 +111,17 @@ function validateBackbone(
   if (!backbone) {
     return undefined;
   }
-  const source = validateInputSource(backbone.source, path, issues);
+  const source = backbone.source;
   if (source === 'local') {
     rejectUnknownFields(backbone, ['source', 'fasta'], path, issues);
     return validateAbsolutePath(backbone.fasta, `${path}.fasta`, issues)
       ? (backbone as BackboneInput)
       : undefined;
   }
-  if (source === 'ncbi') {
-    rejectUnknownFields(backbone, ['source', 'accession', 'ncbi_cache_mode'], path, issues);
-    return validateAccession(backbone.accession, `${path}.accession`, issues) &&
-      validateNcbiCacheMode(backbone, path, issues)
-      ? (backbone as BackboneInput)
-      : undefined;
+  if (source === 'remote') {
+    return validateRemoteGenomeInput(backbone, path, ['fasta'], issues);
   }
+  issues.push({path: `${path}.source`, message: "must be 'local' or 'remote'"});
   return undefined;
 }
 

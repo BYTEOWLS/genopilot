@@ -8,7 +8,7 @@ import {
 import {testMachine, testMachineYaml} from '../machine.js';
 
 const validConfiguration = {
-  schema_version: 1,
+  schema_version: 2,
   workflow_id: 'annotation-transfer',
   workflow_version: 1,
   genopilot: {version: '1.2.3', igv: '3.8.9'},
@@ -49,7 +49,7 @@ function validationIssues(value: unknown) {
 
 test('parses the minimal automatic-CPU configuration from YAML', () => {
   const parsed = parseAnnotationTransferConfiguration(`
-    schema_version: 1
+    schema_version: 2
     workflow_id: annotation-transfer
     workflow_version: 1
     genopilot:
@@ -146,7 +146,7 @@ test('requires a minimum protein identity from 0 to 100 percent', () => {
 
 test('requires the expected schema and workflow identity', () => {
   const issues = validationIssues(
-    configuration({schema_version: 2, workflow_id: 'other', workflow_version: 99}),
+    configuration({schema_version: 99, workflow_id: 'other', workflow_version: 99}),
   );
 
   assert.deepEqual(
@@ -186,43 +186,42 @@ test('rejects unsafe path characters', () => {
 test('accepts a versioned NCBI accession as the reference or target source', () => {
   const referenceFromNcbi = configuration({
     inputs: {
-      reference: {source: 'ncbi', accession: 'GCF_000149205.2'},
+      reference: {source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}}, cache_mode: 'reuse'},
       target: {source: 'local', fasta: '/data/target.fa'},
     },
   });
   const targetFromNcbi = configuration({
     inputs: {
       reference: {source: 'local', fasta: '/data/reference.fa', gff3: '/data/reference.gff3'},
-      target: {source: 'ncbi', accession: 'GCA_000149205.2'},
+      target: {source: 'remote', reference: {source: 'ncbi', id: 'GCA_000149205.2', parameters: {}}, cache_mode: 'reuse'},
     },
   });
 
   const parsedReference = validateAnnotationTransferConfiguration(referenceFromNcbi);
   assert.deepEqual(parsedReference.inputs.reference, {
-    source: 'ncbi',
-    accession: 'GCF_000149205.2',
+    source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}}, cache_mode: 'reuse',
   });
   assert.deepEqual(parsedReference.inputs.target, {source: 'local', fasta: '/data/target.fa'});
 
   const parsedTarget = validateAnnotationTransferConfiguration(targetFromNcbi);
-  assert.deepEqual(parsedTarget.inputs.target, {source: 'ncbi', accession: 'GCA_000149205.2'});
+  assert.deepEqual(parsedTarget.inputs.target, {source: 'remote', reference: {source: 'ncbi', id: 'GCA_000149205.2', parameters: {}}, cache_mode: 'reuse'});
 });
 
 test('accepts only explicit reuse or refresh NCBI cache decisions', () => {
-  for (const ncbi_cache_mode of ['reuse', 'refresh'] as const) {
+  for (const cache_mode of ['reuse', 'refresh'] as const) {
     const parsed = validateAnnotationTransferConfiguration(
       configuration({
         inputs: {
-          reference: {source: 'ncbi', accession: 'GCF_000149205.2', ncbi_cache_mode},
+          reference: {source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}}, cache_mode},
           target: {source: 'local', fasta: '/data/target.fa'},
         },
       }),
     );
     assert.equal(
-      parsed.inputs.reference.source === 'ncbi'
-        ? parsed.inputs.reference.ncbi_cache_mode
+      parsed.inputs.reference.source === 'remote'
+        ? parsed.inputs.reference.cache_mode
         : undefined,
-      ncbi_cache_mode,
+      cache_mode,
     );
   }
 
@@ -230,15 +229,14 @@ test('accepts only explicit reuse or refresh NCBI cache decisions', () => {
     configuration({
       inputs: {
         reference: {
-          source: 'ncbi',
-          accession: 'GCF_000149205.2',
-          ncbi_cache_mode: 'automatic',
+          source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}},
+          cache_mode: 'automatic',
         },
         target: {source: 'local', fasta: '/data/target.fa'},
       },
     }),
   );
-  assert.ok(issues.some(issue => issue.path === '$.inputs.reference.ncbi_cache_mode'));
+  assert.ok(issues.some(issue => issue.path === '$.inputs.reference.cache_mode'));
 });
 
 test('rejects a bare or malformed NCBI accession', () => {
@@ -246,12 +244,12 @@ test('rejects a bare or malformed NCBI accession', () => {
     const issues = validationIssues(
       configuration({
         inputs: {
-          reference: {source: 'ncbi', accession},
+          reference: {source: 'remote', reference: {source: 'ncbi', id: accession, parameters: {}}, cache_mode: 'reuse'},
           target: {source: 'local', fasta: '/data/target.fa'},
         },
       }),
     );
-    assert.ok(issues.some(issue => issue.path === '$.inputs.reference.accession'));
+    assert.ok(issues.some(issue => issue.path === '$.inputs.reference.reference'));
   }
 });
 
@@ -270,8 +268,7 @@ test('rejects an unrecognized input source and mismatched fields for the chosen 
     configuration({
       inputs: {
         reference: {
-          source: 'ncbi',
-          accession: 'GCF_000149205.2',
+          source: 'remote', reference: {source: 'ncbi', id: 'GCF_000149205.2', parameters: {}}, cache_mode: 'reuse',
           fasta: '/data/reference.fa',
         },
         target: {source: 'local', fasta: '/data/target.fa'},
@@ -448,4 +445,10 @@ test('reports malformed YAML as a structured configuration error', () => {
       return true;
     },
   );
+});
+
+test('rejects the previous saved configuration schema without migration', () => {
+  const previous = structuredClone(validConfiguration);
+  previous.schema_version = 1;
+  assert.throws(() => validateAnnotationTransferConfiguration(previous), AnnotationTransferConfigurationError);
 });

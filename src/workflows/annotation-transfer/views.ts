@@ -34,7 +34,7 @@ async function verified(context: TransferViewContext, artifacts: Map<string, Rec
 }
 
 function inputName(input: AnnotationTransferConfiguration['inputs']['reference' | 'target'], fallback: string): string {
-  return input.source === 'ncbi' ? input.accession : fallback;
+  return input.source === 'remote' ? input.reference.id : fallback;
 }
 
 function guideSection(guide: BrowserDocument | undefined, heading = transferGuideHeading): BrowserDocument | undefined {

@@ -1,7 +1,7 @@
 import {stat} from 'node:fs/promises';
 import {join} from 'node:path';
 import type {DiskEstimateFactors} from '../manifest.js';
-import {ncbiCacheDirectory} from '../run-preparation.js';
+import {genomeCacheDirectory} from '../run-preparation.js';
 import {namedDiskFactors, type RunDiskEstimate} from '../systems-check.js';
 import type {PreparedAnnotationTransferRun} from './run-configuration.js';
 
@@ -27,7 +27,7 @@ export async function annotationTransferDiskEstimate(
       const path = file === 'fasta' ? configured.fasta : 'gff3' in configured ? configured.gff3 : undefined;
       return path ? fileSize(path).catch(() => 0) : 0;
     }
-    const cached = join(ncbiCacheDirectory(run.output_root, configured.accession), file === 'fasta' ? 'genomic.fna' : 'genomic.gff');
+    const cached = join(configured.copy?.path ?? genomeCacheDirectory(run.output_root, configured.reference), file === 'fasta' ? 'genomic.fna' : 'genomic.gff');
     return fileSize(cached).catch(() => {
       if (!notDownloaded.includes(input)) {
         notDownloaded.push(input);

@@ -3,7 +3,7 @@ import {parse, parseAllDocuments} from 'yaml';
 export const PARAMETER_DEFINITIONS_SCHEMA_VERSION = 1 as const;
 
 /**
- * `accession` is a versioned NCBI assembly accession, typed or chosen from the accession catalog;
+ * `accession` is a downloaded genome chosen from the accession catalog;
  * `isolates` is one or more isolates chosen from the isolate catalog.
  */
 export type WorkflowParameterKind = 'file' | 'accession' | 'isolates' | 'text' | 'choice' | 'integer' | 'fixed';

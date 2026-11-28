@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import {readdir, readFile} from 'node:fs/promises';
 import test from 'node:test';
 import {parse} from 'yaml';
-import {generalDocumentNames, packagedDocsDirectory, readGeneralDocuments, readWorkflowDocuments} from '../../src/docs/documents.js';
+import {generalDocumentNames, packagedDocsDirectory, providerDocumentName, readGeneralDocuments, readProviderDocuments, readWorkflowDocuments} from '../../src/docs/documents.js';
 import {parseMarkdown, unsupportedMarkdown} from '../../src/docs/markdown.js';
 import {discoverPackagedWorkflows} from '../../src/workflows/discovery.js';
+import {accessionSources} from '../../src/accessions/registry.js';
 
 // Generic over whatever is packaged: a new workflow is checked without changing this file.
 
@@ -49,6 +50,14 @@ test('the application finds every general document it shows, each with a title',
   for (const document of documents) {
     assert.ok(document.blocks, `docs/${document.id}.md is missing`);
     assert.notEqual(document.title, `${document.id}.md`, `docs/${document.id}.md has no # title`);
+  }
+});
+
+test('registered accession providers have packaged help pages', async () => {
+  for (const provider of accessionSources.list()) {
+    const [document] = await readProviderDocuments(provider);
+    assert.equal(document?.id, providerDocumentName(provider));
+    assert.ok(document?.blocks, `Missing provider help for ${provider.id}`);
   }
 });
 

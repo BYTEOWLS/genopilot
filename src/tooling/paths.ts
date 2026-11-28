@@ -28,7 +28,6 @@ export type ToolingPaths = {
   /** This machine's measured run rates, rebuilt by the next completed run after a reset. */
   machineRatesPath: string;
   secretsDirectory: string;
-  ncbiApiKeyPath: string;
   isolateCatalogDirectory: string;
   isolateCatalogPath: string;
   accessionCatalogDirectory: string;
@@ -104,7 +103,6 @@ export function resolveToolingPaths({
     installationLockPath: join(dataDirectory, 'tooling-setup.lock'),
     machineRatesPath: join(dataDirectory, 'machine-rates.yaml'),
     secretsDirectory: join(dataDirectory, 'secrets'),
-    ncbiApiKeyPath: join(dataDirectory, 'secrets', 'ncbi-api-key'),
     // Research metadata sits beside, not inside, the tooling directory, so resetting or
     // deleting managed tooling never removes the researcher's isolate or accession catalog.
     isolateCatalogDirectory: join(dirname(resolve(dataDirectory)), 'isolates'),

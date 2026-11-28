@@ -14,7 +14,7 @@ from pathlib import Path
 
 CHECKSUM_ALGORITHM = "sha256"
 
-# The rule environments several workflows use, such as the NCBI Datasets CLI's.
+# Rule environments shared by several workflows.
 SHARED_ENVS_DIR = Path(__file__).resolve().parent.parent / "envs"
 
 _PINNED_DEPENDENCY = re.compile(r"^\s*-\s+([A-Za-z0-9_.-]+)(?:==|=)([^\s=#]+)\s*(?:#.*)?$")

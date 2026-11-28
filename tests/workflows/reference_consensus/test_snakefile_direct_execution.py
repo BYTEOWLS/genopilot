@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ._load import WORKFLOW_DIR
 from ..shared._load import PROJECT_ROOT
+from ..shared.cache_fixture import cached_genome
 from .fixtures import FIXTURES_DIR, write_decision, write_run
 
 SNAKEMAKE_BIN = shutil.which("snakemake")
@@ -59,6 +60,22 @@ class ReferenceConsensusDirectExecutionTests(unittest.TestCase):
 
     def validation_targets(self, *reports: str) -> list[str]:
         return ["resolved/backbone.fasta", "results/input-validation.json", *reports]
+
+    @unittest.skipUnless((shutil.which("node") or os.environ.get("GENOPILOT_NODE_EXECUTABLE")) and
+                         (PROJECT_ROOT / "dist" / "genome-source.js").is_file(), "build the Node resolver first")
+    def test_reuses_a_cross_root_provider_backbone_without_the_catalog_or_cli(self) -> None:
+        config_path = write_run(self.run_dir, ["iso-a"])
+        remote = cached_genome(self.temp_dir / "other-root", FIXTURES_DIR / "backbone.fasta")
+        configuration = json.loads(config_path.read_text())
+        configuration["inputs"]["backbone"] = remote
+        config_path.write_text(json.dumps(configuration))
+        result = run_snakemake(self.run_dir, config_path, "resolved/backbone.fasta")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.run_dir / "resolved/backbone.fasta").read_bytes(), (FIXTURES_DIR / "backbone.fasta").read_bytes())
+        record = json.loads((self.run_dir / "provenance/backbone.fasta.json").read_text())
+        self.assertFalse(record["downloaded"])
+        self.assertEqual(record["origin"], "imported")
+        self.assertEqual(record["checksum"]["value"], remote["copy"]["fasta_sha256"])
 
     def test_validates_the_inputs_and_every_read_pair(self) -> None:
         config_path = write_run(self.run_dir, ["iso-a", "iso-b"])

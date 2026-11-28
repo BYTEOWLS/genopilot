@@ -311,16 +311,7 @@
       ]
     },
     {
-      "name": "NCBI Datasets CLI",
-      "versions": [
-        "ncbi-datasets-cli"
-      ],
-      "input_source": "ncbi",
-      "references": [
-        "oleary2024"
-      ]
-    },
-    {
+
       "name": "fastp",
       "versions": [
         "fastp"

@@ -23,7 +23,7 @@ test('saves privately, reloads, and refuses stale revisions', async context => {
   const path = await catalogPath(context);
   const saved = await updateAccessionCatalog(path, undefined, catalog => ({
     ...catalog,
-    accessions: [{accession: 'GCF_000149205.2', name: 'no', ncbi: null, cached_copies: []}],
+    accessions: [{source: 'ncbi', id: 'GCF_000149205.2', parameters: {}, name: 'no', metadata: null, cached_copies: []}],
   }));
 
   assert.deepEqual(await loadAccessionCatalog(path), saved);
@@ -38,7 +38,7 @@ test('saves privately, reloads, and refuses stale revisions', async context => {
 test('reports an invalid catalog with its path and never saves over it', async context => {
   const path = await catalogPath(context);
   await updateAccessionCatalog(path, undefined, catalog => catalog);
-  await writeFile(path, 'schema_version: 1\naccessions: nope\n');
+  await writeFile(path, 'schema_version: 2\naccessions: nope\n');
 
   await assert.rejects(loadAccessionCatalog(path), (error: unknown) => {
     assert.ok(error instanceof AccessionCatalogLoadError);
@@ -46,5 +46,5 @@ test('reports an invalid catalog with its path and never saves over it', async c
     return true;
   });
   await assert.rejects(updateAccessionCatalog(path, undefined, catalog => catalog), AccessionCatalogLoadError);
-  assert.equal(await readFile(path, 'utf8'), 'schema_version: 1\naccessions: nope\n');
+  assert.equal(await readFile(path, 'utf8'), 'schema_version: 2\naccessions: nope\n');
 });

@@ -1,4 +1,14 @@
-import React from 'react';
+import React, {useState} from 'react';
+import {accessionSources} from '../../accessions/registry.js';
+import type {GenomeProviderRegistry} from '../../accessions/provider.js';
+import {providerSettings, type ProviderSettings} from '../../tooling/provider-settings.js';
+import {TabBar} from '../components/tabs.js';
+import {ProvidersTab} from './providers-tab.js';
+import {readProviderDocuments} from '../../docs/documents.js';
+import {MarkdownDocumentPage} from '../components/markdown-document-page.js';
+import {ProviderForm} from './provider-form.js';
+
+const defaultSettings = providerSettings();
 import {Alert} from '@inkjs/ui';
 import {Box, Text, useInput} from 'ink';
 import type {ToolingStatus} from '../../tooling/check.js';
@@ -34,6 +44,9 @@ export function ToolingScreen({
   onCheck,
   onBack,
   inputActive,
+  registry = accessionSources,
+  settings = defaultSettings,
+  initialProvider,
 }: {
   metadata: Pick<CliMetadata, 'label' | 'version' | 'build'>;
   status: ToolingStatus;
@@ -41,24 +54,50 @@ export function ToolingScreen({
   onCheck: () => void;
   onBack: () => void;
   inputActive: boolean;
+  registry?: GenomeProviderRegistry;
+  settings?: ProviderSettings;
+  initialProvider?: string;
 }): React.JSX.Element {
+  const [tab, setTab] = useState<'tools' | 'providers'>(initialProvider ? 'providers' : 'tools');
+  const [selectedProvider, setSelectedProvider] = useState(initialProvider);
+  const [helpProvider, setHelpProvider] = useState<string>();
+  const [editing, setEditing] = useState(initialProvider && registry.get(initialProvider).fields.length ? initialProvider : undefined);
+  const header = <TabBar tabs={[{id: 'tools', label: 'Tooling'}, {id: 'providers', label: 'Accession Providers'}]}
+    activeId={tab} onChange={setTab} inputActive={inputActive && !editing && !helpProvider} />;
   useInput((input, key) => {
-    if (!inputActive) {
+    if (!inputActive || editing || helpProvider) {
+      return;
+    }
+    if (input === '?' && tab === 'providers') {
+      setHelpProvider(selectedProvider ?? registry.list()[0]?.id);
       return;
     }
     if (key.escape) {
       onBack();
       return;
     }
-    if (status.state !== 'checking' && (key.return || input.toLowerCase() === 'r')) {
+    if (tab === 'tools' && status.state !== 'checking' && (key.return || input.toLowerCase() === 'r')) {
       onCheck();
     }
   });
 
+  if (helpProvider) {
+    const provider = registry.get(helpProvider);
+    return <MarkdownDocumentPage title={provider.label} load={() => readProviderDocuments(provider)}
+      onClose={() => setHelpProvider(undefined)} back="Close help" inputActive={inputActive} />;
+  }
+  if (editing) {
+    return <ProviderForm provider={registry.get(editing)} settings={settings} inputActive={inputActive} onBack={() => setEditing(undefined)} />;
+  }
+  if (tab === 'providers') {
+    return <ProvidersTab registry={registry} settings={settings} selectedId={selectedProvider} onSelect={setSelectedProvider}
+      onEdit={setEditing} inputActive={inputActive} page={{title: 'Manage Tools', header}} />;
+  }
   return (
     <Page
-      title="Required tooling"
-      shortcuts={[status.state === 'checking' ? 'Checking…' : 'R/Enter — Check tooling']}
+      title="Manage Tools"
+      header={header}
+      shortcuts={[status.state === 'checking' ? 'Checking…' : 'R/Enter — Check tooling', 'Tab/←/→ — Tab']}
     >
       {status.state === 'checking' ? (
         <Text color={mutedColor}>○ Checking availability…</Text>

@@ -1,4 +1,4 @@
-import type {NcbiAssemblyMetadata, NcbiMetadataSource} from './catalog.js';
+import type {NcbiAssemblyMetadata, NcbiMetadataSource} from './metadata.js';
 
 /** The pinned NCBI Datasets REST API version that metadata is read from. */
 export const ncbiDatasetsApiBaseUrl = 'https://api.ncbi.nlm.nih.gov/datasets/v2';
@@ -114,11 +114,13 @@ export async function fetchAssemblyMetadata(
     fetchImpl = fetch,
     now = () => new Date(),
     timeoutMilliseconds = defaultTimeoutMilliseconds,
+    signal,
   }: {
     apiKey?: string;
     fetchImpl?: typeof fetch;
     now?: () => Date;
     timeoutMilliseconds?: number;
+    signal?: AbortSignal;
   } = {},
 ): Promise<MetadataFetchResult> {
   const url = `${ncbiDatasetsApiBaseUrl}/genome/accession/${encodeURIComponent(accession)}/dataset_report`;
@@ -126,7 +128,7 @@ export async function fetchAssemblyMetadata(
   try {
     response = await fetchImpl(url, {
       headers: {accept: 'application/json', ...(apiKey ? {'api-key': apiKey} : {})},
-      signal: AbortSignal.timeout(timeoutMilliseconds),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMilliseconds)]) : AbortSignal.timeout(timeoutMilliseconds),
     });
   } catch {
     return {

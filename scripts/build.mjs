@@ -28,7 +28,8 @@ const buildInfo = commit && committedAt && status !== undefined ? {commit, commi
 // The bundled IGV version, recorded with every configuration so a run's citation can name it.
 const igvVersion = JSON.parse(await readFile('node_modules/igv/package.json', 'utf8')).version;
 
-// The CLI and everything it imports, so an installation runs exactly the locked dependencies.
+// The interactive application and everything it imports, so an installation runs exactly
+// the locked dependencies. Snakemake does not launch this bundle.
 const cli = await build({
   metafile: true,
   entryPoints: ['src/cli.tsx'],
@@ -47,7 +48,8 @@ const cli = await build({
   banner: {js: "import {createRequire as __createRequire} from 'node:module';\nconst require = __createRequire(import.meta.url);"},
 });
 await chmod('dist/cli.js', 0o755);
-// The GFF3 find-and-replace runs in a worker thread, which loads this file next to the CLI.
+// The application's GFF3 find-and-replace runs in a worker thread, which loads this file
+// next to the CLI. This is not a Snakemake entry point.
 const gff3Worker = await build({
   metafile: true,
   entryPoints: ['src/gff3-replace/worker.ts'],
@@ -60,6 +62,22 @@ const gff3Worker = await build({
   minifySyntax: true,
 });
 
+// Separate entry point so Snakemake's Python bridge can reuse the catalog's provider/cache
+// code without launching the TUI, including in direct Snakemake runs. Its copy handshake
+// holds the source cache lock until Python confirms the files were safely copied.
+const genomeSource = await build({
+  metafile: true,
+  entryPoints: ['src/accessions/entry.ts'],
+  outfile: 'dist/genome-source.js',
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node24',
+  minifyWhitespace: true,
+  minifySyntax: true,
+});
+
+// Browser-only assets served by the application; Snakemake does not load these bundles.
 await mkdir('dist/browser/assets', {recursive: true});
 const page = await build({metafile: true, entryPoints: ['src/browser/page/main.tsx'], outfile: 'dist/browser/assets/page.js', bundle: true, platform: 'browser', format: 'esm', minify: true, legalComments: 'eof'});
 await writeFile('dist/browser/assets/index.html', `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${applicationLabel} · Documentation</title><link rel="stylesheet" href="page.css"></head><body><div id="root"></div><script type="module" src="page.js"></script></body></html>`);
@@ -91,7 +109,7 @@ function permitted(license) {
 }
 
 const packages = new Set();
-for (const result of [cli, gff3Worker, page, igv]) {
+for (const result of [cli, gff3Worker, genomeSource, page, igv]) {
   for (const input of Object.keys(result.metafile.inputs).filter(path => path.includes('node_modules/'))) {
     packages.add(await packageDirectory(input));
   }

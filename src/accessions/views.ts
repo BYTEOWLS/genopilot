@@ -10,20 +10,23 @@ export async function accessionGenomeView(entry: AccessionEntry, application: {n
   if (recordedCacheState(entry) !== 'cached') {
     throw new Error('A verified, non-conflicting cached copy is required to view this accession.');
   }
-  const copy = entry.cached_copies[0]!;
+  const copy = entry.cached_copies.find(copy => copy.fasta_sha256);
+  if (!copy?.fasta_sha256) {
+    throw new Error('A verified genome FASTA is required to view this entry.');
+  }
   const fasta = join(copy.path, 'genomic.fna');
   const annotation = copy.gff3_sha256 ? join(copy.path, 'genomic.gff') : undefined;
   const referenceSnapshot = await verify(fasta, copy.fasta_sha256, signal);
   const annotationSnapshot = annotation && copy.gff3_sha256 ? await verify(annotation, copy.gff3_sha256, signal) : undefined;
   signal?.throwIfAborted();
   return {
-    id: createHash('sha256').update(JSON.stringify([entry.accession, copy.path, copy.fasta_sha256, copy.gff3_sha256])).digest('hex'),
-    title: viewTitle('Accession catalog', `${accessionDisplayName(entry)} · ${entry.accession}`),
+    id: createHash('sha256').update(JSON.stringify([entry.source, entry.id, copy.path, copy.fasta_sha256, copy.gff3_sha256])).digest('hex'),
+    title: viewTitle('Accession catalog', `${accessionDisplayName(entry)} · ${entry.id}`),
     provenance: {application, sources: [
       {label: 'Verified imported reference', path: fasta, sha256: copy.fasta_sha256},
       ...(annotation ? [{label: 'Verified imported annotation', path: annotation, sha256: copy.gff3_sha256}] : []),
     ]},
-    content: {kind: 'genome', reference: {name: entry.accession, fasta, snapshot: referenceSnapshot}, tracks: annotation ? [
+    content: {kind: 'genome', reference: {name: entry.id, fasta, snapshot: referenceSnapshot}, tracks: annotation ? [
       {id: 'annotation', name: 'Cached annotation', kind: 'annotation', format: 'gff3', file: annotation, snapshot: annotationSnapshot, shown: true},
     ] : []},
   };

@@ -1,37 +1,32 @@
 import {parse} from 'yaml';
+import {validateRemoteGenomeInput, type RemoteGenomeInput} from '../genome-input.js';
 import {
   isRecord,
   rejectUnknownFields,
   requireObject,
   validateAbsolutePath,
-  validateAccession,
   validateGenoPilot,
-  validateInputSource,
-  validateNcbiCacheMode,
   validateResources,
   validateRun,
   validateWorkflowIdentity,
   type ConfigurationValidationIssue,
   type CpuMode,
   type GenoPilotDetails,
-  type NcbiCacheMode,
   type ResourceSettings,
   type RunDetails,
 } from '../configuration-validation.js';
 
-export type {ConfigurationValidationIssue, CpuMode, NcbiCacheMode};
+export type {ConfigurationValidationIssue, CpuMode};
 
-export const ANNOTATION_TRANSFER_CONFIGURATION_SCHEMA_VERSION = 1 as const;
+export const ANNOTATION_TRANSFER_CONFIGURATION_SCHEMA_VERSION = 2 as const;
 export const ANNOTATION_TRANSFER_WORKFLOW_ID = 'annotation-transfer' as const;
 export const ANNOTATION_TRANSFER_WORKFLOW_VERSION = 1 as const;
 
-type NcbiInput = {source: 'ncbi'; accession: string; ncbi_cache_mode?: NcbiCacheMode};
-
 export type ReferenceInput =
   | {source: 'local'; fasta: string; gff3: string}
-  | NcbiInput;
+  | RemoteGenomeInput;
 
-export type TargetInput = {source: 'local'; fasta: string} | NcbiInput;
+export type TargetInput = {source: 'local'; fasta: string} | RemoteGenomeInput;
 
 export type AnnotationTransferConfiguration = {
   schema_version: typeof ANNOTATION_TRANSFER_CONFIGURATION_SCHEMA_VERSION;
@@ -77,20 +72,17 @@ function validateReferenceInput(
   if (!reference) {
     return undefined;
   }
-  const source = validateInputSource(reference.source, path, issues);
+  const source = reference.source;
   if (source === 'local') {
     rejectUnknownFields(reference, ['source', 'fasta', 'gff3'], path, issues);
     const validFasta = validateAbsolutePath(reference.fasta, `${path}.fasta`, issues);
     const validGff3 = validateAbsolutePath(reference.gff3, `${path}.gff3`, issues);
     return validFasta && validGff3 ? (reference as ReferenceInput) : undefined;
   }
-  if (source === 'ncbi') {
-    rejectUnknownFields(reference, ['source', 'accession', 'ncbi_cache_mode'], path, issues);
-    return validateAccession(reference.accession, `${path}.accession`, issues) &&
-      validateNcbiCacheMode(reference, path, issues)
-      ? (reference as ReferenceInput)
-      : undefined;
+  if (source === 'remote') {
+    return validateRemoteGenomeInput(reference, path, ['fasta', 'gff3'], issues);
   }
+  issues.push({path: `${path}.source`, message: "must be 'local' or 'remote'"});
   return undefined;
 }
 
@@ -103,20 +95,17 @@ function validateTargetInput(
   if (!target) {
     return undefined;
   }
-  const source = validateInputSource(target.source, path, issues);
+  const source = target.source;
   if (source === 'local') {
     rejectUnknownFields(target, ['source', 'fasta'], path, issues);
     return validateAbsolutePath(target.fasta, `${path}.fasta`, issues)
       ? (target as TargetInput)
       : undefined;
   }
-  if (source === 'ncbi') {
-    rejectUnknownFields(target, ['source', 'accession', 'ncbi_cache_mode'], path, issues);
-    return validateAccession(target.accession, `${path}.accession`, issues) &&
-      validateNcbiCacheMode(target, path, issues)
-      ? (target as TargetInput)
-      : undefined;
+  if (source === 'remote') {
+    return validateRemoteGenomeInput(target, path, ['fasta'], issues);
   }
+  issues.push({path: `${path}.source`, message: "must be 'local' or 'remote'"});
   return undefined;
 }
 

@@ -5,13 +5,13 @@ parameters:
     section: Inputs
     kind: choice
     required: true
-    default: ncbi
+    default: remote
     hidden: false
     options:
       - value: local
         label: Local file
-      - value: ncbi
-        label: NCBI accession
+      - value: remote
+        label: Downloaded catalog genome
   - id: reference-fasta
     label: Reference FASTA
     section: Inputs
@@ -33,7 +33,7 @@ parameters:
       parameter: reference-source
       equals: local
   - id: reference-accession
-    label: Reference NCBI accession
+    label: Reference genome
     section: Inputs
     kind: accession
     required: true
@@ -41,19 +41,19 @@ parameters:
     hidden: false
     visible_when:
       parameter: reference-source
-      equals: ncbi
+      equals: remote
   - id: target-source
     label: Target source
     section: Inputs
     kind: choice
     required: true
-    default: ncbi
+    default: remote
     hidden: false
     options:
       - value: local
         label: Local file
-      - value: ncbi
-        label: NCBI accession
+      - value: remote
+        label: Downloaded catalog genome
   - id: target-fasta
     label: Target FASTA
     section: Inputs
@@ -65,7 +65,7 @@ parameters:
       parameter: target-source
       equals: local
   - id: target-accession
-    label: Target NCBI accession
+    label: Target genome
     section: Inputs
     kind: accession
     required: true
@@ -73,7 +73,7 @@ parameters:
     hidden: false
     visible_when:
       parameter: target-source
-      equals: ncbi
+      equals: remote
   - id: lifton-profile
     label: LiftOn profile
     section: Workflow options

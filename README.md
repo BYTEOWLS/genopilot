@@ -116,7 +116,7 @@ Install dependencies:
 pnpm install
 ```
 
-`pnpm build` type-checks the sources and then bundles them with esbuild (`scripts/build.mjs`): the CLI with every dependency into one `dist/cli.js`, and the browser page and IGV into `dist/browser/assets/`. The package therefore has no runtime dependencies: an installation runs exactly the versions `pnpm-lock.yaml` pins, and dependencies are added as `devDependencies`. The build writes every bundled package's license into `dist/THIRD-PARTY-LICENSES.md` and fails for a license outside the permitted list or a package without a license file; such a package's reviewed upstream license goes into `resources/licenses/`. The bundle also embeds the commit it was built from, its date, and whether the working tree had uncommitted changes, which the tooling page shows; `pnpm dev` reads them from Git instead. Run `pnpm build` before opening browser documents or genome views from the source CLI; rebuild after changing browser code or styles.
+`pnpm build` type-checks and bundles the application and its dependencies. Run it before opening browser documents or genome views from source, and rebuild after browser code or style changes. See [developer scripts](scripts/README.md) for build details, package verification, and local reference-file comparison.
 
 Run the CLI from source:
 
@@ -271,36 +271,25 @@ Hypothetical example only: Oxford Nanopore is **not supported**. To add it:
 
 ## Accession catalog
 
-Versioned NCBI assembly accessions (`GCA_…`/`GCF_…` with a version suffix) are cataloged in `accessions/accessions.yaml`, beside the isolate catalog and with the same private, locked, atomic saves:
-
-```text
-$HOME/.byteowlsGenopilot/accessions/accessions.yaml
-```
-
-Each entry keeps an optional local name and description apart from the facts NCBI reports (organism, taxon, assembly name, level, status, and type such as haploid, submitter, assembly release date, genome size, GC percentage, contig/scaffold counts and N50, BioProject/BioSample accessions, and the RefSeq category and strain only when NCBI provides them), which record when and from where they were retrieved: the NCBI Datasets v2 API, or the report cached with a download. Details group these facts into Assembly, Genome statistics, and Linked records. Missing facts are marked as not reported; refresh metadata to populate new fields on existing entries. The assembly release date is not a submission date. These optional fields retain the catalog schema version and require no migration. Cataloging an accession never downloads its assembly; workflows download it on demand. Metadata lookups use the optional NCBI API key when one is configured and work without it at NCBI's lower rate limit.
+Genomes are cataloged by `(source, id)` in `$HOME/.byteowlsGenopilot/accessions/accessions.yaml`, beside the isolate catalog, with private, locked, atomic saves. Provider registration, identity validation, discovery, and download dispatch share `src/accessions/registry.ts`.
 
 ```yaml
-schema_version: 1
-output_roots:
-  - "/analysis/genopilot"
+schema_version: 3
+output_roots: []
 accessions:
-  - accession: "GCF_000149205.2"
-    name: "Preferred backbone"
-    ncbi:
-      organism: "Example organism"
-      assembly_name: "Example assembly"
-      assembly_type: "haploid"
-      refseq_category: "reference genome"
-      submitter: "Example submitter"
-      retrieved_at: "2026-01-01T12:00:00.000Z"
-      source: "datasets-v2-rest"
-    cached_copies:
-      - path: "/analysis/genopilot/ncbi-accessions-cache/GCF_000149205.2"
-        verified_at: "2026-01-01T12:00:00.000Z"
-        fasta_sha256: "…"
+  - source: ncbi
+    id: GCF_000149205.2
+    parameters: {}
+    name: Preferred backbone
+    metadata: null
+    cached_copies: []
 ```
 
-`cached_copies` lists the workflow caches that matched their recorded checksums when they were last discovered. Discovery reads only `ncbi-accessions-cache/` directly inside `./runs` and the listed `output_roots`, never contacts NCBI, and adds any verified cache it finds; incomplete or checksum-invalid caches are reported but never recorded. A successful run that used an NCBI input adds its output root. Two verified copies with different files for one versioned accession are reported as a conflict that needs inspection. Removing an accession from the catalog **deletes its cache directories** under the known output roots, so a later workflow that needs it downloads it again.
+Providers own parameters and metadata; credentials are stored separately. Catalog entries can be metadata-only or hold independently verified genomic FASTA, GFF3, proteins, transcripts, and CDS. Non-genomic FASTA never satisfies a workflow's genome requirement. Discovery reads registered provider cache directories under known output roots without network access and records only verified copies. Different checksums for the same artifact and provider/ID are conflicts, not a reason to prefer one copy silently.
+
+Workflow genome fields are selection-only: download each role's required genomic files in the catalog before configuring a run. Form selections and previous-run prefill snapshot provider references, not mutable catalog lookups. Saved input snapshots include only role-required file checksums; the packaged resolver rechecks them under the cache lease. Deleting a catalog entry also deletes its cache directories under known output roots. Incompatible catalogs are rejected without overwriting or migrating them; existing verified cache directories can be rediscovered.
+
+See [genome-source usage](docs/genome-sources.md) and `src/accessions/README.md` for the implementation boundary.
 
 ## Reset managed tooling for installation tests
 
@@ -367,6 +356,10 @@ npm uninstall --global @byteowls/genopilot
 ## Contributing and security
 
 Report problems and propose workflows through issues, as described in [`CONTRIBUTING.md`](CONTRIBUTING.md); pull requests are accepted on invitation. Report vulnerabilities privately, following [`SECURITY.md`](SECURITY.md). Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
+## Acknowledgements
+
+I gratefully acknowledge [Thomas Svoboda](https://orcid.org/0000-0003-0502-301X) for his guidance in genetics and valuable feedback on researchers’ needs and the practical use of GenoPilot.
 
 ## License
 

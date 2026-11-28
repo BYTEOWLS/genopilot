@@ -1,64 +1,28 @@
 import {basename, isAbsolute, resolve} from 'node:path';
 import {parse} from 'yaml';
-import {isVersionedAssemblyAccession, ncbiAccessionFormatMessage} from './accession.js';
+import {accessionSources} from './registry.js';
+import {fileKinds, referenceKey, sameReference, type ArtifactDigests, type GenomeReference} from './provider.js';
 
-export const ACCESSION_CATALOG_SCHEMA_VERSION = 1 as const;
-
-/** Where fetched NCBI facts came from: the live Datasets API or a cached download's own report. */
-export type NcbiMetadataSource = 'datasets-v2-rest' | 'cached-download-report';
-
-/**
- * Lightweight facts NCBI reports for an assembly. Optional fields are omitted when NCBI does not
- * provide them; they are never guessed or filled in by the researcher.
- */
-export type NcbiAssemblyMetadata = {
-  organism: string;
-  tax_id?: number;
-  assembly_name?: string;
-  assembly_level?: string;
-  assembly_status?: string;
-  /** Whether the assembly is haploid, diploid, and so on. */
-  assembly_type?: string;
-  /** RefSeq's designation, such as `reference genome`; most assemblies have none. */
-  refseq_category?: string;
-  strain?: string;
-  /** Who submitted the assembly to NCBI. */
-  submitter?: string;
-  /** Assembly release date, not the submission or metadata retrieval date. */
-  release_date?: string;
-  total_sequence_length?: number;
-  gc_percent?: number;
-  number_of_contigs?: number;
-  number_of_scaffolds?: number;
-  contig_n50?: number;
-  scaffold_n50?: number;
-  bioproject_accession?: string;
-  biosample_accession?: string;
-  retrieved_at: string;
-  source: NcbiMetadataSource;
-};
+export const ACCESSION_CATALOG_SCHEMA_VERSION = 3 as const;
 
 /** A cache directory that matched its recorded checksums when discovery last ran. */
-export type CachedCopy = {
+export type CachedCopy = ArtifactDigests & {
   path: string;
   verified_at: string;
-  fasta_sha256: string;
-  gff3_sha256?: string;
 };
 
-export type AccessionEntry = {
-  accession: string;
-  /** Researcher-chosen label; the accession is shown when absent. */
+export type AccessionEntry = GenomeReference & {
+  /** Researcher-chosen label; the provider ID is shown when absent. */
   name?: string;
   description?: string;
   /** Null until metadata was retrieved. */
-  ncbi: NcbiAssemblyMetadata | null;
+  metadata: unknown;
   cached_copies: CachedCopy[];
 };
 
 export type AccessionCatalog = {
   schema_version: typeof ACCESSION_CATALOG_SCHEMA_VERSION;
-  /** Output roots whose `ncbi-accessions-cache` directory discovery scans, besides `<cwd>/runs`. */
+  /** Output roots whose registered provider caches discovery scans, besides `<cwd>/runs`. */
   output_roots: string[];
   accessions: AccessionEntry[];
 };
@@ -81,9 +45,6 @@ export class AccessionCatalogValidationError extends Error {
     this.issues = issues;
   }
 }
-
-/** The directory, inside an output root, where workflows cache NCBI downloads by accession. */
-export const ncbiCacheDirectoryName = 'ncbi-accessions-cache';
 
 export function emptyAccessionCatalog(): AccessionCatalog {
   return {schema_version: ACCESSION_CATALOG_SCHEMA_VERSION, output_roots: [], accessions: []};
@@ -155,85 +116,22 @@ function validateSha256(value: unknown, path: string, issues: Issues, required: 
   }
 }
 
-function validateMetadata(value: unknown, path: string, issues: Issues): void {
-  if (value === null) {
-    return;
-  }
-  if (!isRecord(value)) {
-    issues.push({path, message: 'must be a mapping or null'});
-    return;
-  }
-  rejectUnknownFields(
-    value,
-    [
-      'organism',
-      'tax_id',
-      'assembly_name',
-      'assembly_level',
-      'assembly_status',
-      'assembly_type',
-      'refseq_category',
-      'strain',
-      'submitter',
-      'release_date',
-      'total_sequence_length',
-      'gc_percent',
-      'number_of_contigs',
-      'number_of_scaffolds',
-      'contig_n50',
-      'scaffold_n50',
-      'bioproject_accession',
-      'biosample_accession',
-      'retrieved_at',
-      'source',
-    ],
-    path,
-    issues,
-  );
-  validateText(value.organism, `${path}.organism`, issues, true);
-  if (value.tax_id !== undefined && !(Number.isSafeInteger(value.tax_id) && (value.tax_id as number) > 0)) {
-    issues.push({path: `${path}.tax_id`, message: 'must be a positive integer when present'});
-  }
-  for (const field of [
-    'assembly_name',
-    'assembly_level',
-    'assembly_status',
-    'assembly_type',
-    'refseq_category',
-    'strain',
-    'submitter',
-    'release_date',
-    'bioproject_accession',
-    'biosample_accession',
-  ] as const) {
-    validateText(value[field], `${path}.${field}`, issues, false);
-  }
-  for (const field of ['total_sequence_length', 'number_of_contigs', 'number_of_scaffolds', 'contig_n50', 'scaffold_n50'] as const) {
-    if (value[field] !== undefined && !(Number.isSafeInteger(value[field]) && (value[field] as number) >= 0)) {
-      issues.push({path: `${path}.${field}`, message: 'must be a non-negative safe integer when present'});
-    }
-  }
-  if (value.gc_percent !== undefined && !(typeof value.gc_percent === 'number' && Number.isFinite(value.gc_percent) && value.gc_percent >= 0 && value.gc_percent <= 100)) {
-    issues.push({path: `${path}.gc_percent`, message: 'must be a percentage between 0 and 100 when present'});
-  }
-  validateTimestamp(value.retrieved_at, `${path}.retrieved_at`, issues);
-  if (value.source !== 'datasets-v2-rest' && value.source !== 'cached-download-report') {
-    issues.push({path: `${path}.source`, message: 'must be datasets-v2-rest or cached-download-report'});
-  }
-}
-
 function validateCachedCopy(value: unknown, accession: unknown, path: string, issues: Issues): void {
   if (!isRecord(value)) {
     issues.push({path, message: 'must be a mapping'});
     return;
   }
-  rejectUnknownFields(value, ['path', 'verified_at', 'fasta_sha256', 'gff3_sha256'], path, issues);
+  rejectUnknownFields(value, ['path', 'verified_at', ...fileKinds.map(kind => `${kind}_sha256`)], path, issues);
   if (validateAbsolutePath(value.path, `${path}.path`, issues) && basename(value.path) !== accession) {
     issues.push({path: `${path}.path`, message: 'must be a directory named after the accession'});
   }
   validateTimestamp(value.verified_at, `${path}.verified_at`, issues);
-  validateSha256(value.fasta_sha256, `${path}.fasta_sha256`, issues, true);
-  validateSha256(value.gff3_sha256, `${path}.gff3_sha256`, issues, false);
+  if (!fileKinds.some(kind => value[`${kind}_sha256`] !== undefined)) {
+    issues.push({path, message: 'must record at least one artifact checksum'});
+  }
+  for (const kind of fileKinds) {
+    validateSha256(value[`${kind}_sha256`], `${path}.${kind}_sha256`, issues, false);
+  }
 }
 
 function validateEntry(value: unknown, path: string, issues: Issues): void {
@@ -241,21 +139,29 @@ function validateEntry(value: unknown, path: string, issues: Issues): void {
     issues.push({path, message: 'must be a mapping'});
     return;
   }
-  rejectUnknownFields(value, ['accession', 'name', 'description', 'ncbi', 'cached_copies'], path, issues);
-  if (typeof value.accession !== 'string' || !isVersionedAssemblyAccession(value.accession)) {
-    issues.push({path: `${path}.accession`, message: ncbiAccessionFormatMessage});
+  rejectUnknownFields(value, ['source', 'id', 'parameters', 'name', 'description', 'metadata', 'cached_copies'], path, issues);
+  try {
+    accessionSources.validateReference(value);
+  } catch (error) {
+    issues.push({path, message: error instanceof Error ? error.message : 'invalid genome reference'});
   }
   validateText(value.name, `${path}.name`, issues, false);
   if (value.description !== undefined && typeof value.description !== 'string') {
     issues.push({path: `${path}.description`, message: 'must be a string when present'});
   }
-  validateMetadata(value.ncbi, `${path}.ncbi`, issues);
+  if (typeof value.source === 'string' && accessionSources.has(value.source)) {
+    try {
+      accessionSources.get(value.source).validateMetadata(value.metadata);
+    } catch (error) {
+      issues.push({path: `${path}.metadata`, message: error instanceof Error ? error.message : 'invalid metadata'});
+    }
+  }
   if (!Array.isArray(value.cached_copies)) {
     issues.push({path: `${path}.cached_copies`, message: 'must be a list'});
     return;
   }
   value.cached_copies.forEach((copy, index) =>
-    validateCachedCopy(copy, value.accession, `${path}.cached_copies[${index}]`, issues));
+    validateCachedCopy(copy, value.id, `${path}.cached_copies[${index}]`, issues));
 }
 
 /** Checks what only the whole catalog can reveal: repeated accessions, roots, and copy paths. */
@@ -271,10 +177,10 @@ function validateUniqueness(catalog: AccessionCatalog, issues: Issues): void {
   const accessions = new Set<string>();
   const copyPaths = new Set<string>();
   catalog.accessions.forEach((entry, index) => {
-    if (accessions.has(entry.accession)) {
-      issues.push({path: `$.accessions[${index}].accession`, message: 'is already cataloged'});
+    if (accessions.has(referenceKey(entry))) {
+      issues.push({path: `$.accessions[${index}].id`, message: 'is already cataloged'});
     }
-    accessions.add(entry.accession);
+    accessions.add(referenceKey(entry));
     entry.cached_copies.forEach((copy, copyIndex) => {
       const normalized = resolve(copy.path);
       if (copyPaths.has(normalized)) {
@@ -322,35 +228,24 @@ export function parseAccessionCatalog(source: string): AccessionCatalog {
   return validateAccessionCatalog(parse(source));
 }
 
-/** Replaces the entry with the same accession, or appends a new one. */
+/** Replaces the entry with the same provider/ID pair, or appends a new one. */
 export function withAccession(catalog: AccessionCatalog, entry: AccessionEntry): AccessionCatalog {
-  const exists = catalog.accessions.some(candidate => candidate.accession === entry.accession);
+  const exists = catalog.accessions.some(candidate => sameReference(candidate, entry));
   return {
     ...catalog,
     accessions: exists
-      ? catalog.accessions.map(candidate => candidate.accession === entry.accession ? entry : candidate)
+      ? catalog.accessions.map(candidate => sameReference(candidate, entry) ? entry : candidate)
       : [...catalog.accessions, entry],
   };
 }
 
 export function accessionDisplayName(entry: AccessionEntry): string {
-  return entry.name ?? entry.accession;
+  return entry.name ?? entry.id;
 }
 
-/** The NCBI facts that tell assemblies apart at a glance, joined into one line. */
+/** Provider-owned facts that tell genomes apart at a glance. */
 export function accessionFactsSummary(entry: AccessionEntry): string {
-  if (!entry.ncbi) {
-    return 'metadata not retrieved';
-  }
-  return [
-    entry.ncbi.organism,
-    entry.ncbi.assembly_name,
-    entry.ncbi.strain,
-    entry.ncbi.assembly_type,
-    entry.ncbi.refseq_category,
-  ]
-    .filter((value): value is string => value !== undefined)
-    .join(' · ');
+  return accessionSources.get(entry.source).metadataSummary(entry.metadata);
 }
 
 /**
@@ -362,14 +257,12 @@ export type RecordedCacheState = 'not-cached' | 'cached' | 'conflict';
 /** Why an accession whose cached copies conflict cannot be used, for a validation problem. */
 export const conflictingCopiesMessage =
   'has cached copies whose checksums disagree in the accession catalog; remove the entry under ' +
-  'Manage NCBI accessions, which deletes its cached copies, before using it';
+  'Manage accessions, which deletes its cached copies, before using it';
 
 export function recordedCacheState(entry: AccessionEntry): RecordedCacheState {
   if (entry.cached_copies.length === 0) {
     return 'not-cached';
   }
-  const fastaChecksums = new Set(entry.cached_copies.map(copy => copy.fasta_sha256));
-  // A FASTA-only copy (from a target-only download) does not contradict one that also has GFF3.
-  const gff3Checksums = new Set(entry.cached_copies.flatMap(copy => copy.gff3_sha256 ?? []));
-  return fastaChecksums.size > 1 || gff3Checksums.size > 1 ? 'conflict' : 'cached';
+  // Different artifact subsets do not conflict; compare only checksums actually recorded.
+  return fileKinds.some(kind => new Set(entry.cached_copies.flatMap(copy => copy[`${kind}_sha256`] ?? [])).size > 1) ? 'conflict' : 'cached';
 }

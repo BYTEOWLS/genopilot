@@ -4,6 +4,8 @@
 
 ## Work
 
+- [x] Share inline attribute checkbox rendering and toggle keys with download artifacts through `CheckboxGroup`; preserve individual choices under All and keep navigation/validation in the form.
+
 Including derived rewrites in an export moved to the [run-export tasks](../../run-export/tasks.md).
 
 - [x] Kickoff: entry points (result-page action and home-screen command), default output folders, and statistics decided in the [concept](concept.md#placement-and-output).

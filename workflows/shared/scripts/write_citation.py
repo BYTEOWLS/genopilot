@@ -67,7 +67,7 @@ def tool_version(provenance: dict, keys: list[str]) -> str | None:
 
 def input_sources(configuration: dict) -> set[str]:
     return {
-        value["source"]
+        value["reference"]["source"] if value["source"] == "remote" else value["source"]
         for value in configuration.get("inputs", {}).values()
         if isinstance(value, dict) and "source" in value
     }
@@ -79,8 +79,9 @@ def tools_that_ran(provenance: dict, tools: list[dict]) -> list[dict]:
 
 
 def describe_input(value: dict) -> str:
-    if value.get("source") == "ncbi":
-        return f"NCBI assembly {value['accession']}"
+    if value.get("source") == "remote":
+        reference = value["reference"]
+        return f"{reference['source']} genome {reference['id']}"
     files = [key for key, path in value.items() if key != "source" and isinstance(path, str)]
     return "a local file" if len(files) == 1 else "local files"
 

@@ -6,6 +6,21 @@ All notable changes are documented here. Versions follow Semantic Versioning and
 
 ## [Unreleased]
 
+### Genome sources
+
+- Added FungiDB, ToxoDB, and PlasmoDB search and release-pinned downloads through VEuPathDB; an API key is required.
+- Review metadata, choose files, and download genomes in Manage accessions before selecting them in workflows.
+- NCBI downloads now include optional protein FASTA.
+- New VEuPathDB downloads exclude explicitly labeled mitochondrial sequences from genomic FASTA/GFF3 by default; inclusion is optional.
+- Verified files support offline reuse across output roots; failed refreshes preserve existing copies.
+- Added provider help and API-key settings in Manage tooling.
+
+### Upgrade notes
+
+- Recreate older catalogs and runs; no migration is provided. Back up catalogs first, then rescan verified caches.
+- Re-enter saved NCBI API keys in Manage tooling.
+- Direct Snakemake runs require Node on PATH or its absolute path in `GENOPILOT_NODE_EXECUTABLE`.
+
 ## [0.0.3] - 2026-11-25
 
 ### License

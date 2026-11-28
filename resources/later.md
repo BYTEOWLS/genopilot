@@ -80,9 +80,13 @@ Builds on the [saved isolate sequences](concepts/saved-isolate-sequences/concept
 - **Removal.** Removing a sequence removes its annotations, after confirming both.
 - **Final IDs.** Take this up after the [GFF3 find-and-replace](concepts/completed/annotation-id-rewriting/concept.md), so a researcher can save an annotation with rewritten IDs rather than raw LiftOn IDs.
 
+## VEuPathDB record-type selection
+
+Keep `organism` with `GenomeDataTypes` for genome discovery now. Later, offer a provider-declared record-type list after site selection, using the same chooser pattern. Each supported type needs its own search, result fields, downloadable artifacts, and catalog identity; chromosome/contig or gene records must not masquerade as whole-genome inputs. Verify supported API descriptions and behavior before exposing a type.
+
 ## Sequence selection for inputs
 
-A run could use only some sequences of an input genome, such as one chromosome for a quick test or without the mitochondrion. Download and verify the whole genome as usual, then filter the resolved FASTA and GFF3 to listed sequence IDs in a run step that records the list and the checksums before and after. This works for every input source.
+A run could use only some sequences of an input genome, such as one chromosome for a quick test or excluding organelles from local/other-provider inputs. VEuPathDB's provider-specific mitochondrial exclusion is implemented in the download review; this deferred item covers arbitrary sequence lists across all input sources. Download and verify the whole genome as usual, then filter the resolved FASTA and GFF3 to listed sequence IDs in a run step that records the list and the checksums before and after. This works for every input source.
 
 ## Sequence ID renaming
 
@@ -584,6 +588,7 @@ Concept links below are pointers, not duplicate checklists. Their task files own
 
 ## Integration and packaging
 
+- [Guided installation and first-run setup](backlog/06_guided_installation_setup.md): convenience installer, tooling setup, and optional provider credentials including direct VEuPathDB key entry.
 - [ ] Add a direct-Snakemake cancellation test that checks cleanup and complete logs; success, failure, and resume are covered, and cancellation is covered only with an injected process.
 - [Public-release preparation](concepts/public-release/tasks.md).
 - [Remote execution](concepts/remote-execution/tasks.md).

@@ -638,6 +638,7 @@ def build_detail_rows(
                     **(
                         {"protein_category": "unmapped", "review_reasons": "unmapped_or_lost"}
                         if unmapped_report[reference_id].category == "coding"
+                        or reference.feature_type == "protein_coding_gene"
                         else {}
                     ),
                 }
@@ -661,7 +662,11 @@ def build_detail_rows(
             protein_identity = minimum_identity(records, "protein_identity")
             classes = mutation_classes(records)
             rating = dict(UNRATED)
-            if copy_number == 0 and report.category == "coding":
+            # LiftOn calls explicit protein_coding_gene references `other`.
+            # Preserve that category, but do not discard the reference's coding type.
+            if copy_number == 0 and (
+                report.category == "coding" or reference.feature_type == "protein_coding_gene"
+            ):
                 category = protein_category(classes, protein_identity, target_id)
                 unresolved_bases = unresolved_in_cds(records, unresolved)
                 rating = {
@@ -824,7 +829,9 @@ def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object
     reference_all = read_gff3_features(args.reference_gff3)
     target_all = read_gff3_features(args.raw_gff3)
     reference = top_level_features(reference_all, args.reference_gff3, selected_types)
-    target = top_level_features(target_all, args.raw_gff3, selected_types)
+    # LiftOn may emit selected coding feature types as `gene`; reference IDs and
+    # copy reports below still establish membership and the original feature type.
+    target = top_level_features(target_all, args.raw_gff3, selected_types | {"gene"})
 
     verify_authoritative_reports(
         reference,
@@ -876,7 +883,7 @@ def collect(args: argparse.Namespace) -> tuple[dict, dict, list[dict[str, object
         mutations = [value for value in str(row["mutations"]).split(",") if value]
         if (
             row["status"] == "mapped"
-            and row["lifton_category"] == "coding"
+            and row["protein_category"]
             and any(mutation not in UNCHANGED_PROTEIN_CLASSES for mutation in mutations)
         ):
             changed_primary_coding_ids.add(str(row["reference_id"]))

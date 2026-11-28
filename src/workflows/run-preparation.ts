@@ -3,7 +3,8 @@ import {access, mkdir, readdir, readFile, rm, rmdir, stat, writeFile} from 'node
 import {constants} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {stringify} from 'yaml';
-import {ncbiCacheDirectoryName} from '../accessions/catalog.js';
+import {accessionSources} from '../accessions/registry.js';
+import type {GenomeReference} from '../accessions/provider.js';
 import {formatCompactUtcTimestamp} from './timestamps.js';
 import type {ConfigurationValidationIssue, CpuMode} from './configuration-validation.js';
 
@@ -69,21 +70,21 @@ export function resolveDraftPath(currentDirectory: string, value: string): strin
   return value.length === 0 ? '' : resolve(currentDirectory, value);
 }
 
-/** Where a run's NCBI inputs are cached: beside, not inside, its run directories. */
-export function ncbiCacheDirectory(outputRoot: string, accession: string): string {
-  return resolve(outputRoot, ncbiCacheDirectoryName, accession);
+/** Where a run's provider inputs are cached: beside, not inside, its run directories. */
+export function genomeCacheDirectory(outputRoot: string, reference: GenomeReference): string {
+  return resolve(outputRoot, accessionSources.get(reference.source).cacheDirectory, reference.id);
 }
 
 /**
  * Whether the accession already has a cache entry under the output root. Throws a message when
  * the entry exists but cannot be used, so the researcher is never asked about an unusable cache.
  */
-export async function hasNcbiCacheEntry(
+export async function hasGenomeCacheEntry(
   outputRoot: string,
-  accession: string,
+  reference: GenomeReference,
   inspectPath: PathInspection = stat,
 ): Promise<boolean> {
-  const cacheDirectory = ncbiCacheDirectory(outputRoot, accession);
+  const cacheDirectory = genomeCacheDirectory(outputRoot, reference);
   let details;
   try {
     details = await inspectPath(cacheDirectory);

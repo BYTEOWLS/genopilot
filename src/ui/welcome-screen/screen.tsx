@@ -20,7 +20,10 @@ import {sanitizeTerminalText} from '../sanitize.js';
 import {NewRunScreen} from '../new-run-screen/screen.js';
 import {genoPilotDetails} from '../../workflows/configuration-validation.js';
 import {AccessionsScreen} from '../accessions-screen/screen.js';
-import {fetchAssemblyMetadata, type AssemblyMetadataFetcher} from '../../accessions/ncbi-metadata.js';
+import {accessionSources} from '../../accessions/registry.js';
+import type {GenomeProviderRegistry} from '../../accessions/provider.js';
+import {providerSettings, type ProviderSettings} from '../../tooling/provider-settings.js';
+
 import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
 import type {AccessionCatalogLoader, AccessionCatalogUpdater} from '../../accessions/registration.js';
 import type {CacheScanner} from '../../accessions/cache-discovery.js';
@@ -37,12 +40,6 @@ import {DocumentationScreen} from '../documentation-screen/screen.js';
 import {Gff3ReplaceScreen} from '../gff3-replace-screen/screen.js';
 import {discoverPackagedWorkflows} from '../../workflows/discovery.js';
 import type {WorkflowDiscovery} from '../components/workflow-selector.js';
-import {
-  clearNcbiApiKey,
-  isNcbiApiKeyConfigured,
-  readNcbiApiKey,
-  writeNcbiApiKey,
-} from '../../tooling/ncbi-api-key.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import {ToolingSection} from './tooling/section.js';
 import {useConfirmedExit} from './hooks/use-confirmed-exit.js';
@@ -54,6 +51,8 @@ import {
   HomeSuspensionStateContext,
   useHomeSuspensions,
 } from '../home-navigation.js';
+
+const defaultProviderSettings = providerSettings();
 
 export type CliMetadata = {
   packageName: string;
@@ -86,10 +85,8 @@ export function WelcomeScreen({
   workflowDiscovery,
   runDiscovery,
   onWorkflowSelected,
-  ncbiApiKeyPath = resolveToolingPaths().ncbiApiKeyPath,
-  checkNcbiApiKeyConfigured = () => isNcbiApiKeyConfigured(ncbiApiKeyPath),
-  saveNcbiApiKey = key => writeNcbiApiKey(ncbiApiKeyPath, key),
-  clearStoredNcbiApiKey = () => clearNcbiApiKey(ncbiApiKeyPath),
+  providers = accessionSources,
+  providerSettings: settings = defaultProviderSettings,
   isolateCatalogPath = resolveToolingPaths().isolateCatalogPath,
   loadIsolates,
   updateIsolates,
@@ -97,7 +94,6 @@ export function WelcomeScreen({
   accessionCatalogPath = resolveToolingPaths().accessionCatalogPath,
   loadAccessions,
   updateAccessions,
-  fetchAccessionMetadata,
   scanAccessionCaches,
   updateCheck,
   mouseReporting = false,
@@ -114,10 +110,8 @@ export function WelcomeScreen({
   workflowDiscovery?: WorkflowDiscovery;
   runDiscovery?: RunDiscovery;
   onWorkflowSelected?: (workflowId: string) => void;
-  ncbiApiKeyPath?: string;
-  checkNcbiApiKeyConfigured?: () => Promise<boolean>;
-  saveNcbiApiKey?: (key: string) => Promise<void>;
-  clearStoredNcbiApiKey?: () => Promise<void>;
+  providers?: GenomeProviderRegistry;
+  providerSettings?: ProviderSettings;
   isolateCatalogPath?: string;
   loadIsolates?: IsolateCatalogLoader;
   updateIsolates?: IsolateCatalogUpdater;
@@ -125,7 +119,6 @@ export function WelcomeScreen({
   accessionCatalogPath?: string;
   loadAccessions?: AccessionCatalogLoader;
   updateAccessions?: AccessionCatalogUpdater;
-  fetchAccessionMetadata?: AssemblyMetadataFetcher;
   scanAccessionCaches?: CacheScanner;
   updateCheck?: (signal?: AbortSignal) => Promise<UpdateAvailability>;
   /** Whether the terminal reports the mouse, which makes plain dragging no longer select text. */
@@ -139,6 +132,7 @@ export function WelcomeScreen({
   );
   const [commandMessage, setCommandMessage] = useState<string>();
   const [activeScreenId, setActiveScreenId] = useState<WelcomeCommandId>();
+  const [configureProvider, setConfigureProvider] = useState<string>();
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>();
   const [availableUpdateVersion, setAvailableUpdateVersion] = useState<string>();
   const {suspension: homeSuspension, suspend: suspendHome} = useHomeSuspensions();
@@ -158,11 +152,6 @@ export function WelcomeScreen({
   const updateAccessionsAtPath = useCallback<AccessionCatalogUpdater>(
     (revision, mutate) => updateAccessionCatalog(accessionCatalogPath, revision, mutate),
     [accessionCatalogPath],
-  );
-  // The optional key is read for every lookup, so a key saved in this session applies at once.
-  const fetchMetadataWithStoredKey = useCallback<AssemblyMetadataFetcher>(
-    async accession => fetchAssemblyMetadata(accession, {apiKey: await readNcbiApiKey(ncbiApiKeyPath)}),
-    [ncbiApiKeyPath],
   );
 
   useEffect(() => {
@@ -338,20 +327,26 @@ export function WelcomeScreen({
         );
       case 'manage-accessions':
         return (
-          <AccessionsScreen
-            onBack={() => setActiveScreenId(undefined)}
-            inputActive={columns >= minimumTerminalWidth}
-            currentDirectory={currentDirectory}
-            catalogPath={accessionCatalogPath}
-            loadCatalog={loadAccessions ?? loadAccessionsFromPath}
-            updateCatalog={updateAccessions ?? updateAccessionsAtPath}
-            fetchMetadata={fetchAccessionMetadata ?? fetchMetadataWithStoredKey}
-            scanCaches={scanAccessionCaches}
-            checkApiKeyConfigured={checkNcbiApiKeyConfigured}
-            saveApiKey={saveNcbiApiKey}
-            clearApiKey={clearStoredNcbiApiKey}
-            apiKeyPath={ncbiApiKeyPath}
-          />
+          <Box flexDirection="column">
+            <Box display={configureProvider ? 'none' : 'flex'} flexDirection="column">
+              <AccessionsScreen
+                onBack={() => setActiveScreenId(undefined)}
+                inputActive={columns >= minimumTerminalWidth && !configureProvider}
+                currentDirectory={currentDirectory}
+                catalogPath={accessionCatalogPath}
+                loadCatalog={loadAccessions ?? loadAccessionsFromPath}
+                updateCatalog={updateAccessions ?? updateAccessionsAtPath}
+                registry={providers}
+                settings={settings}
+                onConfigureProvider={setConfigureProvider}
+                scanCaches={scanAccessionCaches}
+              />
+            </Box>
+            {configureProvider ? <ToolingScreen metadata={metadata} status={tooling.status}
+              onCheck={() => tooling.runCheck(true)} onBack={() => setConfigureProvider(undefined)}
+              registry={providers} settings={settings} initialProvider={configureProvider}
+              inputActive={columns >= minimumTerminalWidth} /> : null}
+          </Box>
         );
       case 'gff3-replace':
         return (
@@ -365,6 +360,8 @@ export function WelcomeScreen({
         return (
           <ToolingScreen
             metadata={metadata}
+            registry={providers}
+            settings={settings}
             status={tooling.status}
             message={tooling.checkMessage}
             onCheck={() => tooling.runCheck(true)}

@@ -1,20 +1,26 @@
+import {ncbiProvider} from '../../src/accessions/provider/ncbi/index.js';
+import {GenomeProviderRegistry} from '../../src/accessions/provider.js';
+import {ncbiMetadata} from '../../src/accessions/provider/ncbi/index.js';
+import type {NcbiAssemblyMetadata} from '../../src/accessions/provider/ncbi/metadata.js';
 import assert from 'node:assert/strict';
 import {formatLocalDate} from '../../src/ui/utils.js';
 import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
 import React from 'react';
 import {render} from 'ink';
+import {defaultTheme} from '@inkjs/ui';
 import type {CacheScan, ScannedCopy} from '../../src/accessions/cache-discovery.js';
 import {
   emptyAccessionCatalog,
   validateAccessionCatalog,
   type AccessionCatalog,
   type AccessionEntry,
-  type NcbiAssemblyMetadata,
 } from '../../src/accessions/catalog.js';
-import type {MetadataFetchResult} from '../../src/accessions/ncbi-metadata.js';
+import type {MetadataFetchResult} from '../../src/accessions/provider/ncbi/metadata-fetch.js';
 import type {AccessionCatalogMutation, LoadedAccessionCatalog} from '../../src/accessions/store.js';
 import {AccessionsScreen} from '../../src/ui/accessions-screen/screen.js';
+import type {CatalogDownloader} from '../../src/ui/accessions-screen/download-form.js';
+import {formatBytes} from '../../src/workflows/systems-check.js';
 import {effectsSettled, pressKey as press, waitFor, waitForOutput as waitForTerminal} from '../wait.js';
 
 const ENTER = '\r';
@@ -94,12 +100,13 @@ function metadata(organism: string): NcbiAssemblyMetadata {
 }
 
 function entry(id: string, overrides: Partial<AccessionEntry> = {}): AccessionEntry {
-  return {accession: id, ncbi: null, cached_copies: [], ...overrides};
+  return {source: 'ncbi', id: id, parameters: {}, metadata: null, cached_copies: [], ...overrides};
 }
 
 function copy(id: string, root: string, state: ScannedCopy['state'], problem?: string): ScannedCopy {
   return {
-    accession: id,
+    source: 'ncbi', id: id, parameters: {},
+    metadata: null,
     root,
     path: `${root}/ncbi-accessions-cache/${id}`,
     state,
@@ -117,13 +124,15 @@ function renderScreen(
     columns,
     scanGate,
     ignored = [],
+    download = async () => { throw new Error('Unexpected download.'); },
   }: {
+    download?: CatalogDownloader;
     ignored?: CacheScan['ignored'];
     /** Holds every scan until it resolves, as hashing large assemblies would. */
     scanGate?: Promise<void>;
     catalog?: AccessionCatalog;
     copies?: ScannedCopy[];
-    fetch?: (id: string) => Promise<MetadataFetchResult>;
+    fetch?: (id: string, signal: AbortSignal) => Promise<MetadataFetchResult>;
     deleteCaches?: (roots: readonly string[], id: string) => Promise<string[]>;
     columns?: number;
   } = {},
@@ -138,6 +147,7 @@ function renderScreen(
   const input = new TestInput();
   const output = new TestOutput(columns);
   let backs = 0;
+  let configurations = 0;
   const instance = render(
     <AccessionsScreen
       onBack={() => {
@@ -159,20 +169,22 @@ function renderScreen(
         scansCompleted += 1;
         return {scannedAt: '2026-01-01T12:00:00.000Z', cacheDirectories: roots.map(root => `${root}/ncbi-accessions-cache`), copies: currentCopies, ignored, rootProblems: []} satisfies CacheScan;
       }}
-      fetchMetadata={async id => {
-        fetches.push(id);
-        return fetch(id);
-      }}
-      deleteCaches={async (roots, id) => {
+      registry={new GenomeProviderRegistry([{...ncbiProvider, lookupMetadata: async (reference, context) => {
+        fetches.push(reference.id);
+        const result = await fetch(reference.id, context.signal);
+        if (result.state === 'failed') { throw new Error(result.message); }
+        return result.metadata;
+      }}])}
+      settings={{read: async () => ({}), save: async () => {}, clear: async () => {}}}
+      download={download}
+      onConfigureProvider={() => { configurations += 1; }}
+      deleteCaches={async (roots, reference) => {
+        const id = reference.id;
         deletions.push({roots, accession: id});
         const deleted = await deleteCaches(roots, id);
-        currentCopies = currentCopies.filter(candidate => candidate.accession !== id);
+        currentCopies = currentCopies.filter(candidate => candidate.id !== id);
         return deleted;
       }}
-      checkApiKeyConfigured={async () => false}
-      saveApiKey={async () => undefined}
-      clearApiKey={async () => undefined}
-      apiKeyPath="/researcher/secrets/ncbi-api-key"
     />,
     {
       exitOnCtrlC: false,
@@ -198,6 +210,9 @@ function renderScreen(
     get backs() {
       return backs;
     },
+    get configurations() {
+      return configurations;
+    },
     get scansCompleted() {
       return scansCompleted;
     },
@@ -213,22 +228,124 @@ async function ready(screen: {scansCompleted: number}): Promise<void> {
   await effectsSettled();
 }
 
-test('shows all metadata sections together without changing or submitting the entry', async context => {
-  const facts = {...metadata('Synthetic detail organism'), release_date: '2025-04-03', total_sequence_length: 1234567, biosample_accession: 'SAMN123'};
+test('saving reviewed metadata adds a selectable catalog entry with no cached files', async context => {
+  const facts = metadata('metadata-only-organism-marker');
   const screen = renderScreen(context, {fetch: async () => ({state: 'retrieved', metadata: facts})});
   await ready(screen);
   await press(screen.input, 'n');
-  await press(screen.input, typed);
-  await lookUp(screen.input);
-  await waitForOutput(screen.output, value => value.includes(formatLocalDate(facts.release_date))
-    && value.includes('1,234,567 bp')
-    && value.includes('https://www.ncbi.nlm.nih.gov/biosample/SAMN123'));
   await press(screen.input, ENTER);
-  assert.equal(screen.writes, 0);
-  await saveDetails(screen.input);
-  await waitFor(() => screen.writes === 1, 'explicit save');
-  assert.deepEqual(screen.catalog.accessions[0]?.ncbi, facts);
+  await press(screen.input, typed);
+  await press(screen.input, '\x1b[A');
+  await press(screen.input, ENTER);
+  await waitForOutput(screen.output, value => value.includes(facts.organism));
+  assert.equal(screen.catalog.accessions.length, 0);
+  await press(screen.input, '\x1b[A');
+  await press(screen.input, ENTER);
+  await waitFor(() => screen.catalog.accessions.length === 1, 'saved metadata');
+  assert.deepEqual(screen.catalog.accessions[0], entry(typed, {metadata: facts}));
+  assert.equal(screen.scansCompleted, 1, 'saving metadata does not trigger a download/cache rescan');
+  // The new entry is selected and can be reopened without another remote lookup.
+  await press(screen.input, ENTER);
+  assert.equal(screen.fetches.length, 1);
 });
+
+test('metadata-only refresh preserves existing labels and verified cache copies', async context => {
+  const facts = metadata('refreshed-metadata-marker');
+  const screen = renderScreen(context, {
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'preserved-name', description: 'preserved-description'})]},
+    copies: [copy(accession, '/project/runs', 'verified')],
+    fetch: async () => ({state: 'retrieved', metadata: facts}),
+  });
+  await ready(screen);
+  const before = structuredClone(screen.catalog.accessions[0]!);
+  await press(screen.input, 'n');
+  await press(screen.input, ENTER);
+  await press(screen.input, accession);
+  await press(screen.input, '\x1b[A');
+  await press(screen.input, ENTER);
+  await waitForOutput(screen.output, value => value.includes(facts.organism));
+  await press(screen.input, '\x1b[A');
+  await press(screen.input, ENTER);
+  await waitFor(() => ncbiMetadata(screen.catalog.accessions[0]!.metadata)?.organism === facts.organism, 'updated metadata');
+  assert.deepEqual(screen.catalog.accessions[0], {...before, metadata: facts});
+  assert.equal(screen.scansCompleted, 1);
+});
+
+test('the list ignores the former download shortcut and inline download cancellation retains editor drafts', async context => {
+  let signal: AbortSignal | undefined;
+  const screen = renderScreen(context, {
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'draft-marker'})]},
+    download: async (_request, context) => {
+      signal = context.signal;
+      context.onProgress?.({phase: 'downloading', bytes: 1024});
+      return new Promise((_resolve, reject) => context.signal.addEventListener('abort', () => reject(context.signal.reason), {once: true}));
+    },
+  });
+  await ready(screen);
+  await press(screen.input, 'g');
+  await press(screen.input, ENTER);
+  await press(screen.input, '-changed');
+  await press(screen.input, TAB);
+  await press(screen.input, TAB);
+  await press(screen.input, 'g');
+  await waitFor(() => signal !== undefined, 'download starts without another form');
+  await waitForOutput(screen.output, value => value.includes(formatBytes(1024)));
+  await press(screen.input, ESCAPE);
+  await waitFor(() => signal!.aborted, 'download cancelled');
+  await effectsSettled();
+  await press(screen.input, TAB);
+  await press(screen.input, TAB);
+  await press(screen.input, ENTER);
+  await waitFor(() => screen.catalog.accessions[0]?.name === 'draft-marker-changed', 'draft saved after cancelling download');
+  assert.deepEqual(screen.fetches, []);
+  assert.equal(screen.backs, 0);
+});
+
+for (const annotation of ['available', 'unavailable'] as const) {
+  test(`editor download reports ${annotation} annotation in the appropriate alert and retains unsaved labels`, async context => {
+  let complete!: () => void;
+  const transfer = new Promise<void>(resolve => { complete = resolve; });
+  context.after(() => complete());
+  let downloads = 0;
+  const facts = metadata('downloaded-metadata-marker');
+  const screen = renderScreen(context, {
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'draft-marker'})]},
+    download: async (request, context) => {
+      downloads += 1;
+      assert.deepEqual(request, {
+        reference: {source: 'ncbi', id: accession, parameters: {}},
+        kinds: ncbiProvider.artifacts.map(artifact => artifact.kind), root: '/project/runs', mode: 'refresh',
+      });
+      context.onProgress?.({phase: 'downloading', bytes: 1024, total: 4096});
+      await transfer;
+      return {reference: request.reference, metadata: facts, facts: {}, downloaded: true, annotation};
+    },
+  });
+  await ready(screen);
+  await press(screen.input, ENTER);
+  await press(screen.input, '-changed');
+  await press(screen.input, TAB);
+  await press(screen.input, TAB);
+  await press(screen.input, ENTER);
+  await waitFor(() => downloads === 1, 'button starts direct download');
+  await waitForOutput(screen.output, value => value.includes(formatBytes(4096)));
+  await press(screen.input, 'g');
+  assert.equal(downloads, 1, 'busy editor cannot start a duplicate transfer');
+  complete();
+  await waitFor(() => screen.scansCompleted === 2, 'download completion rescans caches');
+  await effectsSettled();
+  const config = defaultTheme.components.Alert!.config as (props: {variant: string}) => {icon: string};
+  const variant = annotation === 'unavailable' ? 'warning' : 'info';
+  await waitForOutput(screen.output, value => value.includes(config({variant}).icon));
+  assert.equal(screen.catalog.accessions[0]?.name, 'draft-marker');
+  assert.deepEqual(screen.fetches, [], 'no metadata-review request precedes the transfer');
+  await press(screen.input, TAB);
+  await press(screen.input, TAB);
+  await press(screen.input, ENTER);
+  await waitFor(() => screen.catalog.accessions[0]?.name === 'draft-marker-changed', 'editor draft saved after download');
+  assert.deepEqual(screen.catalog.accessions[0]?.metadata, facts);
+  });
+}
 
 test('records verified caches on open and shows damaged copies without trusting them', async context => {
   const screen = renderScreen(context, {
@@ -240,78 +357,14 @@ test('records verified caches on open and shows damaged copies without trusting 
 
   await waitFor(() => screen.writes === 1, 'discovery to save');
   assert.deepEqual(screen.scans[0], ['/project/runs']);
-  assert.deepEqual(screen.catalog.accessions.map(candidate => candidate.accession), [accession]);
+  assert.deepEqual(screen.catalog.accessions.map(candidate => candidate.id), [accession]);
   const frame = await waitForOutput(screen.output, value => value.includes('genomic.fna does not match'));
   assert.match(frame, new RegExp(`${other}`));
 });
 
-test('adds an accession with its looked-up metadata and without downloading anything', async context => {
-  const screen = renderScreen(context);
-  await ready(screen);
-
-  await press(screen.input, 'n');
-  await settle();
-  await press(screen.input, accession.toLowerCase());
-  await waitForOutput(screen.output, value => value.includes(accession.toLowerCase()));
-  await lookUp(screen.input);
-  await waitFor(() => screen.fetches.length === 1, 'the metadata lookup');
-  await waitForOutput(screen.output, value => value.includes('Fetched organism'));
-  await press(screen.input, 'Backbone');
-  await waitForOutput(screen.output, value => value.includes('Backbone'));
-  await saveDetails(screen.input);
-
-  await waitFor(() => screen.catalog.accessions.length === 1, 'the entry to be saved');
-  // The form stayed open on its own page and received the accession.
-  assert.deepEqual(screen.fetches, [accession]);
-  assert.deepEqual(screen.catalog.accessions[0], {
-    accession,
-    name: 'Backbone',
-    ncbi: metadata('Fetched organism'),
-    cached_copies: [],
-  });
-  assert.deepEqual(screen.deletions, []);
-});
-
-test('saves an accession without metadata when NCBI is unreachable', async context => {
-  const screen = renderScreen(context, {
-    fetch: async () => ({state: 'failed', kind: 'offline', message: 'NCBI could not be reached.'}),
-  });
-  await ready(screen);
-
-  await press(screen.input, 'n');
-  await settle();
-  await press(screen.input, typed);
-  await waitForOutput(screen.output, value => value.includes(typed));
-  await lookUp(screen.input);
-  await waitForOutput(screen.output, value => value.includes('NCBI could not be reached.'));
-  await saveDetails(screen.input);
-
-  await waitFor(() => screen.catalog.accessions.length === 1, 'the entry to be saved');
-  assert.equal(screen.catalog.accessions[0]?.ncbi, null);
-});
-
-test('does not add an accession NCBI does not know', async context => {
-  const screen = renderScreen(context, {
-    fetch: async () => ({state: 'failed', kind: 'not-found', message: 'NCBI has no such assembly.'}),
-  });
-  await ready(screen);
-
-  await press(screen.input, 'n');
-  await settle();
-  await press(screen.input, typed);
-  await waitForOutput(screen.output, value => value.includes(typed));
-  await lookUp(screen.input);
-  await waitForOutput(screen.output, value => value.includes('NCBI has no such assembly.'));
-  await press(screen.input, ENTER);
-  await press(screen.input, ENTER);
-
-  assert.equal(screen.fetches.length, 3);
-  assert.equal(screen.writes, 0);
-});
-
 test('edits only the local name and keeps fetched facts', async context => {
   const screen = renderScreen(context, {
-    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'Old', ncbi: metadata('Kept organism')})]},
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'Old', metadata: metadata('Kept organism')})]},
   });
   await waitForOutput(screen.output, value => value.includes('Kept organism'));
 
@@ -321,20 +374,58 @@ test('edits only the local name and keeps fetched facts', async context => {
   await saveDetails(screen.input);
 
   await waitFor(() => screen.catalog.accessions[0]?.name === 'Old label', 'the edit to be saved');
-  assert.deepEqual(screen.catalog.accessions[0]?.ncbi, metadata('Kept organism'));
+  assert.deepEqual(screen.catalog.accessions[0]?.metadata, metadata('Kept organism'));
   assert.deepEqual(screen.fetches, []);
 });
 
-test('refreshes metadata independently of any assembly download', async context => {
+test('metadata refresh belongs to the editor and preserves unsaved labels', async context => {
   const screen = renderScreen(context, {
-    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {ncbi: metadata('Stale')})]},
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {metadata: metadata('Stale')})]},
   });
-  await waitForOutput(screen.output, value => value.includes('Stale'));
-
+  await ready(screen);
   await press(screen.input, 'm');
-
-  await waitFor(() => screen.catalog.accessions[0]?.ncbi?.organism === 'Fetched organism', 'the refresh');
+  await press(screen.input, 'c');
+  assert.deepEqual(screen.fetches, []);
+  assert.equal(screen.configurations, 0, 'provider setup is not a list action');
+  await press(screen.input, ENTER);
+  await press(screen.input, 'draft-marker');
+  await press(screen.input, '\x1b[A');
+  await press(screen.input, 'm');
+  await waitFor(() => ncbiMetadata(screen.catalog.accessions[0]?.metadata)?.organism === 'Fetched organism', 'the refresh');
+  await effectsSettled();
+  assert.equal(screen.catalog.accessions[0]?.name, undefined, 'refresh does not save drafts');
+  await press(screen.input, ENTER);
+  await waitFor(() => screen.catalog.accessions[0]?.name === 'draft-marker', 'draft saved after refresh');
   assert.deepEqual(screen.deletions, []);
+});
+
+test('metadata refresh failures can be retried and an active lookup can be cancelled in the editor', async context => {
+  let signal: AbortSignal | undefined;
+  const screen = renderScreen(context, {
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {metadata: metadata('unchanged-marker')})]},
+    fetch: async (_id, abortSignal) => {
+      if (screen.fetches.length === 1) {
+        return {state: 'failed', kind: 'offline', message: 'failure-marker'};
+      }
+      signal = abortSignal;
+      return new Promise((_resolve, reject) => abortSignal.addEventListener('abort', () => reject(abortSignal.reason), {once: true}));
+    },
+  });
+  await ready(screen);
+  await press(screen.input, ENTER);
+  await press(screen.input, '\x1b[A');
+  await press(screen.input, 'm');
+  await waitForOutput(screen.output, value => value.includes('failure-marker'));
+  await press(screen.input, 'm');
+  await waitFor(() => signal !== undefined, 'retry starts lookup');
+  await press(screen.input, ESCAPE);
+  await waitFor(() => signal!.aborted, 'lookup cancelled');
+  await effectsSettled();
+  assert.equal(ncbiMetadata(screen.catalog.accessions[0]?.metadata)?.organism, 'unchanged-marker');
+  assert.equal(screen.backs, 0);
+  await press(screen.input, ESCAPE);
+  await press(screen.input, ESCAPE);
+  assert.equal(screen.backs, 1);
 });
 
 test('removing a cached entry deletes its cache directories under every known root', async context => {
@@ -342,7 +433,7 @@ test('removing a cached entry deletes its cache directories under every known ro
     catalog: {
       ...emptyAccessionCatalog(),
       output_roots: ['/analysis/other'],
-      accessions: [entry(accession, {ncbi: metadata('Organism')})],
+      accessions: [entry(accession, {metadata: metadata('Organism')})],
     },
     copies: [copy(accession, '/project/runs', 'verified'), copy(accession, '/analysis/other', 'incomplete', 'genomic.fna is missing')],
   });
@@ -410,7 +501,7 @@ test('returns with Escape from the tab bar but not from an open form', async con
 test('stays usable on a narrow terminal', async context => {
   const screen = renderScreen(context, {
     columns: 40,
-    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'A long researcher label', ncbi: metadata('Organism')})]},
+    catalog: {...emptyAccessionCatalog(), accessions: [entry(accession, {name: 'A long researcher label', metadata: metadata('Organism')})]},
   });
 
   const frame = await waitForOutput(screen.output, value => value.includes('A long researcher'));
@@ -437,32 +528,16 @@ test('switches tabs with ←/→ like the file browser moves between folders', a
   // ← from the roots tab returns to the accession list, whose n opens the add form.
   await press(screen.input, ARROW_LEFT);
   await press(screen.input, 'n');
+  await press(screen.input, ENTER);
   await settle();
   await press(screen.input, typed);
   await waitForOutput(screen.output, value => value.includes(typed));
-  await lookUp(screen.input);
-  await waitFor(() => screen.fetches.length === 1, 'the lookup from the accession tab');
-});
-
-test('leaves ←/→ to the API-key cursor while a key is being typed', async context => {
-  const screen = renderScreen(context);
-  await ready(screen);
-
-  // ← from the first tab wraps to the API-key tab, which shows where the key is stored.
-  await press(screen.input, ARROW_LEFT);
-  await waitForOutput(screen.output, value => value.includes('/researcher/secrets/ncbi-api-key'));
-  await press(screen.input, 'ab');
-  await waitForOutput(screen.output, value => value.includes('**'));
-  await press(screen.input, ARROW_LEFT);
-  screen.output.clear();
-  await press(screen.input, 'X');
-  // The key tab is still active: ← moved the cursor, and the next character joined the draft.
-  await waitForOutput(screen.output, value => value.includes('***'));
+  assert.equal(screen.fetches.length, 0);
 });
 
 test('shows every cached and damaged copy when an entry is opened', async context => {
   const screen = renderScreen(context, {
-    catalog: {...emptyAccessionCatalog(), output_roots: ['/analysis/other'], accessions: [entry(accession, {ncbi: metadata('Organism')})]},
+    catalog: {...emptyAccessionCatalog(), output_roots: ['/analysis/other'], accessions: [entry(accession, {metadata: metadata('Organism')})]},
     copies: [
       copy(accession, '/project/runs', 'verified'),
       copy(accession, '/analysis/other', 'checksum-invalid', 'genomic.fna does not match its recorded checksum'),
@@ -473,6 +548,7 @@ test('shows every cached and damaged copy when an entry is opened', async contex
 
   screen.output.clear();
   await press(screen.input, ENTER);
+  await press(screen.input, '\x1b[6~');
 
   const frame = await waitForOutput(screen.output, value => value.includes('genomic.fna does not match its recorded checksum'));
   assert.match(frame, /\/project\/runs\/ncbi-accessions-cache\/GCF_000149205\.2/);

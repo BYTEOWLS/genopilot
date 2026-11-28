@@ -2,7 +2,7 @@ import {stat} from 'node:fs/promises';
 import {readPairs} from '../../isolates/catalog.js';
 import {join} from 'node:path';
 import type {DiskEstimateFactors} from '../manifest.js';
-import {ncbiCacheDirectory} from '../run-preparation.js';
+import {genomeCacheDirectory} from '../run-preparation.js';
 import {namedDiskFactors, type DiskEstimate, type RunDiskEstimate} from '../systems-check.js';
 import type {PreparedReferenceConsensusRun} from './run-configuration.js';
 
@@ -77,7 +77,7 @@ export async function diskEstimateInputs(
   if (backbone.source === 'local') {
     return {inputs: {isolateReadBytes, genomeBytes: await size(backbone.fasta), effectiveCpus}};
   }
-  const cached = join(ncbiCacheDirectory(prepared.configuration.run.output_root, backbone.accession), 'genomic.fna');
+  const cached = join(backbone.copy?.path ?? genomeCacheDirectory(prepared.configuration.run.output_root, backbone.reference), 'genomic.fna');
   const genomeBytes = await fileSize(cached).catch(() => undefined);
   return genomeBytes === undefined
     ? {inputs: {isolateReadBytes, effectiveCpus}, note: 'without the backbone, which is not downloaded yet'}

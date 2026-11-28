@@ -21,3 +21,4 @@ runs/
 .idea/
 .vscode/
 .DS_Store
+tmp/

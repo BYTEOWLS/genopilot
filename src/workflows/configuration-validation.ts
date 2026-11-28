@@ -1,12 +1,10 @@
 import {arch, availableParallelism, cpus, platform, totalmem} from 'node:os';
 import {isAbsolute} from 'node:path';
-import {isVersionedAssemblyAccession, ncbiAccessionFormatMessage} from '../accessions/accession.js';
 import type {BuildInfo} from '../build-info.js';
 
 /** Validation helpers and sections shared by every workflow's run configuration. */
 
 export type CpuMode = 'automatic' | 'leave-one-free' | 'manual';
-export type NcbiCacheMode = 'reuse' | 'refresh';
 
 export type ConfigurationValidationIssue = {
   path: string;
@@ -139,49 +137,6 @@ export function validateAbsolutePath(
   }
   if (!isAbsolute(value)) {
     issues.push({path, message: 'must be an absolute path'});
-    return false;
-  }
-  return true;
-}
-
-export function validateAccession(
-  value: unknown,
-  path: string,
-  issues: ConfigurationValidationIssue[],
-): value is string {
-  if (!requireNonEmptyString(value, path, issues)) {
-    return false;
-  }
-  if (!isVersionedAssemblyAccession(value)) {
-    issues.push({path, message: ncbiAccessionFormatMessage});
-    return false;
-  }
-  return true;
-}
-
-export function validateInputSource(
-  value: unknown,
-  path: string,
-  issues: ConfigurationValidationIssue[],
-): 'local' | 'ncbi' | undefined {
-  if (value !== 'local' && value !== 'ncbi') {
-    issues.push({path: `${path}.source`, message: "must be 'local' or 'ncbi'"});
-    return undefined;
-  }
-  return value;
-}
-
-export function validateNcbiCacheMode(
-  value: RecordValue,
-  path: string,
-  issues: ConfigurationValidationIssue[],
-): boolean {
-  if (
-    'ncbi_cache_mode' in value &&
-    value.ncbi_cache_mode !== 'reuse' &&
-    value.ncbi_cache_mode !== 'refresh'
-  ) {
-    issues.push({path: `${path}.ncbi_cache_mode`, message: "must be 'reuse' or 'refresh'"});
     return false;
   }
   return true;

@@ -33,7 +33,7 @@ Existing supporting step files are retained as contract and implementation histo
 | Concept | Status | Release | Record |
 |---|---|---|---|
 | [Annotation review](completed/annotation-review/concept.md) | done | — | [Tasks](completed/annotation-review/tasks.md) |
-| [Annotation-transfer results](completed/annotation-transfer-results/concept.md) | done | — | Implemented slices and compatibility contract |
+| [Annotation-transfer results](completed/annotation-transfer-results/concept.md) | done | — | Implemented slices, emitted gene-type reconciliation, coding-type recognition, and compatibility contract |
 | [Annotation-transfer workflow](completed/annotation-transfer-workflow/concept.md) | done | — | Workflow design and delivery slices |
 | [Browser view](completed/browser-view/concept.md) | done | — | [Tasks](completed/browser-view/tasks.md); verification limits remain explicit |
 | [Bundled package](completed/bundled-package/concept.md) | done | — | [Tasks](completed/bundled-package/tasks.md) |

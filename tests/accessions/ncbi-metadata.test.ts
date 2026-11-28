@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {fetchAssemblyMetadata, parseAssemblyReport} from '../../src/accessions/ncbi-metadata.js';
+import {fetchAssemblyMetadata, parseAssemblyReport} from '../../src/accessions/provider/ncbi/metadata-fetch.js';
 
 const accession = 'GCF_000149205.2';
 const secret = 'secret-api-key-value';

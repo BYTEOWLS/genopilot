@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import {PassThrough, Writable} from 'node:stream';
 import test, {type TestContext} from 'node:test';
+import {stripVTControlCharacters} from 'node:util';
 import React, {useState} from 'react';
 import {render} from 'ink';
 import type {AccessionEntry} from '../../src/accessions/catalog.js';
 import type {AccessionCatalogReader} from '../../src/accessions/store.js';
+import {genomeSelection, selectedGenome} from '../../src/accessions/selection.js';
 import {accessionHint, AccessionField} from '../../src/ui/components/accession-field.js';
-import {pressKey as press, waitFor} from '../wait.js';
+import {pressKey as press, waitFor, rendered} from '../wait.js';
 
 const ENTER = '\r';
 const ESCAPE = '\x1b';
@@ -26,8 +28,8 @@ class TestInput extends PassThrough {
 }
 
 class TestOutput extends Writable {
-  readonly columns = 160;
-  readonly rows = 30;
+  columns = 160;
+  rows = 30;
   readonly isTTY = false;
   private output = '';
   /** How many frames Ink has written, to wait for the next one. */
@@ -50,14 +52,14 @@ async function waitForFrame(output: TestOutput, predicate: (frame: string) => bo
 }
 function entry(accession: string, name: string, overrides: Partial<AccessionEntry> = {}): AccessionEntry {
   return {
-    accession,
+    source: 'ncbi', id: accession, parameters: {},
     name,
-    ncbi: {
+    metadata: {
       organism: 'Synthetic organism',
       retrieved_at: '2026-01-01T00:00:00.000Z',
       source: 'datasets-v2-rest',
     },
-    cached_copies: [],
+    cached_copies: [{path: `/catalog/${accession}`, verified_at: '2026-01-01T00:00:00Z', fasta_sha256: 'a'.repeat(64)}],
     ...overrides,
   };
 }
@@ -101,7 +103,7 @@ function Harness({
 async function renderField(
   context: TestContext,
   props: {initialValue?: string; loadAccessions?: AccessionCatalogReader} = {},
-): Promise<{input: TestInput; output: TestOutput; changes: string[]}> {
+): Promise<{input: TestInput; output: TestOutput; changes: string[]; instance: ReturnType<typeof render>}>  {
   const input = new TestInput();
   const output = new TestOutput();
   const changes: string[] = [];
@@ -129,7 +131,7 @@ async function renderField(
     () => writesAtSettle !== undefined && output.writes > writesAtSettle,
     'the loaded catalog is drawn',
   );
-  return {input, output, changes};
+  return {input, output, changes, instance};
 }
 
 const pickerOpen = (frame: string): boolean => frame.includes('first-assembly') && frame.includes('second-assembly');
@@ -146,14 +148,14 @@ test('chooses an accession from the catalog with Enter', async context => {
   await press(input, ENTER);
 
   const frame = await waitForFrame(output, value => !pickerOpen(value));
-  assert.deepEqual(changes, ['GCA_000000002.3']);
+  assert.deepEqual(changes.map(selectedGenome), [{source: 'ncbi', id: 'GCA_000000002.3', parameters: {}}]);
   // Back in the field, the chosen value is shown with what the catalog knows about it.
   assert.match(frame, /GCA_000000002\.3/);
   assert.match(frame, /second-assembly/);
 });
 
 test('preselects the current value in the picker and keeps it when cancelled', async context => {
-  const {input, output, changes} = await renderField(context, {initialValue: 'GCA_000000002.3'});
+  const {input, output, changes} = await renderField(context, {initialValue: genomeSelection({source: 'ncbi', id: 'GCA_000000002.3', parameters: {}})});
   await waitForFrame(output, frame => selectedLine(frame).length > 0);
 
   await press(input, ENTER);
@@ -164,16 +166,55 @@ test('preselects the current value in the picker and keeps it when cancelled', a
   assert.deepEqual(changes, []);
 });
 
-test('recognizes a typed accession from the catalog regardless of case and whitespace', async context => {
-  const {input, output, changes} = await renderField(context);
-  await waitForFrame(output, frame => selectedLine(frame).length > 0);
-
-  await press(input, ' gcf_000000001.1');
-  await waitForFrame(output, frame => frame.includes('first-assembly'));
-  assert.equal(changes.at(-1), ' gcf_000000001.1');
+test('chooses a non-NCBI catalog genome with its provider parameters intact', async context => {
+  const reference = {source: 'veupathdb', id: 'FungiDB-71_ExampleA', parameters: {site: 'FungiDB', release: 71, organism_abbreviation: 'ExampleA'}};
+  const genome: AccessionEntry = {...reference, name: 'other-provider-marker', metadata: {...reference.parameters, organism: 'synthetic-organism-marker'}, cached_copies: [{path: `/catalog/${reference.id}`, verified_at: '2026-01-01T00:00:00Z', fasta_sha256: 'a'.repeat(64)}]};
+  const {input, output, changes} = await renderField(context, {loadAccessions: async () => [...await catalog(), genome]});
+  await press(input, ENTER);
+  await waitForFrame(output, frame => frame.includes(genome.name!));
+  await press(input, ARROW_DOWN);
+  await press(input, ARROW_DOWN);
+  await press(input, ENTER);
+  await waitForFrame(output, frame => !pickerOpen(frame) && frame.includes(reference.id));
+  assert.deepEqual(changes, [genomeSelection(reference)]);
+  assert.deepEqual(selectedGenome(changes[0]!), reference);
+  await press(input, ENTER);
+  await waitForFrame(output, frame => selectedLine(frame).includes(reference.id));
+  await press(input, ESCAPE);
+  assert.equal(changes.length, 1);
 });
 
-test('describes the typed value by its state against the catalog', async () => {
+test('catalog lists page around focus and remain bounded after resizing', async context => {
+  const choices = Array.from({length: 30}, (_, index) => entry(`GCF_${String(index + 1).padStart(9, '0')}.1`, `genome-marker-${index}`));
+  const screen = await renderField(context, {loadAccessions: async () => choices});
+  await press(screen.input, ENTER);
+  await waitForFrame(screen.output, frame => frame.includes(choices[0]!.name!));
+  screen.output.columns = 60;
+  screen.output.rows = 18;
+  screen.output.emit('resize');
+  await rendered(screen.instance);
+  const fits = () => stripVTControlCharacters(screen.output.lastFrame()).trimEnd().split('\n').length <= screen.output.rows;
+  assert.ok(fits(), screen.output.lastFrame());
+  const before = selectedLine(screen.output.lastFrame());
+  await press(screen.input, '\x1b[6~');
+  await waitForFrame(screen.output, frame => selectedLine(frame) !== before);
+  assert.ok(fits(), screen.output.lastFrame());
+  await press(screen.input, ENTER);
+  assert.equal(screen.changes.length, 1);
+  assert.ok(choices.some(choice => choice.id === selectedGenome(screen.changes[0]!)?.id));
+});
+
+test('genome fields ignore typed identifiers and deletion keys', async context => {
+  for (const initialValue of ['', genomeSelection(entry('GCF_000000001.1', 'first-assembly'))]) {
+    const {input, instance, changes} = await renderField(context, {initialValue});
+    await press(input, 'GCF_000000009.1');
+    await press(input, '\x7f');
+    await rendered(instance);
+    assert.deepEqual(changes, []);
+  }
+});
+
+test('describes the selected reference by its state against the catalog', async () => {
   const entries = await catalog();
   const conflicting = entry('GCF_000000003.1', 'conflicting-assembly', {
     cached_copies: [
@@ -187,12 +228,15 @@ test('describes the typed value by its state against the catalog', async () => {
 
   assert.equal(kind(''), 'empty');
   assert.equal(kind('GCF_000000001'), 'invalid');
-  assert.equal(kind('GCF_000000009.1'), 'uncataloged');
-  assert.equal(kind(' gcf_000000001.1 '), 'cataloged');
-  assert.equal(kind('GCF_000000003.1'), 'conflict');
+  const selection = (id: string): string => genomeSelection(entry(id, ''));
+  assert.equal(kind('GCF_000000009.1'), 'invalid');
+  assert.equal(kind(selection('GCF_000000009.1')), 'uncataloged');
+  assert.equal(kind(selection('GCF_000000001.1')), 'cataloged');
+  assert.equal(kind(selection('GCF_000000003.1')), 'conflict');
+  assert.equal(kind(selection('GCF_000000001.1'), {state: 'ready', entries: [entry('GCF_000000001.1', '', {cached_copies: []})]}), 'not-downloaded');
   // An unchecked catalog never claims that a valid accession is missing from it.
-  assert.equal(kind('GCF_000000001.1', {state: 'loading'}), 'loading');
-  assert.equal(kind('GCF_000000001.1', {state: 'failed', message: 'broken'}), 'unavailable');
+  assert.equal(kind(selection('GCF_000000001.1'), {state: 'loading'}), 'loading');
+  assert.equal(kind(selection('GCF_000000001.1'), {state: 'failed', message: 'broken'}), 'unavailable');
   // A malformed value is reported whatever the catalog's state.
   assert.equal(kind('GCF_1', {state: 'loading'}), 'invalid');
 });
@@ -224,7 +268,48 @@ test('lists a conflicting accession with its copies but refuses to choose it', a
   assert.doesNotMatch(next, /first-root/);
   await press(input, ENTER);
   await waitForFrame(output, frame => !frame.includes('conflicting-assembly'));
-  assert.deepEqual(changes, ['GCF_000000001.1']);
+  assert.deepEqual(changes.map(selectedGenome), [{source: 'ncbi', id: 'GCF_000000001.1', parameters: {}}]);
+});
+
+test('conflicting copies stay unselectable with bounded diagnostics on short terminals', async context => {
+  const id = 'GCF_000000003.1';
+  const conflicting = entry(id, 'conflict-marker', {cached_copies: Array.from({length: 5}, (_, index) => ({
+    path: `/very-long-directory-${'segment/'.repeat(8)}copy-${index}/${id}`,
+    verified_at: '2026-01-01T00:00:00Z', fasta_sha256: (index ? 'a' : 'b').repeat(64),
+  }))});
+  const screen = await renderField(context, {loadAccessions: async () => [conflicting]});
+  await press(screen.input, ENTER);
+  await waitForFrame(screen.output, frame => selectedLine(frame).includes(id));
+  screen.output.columns = 60;
+  for (const rows of [18, 16]) {
+    screen.output.rows = rows;
+    screen.output.emit('resize');
+    await rendered(screen.instance);
+    const frame = stripVTControlCharacters(screen.output.lastFrame()).trimEnd();
+    assert.ok(frame.split('\n').length <= rows, frame);
+    assert.ok(selectedLine(frame).includes(id));
+    await press(screen.input, ENTER);
+    assert.deepEqual(screen.changes, []);
+  }
+});
+
+test('metadata-only and non-genomic entries cannot be selected, including after resizing', async context => {
+  const id = 'GCF_000000001.1';
+  for (const cached_copies of [[], [{path: `/catalog/${id}`, verified_at: '2026-01-01T00:00:00Z', proteins_sha256: 'a'.repeat(64)}]]) {
+    const screen = await renderField(context, {loadAccessions: async () => [entry(id, 'undownloaded-marker', {cached_copies})]});
+    await press(screen.input, ENTER);
+    await waitForFrame(screen.output, frame => selectedLine(frame).includes(id));
+    screen.output.rows = 16;
+    screen.output.columns = 60;
+    screen.output.emit('resize');
+    await rendered(screen.instance);
+    assert.ok(stripVTControlCharacters(screen.output.lastFrame()).trimEnd().split('\n').length <= screen.output.rows);
+    await press(screen.input, ENTER);
+    assert.deepEqual(screen.changes, []);
+    await press(screen.input, ESCAPE);
+    await waitForFrame(screen.output, frame => !frame.includes('undownloaded-marker'));
+    screen.instance.unmount();
+  }
 });
 
 test('opens an empty or unreadable catalog without choosing anything', async context => {

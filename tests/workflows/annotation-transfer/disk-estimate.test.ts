@@ -8,7 +8,7 @@ import {
   createAnnotationTransferDraft,
 } from '../../../src/workflows/annotation-transfer/run-configuration.js';
 import {parseWorkflowManifest} from '../../../src/workflows/manifest.js';
-import {ncbiCacheDirectory} from '../../../src/workflows/run-preparation.js';
+import {genomeCacheDirectory} from '../../../src/workflows/run-preparation.js';
 
 const genopilot = {version: '1.2.3', igv: '3.8.9'};
 const factors = {target_genome_bytes: 4, reference_genome_bytes: 1, reference_annotation_bytes: 10};
@@ -48,15 +48,15 @@ test('estimates kept bytes from each input\'s size and factor, with no temporary
 test('counts NCBI inputs from the download cache and names those not downloaded yet', async () => {
   const prepared = localRun();
   const outputRoot = prepared.configuration.run.output_root;
-  const reference = {source: 'ncbi' as const, accession: 'GCF_000000001.1'};
-  const target = {source: 'ncbi' as const, accession: 'GCA_000000002.1'};
+  const reference = {source: 'remote' as const, reference: {source: 'ncbi', id: 'GCF_000000001.1', parameters: {}}, cache_mode: 'reuse' as const,};
+  const target = {source: 'remote' as const, reference: {source: 'ncbi', id: 'GCA_000000002.1', parameters: {}}, cache_mode: 'reuse' as const,};
   const ncbi = {...prepared, configuration: {...prepared.configuration, inputs: {reference, target}}};
 
   const none = await annotationTransferDiskEstimate(factors, ncbi, fileSizes());
   assert.equal(none.disk.keptBytes, 0);
   assert.ok(none.note?.includes('reference') && none.note.includes('target'));
 
-  const cache = ncbiCacheDirectory(outputRoot, reference.accession);
+  const cache = genomeCacheDirectory(outputRoot, reference.reference);
   const withReference = await annotationTransferDiskEstimate(factors, ncbi, fileSizes({
     [join(cache, 'genomic.fna')]: 300,
     [join(cache, 'genomic.gff')]: 200,

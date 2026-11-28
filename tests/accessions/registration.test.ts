@@ -25,10 +25,11 @@ function scanWith(scanned: (readonly string[])[]) {
       ignored: [],
       rootProblems: [],
       copies: roots.map(root => ({
-        accession,
+        source: 'ncbi', id: accession, parameters: {},
         root,
         path: copyPath(root),
         state: 'verified' as const,
+        metadata: null,
         fasta_sha256: 'a'.repeat(64),
       })),
     };
@@ -76,7 +77,7 @@ test('after a run, scans only its output root and keeps copies recorded elsewher
   const store = fakeStore({
     ...emptyAccessionCatalog(),
     output_roots: ['/analysis/earlier'],
-    accessions: [{accession, ncbi: null, cached_copies: [recordedCopy('/analysis/earlier')]}],
+    accessions: [{source: 'ncbi', id: accession, parameters: {}, metadata: null, cached_copies: [recordedCopy('/analysis/earlier')]}],
   });
   const scanned: (readonly string[])[] = [];
 
@@ -101,7 +102,7 @@ test('after a run, scans only its output root and keeps copies recorded elsewher
 test('a full refresh drops copies under roots that are no longer known', async () => {
   const store = fakeStore({
     ...emptyAccessionCatalog(),
-    accessions: [{accession, ncbi: null, cached_copies: [recordedCopy('/analysis/forgotten')]}],
+    accessions: [{source: 'ncbi', id: accession, parameters: {}, metadata: null, cached_copies: [recordedCopy('/analysis/forgotten')]}],
   });
 
   const {loaded} = await refreshAccessionCaches({
@@ -146,7 +147,7 @@ test('gives up after a second conflicting save', async () => {
 test('does not write when discovery changes nothing', async () => {
   const store = fakeStore({
     ...emptyAccessionCatalog(),
-    accessions: [{accession, ncbi: null, cached_copies: [recordedCopy('/project/runs')]}],
+    accessions: [{source: 'ncbi', id: accession, parameters: {}, metadata: null, cached_copies: [recordedCopy('/project/runs')]}],
   });
   await refreshAccessionCaches({
     currentDirectory: '/project',

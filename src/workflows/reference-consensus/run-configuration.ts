@@ -1,7 +1,9 @@
+import {ncbiMetadata} from '../../accessions/provider/ncbi/index.js';
+import {requireDownloadedGenome, type GenomeCacheMode} from '../genome-input.js';
 import {availableParallelism} from 'node:os';
 import {stat} from 'node:fs/promises';
 import {basename, resolve} from 'node:path';
-import {normalizeAccession} from '../../accessions/accession.js';
+import {selectedGenome} from '../../accessions/selection.js';
 import {
   conflictingCopiesMessage,
   recordedCacheState,
@@ -18,7 +20,6 @@ import {
   type CpuMode,
   type GenoPilotDetails,
   type MachineDetails,
-  type NcbiCacheMode,
 } from '../configuration-validation.js';
 import {
   buildRunId,
@@ -27,7 +28,7 @@ import {
   createRunWorkspace,
   discoverSavedRuns,
   effectiveCpuCount,
-  hasNcbiCacheEntry,
+  hasGenomeCacheEntry,
   resolveDraftPath,
   stringifyRunFile,
   type PathInspection,
@@ -50,7 +51,7 @@ import {
 import {ISOLATE_SNAPSHOT_SCHEMA_VERSION, validateIsolateSnapshot, type IsolateSnapshot} from './snapshot.js';
 
 export type ReferenceConsensusDraft = {
-  backboneSource: 'local' | 'ncbi';
+  backboneSource: 'local' | 'remote';
   backboneFasta: string;
   backboneAccession: string;
   /** Explicit isolate/read-set keys, as offered by the selection picker. */
@@ -142,8 +143,8 @@ export function buildReferenceConsensusRun(
     workflow_version: REFERENCE_CONSENSUS_WORKFLOW_VERSION,
     genopilot,
     inputs: {
-      backbone: draft.backboneSource === 'ncbi'
-        ? {source: 'ncbi', accession: normalizeAccession(draft.backboneAccession), ncbi_cache_mode: 'reuse'}
+      backbone: draft.backboneSource === 'remote'
+        ? {source: 'remote', reference: selectedGenome(draft.backboneAccession), cache_mode: 'reuse'}
         : {source: 'local', fasta: resolveDraftPath(currentDirectory, draft.backboneFasta)},
       isolates_file: ISOLATE_SNAPSHOT_FILENAME,
       selected_isolates: isolates.map(isolate => isolate.id),
@@ -203,7 +204,7 @@ const bracesMessage = "path contains '{' or '}', which Snakemake cannot use as a
 
 /** What checking the prepared run found out that the review shows. */
 export type RunInspection = {
-  /** The accession-catalog entry of an NCBI backbone, when it is cataloged. */
+  /** The backbone's accession-catalog entry, when available. */
   backboneEntry?: AccessionEntry;
   /** Read paths of the selection that name one file more than once. */
   sameFiles: readonly {first: string; second: string}[];
@@ -231,12 +232,13 @@ export async function inspectPreparedRun(
   const issues: ConfigurationValidationIssue[] = [];
   const {backbone} = prepared.configuration.inputs;
   let backboneEntry: AccessionEntry | undefined;
-  if (backbone.source === 'ncbi') {
-    // The catalog is optional bookkeeping: an unreadable one does not block a run.
+  if (backbone.source === 'remote') {
     const cataloged = await readAccessions().catch(() => []);
-    backboneEntry = cataloged.find(entry => entry.accession === backbone.accession);
+    backboneEntry = cataloged.find(entry => entry.source === backbone.reference.source && entry.id === backbone.reference.id);
     if (backboneEntry && recordedCacheState(backboneEntry) === 'conflict') {
-      issues.push({path: '$.inputs.backbone.accession', message: conflictingCopiesMessage});
+      issues.push({path: '$.inputs.backbone.reference', message: conflictingCopiesMessage});
+    } else {
+      requireDownloadedGenome(backbone, ['fasta'], cataloged, '$.inputs.backbone.reference', issues);
     }
   } else {
     await checkReadableFile(backbone.fasta, '$.inputs.backbone.fasta', issues, inspectPath);
@@ -296,7 +298,7 @@ function backboneSampleNames(prepared: PreparedReferenceConsensusRun, inspection
   if (backbone.source === 'local') {
     return [basename(backbone.fasta).replace(/\.(fa|fasta|fna)(\.gz)?$/i, '')];
   }
-  const strain = inspection.backboneEntry?.ncbi?.strain;
+  const strain = backbone.reference.source === 'ncbi' ? ncbiMetadata(inspection.backboneEntry?.metadata ?? null)?.strain : undefined;
   return strain ? [strain] : [];
 }
 
@@ -343,14 +345,14 @@ export async function hasBackboneCacheEntry(
   inspectPath: PathInspection = stat,
 ): Promise<boolean> {
   const {backbone} = prepared.configuration.inputs;
-  if (backbone.source !== 'ncbi') {
+  if (backbone.source !== 'remote') {
     return false;
   }
   try {
-    return await hasNcbiCacheEntry(prepared.configuration.run.output_root, backbone.accession, inspectPath);
+    return !!backbone.copy || await hasGenomeCacheEntry(prepared.configuration.run.output_root, backbone.reference, inspectPath);
   } catch (error) {
     throw new ReferenceConsensusConfigurationError([
-      {path: '$.inputs.backbone.ncbi_cache_mode', message: error instanceof Error ? error.message : String(error)},
+      {path: '$.inputs.backbone.cache_mode', message: error instanceof Error ? error.message : String(error)},
     ]);
   }
 }
@@ -358,11 +360,14 @@ export async function hasBackboneCacheEntry(
 /** Applies the researcher's explicit cache decision without changing the rest of the run. */
 export function applyBackboneCacheMode(
   prepared: PreparedReferenceConsensusRun,
-  mode: NcbiCacheMode,
+  mode: GenomeCacheMode,
 ): PreparedReferenceConsensusRun {
   const configuration = structuredClone(prepared.configuration);
-  if (configuration.inputs.backbone.source === 'ncbi') {
-    configuration.inputs.backbone.ncbi_cache_mode = mode;
+  if (configuration.inputs.backbone.source === 'remote') {
+    configuration.inputs.backbone.cache_mode = mode;
+    if (mode === 'refresh') {
+      delete configuration.inputs.backbone.copy;
+    }
   }
   return {...prepared, configuration: validateReferenceConsensusConfiguration(configuration)};
 }
@@ -378,6 +383,7 @@ export async function savePreparedRun(
   validateReferenceConsensusConfiguration(prepared.configuration);
   validateIsolateSnapshot(prepared.snapshot, prepared.configuration.inputs.selected_isolates, prepared.configuration.inputs.selected_read_sets);
   await inspectPreparedRun(prepared, dependencies);
+  validateReferenceConsensusConfiguration(prepared.configuration);
   const written = await createRunWorkspace(
     prepared.outputDirectory,
     [

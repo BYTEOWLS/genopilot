@@ -22,7 +22,7 @@ def provenance(workflow_id: str, inputs: dict, configuration: dict, released: bo
         "genopilot": genopilot,
         "effective_configuration": {"workflow_id": workflow_id, "genopilot": genopilot, "inputs": inputs, **configuration},
         "tool_versions": {
-            "configured": {"ncbi-datasets-cli": "18.38.0", "parasail-python": "1.3.4", "htslib": "1.24"},
+            "configured": { "parasail-python": "1.3.4", "htslib": "1.24"},
             "observed": {
                 "snakemake": {"version": "9.0.0", "source": "workflow-runtime"},
                 "lifton": {"version": "1.0.14", "source": "installed-package"},
@@ -84,7 +84,7 @@ class WriteCitationTests(unittest.TestCase):
         for workflow_id, inputs, configuration in [
             ("annotation-transfer", LOCAL_TRANSFER_INPUTS, TRANSFER_CONFIGURATION),
             ("reference-consensus",
-             {"backbone": {"source": "ncbi", "accession": "GCF_000149205.2"}, "selected_isolates": ["a", "b", "c"]},
+             {"backbone": {"source": "remote", "reference": {"source": "ncbi", "id": "GCF_000149205.2", "parameters": {}}, "cache_mode": "reuse"}, "selected_isolates": ["a", "b", "c"]},
              CONSENSUS_CONFIGURATION),
         ]:
             with self.subTest(workflow_id):
@@ -110,12 +110,12 @@ class WriteCitationTests(unittest.TestCase):
         self.assertIn("@article{robinson2023,", bibtex)
         self.assertIn("DO  - 10.1093/bioinformatics/btac830", ris)
 
-    def test_cites_the_download_tool_when_an_input_came_from_ncbi(self) -> None:
-        inputs = {**LOCAL_TRANSFER_INPUTS, "target": {"source": "ncbi", "accession": "GCF_000149205.2"}}
+    def test_describes_remote_reference_without_citing_the_removed_cli(self) -> None:
+        inputs = {**LOCAL_TRANSFER_INPUTS, "target": {"source": "remote", "reference": {"source": "ncbi", "id": "GCF_000149205.2", "parameters": {}}, "cache_mode": "reuse"}}
         markdown, bibtex, _ = self.write("annotation-transfer", provenance("annotation-transfer", inputs, TRANSFER_CONFIGURATION))
-        self.assertIn("| NCBI Datasets CLI | 18.38.0 |", markdown)
-        self.assertIn("@article{oleary2024,", bibtex)
-        self.assertIn("NCBI assembly GCF_000149205.2", markdown)
+        self.assertNotIn("NCBI Datasets CLI", markdown)
+        self.assertNotIn("@article{oleary2024,", bibtex)
+        self.assertIn("ncbi genome GCF_000149205.2", markdown)
 
     def test_marks_a_development_build_as_not_citable(self) -> None:
         released, _, _ = self.write("annotation-transfer", provenance("annotation-transfer", LOCAL_TRANSFER_INPUTS, TRANSFER_CONFIGURATION))

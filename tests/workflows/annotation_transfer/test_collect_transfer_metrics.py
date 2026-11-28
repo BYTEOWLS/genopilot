@@ -210,6 +210,80 @@ class CollectTransferMetricsTests(unittest.TestCase):
                 written = list(csv.DictReader(handle, delimiter="\t"))
             self.assertEqual([row["reference_id"] for row in written], ["gene1", "gene2", "gene2", "gene3"])
 
+    def test_counts_normalized_gene_types_without_changing_reference_types(self) -> None:
+        for mixed_types in (False, True):
+            with self.subTest(mixed_types=mixed_types), tempfile.TemporaryDirectory() as tmp:
+                args = self.prepare(Path(tmp))
+                args.reference_gff3.write_text(
+                    REFERENCE_GFF3.replace("\tgene\t", "\tprotein_coding_gene\t"),
+                    encoding="utf-8",
+                )
+                (args.diagnostics / "intermediate_files" / "auto_feature_types.txt").write_text(
+                    "protein_coding_gene\n", encoding="utf-8"
+                )
+                completeness = args.diagnostics / "stats" / "completeness_by_feature_type.txt"
+                completeness.write_text(
+                    completeness.read_text(encoding="utf-8").replace("\ngene\t", "\nprotein_coding_gene\t"),
+                    encoding="utf-8",
+                )
+                # LiftOn categorizes these explicit coding types as `other`.
+                for report_name in ("mapped_feature.txt", "unmapped_features.txt", "extra_copy_features.txt"):
+                    report = args.diagnostics / "stats" / report_name
+                    report.write_text(report.read_text(encoding="utf-8").replace("\tcoding", "\tother"), encoding="utf-8")
+                raw = TARGET_GFF3.replace("\tgene\t", "\tprotein_coding_gene\t", 1) if mixed_types else TARGET_GFF3
+                args.raw_gff3.write_text(raw, encoding="utf-8")
+
+                metrics, _summary, rows, _unresolved = collect_transfer_metrics.collect(args)
+
+                self.assertEqual(metrics["transfer"]["target_feature_copies"], 3)
+                self.assertEqual(metrics["transfer"]["target_feature_copies_by_type"], {"protein_coding_gene": 3})
+                self.assertEqual([row["feature_type"] for row in rows], ["protein_coding_gene"] * 4)
+                self.assertEqual([row["target_id"] for row in rows], ["gene1", "gene2", "gene2_1", ""])
+                self.assertEqual([row["lifton_category"] for row in rows], ["other"] * 4)
+                self.assertEqual([row["protein_category"] for row in rows], ["unchanged", "disrupted", "", "unmapped"])
+                self.assertEqual(rows[3]["review_reasons"], "unmapped_or_lost")
+                self.assertEqual(metrics["proteins"]["rated_genes"], 3)
+                self.assertEqual(metrics["transfer"]["changed_primary_protein_coding_features"], 1)
+                self.assertEqual(args.raw_gff3.read_text(encoding="utf-8"), raw)
+
+    def test_other_noncoding_reference_types_remain_unrated(self) -> None:
+        for feature_type in ("ncRNA_gene", "pseudogene"):
+            with self.subTest(feature_type=feature_type), tempfile.TemporaryDirectory() as tmp:
+                args = self.prepare(Path(tmp))
+                args.reference_gff3.write_text(REFERENCE_GFF3.replace("\tgene\t", f"\t{feature_type}\t"), encoding="utf-8")
+                args.raw_gff3.write_text(TARGET_GFF3.replace("\tgene\t", f"\t{feature_type}\t"), encoding="utf-8")
+                (args.diagnostics / "intermediate_files" / "auto_feature_types.txt").write_text(f"{feature_type}\n", encoding="utf-8")
+                completeness = args.diagnostics / "stats" / "completeness_by_feature_type.txt"
+                completeness.write_text(completeness.read_text(encoding="utf-8").replace("\ngene\t", f"\n{feature_type}\t"), encoding="utf-8")
+                for report_name in ("mapped_feature.txt", "unmapped_features.txt", "extra_copy_features.txt"):
+                    report = args.diagnostics / "stats" / report_name
+                    report.write_text(report.read_text(encoding="utf-8").replace("\tcoding", "\tother"), encoding="utf-8")
+
+                metrics, _summary, rows, _unresolved = collect_transfer_metrics.collect(args)
+
+                self.assertEqual(metrics["proteins"]["rated_genes"], 0)
+                self.assertEqual(metrics["transfer"]["changed_primary_protein_coding_features"], 0)
+                self.assertTrue(all(row["protein_category"] == "" for row in rows))
+
+    def test_rejects_unknown_normalized_gene_ids_even_when_total_counts_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            args = self.prepare(Path(tmp))
+            args.reference_gff3.write_text(
+                REFERENCE_GFF3.replace("\tgene\t", "\tprotein_coding_gene\t"), encoding="utf-8"
+            )
+            (args.diagnostics / "intermediate_files" / "auto_feature_types.txt").write_text(
+                "protein_coding_gene\n", encoding="utf-8"
+            )
+            completeness = args.diagnostics / "stats" / "completeness_by_feature_type.txt"
+            completeness.write_text(
+                completeness.read_text(encoding="utf-8").replace("\ngene\t", "\nprotein_coding_gene\t"), encoding="utf-8"
+            )
+            args.raw_gff3.write_text(
+                TARGET_GFF3.replace("ID=gene1;", "ID=unknown;"), encoding="utf-8"
+            )
+            with self.assertRaisesRegex(collect_transfer_metrics.SummaryError, "no matching reference ID"):
+                collect_transfer_metrics.collect(args)
+
     def test_records_an_explicit_reason_when_identity_metrics_are_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             args = self.prepare(Path(tmp))

@@ -7,7 +7,7 @@ A LiftOn update changes the pin in the [`lifton`](envs/lifton/environment.yaml) 
 | File | Depends on |
 |---|---|
 | `workflows/annotation-transfer/rules/transfer_annotation.smk` | Output layout; the declared `lifton_output/` directory must contain every file LiftOn writes (older releases wrote `liftoff/` and `miniprot/` beside it) |
-| `workflows/annotation-transfer/scripts/collect_transfer_metrics.py` | Mutation classes that count as unchanged proteins |
+| `workflows/annotation-transfer/scripts/collect_transfer_metrics.py` | Emitted gene-type normalization, explicit coding reference types classified as `other`, copy-ID conventions, and mutation classes that count as unchanged proteins |
 | `workflows/annotation-transfer/results.md` | Gene `source`, transcript `status`, and mutation-class values explained on the result help page |
 | `resources/concepts/completed/annotation-transfer-results/concept.md` | The documented metric and value contract |
 

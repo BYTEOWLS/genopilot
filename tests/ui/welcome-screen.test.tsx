@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import {render} from 'ink';
 import type {CacheScanner} from '../../src/accessions/cache-discovery.js';
-import type {AssemblyMetadataFetcher} from '../../src/accessions/ncbi-metadata.js';
+import type {ProviderSettings} from '../../src/tooling/provider-settings.js';
 import type {AccessionCatalogLoader, AccessionCatalogUpdater} from '../../src/accessions/registration.js';
 import {WelcomeScreen, type CliMetadata} from '../../src/ui/welcome-screen.js';
 import type {ToolingStatus} from '../../src/tooling/check.js';
@@ -172,16 +172,12 @@ function renderWelcome(
     workflowDiscovery?: WorkflowDiscovery;
     runDiscovery?: RunDiscovery;
     onWorkflowSelected?: (workflowId: string) => void;
-    ncbiApiKeyPath?: string;
-    checkNcbiApiKeyConfigured?: () => Promise<boolean>;
-    saveNcbiApiKey?: (key: string) => Promise<void>;
-    clearStoredNcbiApiKey?: () => Promise<void>;
+    providerSettings?: ProviderSettings;
     loadIsolates?: IsolateCatalogLoader;
     updateIsolates?: IsolateCatalogUpdater;
     loadAccessions?: AccessionCatalogLoader;
     updateAccessions?: AccessionCatalogUpdater;
     scanAccessionCaches?: CacheScanner;
-    fetchAccessionMetadata?: AssemblyMetadataFetcher;
     updateCheck?: () => Promise<UpdateAvailability>;
     mouseReporting?: boolean;
   } = {},
@@ -202,10 +198,7 @@ function renderWelcome(
       workflowDiscovery={options.workflowDiscovery}
       runDiscovery={options.runDiscovery}
       onWorkflowSelected={options.onWorkflowSelected}
-      ncbiApiKeyPath={options.ncbiApiKeyPath}
-      checkNcbiApiKeyConfigured={options.checkNcbiApiKeyConfigured}
-      saveNcbiApiKey={options.saveNcbiApiKey}
-      clearStoredNcbiApiKey={options.clearStoredNcbiApiKey}
+      providerSettings={options.providerSettings}
       isolateCatalogPath="/researcher/isolates/isolates.yaml"
       loadIsolates={options.loadIsolates}
       updateIsolates={options.updateIsolates}
@@ -213,7 +206,6 @@ function renderWelcome(
       loadAccessions={options.loadAccessions}
       updateAccessions={options.updateAccessions}
       scanAccessionCaches={options.scanAccessionCaches}
-      fetchAccessionMetadata={options.fetchAccessionMetadata}
       updateCheck={options.updateCheck ?? (async () => ({state: 'current'}))}
       mouseReporting={options.mouseReporting}
     />,
@@ -488,7 +480,7 @@ test('opens the accession manager by command ID and returns to the menu', async 
     commands: accessionsOnlyCommands,
     loadAccessions: async () => {
       loads += 1;
-      return {catalog: {schema_version: 1, output_roots: [], accessions: []}, revision: undefined};
+      return {catalog: {schema_version: 3, output_roots: [], accessions: []}, revision: undefined};
     },
     updateAccessions: async () => {
       throw new Error('unexpected');
@@ -496,9 +488,6 @@ test('opens the accession manager by command ID and returns to the menu', async 
     scanAccessionCaches: async roots => {
       scannedRoots = roots;
       return {scannedAt: '2026-01-01T12:00:00.000Z', cacheDirectories: [], copies: [], ignored: [], rootProblems: []};
-    },
-    fetchAccessionMetadata: async () => {
-      throw new Error('unexpected');
     },
   });
   registerCleanup(context, instance);
@@ -718,30 +707,24 @@ test('leaves h to a focused text field and returns home from a choice field', as
 
 test('types h into the NCBI key instead of returning home', async context => {
   let saved: string | undefined;
-  let accessionLoads = 0;
   let keyChecks = 0;
   const {input, instance, output} = renderWelcome(detectedStatus, {
-    commands: accessionsOnlyCommands,
-    loadAccessions: async () => {
-      accessionLoads += 1;
-      return {catalog: {schema_version: 1, output_roots: [], accessions: []}, revision: undefined};
-    },
-    scanAccessionCaches: async () => ({scannedAt: '', cacheDirectories: [], copies: [], ignored: [], rootProblems: []}),
-    checkNcbiApiKeyConfigured: async () => {
-      keyChecks += 1;
-      return false;
-    },
-    saveNcbiApiKey: async key => {
-      saved = key;
+    commands: toolingOnlyCommands,
+    providerSettings: {
+      read: async () => { keyChecks += 1; return {}; },
+      save: async (_provider, _field, key) => { saved = key; },
+      clear: async () => {},
     },
   });
   registerCleanup(context, instance);
   await waitForOutput(output, value => value.includes('↑/↓ — Select'));
   await pressKey(input, '\r');
-  await waitFor(() => accessionLoads >= 1 && keyChecks === 1);
   await rendered(instance);
-  // Shift+Tab wraps from the first tab to the API-key tab, whose key field then has focus.
-  await pressKey(input, '\x1b[Z');
+  await pressKey(input, '\t');
+  await waitFor(() => keyChecks >= 1);
+  await pressKey(input, '\r');
+  await waitFor(() => keyChecks >= 2);
+  await rendered(instance);
   await rendered(instance);
 
   output.clearOutput();
@@ -753,6 +736,10 @@ test('types h into the NCBI key instead of returning home', async context => {
   await pressKey(input, '\r');
   await waitFor(() => saved !== undefined);
   assert.equal(saved, 'h');
+  await pressKey(input, '\x1b');
+  await rendered(instance);
+  await pressKey(input, '\x1b');
+  await rendered(instance);
 });
 
 test('offers setup choices instead of commands when tooling is missing', async context => {

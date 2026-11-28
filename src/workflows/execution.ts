@@ -3,7 +3,6 @@ import {mkdir, open} from 'node:fs/promises';
 import {dirname, delimiter, join, resolve} from 'node:path';
 import {finished} from 'node:stream/promises';
 import {packagedPath} from '../package-root.js';
-import {readNcbiApiKey} from '../tooling/ncbi-api-key.js';
 import {resolveToolingPaths, type ToolingPaths} from '../tooling/paths.js';
 import {formatCompactUtcTimestamp} from './timestamps.js';
 import {RUN_EVENTS_FILENAME} from './run-events.js';
@@ -175,13 +174,13 @@ export async function executeSnakemakeRun(
   {
     paths = resolveToolingPaths(),
     spawnProcess = spawn as WorkflowProcessSpawner,
-    readApiKey = readNcbiApiKey,
+    openLog = open,
     loggerDirectory = packagedLoggerDirectory,
     readProcesses = readProcessList,
   }: {
     paths?: ToolingPaths;
     spawnProcess?: WorkflowProcessSpawner;
-    readApiKey?: (path: string) => Promise<string | undefined>;
+    openLog?: typeof open;
     loggerDirectory?: string;
     readProcesses?: ProcessListReader;
   } = {},
@@ -192,20 +191,20 @@ export async function executeSnakemakeRun(
     throw cancelled();
   }
   await mkdir(dirname(prepared.stdoutLogPath), {recursive: true, mode: 0o700});
-  const apiKey = await readApiKey(paths.ncbiApiKeyPath);
   const environment: NodeJS.ProcessEnv = {
     HOME: process.env.HOME,
     LANG: process.env.LANG,
     LC_ALL: process.env.LC_ALL,
     PATH: [paths.managedBinDirectory, '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(delimiter),
     PIXI_HOME: paths.pixiHome,
+    // Rule jobs do not inherit the caller's PATH (Node may be installed through nvm).
+    GENOPILOT_NODE_EXECUTABLE: process.execPath,
     ...(prepared.eventsPath || prepared.dryRunEventsPath ? {PYTHONPATH: loggerDirectory} : {}),
-    ...(apiKey ? {NCBI_API_KEY: apiKey} : {}),
   };
-  const stdoutFile = await open(prepared.stdoutLogPath, 'wx', 0o600);
+  const stdoutFile = await openLog(prepared.stdoutLogPath, 'wx', 0o600);
   let stderrFile;
   try {
-    stderrFile = await open(prepared.stderrLogPath, 'wx', 0o600);
+    stderrFile = await openLog(prepared.stderrLogPath, 'wx', 0o600);
   } catch (error) {
     await stdoutFile.close();
     throw error;
@@ -234,7 +233,7 @@ export async function executeSnakemakeRun(
   ];
 
   try {
-    // Setup awaits the API key and log files; cancellation during those awaits must not start work.
+    // Setup awaits the log files; cancellation during those awaits must not start work.
     if (signal?.aborted) {
       throw cancelled();
     }

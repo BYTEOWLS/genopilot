@@ -78,6 +78,8 @@ It supplies:
 - `dna_identity` and `protein_identity` attributes;
 - LiftOn mutation classifications.
 
+LiftOn can emit a selected reference coding type, such as `protein_coding_gene`, as `gene` in the target GFF3. Target collection accepts that emitted type alongside the selected types; reference-ID and copy-number checks still reject unknown, missing, or contradictory copies. Per-feature rows and per-type metrics retain the reference feature type from the authoritative reports. Raw GFF3 records remain unmodified.
+
 The human-readable LiftOn summary and console logs are not parsed.
 
 ## Persisted result contracts
@@ -109,7 +111,7 @@ mutations
 
 Important semantics:
 
-- `lifton_category` is LiftOn's `coding`, `non-coding`, or `other` category.
+- `lifton_category` is LiftOn's `coding`, `non-coding`, or `other` category, preserved verbatim. Protein eligibility uses that category or the reference's explicit `protein_coding_gene` type, which LiftOn can classify as `other`. The same eligibility governs mapped/unmapped primary ratings and changed-protein counts; additional copies stay unrated.
 - `status` is `mapped`, `extra-copy`, or `unmapped`.
 - `copy_number` is `0` for the primary copy and positive for additional copies.
 - `target_id` is the raw LiftOn ID, not necessarily the ID in a rewritten final GFF3.

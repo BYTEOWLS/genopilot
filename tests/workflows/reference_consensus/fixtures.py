@@ -64,7 +64,7 @@ def write_run(
     # JSON is valid YAML, so the snapshot and configuration need no YAML writer.
     (run_dir / "isolates.yaml").write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
     config = {
-        "schema_version": 1,
+        "schema_version": 2,
         "workflow_id": "reference-consensus",
         "workflow_version": 1,
         "genopilot": {"version": "1.2.3", "igv": "3.8.9"},

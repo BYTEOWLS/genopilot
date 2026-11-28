@@ -2,6 +2,7 @@ import {readFile} from 'node:fs/promises';
 import {basename, resolve} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {packagedUrl} from '../package-root.js';
+import type {GenomeProvider} from '../accessions/provider.js';
 import {discoverPackagedWorkflows, type DiscoveredWorkflow} from '../workflows/discovery.js';
 import {documentTitle, parseMarkdown, type Block} from './markdown.js';
 
@@ -58,7 +59,7 @@ export async function readRunCitation(runDirectory: string, read: ReadText = rea
 export const isolateDocumentNames = ['isolates', 'illumina'] as const;
 
 /** The general documents in `docs/` the application shows, in tab order. */
-export const generalDocumentNames = ['help', ...isolateDocumentNames, 'import-review', 'run-results', 'gff3-find-and-replace', 'browser-view', 'genome-view'] as const;
+export const generalDocumentNames = ['help', 'genome-sources', ...isolateDocumentNames, 'import-review', 'run-results', 'gff3-find-and-replace', 'browser-view', 'genome-view'] as const;
 
 /** General documents in `docs/`, by file name without `.md`. */
 export function readGeneralDocuments(
@@ -67,6 +68,20 @@ export function readGeneralDocuments(
   directory: URL = packagedDocsDirectory,
 ): Promise<Document[]> {
   return Promise.all(names.map(name => readDocument(new URL(`${name}.md`, directory), read)));
+}
+
+/** Provider help follows the same filename convention for every registered provider. */
+export function providerDocumentName(provider: Pick<GenomeProvider, 'id'>): string {
+  return `provider-${provider.id}`;
+}
+
+/** Provider-specific guidance first, followed by shared catalog/download help. */
+export function readProviderDocuments(
+  provider: Pick<GenomeProvider, 'id'>,
+  read: ReadText = readText,
+  directory: URL = packagedDocsDirectory,
+): Promise<Document[]> {
+  return readGeneralDocuments([providerDocumentName(provider), 'genome-sources'], read, directory);
 }
 
 /** The files every workflow may contribute, next to its manifest. */

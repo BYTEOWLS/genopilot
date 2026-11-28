@@ -1,14 +1,17 @@
+import {genomeSelection} from '../../accessions/selection.js';
+import {accessionSources} from '../../accessions/registry.js';
 import {basename, resolve} from 'node:path';
 import React, {useEffect, useState} from 'react';
 import {scanAccessionCaches} from '../../accessions/cache-discovery.js';
-import {accessionDisplayName, recordedCacheState} from '../../accessions/catalog.js';
+import {accessionDisplayName, accessionFactsSummary, recordedCacheState} from '../../accessions/catalog.js';
 import {refreshAccessionCaches} from '../../accessions/registration.js';
-import {loadAccessionCatalog, updateAccessionCatalog} from '../../accessions/store.js';
+import {loadAccessionCatalog, updateAccessionCatalog, type AccessionCatalogReader} from '../../accessions/store.js';
 import {readPairs, type IsolateCatalog} from '../../isolates/catalog.js';
 import {illuminaCompatibility} from '../../isolates/illumina/metadata.js';
 import {lineage, trimmedStatus} from '../../isolates/presentation.js';
 import {loadIsolateCatalog} from '../../isolates/store.js';
-import {isNcbiApiKeyConfigured} from '../../tooling/ncbi-api-key.js';
+import {providerSettings} from '../../tooling/provider-settings.js';
+import {ncbiProvider} from '../../accessions/provider/ncbi/index.js';
 import {resolveToolingPaths} from '../../tooling/paths.js';
 import type {GenoPilotDetails} from '../../workflows/configuration-validation.js';
 import {
@@ -62,7 +65,7 @@ async function defaultLoadIsolateCatalog(): Promise<IsolateCatalog> {
 }
 
 async function defaultNcbiApiKeyCheck(): Promise<boolean> {
-  return isNcbiApiKeyConfigured(resolveToolingPaths().ncbiApiKeyPath);
+  return !!(await providerSettings().read(ncbiProvider))['api-key'];
 }
 
 async function defaultRegisterAccessionCaches(outputRoot: string, currentDirectory: string): Promise<string> {
@@ -78,19 +81,19 @@ async function defaultRegisterAccessionCaches(outputRoot: string, currentDirecto
     });
   } catch (error) {
     throw new Error(
-      `The run succeeded, but its NCBI cache was not recorded in the accession catalog: ${
+      `The run succeeded, but its genome cache was not recorded in the accession catalog: ${
         error instanceof Error ? error.message : String(error)}`,
     );
   }
-  return `Recorded the NCBI accession cache under ${outputRoot} in the accession catalog.`;
+  return `Recorded genome caches under ${outputRoot} in the accession catalog.`;
 }
 
-function previousRunFormValues(configuration: ReferenceConsensusConfiguration): WorkflowFormValues {
+export function previousRunFormValues(configuration: ReferenceConsensusConfiguration): WorkflowFormValues {
   const {backbone} = configuration.inputs;
   return {
-    'backbone-source': backbone.source,
+    'backbone-source': backbone.source === 'local' ? 'local' : 'remote',
     'backbone-fasta': backbone.source === 'local' ? backbone.fasta : '',
-    'backbone-accession': backbone.source === 'ncbi' ? backbone.accession : '',
+    'backbone-accession': backbone.source === 'remote' ? genomeSelection(backbone.reference) : '',
     isolates: configuration.inputs.selected_read_sets.join(','),
     'voting-method': configuration.consensus.voting_method,
     'include-backbone-vote': configuration.consensus.include_backbone_vote ? 'yes' : 'no',
@@ -122,7 +125,7 @@ async function defaultDiscoverPreviousRuns(currentDirectory: string): ReturnType
 function draftFromValues(values: WorkflowFormValues, currentDirectory: string): ReferenceConsensusDraft {
   const cpuMode = values['cpu-allocation'];
   return {
-    backboneSource: values['backbone-source'] === 'local' ? 'local' : 'ncbi',
+    backboneSource: values['backbone-source'] === 'remote' ? 'remote' : 'local',
     backboneFasta: values['backbone-fasta'] ?? '',
     backboneAccession: values['backbone-accession'] ?? '',
     readSetIds: parseIsolateSelection(values.isolates ?? ''),
@@ -151,7 +154,7 @@ function resolvedValues(prepared: PreparedReferenceConsensusRun): WorkflowFormVa
   const {backbone} = configuration.inputs;
   return {
     'backbone-fasta': backbone.source === 'local' ? backbone.fasta : '',
-    'backbone-accession': backbone.source === 'ncbi' ? backbone.accession : '',
+    'backbone-accession': backbone.source === 'remote' ? backbone.reference.id : '',
     isolates: `${String(configuration.inputs.selected_read_sets.length)} selected, listed below`,
     'min-allele-fraction': String(configuration.calling.min_allele_fraction),
     'output-root': configuration.run.output_root,
@@ -174,25 +177,24 @@ function backboneSection(prepared: PreparedReferenceConsensusRun, inspection: Ru
   }
   const entry = inspection.backboneEntry;
   const copies = entry && recordedCacheState(entry) === 'cached' ? entry.cached_copies : [];
-  const facts = entry?.ncbi;
+  const fastaChecksum = copies.find(copy => copy.fasta_sha256)?.fasta_sha256;
   return {
     id: 'backbone',
     title: 'Backbone',
     rows: [
       {label: 'Name', value: entry ? accessionDisplayName(entry) : 'Not in the accession catalog'},
-      {label: 'Source', value: 'NCBI accession'},
-      {label: 'Accession', value: backbone.accession},
-      ...(facts ? [{label: 'Organism', value: facts.organism}] : []),
-      ...(facts?.strain ? [{label: 'Strain', value: facts.strain}] : []),
+      {label: 'Source', value: accessionSources.get(backbone.reference.source).label},
+      {label: 'Accession', value: backbone.reference.id},
+      ...(entry ? [{label: 'Metadata', value: accessionFactsSummary(entry)}] : []),
       {
         label: 'Cache',
-        value: backbone.ncbi_cache_mode === 'refresh'
+        value: backbone.cache_mode === 'refresh'
           ? 'Download a fresh copy'
           : 'Reuse the cache after checksum verification when available, otherwise download',
       },
       {
         label: 'FASTA checksum',
-        value: copies[0] ? `sha256 ${copies[0].fasta_sha256}` : 'Not known yet; recorded when downloaded',
+        value: fastaChecksum ? `sha256 ${fastaChecksum}` : 'Not known yet; recorded when downloaded',
       },
     ],
   };
@@ -328,6 +330,7 @@ export function ReferenceConsensusConfigurationScreen({
   saveRun = prepared => savePreparedRun(prepared),
   checkBackboneCache = prepared => hasBackboneCacheEntry(prepared),
   checkNcbiApiKey = defaultNcbiApiKeyCheck,
+  loadAccessions,
   discoverPreviousRuns = defaultDiscoverPreviousRuns,
   snakefilePath,
   prepareSnakemakeRun = defaultPrepareSnakemakeRun,
@@ -353,6 +356,7 @@ export function ReferenceConsensusConfigurationScreen({
   saveRun?: ReferenceConsensusRunSaver;
   checkBackboneCache?: BackboneCacheCheck;
   checkNcbiApiKey?: NcbiApiKeyCheck;
+  loadAccessions?: AccessionCatalogReader;
   discoverPreviousRuns?: PreviousRunsLoader;
   /** The workflow's entry Snakefile, from its discovered directory. */
   snakefilePath: string;
@@ -407,9 +411,11 @@ export function ReferenceConsensusConfigurationScreen({
     );
     const inspection = await inspectRun(prepared);
     const system = await checkSystem(prepared);
-    const usesNcbi = prepared.configuration.inputs.backbone.source === 'ncbi';
+    const backbone = prepared.configuration.inputs.backbone;
+    const usesRemote = backbone.source === 'remote';
+    const usesNcbi = backbone.source === 'remote' && backbone.reference.source === 'ncbi';
     const apiKeyConfigured = usesNcbi ? await checkNcbiApiKey() : false;
-    const cached = usesNcbi ? await checkBackboneCache(prepared) : false;
+    const cached = usesRemote ? await checkBackboneCache(prepared) : false;
 
     const prepareForReview = (
       run: PreparedReferenceConsensusRun,
@@ -422,7 +428,7 @@ export function ReferenceConsensusConfigurationScreen({
         ...(usesNcbi
           ? [{
               label: 'NCBI API key',
-              value: apiKeyConfigured ? 'Configured' : 'Not set (rate-limited) — add one in Manage NCBI accessions',
+              value: apiKeyConfigured ? 'Configured' : 'Not set (rate-limited) — configure in Manage tooling → Accession Providers',
             }]
           : []),
       ];
@@ -441,13 +447,12 @@ export function ReferenceConsensusConfigurationScreen({
     if (!cached) {
       return review;
     }
-    const {backbone} = prepared.configuration.inputs;
     return {
       ...review,
-      ncbiCache: {
+      genomeCache: {
         entries: [{
           id: 'backbone',
-          label: `Backbone ${backbone.source === 'ncbi' ? backbone.accession : ''}`,
+          label: `Backbone ${backbone.source === 'remote' ? backbone.reference.id : ''}`,
         }],
         apply: modes => prepareForReview(applyBackboneCacheMode(prepared, modes.backbone ?? 'reuse')),
       },
@@ -464,6 +469,7 @@ export function ReferenceConsensusConfigurationScreen({
       onBack={onBack}
       inputActive={inputActive}
       prepareRun={prepareRun}
+      loadAccessions={loadAccessions}
       saveRun={saveRun}
       previousRuns={previousRuns}
       prepareSnakemakeRun={snakemakeRun}
@@ -482,18 +488,18 @@ export function ReferenceConsensusConfigurationScreen({
         prepared.snapshot.isolates.map(isolate => isolate.id),
       )}
       onRunSucceeded={prepared => {
-        const ncbi = prepared.configuration.inputs.backbone.source === 'ncbi';
+        const remote = prepared.configuration.inputs.backbone.source === 'remote';
         const measures = recordsRunRates(manifest);
-        if (!ncbi && !measures) {
+        if (!remote && !measures) {
           return undefined;
         }
         const measured = measures ? recordRate(prepared) : Promise.resolve(undefined);
-        const registered = ncbi
+        const registered = remote
           ? registerAccessionCaches(prepared.configuration.run.output_root, currentDirectory)
           : Promise.resolve(undefined);
         return {
-          label: ncbi
-            ? 'Recording the NCBI accession cache in the accession catalog…'
+          label: remote
+            ? 'Recording genome caches in the accession catalog…'
             : 'Measuring this run for the next estimate…',
           outcome: Promise.all([registered, measured]).then(notes => notes.filter(Boolean).join(' ') || undefined),
         };
