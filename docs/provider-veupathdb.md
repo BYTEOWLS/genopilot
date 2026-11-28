@@ -48,4 +48,4 @@ Classification reads the genomic FASTA and available GFF3 together, even when on
 
 Original selected genomic files remain under `original/` in the cache. Completion notices identify exclusions and counts; `genome.json` records full exclusion lists, original and classification-input checksums, and per-artifact provenance. Provider-reported statistics describe the unfiltered source, not the derived genome.
 
-See [Genome sources](genome-sources.md) for review, caching, and workflow requirements. API descriptions are available in [FungiDB API documentation](https://fungidb.org/service-api.html), the [organism schema](https://fungidb.org/a/service/record-types/organism), and the [genomic-sequence schema](https://fungidb.org/a/service/record-types/genomic-sequence).
+See [Managing accessions](genome-sources.md) for review, caching, and workflow requirements. API descriptions are available in [FungiDB API documentation](https://fungidb.org/service-api.html), the [organism schema](https://fungidb.org/a/service/record-types/organism), and the [genomic-sequence schema](https://fungidb.org/a/service/record-types/genomic-sequence).

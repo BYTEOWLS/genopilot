@@ -3,7 +3,7 @@
 The same pages are shown inside GenoPilot under Help.
 
 - [Using GenoPilot](help.md): runs, catalogs, tooling, and keys.
-- [Genome sources](genome-sources.md): accession catalog, artifact selection, and reuse.
+- [Managing accessions](genome-sources.md): accession catalog, artifact selection, and reuse.
 - [NCBI](provider-ncbi.md): assembly lookup, website search, and optional API keys.
 - [VEuPathDB](provider-veupathdb.md): FungiDB and other supported sites, required API keys, exact record-type/search choices, and mitochondrial filtering.
 - [Managing isolates](isolates.md): the isolate list, editing, library identity, and saved changes.

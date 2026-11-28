@@ -40,7 +40,7 @@ A GFF 404 is considered unavailable only after confirming the pinned genome rout
 
 ## Evidence and tests
 
-The authenticated investigation is retained at `resources/releases/0.0.4/veupathdb-api-evidence.md`. It records full FungiDB genome/GFF inspection, additional artifact checks, historical-release evidence, component-site coverage, and response quirks. Tests use synthetic sequences and injected HTTP responses; downloaded biological files and keys are not fixtures.
+The authenticated investigation is retained at `resources/releases/0.0.4/done_veupathdb-api-evidence.md`. It records full FungiDB genome/GFF inspection, additional artifact checks, historical-release evidence, component-site coverage, and response quirks. Tests use synthetic sequences and injected HTTP responses; downloaded biological files and keys are not fixtures.
 
 `tests/accessions/veupathdb-live.test.ts` is opt-in. It exercises live discovery on all supported sites, all five FungiDB artifacts through the packaged Python bridge, reuse without stored credentials, historical downloads, and an unavailable release. When the managed pinned Snakemake exists, it also checks offline reuse for reference, target, and backbone inputs from an unrelated working directory. No scientific analysis or Conda provisioning runs.
 

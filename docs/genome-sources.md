@@ -1,4 +1,4 @@
-# Genome sources
+# Managing accessions
 
 **Manage accessions** downloads and inspects genomes without creating a run. NCBI and VEuPathDB are registered providers. Catalog and workflow downloads use the same REST implementation. Provider help explains [NCBI](provider-ncbi.md) and [VEuPathDB, including FungiDB](provider-veupathdb.md): what each supplies, website searches, API-key setup, and the exact discovery choices.
 

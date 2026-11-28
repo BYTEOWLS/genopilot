@@ -17,7 +17,7 @@ Files copied into a run from outside are marked **imported**. Files the run comp
 ## Catalogs
 
 - **Isolates** store identity and lineage independently of sequencing data. Their read sets record a library, platform, layout, and multiple file groups. Confirm library identity during import; workflows explicitly select compatible read sets and snapshot their effective settings.
-- **Genome sources** store provider-scoped identifiers, metadata, and verified download locations. Download and inspect genomes before creating a run; see [Genome sources](genome-sources.md) for keys, provider credentials, and current workflow-integration limits. Incompatible catalogs are refused without being overwritten; there is no migration.
+- **Accessions** store provider-scoped identifiers, metadata, and verified download locations. Download and inspect genomes before creating a run; see [Managing accessions](genome-sources.md) for keys, provider credentials, and current workflow-integration limits. Incompatible catalogs are refused without being overwritten; there is no migration.
 
 See [Managing isolates](isolates.md) for the list, edit form, read sets, and library identity. Each supported sequencing technique has its own help file and tab, currently [Illumina](illumina.md). Press `?` in the list or on an edit-form choice or button to open these tabs.
 

@@ -1,6 +1,6 @@
 # VEuPathDB API investigation
 
-Supporting evidence for [task 01, step 6](01_genome_sources.md). The initial FungiDB investigation below is supplemented by the implemented provider's live checks in the final section. Requests used a locally supplied Bearer key; no key, raw genome, or complete service response is retained here.
+Supporting evidence for [task 01, step 6](done_01_genome_sources.md). The initial FungiDB investigation below is supplemented by the implemented provider's live checks in the final section. Requests used a locally supplied Bearer key; no key, raw genome, or complete service response is retained here.
 
 ## Whole-genome result
 

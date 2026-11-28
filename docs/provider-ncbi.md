@@ -31,4 +31,4 @@ Protein FASTA contains amino-acid sequences translated from annotated coding reg
 
 A missing annotation is different from a failed download. A verified genomic FASTA can remain usable where annotation is not required. GenoPilot records the accession, provider facts, checksums, and downloaded/reused origin.
 
-See [Genome sources](genome-sources.md) for download review, cache reuse, provider settings, and workflow input requirements. Technical API documentation: [NCBI Datasets REST API](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/rest-api/).
+See [Managing accessions](genome-sources.md) for download review, cache reuse, provider settings, and workflow input requirements. Technical API documentation: [NCBI Datasets REST API](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/rest-api/).
