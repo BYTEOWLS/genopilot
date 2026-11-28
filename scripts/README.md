@@ -19,7 +19,7 @@ pnpm pack:local
 pnpm verify:package
 ```
 
-`verify-package.mjs` installs the tarball into a temporary npm prefix, checks packaged resources and CLI startup, and exercises the installed Node/Python genome-copy bridge with synthetic files. It requires npm and Python and removes its temporary directory afterward.
+`verify-package.mjs` installs the tarball into a temporary npm prefix, checks packaged resources and CLI startup, and calls `verify-package-genome-source.py` to exercise the installed Node/Python genome-copy bridge with synthetic files. It requires npm and Python and removes its temporary directory afterward.
 
 To verify another tarball:
 
