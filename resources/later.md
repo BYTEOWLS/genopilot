@@ -588,6 +588,7 @@ Concept links below are pointers, not duplicate checklists. Their task files own
 
 ## Integration and packaging
 
+- [Guided installation and first-run setup](backlog/06_guided_installation_setup.md): convenience installer, tooling setup, and optional provider credentials including direct VEuPathDB key entry.
 - [ ] Add a direct-Snakemake cancellation test that checks cleanup and complete logs; success, failure, and resume are covered, and cancellation is covered only with an injected process.
 - [Public-release preparation](concepts/public-release/tasks.md).
 - [Remote execution](concepts/remote-execution/tasks.md).
